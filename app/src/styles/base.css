@@ -62,6 +62,15 @@ select { appearance: none; padding-right: 22px; background-image: url("data:imag
 .agent-line.is-waiting .agent-state { color: var(--waiting); }
 .agent-line.is-working .agent-state { color: var(--working); }
 
+/* ---- NOW signals: at most three per worktree, same dots and colors */
+.signals { display: inline-flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.signal { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-1); color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.signal .icon { width: 11px; height: 11px; color: var(--fg-2); }
+.signal-attention { color: var(--waiting); }
+.signal-crash, .signal-warn { color: var(--hot); }
+.signal-glyph { font-weight: 600; }
+.signal-runtime { color: var(--fg-2); font-variant-numeric: tabular-nums; }
+
 /* ---- motion */
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }

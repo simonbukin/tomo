@@ -1,7 +1,9 @@
 import { useRef, useSyncExternalStore } from "react";
 import { rpc } from "./api";
+import { mergeActivity, needsMeItems, truncate } from "./activityModel";
 import type {
   ActionSet,
+  ActivityEvent,
   AgentPresence,
   AttentionItem,
   Config,
@@ -15,10 +17,12 @@ import type {
   PrStatusResult,
   PullRequest,
   Repo,
+  RuntimeEndpoint,
   Snapshot,
   Tab,
   TownUnlock,
   UiState,
+  UsageSnapshot,
   Worktree,
   WorktreeResources,
 } from "./types";
@@ -37,6 +41,9 @@ export interface State {
   agents: Record<Id, AgentPresence>;
   attention: AttentionItem[];
   resources: Record<Id, WorktreeResources>;
+  endpoints: Record<Id, RuntimeEndpoint[]>;
+  activity: ActivityEvent[];
+  usage: UsageSnapshot[];
   ui: UiState;
   focusRequest: { worktree_id: Id; tab_id: Id; pane_id: Id; nonce: number } | null;
   notice: { level: string; message: string; nonce: number } | null;
@@ -77,6 +84,9 @@ let state: State = {
   agents: {},
   attention: [],
   resources: {},
+  endpoints: {},
+  activity: [],
+  usage: [],
   ui: defaultUi,
   focusRequest: null,
   notice: null,
@@ -143,6 +153,10 @@ export function setUi(patch: Partial<UiState>): void {
   }, 300);
 }
 
+function groupEndpoints(list: RuntimeEndpoint[]): Record<Id, RuntimeEndpoint[]> {
+  return list.reduce<Record<Id, RuntimeEndpoint[]>>((out, e) => ({ ...out, [e.worktree_id]: [...(out[e.worktree_id] ?? []), e] }), {});
+}
+
 function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
   const out: Record<Id, Tab[]> = {};
   for (const t of tabs) (out[t.worktree_id] ??= []).push(t);
@@ -182,6 +196,8 @@ export function applySnapshot(snap: Snapshot): void {
     attention: snap.attention,
     resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
     actions: Object.fromEntries((snap.actions ?? []).map((a) => [a.worktree_id, a])),
+    endpoints: groupEndpoints(snap.endpoints ?? []),
+    usage: snap.usage ?? [],
     ui,
   });
   checkHealthOnce();
@@ -288,8 +304,32 @@ export function applyFrame(frame: Frame): void {
       });
       break;
     }
-    case "attention_added":
-      setState((s) => ({ attention: [...s.attention, (d as { item: AttentionItem }).item] }));
+    case "attention_added": {
+      const { item } = d as { item: AttentionItem };
+      setState((s) => ({ attention: [...s.attention.filter((a) => a.id !== item.id), item] }));
+      if (item.kind === "checkpoint") notify("info", `review requested: ${truncate(item.message)}`);
+      break;
+    }
+    case "attention_resolved": {
+      const { id } = d as { id: Id };
+      setState((s) => ({ attention: s.attention.filter((a) => a.id !== id) }));
+      break;
+    }
+    case "endpoints_changed": {
+      const { worktree_id, endpoints } = d as { worktree_id: Id; endpoints: RuntimeEndpoint[] };
+      setState((s) => {
+        const next = { ...s.endpoints };
+        if (endpoints.length) next[worktree_id] = endpoints;
+        else delete next[worktree_id];
+        return { endpoints: next };
+      });
+      break;
+    }
+    case "activity_added":
+      setState((s) => ({ activity: mergeActivity(s.activity, [(d as { event: ActivityEvent }).event]) }));
+      break;
+    case "usage_changed":
+      setState({ usage: (d as { snapshots: UsageSnapshot[] }).snapshots });
       break;
     case "attention_viewed": {
       const { id } = d as { id: Id };
@@ -359,8 +399,18 @@ export function keyBindings(s: State): Record<string, string> {
   return { ...(s.config?.keybindings ?? {}), ...Object.fromEntries(shortcuts) };
 }
 
-export function unviewedAttention(s: State): AttentionItem[] {
-  return s.attention.filter((a) => !a.viewed_at_ms);
+export function needsMe(s: State): AttentionItem[] {
+  return needsMeItems(s.attention);
+}
+
+export const unviewedAttention = needsMe;
+
+export function endpointsOf(s: State, worktreeId: Id): RuntimeEndpoint[] {
+  return s.endpoints[worktreeId] ?? [];
+}
+
+export function liveEndpointFor(s: State, worktreeId: Id, actionId: string): RuntimeEndpoint | null {
+  return endpointsOf(s, worktreeId).find((e) => e.action_id === actionId && e.protocol !== "tcp") ?? null;
 }
 
 export function queryContext(s: State): QueryContext {
