@@ -1,0 +1,257 @@
+import { useRef, useSyncExternalStore } from "react";
+import { rpc } from "./api";
+import type {
+  AgentPresence,
+  AttentionItem,
+  Config,
+  Frame,
+  HomeOptions,
+  Id,
+  Pane,
+  Repo,
+  Snapshot,
+  Tab,
+  UiState,
+  Worktree,
+  WorktreeResources,
+} from "./types";
+
+export interface State {
+  connected: boolean;
+  loaded: boolean;
+  config: Config | null;
+  repos: Repo[];
+  worktrees: Worktree[];
+  tabs: Record<Id, Tab[]>;
+  panes: Record<Id, Pane>;
+  agents: Record<Id, AgentPresence>;
+  attention: AttentionItem[];
+  resources: Record<Id, WorktreeResources>;
+  ui: UiState;
+  focusRequest: { worktree_id: Id; tab_id: Id; pane_id: Id; nonce: number } | null;
+  notice: { level: string; message: string; nonce: number } | null;
+  paletteOpen: boolean;
+  dialog: Dialog | null;
+}
+
+export type Dialog =
+  | { kind: "add-repo" }
+  | { kind: "create-worktree"; repoId?: Id }
+  | { kind: "confirm"; title: string; body: string; confirmLabel: string; onConfirm: () => void }
+  | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void };
+
+export const defaultHome: HomeOptions = { query: "", repo: "", project: "", tag: "", sort: "priority", group: "repo", attentionOnly: false };
+
+const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, home: defaultHome };
+
+let state: State = {
+  connected: false,
+  loaded: false,
+  config: null,
+  repos: [],
+  worktrees: [],
+  tabs: {},
+  panes: {},
+  agents: {},
+  attention: [],
+  resources: {},
+  ui: defaultUi,
+  focusRequest: null,
+  notice: null,
+  paletteOpen: false,
+  dialog: null,
+};
+
+const listeners = new Set<() => void>();
+
+export function getState(): State {
+  return state;
+}
+
+export function setState(patch: Partial<State> | ((s: State) => Partial<State>)): void {
+  const next = typeof patch === "function" ? patch(state) : patch;
+  state = { ...state, ...next };
+  listeners.forEach((l) => l());
+}
+
+function shallowEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    return ka.length === kb.length && ka.every((k) => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+  }
+  return false;
+}
+
+export function useStore<T>(selector: (s: State) => T): T {
+  const cache = useRef<{ state: State; value: T } | null>(null);
+  const read = () => {
+    const c = cache.current;
+    if (c && c.state === state) return c.value;
+    const next = selector(state);
+    const value = c && shallowEqual(c.value, next) ? c.value : next;
+    cache.current = { state, value };
+    return value;
+  };
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    read,
+  );
+}
+
+let uiSaveTimer: number | undefined;
+export function setUi(patch: Partial<UiState>): void {
+  setState((s) => ({ ui: { ...s.ui, ...patch } }));
+  window.clearTimeout(uiSaveTimer);
+  uiSaveTimer = window.setTimeout(() => {
+    rpc("ui_state_set", { state: state.ui }).catch(() => {});
+  }, 300);
+}
+
+function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
+  const out: Record<Id, Tab[]> = {};
+  for (const t of tabs) (out[t.worktree_id] ??= []).push(t);
+  for (const list of Object.values(out)) list.sort((a, b) => a.position - b.position);
+  return out;
+}
+
+export function applySnapshot(snap: Snapshot): void {
+  const ui: UiState = { ...defaultUi, ...(snap.ui_state ?? {}), home: { ...defaultHome, ...(snap.ui_state?.home ?? {}) } };
+  if (ui.view === "worktree" && !snap.worktrees.some((w) => w.id === ui.activeWorktreeId)) ui.view = "home";
+  setState({
+    loaded: true,
+    config: snap.config,
+    repos: snap.repos,
+    worktrees: snap.worktrees,
+    tabs: groupTabs(snap.tabs),
+    panes: Object.fromEntries(snap.panes.map((p) => [p.id, p])),
+    agents: Object.fromEntries(snap.agents.map((a) => [a.pane_id, a])),
+    attention: snap.attention,
+    resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
+    ui,
+  });
+}
+
+export function applyFrame(frame: Frame): void {
+  const d = frame.data as never;
+  switch (frame.event) {
+    case "repos_changed":
+      setState({ repos: (d as { repos: Repo[] }).repos });
+      break;
+    case "worktrees_changed":
+      setState({ worktrees: (d as { worktrees: Worktree[] }).worktrees });
+      break;
+    case "metadata_changed": {
+      const { worktree_id, metadata } = d as { worktree_id: Id; metadata: Worktree["metadata"] };
+      setState((s) => ({ worktrees: s.worktrees.map((w) => (w.id === worktree_id ? { ...w, metadata } : w)) }));
+      break;
+    }
+    case "tabs_changed": {
+      const { worktree_id, tabs } = d as { worktree_id: Id; tabs: Tab[] };
+      setState((s) => {
+        const next = { ...s.tabs };
+        if (tabs.length) next[worktree_id] = tabs;
+        else delete next[worktree_id];
+        const live = new Set(Object.values(next).flat().flatMap((t) => paneIds(t.layout)));
+        const panes = Object.fromEntries(Object.entries(s.panes).filter(([id, p]) => p.worktree_id !== worktree_id || live.has(id)));
+        const agents = Object.fromEntries(Object.entries(s.agents).filter(([id]) => panes[id]));
+        return { tabs: next, panes, agents };
+      });
+      break;
+    }
+    case "pane_changed": {
+      const { pane } = d as { pane: Pane };
+      setState((s) => ({ panes: { ...s.panes, [pane.id]: pane } }));
+      break;
+    }
+    case "pane_exited": {
+      const { pane_id, exit_code } = d as { pane_id: Id; exit_code: number | null };
+      setState((s) => (s.panes[pane_id] ? { panes: { ...s.panes, [pane_id]: { ...s.panes[pane_id], live: false, exit_code } } } : {}));
+      break;
+    }
+    case "agent_changed": {
+      const { agent } = d as { agent: AgentPresence };
+      setState((s) => ({
+        agents: { ...s.agents, [agent.pane_id]: agent },
+        panes: s.panes[agent.pane_id] ? { ...s.panes, [agent.pane_id]: { ...s.panes[agent.pane_id], agent } } : s.panes,
+      }));
+      break;
+    }
+    case "agent_removed": {
+      const { pane_id } = d as { pane_id: Id };
+      setState((s) => {
+        const agents = { ...s.agents };
+        delete agents[pane_id];
+        return { agents };
+      });
+      break;
+    }
+    case "attention_added":
+      setState((s) => ({ attention: [...s.attention, (d as { item: AttentionItem }).item] }));
+      break;
+    case "attention_viewed": {
+      const { id } = d as { id: Id };
+      setState((s) => ({ attention: s.attention.map((a) => (a.id === id ? { ...a, viewed_at_ms: Date.now() } : a)) }));
+      break;
+    }
+    case "attention_cleared":
+      setState({ attention: [] });
+      break;
+    case "resources":
+      setState({ resources: Object.fromEntries((d as { worktrees: WorktreeResources[] }).worktrees.map((r) => [r.worktree_id, r])) });
+      break;
+    case "focus_request": {
+      const req = d as { worktree_id: Id; tab_id: Id; pane_id: Id };
+      setState((s) => ({
+        focusRequest: { ...req, nonce: (s.focusRequest?.nonce ?? 0) + 1 },
+        ui: { ...s.ui, view: "worktree", activeWorktreeId: req.worktree_id },
+        attention: s.attention.map((a) => (a.pane_id === req.pane_id && !a.viewed_at_ms ? { ...a, viewed_at_ms: Date.now() } : a)),
+      }));
+      break;
+    }
+    case "notice": {
+      const n = d as { level: string; message: string };
+      setState((s) => ({ notice: { ...n, nonce: (s.notice?.nonce ?? 0) + 1 } }));
+      break;
+    }
+  }
+}
+
+export function paneIds(node: import("./types").LayoutNode): Id[] {
+  return node.type === "leaf" ? [node.pane_id] : [...paneIds(node.first), ...paneIds(node.second)];
+}
+
+export function activeTab(s: State, worktreeId: Id | null): Tab | null {
+  if (!worktreeId) return null;
+  const tabs = s.tabs[worktreeId] ?? [];
+  return tabs.find((t) => t.is_active) ?? tabs[0] ?? null;
+}
+
+export function unviewedAttention(s: State): AttentionItem[] {
+  return s.attention.filter((a) => !a.viewed_at_ms);
+}
+
+export function agentsOf(s: State, worktreeId: Id): AgentPresence[] {
+  return Object.values(s.agents).filter((a) => a.worktree_id === worktreeId && a.state !== "exited");
+}
+
+export function repoName(s: State, repoId: Id): string {
+  return s.repos.find((r) => r.id === repoId)?.name ?? "?";
+}
+
+export function notify(level: string, message: string): void {
+  setState((s) => ({ notice: { level, message, nonce: (s.notice?.nonce ?? 0) + 1 } }));
+}
+
+export function formatBytes(b: number): string {
+  const GB = 1024 ** 3;
+  const MB = 1024 ** 2;
+  if (b >= GB) return `${(b / GB).toFixed(1)} GB`;
+  if (b >= MB) return `${Math.round(b / MB)} MB`;
+  return `${Math.round(b / 1024)} KB`;
+}
