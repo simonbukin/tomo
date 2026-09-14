@@ -1,6 +1,8 @@
 mod agents;
 mod config;
 mod daemon;
+mod events;
+mod features;
 mod git;
 mod github;
 mod integrations;
@@ -10,7 +12,6 @@ mod procs;
 mod pty;
 mod server;
 mod store;
-mod towns;
 mod watch;
 
 use anyhow::{Context, Result};

@@ -2,13 +2,18 @@
 //!
 //! Transport: newline-delimited JSON over a Unix domain socket.
 //! A client sends [`Request`] frames and receives [`Frame`] frames.
+//!
+//! Every type marked `#[ts(export)]` is exported to `app/src/generated/`.
+//! Run `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` after a change here;
+//! the default test run fails when the generated files are stale.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use ts_rs::TS;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 pub type Id = String;
 
@@ -27,13 +32,13 @@ pub enum Frame {
     Event { seq: u64, #[serde(flatten)] event: Event },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct RpcError {
     pub code: ErrorCode,
     pub message: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     BadRequest,
@@ -43,6 +48,7 @@ pub enum ErrorCode {
     Io,
     Unsupported,
     Internal,
+    Aborted,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,8 +58,11 @@ pub enum Call {
     Status,
     Subscribe,
     ConfigGet,
+    ConfigCheck,
     DaemonStop,
     IntegrationsInstall,
+    IntegrationsStatus,
+    HookLog { limit: Option<usize> },
 
     RepoList,
     RepoAdd { path: PathBuf },
@@ -75,6 +84,10 @@ pub enum Call {
     TabRename { tab_id: Id, title: String },
     TabActivate { tab_id: Id },
     LayoutResize { tab_id: Id, split_id: Id, ratio: f64 },
+    LayoutEqualize { tab_id: Id },
+    LayoutRotate { tab_id: Id, split_id: Option<Id> },
+    PaneSwap { pane_a: Id, pane_b: Id },
+    PaneZoom { pane_id: Option<Id>, tab_id: Option<Id> },
 
     PaneList { worktree_id: Option<Id> },
     PaneCreate(PaneCreate),
@@ -103,6 +116,7 @@ pub enum Call {
     AttentionClear,
 
     GitSummary { worktree_id: Id },
+    PrStatus { worktree_id: Id },
     FsList { worktree_id: Id, rel_path: String },
     OpenExternal { worktree_id: Id, rel_path: String, target: ExternalTarget },
 
@@ -111,11 +125,9 @@ pub enum Call {
 
     TownList,
     TownPick,
-
-    PrStatus { worktree_id: Id },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorktreeCreate {
     pub repo_id: Id,
     pub branch: String,
@@ -126,7 +138,7 @@ pub struct WorktreeCreate {
     pub town_slug: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 pub struct PaneCreate {
     pub worktree_id: Option<Id>,
     pub tab_id: Option<Id>,
@@ -135,7 +147,7 @@ pub struct PaneCreate {
     pub title: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct AgentSpawn {
     pub kind: AgentKind,
     pub worktree_id: Option<Id>,
@@ -146,7 +158,7 @@ pub struct AgentSpawn {
     pub extra_args: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct AgentReport {
     pub pane_id: Id,
     pub kind: AgentKind,
@@ -156,26 +168,27 @@ pub struct AgentReport {
     pub at_ms: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum SplitDirection {
     Horizontal,
     Vertical,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ExternalTarget {
     Finder,
     Editor,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "event", content = "data", rename_all = "snake_case")]
 pub enum Event {
     ReposChanged { repos: Vec<Repo> },
     WorktreesChanged { worktrees: Vec<Worktree> },
     MetadataChanged { worktree_id: Id, metadata: WorktreeMetadata },
+    WorktreeArchiving { worktree_id: Id },
     TabsChanged { worktree_id: Id, tabs: Vec<Tab> },
     PaneOutput { pane_id: Id, data_base64: String },
     PaneChanged { pane: Pane },
@@ -187,12 +200,14 @@ pub enum Event {
     AttentionCleared,
     Resources { worktrees: Vec<WorktreeResources> },
     FocusRequest { worktree_id: Id, tab_id: Id, pane_id: Id },
+    ZoomRequest { tab_id: Id, pane_id: Option<Id> },
     Notice { level: NoticeLevel, message: String },
     TownUnlocked { unlock: TownUnlock },
     PrChanged { worktree_id: Id, pr: Option<PullRequest> },
+    HookRan { run: HookRun },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum NoticeLevel {
     Info,
@@ -200,7 +215,7 @@ pub enum NoticeLevel {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Hello {
     pub protocol: u32,
     pub version: String,
@@ -208,7 +223,7 @@ pub struct Hello {
     pub session_id: Id,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Status {
     pub protocol: u32,
     pub version: String,
@@ -226,14 +241,138 @@ pub struct Status {
     pub integrations: Integrations,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 pub struct Integrations {
     pub claude_hooks: bool,
     pub codex_hooks: bool,
     pub pi_extension: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IntegrationLevel {
+    Full,
+    Partial,
+    ProcessOnly,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct IntegrationStatus {
+    pub kind: AgentKind,
+    pub level: IntegrationLevel,
+    pub binary: Option<PathBuf>,
+    pub lifecycle: bool,
+    pub resume: bool,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct StateDef {
+    pub id: String,
+    pub label: String,
+    pub order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookDef {
+    pub event: String,
+    pub command: String,
+    pub state: Option<String>,
+    pub mode: HookMode,
+    pub timeout_s: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum HookMode {
+    Async,
+    Pane,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookRun {
+    pub event: String,
+    pub command: String,
+    pub worktree_id: Option<Id>,
+    pub started_at_ms: u64,
+    pub duration_ms: u64,
+    pub exit_code: Option<i32>,
+    pub ok: bool,
+    pub output_tail: String,
+}
+
+/// Payload every hook receives on stdin. Fields are present when they apply.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct HookEvent {
+    pub event: String,
+    pub at_ms: u64,
+    pub worktree: Option<HookWorktree>,
+    pub previous_state: Option<String>,
+    pub pane: Option<HookPane>,
+    pub agent: Option<HookAgent>,
+    pub attention: Option<AttentionItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookWorktree {
+    pub id: Id,
+    pub path: PathBuf,
+    pub repo_id: Id,
+    pub repo_path: PathBuf,
+    pub branch: Option<String>,
+    pub name: String,
+    pub state: Option<String>,
+    pub project: Option<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookPane {
+    pub id: Id,
+    pub tab_id: Id,
+    pub cwd: PathBuf,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookAgent {
+    pub kind: AgentKind,
+    pub state: AgentState,
+    pub session_ref: Option<String>,
+}
+
+pub const HOOK_EVENTS: &[&str] = &[
+    "worktree.discovered",
+    "worktree.created",
+    "worktree.before_archive",
+    "worktree.archived",
+    "worktree.restored",
+    "worktree.state_changed",
+    "pane.created",
+    "pane.closed",
+    "agent.started",
+    "agent.working",
+    "agent.waiting",
+    "agent.idle",
+    "agent.exited",
+    "attention.created",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IssueLevel {
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ConfigIssue {
+    pub level: IssueLevel,
+    pub key: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Config {
     pub shell: String,
     pub editor_command: Vec<String>,
@@ -243,21 +382,24 @@ pub struct Config {
     pub font_family: String,
     pub font_size: u32,
     pub theme: String,
+    pub max_panes_per_tab: u32,
     pub keybindings: BTreeMap<String, String>,
     pub agents: BTreeMap<String, AgentCommand>,
     #[serde(default)]
     pub archive_cleanup: Vec<String>,
     #[serde(default)]
-    pub hooks: BTreeMap<String, String>,
+    pub states: Vec<StateDef>,
+    #[serde(default)]
+    pub hooks: Vec<HookDef>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct AgentCommand {
     pub command: String,
     pub args: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Repo {
     pub id: Id,
     pub path: PathBuf,
@@ -269,13 +411,13 @@ pub struct Repo {
     pub github: Option<GitHubRepo>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GitHubRepo {
     pub owner: String,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Worktree {
     pub id: Id,
     pub repo_id: Id,
@@ -294,12 +436,14 @@ pub struct Worktree {
     #[serde(default)]
     pub archived_at_ms: Option<u64>,
     #[serde(default)]
+    pub archiving: bool,
+    #[serde(default)]
     pub town_slug: Option<String>,
     pub tab_count: usize,
     pub pane_count: usize,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct GitSummary {
     pub branch: Option<String>,
     pub head: String,
@@ -314,24 +458,33 @@ pub struct GitSummary {
     pub upstream: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct WorktreeMetadata {
     pub display_name: Option<String>,
     pub project: Option<String>,
+    #[serde(default)]
+    pub state: Option<String>,
     pub priority: Option<u8>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 pub struct MetadataPatch {
     #[serde(default, with = "double_option")]
+    #[ts(optional, type = "string | null")]
     pub display_name: Option<Option<String>>,
     #[serde(default, with = "double_option")]
+    #[ts(optional, type = "string | null")]
     pub project: Option<Option<String>>,
     #[serde(default, with = "double_option")]
+    #[ts(optional, type = "string | null")]
+    pub state: Option<Option<String>>,
+    #[serde(default, with = "double_option")]
+    #[ts(optional, type = "number | null")]
     pub priority: Option<Option<u8>>,
     #[serde(default)]
+    #[ts(optional)]
     pub tags: Option<Vec<String>>,
 }
 
@@ -353,13 +506,14 @@ impl MetadataPatch {
         WorktreeMetadata {
             display_name: self.display_name.clone().unwrap_or_else(|| base.display_name.clone()),
             project: self.project.clone().unwrap_or_else(|| base.project.clone()),
+            state: self.state.clone().unwrap_or_else(|| base.state.clone()),
             priority: self.priority.unwrap_or(base.priority),
             tags: self.tags.clone().unwrap_or_else(|| base.tags.clone()),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Tab {
     pub id: Id,
     pub worktree_id: Id,
@@ -370,14 +524,14 @@ pub struct Tab {
     pub is_active: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LayoutNode {
     Leaf { pane_id: Id },
     Split { id: Id, direction: SplitDirection, ratio: f64, first: Box<LayoutNode>, second: Box<LayoutNode> },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum PaneOrigin {
     Live,
@@ -385,7 +539,7 @@ pub enum PaneOrigin {
     Resumed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Pane {
     pub id: Id,
     pub tab_id: Id,
@@ -403,7 +557,7 @@ pub struct Pane {
     pub created_at_ms: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
     Claude,
@@ -419,6 +573,10 @@ impl AgentKind {
             AgentKind::Pi => "Pi",
         }
     }
+
+    pub fn all() -> [AgentKind; 3] {
+        [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi]
+    }
 }
 
 impl std::str::FromStr for AgentKind {
@@ -433,7 +591,7 @@ impl std::str::FromStr for AgentKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentState {
     Working,
@@ -453,10 +611,20 @@ impl AgentState {
             AgentState::Unknown => "?",
         }
     }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            AgentState::Working => "working",
+            AgentState::Waiting => "waiting",
+            AgentState::Idle => "idle",
+            AgentState::Exited => "exited",
+            AgentState::Unknown => "unknown",
+        }
+    }
 }
 
 /// Lower number = stronger authority. See PRD §14.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Authority {
     Lifecycle = 1,
@@ -466,7 +634,7 @@ pub enum Authority {
     Unknown = 5,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct AgentPresence {
     pub pane_id: Id,
     pub worktree_id: Id,
@@ -478,7 +646,7 @@ pub struct AgentPresence {
     pub pid: Option<u32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Ownership {
     Owned,
@@ -486,7 +654,7 @@ pub enum Ownership {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ProcessInfo {
     pub pid: u32,
     pub ppid: Option<u32>,
@@ -502,7 +670,7 @@ pub struct ProcessInfo {
     pub depth: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 pub struct WorktreeResources {
     pub worktree_id: Id,
     pub cpu_percent: f32,
@@ -510,14 +678,14 @@ pub struct WorktreeResources {
     pub process_count: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum AttentionLevel {
     Attention,
     Info,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct AttentionItem {
     pub id: Id,
     pub worktree_id: Id,
@@ -528,7 +696,7 @@ pub struct AttentionItem {
     pub viewed_at_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct PullRequest {
     pub number: u64,
     pub title: String,
@@ -543,14 +711,14 @@ pub struct PullRequest {
     pub fetched_at_ms: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct PrStatusResult {
     pub available: bool,
     pub reason: Option<String>,
     pub pr: Option<PullRequest>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Town {
     pub slug: String,
     pub name: String,
@@ -564,7 +732,7 @@ pub struct Town {
     pub rarity: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct TownUnlock {
     pub slug: String,
     pub worktree_id: Id,
@@ -572,7 +740,7 @@ pub struct TownUnlock {
     pub unlocked_at_ms: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct FsEntry {
     pub name: String,
     pub rel_path: String,
@@ -580,11 +748,27 @@ pub struct FsEntry {
     pub size: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct SpawnResult {
     pub pane: Pane,
     pub tab: Tab,
     pub agent: Option<AgentPresence>,
+}
+
+/// What `subscribe` returns: everything a client needs to render.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Snapshot {
+    pub status: Status,
+    pub config: Config,
+    pub repos: Vec<Repo>,
+    pub worktrees: Vec<Worktree>,
+    pub tabs: Vec<Tab>,
+    pub panes: Vec<Pane>,
+    pub agents: Vec<AgentPresence>,
+    pub attention: Vec<AttentionItem>,
+    pub resources: Vec<WorktreeResources>,
+    #[ts(type = "unknown")]
+    pub ui_state: Value,
 }
 
 pub fn now_ms() -> u64 {
@@ -609,11 +793,12 @@ mod tests {
 
     #[test]
     fn metadata_patch_distinguishes_unset_from_clear() {
-        let base = WorktreeMetadata { display_name: Some("a".into()), project: Some("p".into()), priority: Some(2), tags: vec!["x".into()] };
-        let patch: MetadataPatch = serde_json::from_str(r#"{"project": null, "priority": 1}"#).unwrap();
+        let base = WorktreeMetadata { display_name: Some("a".into()), project: Some("p".into()), state: Some("active".into()), priority: Some(2), tags: vec!["x".into()] };
+        let patch: MetadataPatch = serde_json::from_str(r#"{"project": null, "priority": 1, "state": "merged"}"#).unwrap();
         let out = patch.apply(&base);
         assert_eq!(out.display_name.as_deref(), Some("a"));
         assert_eq!(out.project, None);
+        assert_eq!(out.state.as_deref(), Some("merged"));
         assert_eq!(out.priority, Some(1));
         assert_eq!(out.tags, vec!["x".to_string()]);
     }
@@ -623,5 +808,79 @@ mod tests {
         let f = Frame::Event { seq: 3, event: Event::AttentionCleared };
         let text = serde_json::to_string(&f).unwrap();
         assert_eq!(text, r#"{"seq":3,"event":"attention_cleared"}"#);
+    }
+}
+
+#[cfg(test)]
+mod bindings {
+    use super::*;
+    use std::path::Path;
+
+    const HEADER: &str = "// GENERATED FROM tomo-proto. DO NOT EDIT.\n// Run: TOMO_WRITE_TYPES=1 cargo test -p tomo-proto\n\n";
+
+    fn export_all(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::env::set_var("TS_RS_EXPORT_DIR", dir);
+        let cfg = ts_rs::Config::from_env().with_large_int("number");
+        Snapshot::export_all(&cfg).unwrap();
+        Event::export_all(&cfg).unwrap();
+        HookEvent::export_all(&cfg).unwrap();
+        IntegrationStatus::export_all(&cfg).unwrap();
+        ConfigIssue::export_all(&cfg).unwrap();
+        PrStatusResult::export_all(&cfg).unwrap();
+        Town::export_all(&cfg).unwrap();
+        FsEntry::export_all(&cfg).unwrap();
+        SpawnResult::export_all(&cfg).unwrap();
+        MetadataPatch::export_all(&cfg).unwrap();
+        WorktreeCreate::export_all(&cfg).unwrap();
+        PaneCreate::export_all(&cfg).unwrap();
+        AgentSpawn::export_all(&cfg).unwrap();
+        AgentReport::export_all(&cfg).unwrap();
+        RpcError::export_all(&cfg).unwrap();
+        Hello::export_all(&cfg).unwrap();
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".ts") && n != "index.ts")
+            .collect();
+        names.sort();
+        for name in &names {
+            let path = dir.join(name);
+            let body = std::fs::read_to_string(&path).unwrap();
+            std::fs::write(&path, format!("{HEADER}{body}")).unwrap();
+        }
+        let index: String = names.iter().map(|n| format!("export * from \"./{}\";\n", n.trim_end_matches(".ts"))).collect();
+        std::fs::write(dir.join("index.ts"), format!("{HEADER}{index}")).unwrap();
+    }
+
+    fn snapshot(dir: &Path) -> std::collections::BTreeMap<String, String> {
+        std::fs::read_dir(dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().map_or(false, |x| x == "ts"))
+                    .map(|e| (e.file_name().to_string_lossy().into_owned(), std::fs::read_to_string(e.path()).unwrap_or_default()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn generated_typescript_bindings_are_fresh() {
+        let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/src/generated");
+        let tmp = std::env::temp_dir().join(format!("tomo-proto-bindings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        export_all(&tmp);
+        if std::env::var_os("TOMO_WRITE_TYPES").is_some() {
+            let _ = std::fs::remove_dir_all(&target);
+            std::fs::create_dir_all(&target).unwrap();
+            for (name, body) in snapshot(&tmp) {
+                std::fs::write(target.join(name), body).unwrap();
+            }
+        }
+        let expected = snapshot(&tmp);
+        let actual = snapshot(&target);
+        let _ = std::fs::remove_dir_all(&tmp);
+        assert_eq!(actual, expected, "app/src/generated is stale; run TOMO_WRITE_TYPES=1 cargo test -p tomo-proto");
     }
 }

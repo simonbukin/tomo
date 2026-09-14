@@ -201,3 +201,64 @@ pub fn pr(r: &PrStatusResult, json: bool) {
         (None, None) => println!("no pull request for this branch"),
     }
 }
+
+pub fn integration_status(list: &[IntegrationStatus], json: bool) {
+    if json {
+        return emit_json(&list);
+    }
+    for s in list {
+        let level = match s.level {
+            IntegrationLevel::Full => "✓ full",
+            IntegrationLevel::Partial => "⚠ partial",
+            IntegrationLevel::ProcessOnly => "⚠ process-only",
+            IntegrationLevel::Unavailable => "× unavailable",
+        };
+        let caps = match (s.lifecycle, s.resume) {
+            (true, true) => "lifecycle + resume",
+            (false, true) => "resume only",
+            (true, false) => "lifecycle only",
+            (false, false) => "process heuristic",
+        };
+        println!("{:<7} {:<16} {}{}", s.kind.label(), level, caps, s.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default());
+    }
+}
+
+pub fn config_issues(issues: &[ConfigIssue], json: bool) {
+    if json {
+        return emit_json(&issues);
+    }
+    if issues.is_empty() {
+        println!("config ok");
+    }
+    for i in issues {
+        let level = match i.level {
+            IssueLevel::Error => "error",
+            IssueLevel::Warning => "warning",
+        };
+        println!("{level:<8} {:<20} {}", i.key, i.message);
+    }
+}
+
+pub fn hook_runs(runs: &[HookRun], json: bool) {
+    if json {
+        return emit_json(&runs);
+    }
+    for r in runs {
+        let status = if r.ok { "ok" } else { "FAIL" };
+        println!("{status:<5} {:<26} {:>6} ms  exit {:<4} {}", r.event, r.duration_ms, r.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "-".into()), r.command);
+        if !r.ok && !r.output_tail.is_empty() {
+            for line in r.output_tail.lines().rev().take(3).collect::<Vec<_>>().into_iter().rev() {
+                println!("      {line}");
+            }
+        }
+    }
+}
+
+pub fn states(states: &[StateDef], json: bool) {
+    if json {
+        return emit_json(&states);
+    }
+    for s in states {
+        println!("{:<3} {:<16} {}", s.order, s.id, s.label);
+    }
+}

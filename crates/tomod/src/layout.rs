@@ -77,6 +77,82 @@ pub fn resize(node: &LayoutNode, split_id: &str, new_ratio: f64) -> LayoutNode {
     }
 }
 
+pub fn leaf_count(node: &LayoutNode) -> usize {
+    match node {
+        LayoutNode::Leaf { .. } => 1,
+        LayoutNode::Split { first, second, .. } => leaf_count(first) + leaf_count(second),
+    }
+}
+
+/// Gives every pane in a chain of same-direction splits the same size.
+pub fn equalize(node: &LayoutNode) -> LayoutNode {
+    match node {
+        LayoutNode::Leaf { .. } => node.clone(),
+        LayoutNode::Split { id, direction, first, second, .. } => {
+            let (a, b) = (leaf_count(first) as f64, leaf_count(second) as f64);
+            LayoutNode::Split { id: id.clone(), direction: *direction, ratio: a / (a + b), first: Box::new(equalize(first)), second: Box::new(equalize(second)) }
+        }
+    }
+}
+
+pub fn swap(node: &LayoutNode, a: &str, b: &str) -> LayoutNode {
+    match node {
+        LayoutNode::Leaf { pane_id } if pane_id == a => leaf(b),
+        LayoutNode::Leaf { pane_id } if pane_id == b => leaf(a),
+        LayoutNode::Leaf { .. } => node.clone(),
+        LayoutNode::Split { id, direction, ratio, first, second } => LayoutNode::Split {
+            id: id.clone(),
+            direction: *direction,
+            ratio: *ratio,
+            first: Box::new(swap(first, a, b)),
+            second: Box::new(swap(second, a, b)),
+        },
+    }
+}
+
+fn flip(d: SplitDirection) -> SplitDirection {
+    match d {
+        SplitDirection::Horizontal => SplitDirection::Vertical,
+        SplitDirection::Vertical => SplitDirection::Horizontal,
+    }
+}
+
+pub fn rotate(node: &LayoutNode, split_id: &str) -> LayoutNode {
+    match node {
+        LayoutNode::Leaf { .. } => node.clone(),
+        LayoutNode::Split { id, direction, ratio, first, second } => LayoutNode::Split {
+            id: id.clone(),
+            direction: if id == split_id { flip(*direction) } else { *direction },
+            ratio: *ratio,
+            first: Box::new(rotate(first, split_id)),
+            second: Box::new(rotate(second, split_id)),
+        },
+    }
+}
+
+/// The innermost split that contains `pane_id`.
+pub fn split_of(node: &LayoutNode, pane_id: &str) -> Option<Id> {
+    match node {
+        LayoutNode::Leaf { .. } => None,
+        LayoutNode::Split { id, first, second, .. } => split_of(first, pane_id)
+            .or_else(|| split_of(second, pane_id))
+            .or_else(|| contains(node, pane_id).then(|| id.clone())),
+    }
+}
+
+pub fn is_valid(node: &LayoutNode) -> bool {
+    let ids = pane_ids(node);
+    let unique: std::collections::HashSet<&Id> = ids.iter().collect();
+    ids.len() == unique.len() && ids.iter().all(|p| !p.is_empty()) && ratios_ok(node)
+}
+
+fn ratios_ok(node: &LayoutNode) -> bool {
+    match node {
+        LayoutNode::Leaf { .. } => true,
+        LayoutNode::Split { ratio, first, second, .. } => (0.05..=0.95).contains(ratio) && ratios_ok(first) && ratios_ok(second),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +169,42 @@ mod tests {
         let single = remove(&back, "a").unwrap();
         assert_eq!(single, leaf("b"));
         assert!(remove(&single, "b").is_none());
+    }
+
+    #[test]
+    fn equalize_gives_equal_thirds_in_a_chain() {
+        let root = split(&split(&leaf("a"), "a", SplitDirection::Horizontal, "b", "s1"), "b", SplitDirection::Horizontal, "c", "s2");
+        let eq = equalize(&root);
+        match &eq {
+            LayoutNode::Split { ratio, second, .. } => {
+                assert!((ratio - 1.0 / 3.0).abs() < 1e-9);
+                match &**second {
+                    LayoutNode::Split { ratio, .. } => assert!((ratio - 0.5).abs() < 1e-9),
+                    _ => panic!(),
+                }
+            }
+            _ => panic!(),
+        }
+        assert!(is_valid(&eq));
+    }
+
+    #[test]
+    fn swap_rotate_and_split_of_keep_the_tree_valid() {
+        let root = split(&split(&leaf("a"), "a", SplitDirection::Horizontal, "b", "s1"), "b", SplitDirection::Vertical, "c", "s2");
+        let swapped = swap(&root, "a", "c");
+        assert_eq!(pane_ids(&swapped), vec!["c", "b", "a"]);
+        assert_eq!(split_of(&root, "c").as_deref(), Some("s2"));
+        assert_eq!(split_of(&root, "a").as_deref(), Some("s1"));
+        let rotated = rotate(&root, "s2");
+        match &rotated {
+            LayoutNode::Split { second, .. } => match &**second {
+                LayoutNode::Split { direction, .. } => assert_eq!(*direction, SplitDirection::Horizontal),
+                _ => panic!(),
+            },
+            _ => panic!(),
+        }
+        assert!(is_valid(&rotated) && is_valid(&swapped));
+        assert!(!is_valid(&split(&leaf("a"), "a", SplitDirection::Horizontal, "a", "dup")));
     }
 
     #[test]

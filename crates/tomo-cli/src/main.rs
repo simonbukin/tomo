@@ -61,6 +61,32 @@ enum Cmd {
     Kill { pid: u32 },
     #[command(about = "Show the GitHub pull request for a worktree's branch (needs gh)")]
     Pr { worktree: Option<String> },
+    #[command(subcommand, about = "Configuration")]
+    Config(ConfigCmd),
+    #[command(subcommand, about = "Workflow hooks")]
+    Hooks(HooksCmd),
+    #[command(subcommand, about = "Workflow states")]
+    States(StatesCmd),
+}
+
+#[derive(Subcommand)]
+enum ConfigCmd {
+    #[command(about = "Validate config.toml and report problems")]
+    Check,
+}
+
+#[derive(Subcommand)]
+enum HooksCmd {
+    #[command(about = "Show recent hook runs")]
+    Log {
+        #[arg(short = 'n', long, default_value_t = 20)]
+        limit: usize,
+    },
+}
+
+#[derive(Subcommand)]
+enum StatesCmd {
+    List,
 }
 
 #[derive(Subcommand)]
@@ -121,6 +147,10 @@ enum MetadataCmd {
         priority: Option<u8>,
         #[arg(long, help = "Comma-separated tags; replaces the tag list")]
         tags: Option<String>,
+        #[arg(long, help = "Workflow state id from config.toml")]
+        state: Option<String>,
+        #[arg(long)]
+        clear_state: bool,
         #[arg(long)]
         clear_name: bool,
         #[arg(long)]
@@ -152,11 +182,19 @@ enum PaneCmd {
     },
     Split {
         pane: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Split downward (alias: --vertical)")]
+        down: bool,
+        #[arg(long, hide = true)]
         vertical: bool,
+        #[arg(long, help = "Split to the right (default)")]
+        right: bool,
         #[arg(last = true)]
         command: Vec<String>,
     },
+    #[command(about = "Swap two panes in the same tab")]
+    Swap { pane_a: String, pane_b: String },
+    #[command(about = "Toggle zoom on a pane in the GUI")]
+    Zoom { pane: Option<String> },
     Focus { pane: Option<String> },
     Send {
         text: String,
@@ -193,6 +231,10 @@ enum TabCmd {
         #[arg(long)]
         force: bool,
     },
+    #[command(about = "Give every pane in the tab the same size")]
+    Equalize { tab: Option<String> },
+    #[command(about = "Flip the split around the active pane")]
+    Rotate { tab: Option<String> },
 }
 
 #[derive(Subcommand)]
@@ -256,6 +298,15 @@ async fn resolve_worktree_id(c: &client::Client, arg: Option<String>) -> Result<
     let path: PathBuf = serde_json::from_value(r["path"].clone())?;
     let w: Worktree = c.call(Call::WorktreeResolve { path }).await?;
     Ok(w.id)
+}
+
+async fn tab_ref(c: &client::Client, arg: Option<String>) -> Result<String> {
+    if let Some(t) = arg.or_else(|| std::env::var("TOMO_TAB_ID").ok()) {
+        return Ok(t);
+    }
+    let pane = pane_ref(None)?;
+    let panes: Vec<Pane> = c.call(Call::PaneList { worktree_id: None }).await?;
+    panes.into_iter().find(|p| p.id == pane).map(|p| p.tab_id).ok_or_else(|| anyhow!("pane {pane} not found"))
 }
 
 fn pane_ref(arg: Option<String>) -> Result<String> {
@@ -409,11 +460,12 @@ async fn run() -> Result<()> {
             let m: WorktreeMetadata = c.call(Call::MetadataGet { worktree_id: id }).await?;
             print::metadata(&m, json);
         }
-        Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Set { worktree, name, project, priority, tags, clear_name, clear_project, clear_priority, clear_tags })) => {
+        Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Set { worktree, name, project, priority, tags, state, clear_state, clear_name, clear_project, clear_priority, clear_tags })) => {
             let id = resolve_worktree_id(&c, worktree).await?;
             let patch = MetadataPatch {
                 display_name: if clear_name { Some(None) } else { name.map(Some) },
                 project: if clear_project { Some(None) } else { project.map(Some) },
+                state: if clear_state { Some(None) } else { state.map(Some) },
                 priority: if clear_priority { Some(None) } else { priority.map(Some) },
                 tags: if clear_tags { Some(vec![]) } else { tags.map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()) },
             };
@@ -438,11 +490,11 @@ async fn run() -> Result<()> {
             let v: Value = c.call(Call::PaneCreate(PaneCreate { worktree_id, tab_id: tab, cwd, command: (!command.is_empty()).then_some(command), title })).await?;
             print::pane_result(&v, json);
         }
-        Cmd::Pane(PaneCmd::Split { pane, vertical, command }) => {
+        Cmd::Pane(PaneCmd::Split { pane, down, vertical, right: _, command }) => {
             let v: Value = c
                 .call(Call::PaneSplit {
                     pane_id: pane_ref(pane)?,
-                    direction: if vertical { SplitDirection::Vertical } else { SplitDirection::Horizontal },
+                    direction: if down || vertical { SplitDirection::Vertical } else { SplitDirection::Horizontal },
                     command: (!command.is_empty()).then_some(command),
                 })
                 .await?;
@@ -460,6 +512,12 @@ async fn run() -> Result<()> {
         }
         Cmd::Pane(PaneCmd::Rename { title, pane }) => {
             let _: Value = c.call(Call::PaneRename { pane_id: pane_ref(pane)?, title: Some(title) }).await?;
+        }
+        Cmd::Pane(PaneCmd::Swap { pane_a, pane_b }) => {
+            let _: Value = c.call(Call::PaneSwap { pane_a, pane_b }).await?;
+        }
+        Cmd::Pane(PaneCmd::Zoom { pane }) => {
+            let _: Value = c.call(Call::PaneZoom { pane_id: Some(pane_ref(pane)?), tab_id: None }).await?;
         }
         Cmd::Pane(PaneCmd::KillTree { pane }) => {
             let _: Value = c.call(Call::PaneKillTree { pane_id: pane_ref(pane)? }).await?;
@@ -479,6 +537,14 @@ async fn run() -> Result<()> {
         }
         Cmd::Tab(TabCmd::Close { tab, force }) => {
             let _: Value = c.call(Call::TabClose { tab_id: tab, force }).await?;
+        }
+        Cmd::Tab(TabCmd::Equalize { tab }) => {
+            let tab_id = tab_ref(&c, tab).await?;
+            let _: Value = c.call(Call::LayoutEqualize { tab_id }).await?;
+        }
+        Cmd::Tab(TabCmd::Rotate { tab }) => {
+            let tab_id = tab_ref(&c, tab).await?;
+            let _: Value = c.call(Call::LayoutRotate { tab_id, split_id: None }).await?;
         }
         Cmd::Agent(AgentCmd::List { worktree }) => {
             let worktree_id = match worktree {
@@ -546,8 +612,23 @@ async fn run() -> Result<()> {
             let _: Value = c.call(Call::AttentionClear).await?;
         }
         Cmd::Integrations(IntegrationsCmd::Status) => {
-            let s: Status = c.call(Call::Status).await?;
-            print::integrations(&s.integrations, json);
+            let s: Vec<IntegrationStatus> = c.call(Call::IntegrationsStatus).await?;
+            print::integration_status(&s, json);
+        }
+        Cmd::Config(ConfigCmd::Check) => {
+            let issues: Vec<ConfigIssue> = c.call(Call::ConfigCheck).await?;
+            print::config_issues(&issues, json);
+            if issues.iter().any(|i| i.level == IssueLevel::Error) {
+                std::process::exit(2);
+            }
+        }
+        Cmd::Hooks(HooksCmd::Log { limit }) => {
+            let runs: Vec<HookRun> = c.call(Call::HookLog { limit: Some(limit) }).await?;
+            print::hook_runs(&runs, json);
+        }
+        Cmd::States(StatesCmd::List) => {
+            let cfg: Config = c.call(Call::ConfigGet).await?;
+            print::states(&cfg.states, json);
         }
         Cmd::Integrations(IntegrationsCmd::Install) => {
             let i: Integrations = c.call(Call::IntegrationsInstall).await?;
