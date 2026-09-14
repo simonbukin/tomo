@@ -26,7 +26,7 @@ pub async fn serve(daemon: Arc<Daemon>, listener: UnixListener) {
 fn is_slow(call: &Call) -> bool {
     matches!(
         call,
-        Call::RepoAdd { .. } | Call::RepoRemove { .. } | Call::RepoClone { .. } | Call::WorktreeRefresh | Call::WorktreeCreate(_) | Call::WorktreeArchive { .. } | Call::WorktreeRestore { .. } | Call::GitSummary { .. }
+        Call::RepoAdd { .. } | Call::RepoRemove { .. } | Call::RepoClone { .. } | Call::WorktreeRefresh | Call::WorktreeCreate(_) | Call::WorktreeArchive { .. } | Call::WorktreeRestore { .. } | Call::GitSummary { .. } | Call::PrStatus { .. }
     )
 }
 

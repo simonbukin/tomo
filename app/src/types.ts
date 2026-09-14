@@ -132,6 +132,26 @@ export interface AttentionItem {
   viewed_at_ms: number | null;
 }
 
+export interface PullRequest {
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  draft: boolean;
+  review_decision: string | null;
+  mergeable: string | null;
+  checks_passed: number;
+  checks_failed: number;
+  checks_pending: number;
+  fetched_at_ms: number;
+}
+
+export interface PrStatusResult {
+  available: boolean;
+  reason: string | null;
+  pr: PullRequest | null;
+}
+
 export interface FsEntry {
   name: string;
   rel_path: string;

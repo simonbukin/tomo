@@ -8,6 +8,8 @@ import type {
   HomeOptions,
   Id,
   Pane,
+  PrStatusResult,
+  PullRequest,
   Repo,
   Snapshot,
   Tab,
@@ -39,6 +41,7 @@ export interface State {
   unlocks: TownUnlock[];
   selection: Set<Id>;
   selectionAnchor: Id | null;
+  prs: Record<Id, PrStatusResult>;
 }
 
 export type Dialog =
@@ -72,6 +75,7 @@ let state: State = {
   unlocks: [],
   selection: new Set(),
   selectionAnchor: null,
+  prs: {},
 };
 
 const listeners = new Set<() => void>();
@@ -238,6 +242,11 @@ export function applyFrame(frame: Frame): void {
     case "notice": {
       const n = d as { level: string; message: string };
       setState((s) => ({ notice: { ...n, nonce: (s.notice?.nonce ?? 0) + 1 } }));
+      break;
+    }
+    case "pr_changed": {
+      const { worktree_id, pr } = d as { worktree_id: Id; pr: PullRequest | null };
+      setState((s) => ({ prs: { ...s.prs, [worktree_id]: { available: true, reason: null, pr } } }));
       break;
     }
     case "town_unlocked": {

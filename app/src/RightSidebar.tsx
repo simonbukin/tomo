@@ -5,8 +5,9 @@ import { openMenu } from "./ContextMenu";
 import { fileMenu } from "./menus";
 import { ResizeHandle } from "./Sidebar";
 import { setMetadata } from "./actions";
-import { formatBytes, notify, useStore } from "./store";
-import type { FsEntry, Id, ProcessInfo, Worktree } from "./types";
+import { formatBytes, notify, setState, useStore } from "./store";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { FsEntry, Id, PrStatusResult, ProcessInfo, Worktree } from "./types";
 
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
   return (
@@ -14,6 +15,7 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
       <ResizeHandle side="right" />
       <MetadataSection w={worktree} />
       <GitSection w={worktree} />
+      <PrSection w={worktree} />
       <ProcessSection w={worktree} />
       <FilesSection w={worktree} />
     </aside>
@@ -67,6 +69,39 @@ function GitSection({ w }: { w: Worktree }) {
         </>
       ) : (
         <div className="muted">{w.exists ? "no status yet" : "worktree directory is missing"}</div>
+      )}
+    </section>
+  );
+}
+
+function PrSection({ w }: { w: Worktree }) {
+  const status = useStore((s) => s.prs[w.id]);
+  const load = () => rpc<PrStatusResult>("pr_status", { worktree_id: w.id }).then((r) => setState((s) => ({ prs: { ...s.prs, [w.id]: r } }))).catch(() => {});
+  useEffect(() => {
+    if (!w.exists) return;
+    load();
+    const t = window.setInterval(load, 120_000);
+    return () => window.clearInterval(t);
+  }, [w.id, w.branch, w.exists]);
+  const pr = status?.pr ?? null;
+  const checks = pr ? pr.checks_passed + pr.checks_failed + pr.checks_pending : 0;
+  const checkState = !pr || checks === 0 ? "none" : pr.checks_failed > 0 ? "failed" : pr.checks_pending > 0 ? "pending" : "passed";
+  return (
+    <section className="side-section">
+      <div className="section-label">pull request <button className="link" onClick={load}>refresh</button></div>
+      {pr ? (
+        <>
+          <div className="kv"><label>#{pr.number}</label><span className="pr-title" title={pr.title} onClick={() => openUrl(pr.url).catch(() => {})}>{pr.title}</span></div>
+          <div className="kv"><label>state</label><span><span className={`state pr-${pr.state}`} /> {pr.state}{pr.draft ? " · draft" : ""}{pr.review_decision ? ` · ${pr.review_decision.replace(/_/g, " ")}` : ""}</span></div>
+          <div className="kv"><label>checks</label><span><span className={`state check-${checkState}`} /> {checks === 0 ? "none" : `${pr.checks_passed} passed${pr.checks_failed ? ` · ${pr.checks_failed} failed` : ""}${pr.checks_pending ? ` · ${pr.checks_pending} pending` : ""}`}</span></div>
+          {pr.mergeable && pr.mergeable !== "mergeable" && <div className="kv"><label>merge</label><span className="hot">{pr.mergeable}</span></div>}
+        </>
+      ) : status?.available === false ? (
+        <div className="muted">{status.reason}</div>
+      ) : status ? (
+        <div className="muted">no pull request for {w.branch ?? "this branch"}</div>
+      ) : (
+        <div className="faint">checking…</div>
       )}
     </section>
   );

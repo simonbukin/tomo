@@ -16,8 +16,8 @@ import { paneMenu } from "./menus";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
-const DARK = { background: "#0c0c10", foreground: "#e2e2e8", cursor: "#e2e2e8", selectionBackground: "#2a2347" };
-const LIGHT = { background: "#ffffff", foreground: "#17171c", cursor: "#17171c", selectionBackground: "#ebe6fb" };
+const DARK = { background: "#0f0f12", foreground: "#e2e2e8", cursor: "#e2e2e8", selectionBackground: "#261d45" };
+const LIGHT = { background: "#ffffff", foreground: "#17171c", cursor: "#17171c", selectionBackground: "#ede7ff" };
 
 function isDark(theme: string): boolean {
   if (theme === "dark") return true;

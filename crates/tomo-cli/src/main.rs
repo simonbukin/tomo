@@ -59,6 +59,8 @@ enum Cmd {
     Towns(TownsCmd),
     #[command(about = "Kill an owned process tree by pid")]
     Kill { pid: u32 },
+    #[command(about = "Show the GitHub pull request for a worktree's branch (needs gh)")]
+    Pr { worktree: Option<String> },
 }
 
 #[derive(Subcommand)]
@@ -550,6 +552,11 @@ async fn run() -> Result<()> {
         Cmd::Integrations(IntegrationsCmd::Install) => {
             let i: Integrations = c.call(Call::IntegrationsInstall).await?;
             print::integrations(&i, json);
+        }
+        Cmd::Pr { worktree } => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let r: PrStatusResult = c.call(Call::PrStatus { worktree_id: id }).await?;
+            print::pr(&r, json);
         }
         Cmd::Kill { pid } => {
             let _: Value = c.call(Call::ProcessKillTree { pid }).await?;
