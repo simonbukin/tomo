@@ -26,6 +26,7 @@ function isDark(theme: string): boolean {
 export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }) {
   const pane = useStore((s) => s.panes[paneId]);
   const config = useStore((s) => s.config);
+  const connectionNonce = useStore((s) => s.connectionNonce);
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const [oscTitle, setOscTitle] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       term.dispose();
       termRef.current = null;
     };
-  }, [paneId, config?.font_family, config?.font_size, config?.theme, config?.scrollback_lines]);
+  }, [paneId, connectionNonce, config?.font_family, config?.font_size, config?.theme, config?.scrollback_lines]);
 
   useEffect(() => {
     if (active) termRef.current?.focus();
