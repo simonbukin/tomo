@@ -95,7 +95,11 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       window.clearTimeout(settle);
       settle = window.setTimeout(() => {
         raf = requestAnimationFrame(() => {
-          if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit();
+          if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
+          fit.fit();
+          const screen = host.querySelector(".xterm-screen");
+          const limit = host.getBoundingClientRect().bottom - parseFloat(getComputedStyle(host).paddingBottom);
+          if (screen && screen.getBoundingClientRect().bottom > limit + 0.5 && term.rows > 2) term.resize(term.cols, term.rows - 1);
         });
       }, 90);
     };

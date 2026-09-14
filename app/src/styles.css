@@ -223,7 +223,7 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 .pane-note { color: var(--fg-3); }
 .pane-close { background: none; padding: 0 2px; color: var(--fg-3); }
 .pane-close:hover { color: var(--fg); background: transparent; }
-.pane-body { flex: 1; min-height: 0; padding: var(--sp-3) var(--sp-1) var(--sp-1) var(--sp-3); user-select: text; }
+.pane-body { flex: 1; min-height: 0; padding: var(--sp-3) var(--sp-1) var(--sp-1) var(--sp-3); user-select: text; overflow: hidden; border-radius: var(--radius); }
 .pane-body .xterm { height: 100%; }
 .pane-body .xterm-viewport { overflow-y: auto; }
 
