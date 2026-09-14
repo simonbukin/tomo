@@ -13,6 +13,8 @@
     "windows": [
       {
         "title": "Tomo",
+        "label": "main",
+        "create": false,
         "width": 1400,
         "height": 900,
         "minWidth": 800,
