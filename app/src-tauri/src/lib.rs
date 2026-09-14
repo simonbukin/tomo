@@ -77,6 +77,8 @@ async fn connect_once(app: &AppHandle, link: &Link) -> Option<()> {
     let stream = UnixStream::connect(socket_path()).await.ok()?;
     let (rd, mut wr) = stream.into_split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let hello = json!({ "id": 0, "method": "hello", "params": { "protocol": PROTOCOL_VERSION, "client": format!("tomo-app/{}", env!("CARGO_PKG_VERSION")) } });
+    let _ = tx.send(hello.to_string());
     *link.tx.lock().unwrap() = Some(tx);
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
@@ -94,6 +96,14 @@ async fn connect_once(app: &AppHandle, link: &Link) -> Option<()> {
                 if let Some(tx) = link.pending.lock().unwrap().remove(&id) {
                     let _ = tx.send(Ok(result));
                 }
+            }
+            Ok(Frame::Error { id: 0, error }) if error.code == ErrorCode::Unsupported => {
+                eprintln!("[tomo-app] daemon speaks another protocol; asking it to stop: {}", error.message);
+                if let Some(tx) = link.tx.lock().unwrap().as_ref() {
+                    let _ = tx.send(json!({ "id": 0, "method": "daemon_stop" }).to_string());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                break;
             }
             Ok(Frame::Error { id, error }) => {
                 if let Some(tx) = link.pending.lock().unwrap().remove(&id) {
