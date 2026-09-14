@@ -4,9 +4,12 @@ import type {
   AgentPresence,
   AttentionItem,
   Config,
+  ConfigIssue,
   Frame,
   HomeOptions,
+  HookRun,
   Id,
+  IntegrationStatus,
   Pane,
   PrStatusResult,
   PullRequest,
@@ -19,6 +22,7 @@ import type {
   WorktreeResources,
 } from "./types";
 import type { MenuItem } from "./ContextMenu";
+import type { QueryContext } from "./homeQuery";
 
 export interface State {
   connected: boolean;
@@ -42,15 +46,20 @@ export interface State {
   selection: Set<Id>;
   selectionAnchor: Id | null;
   prs: Record<Id, PrStatusResult>;
+  zoomed: Record<Id, Id>;
+  healthChecked: boolean;
 }
 
 export type Dialog =
   | { kind: "add-repo" }
   | { kind: "create-worktree"; repoId?: Id }
   | { kind: "confirm"; title: string; body: string; confirmLabel: string; onConfirm: () => void }
-  | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void };
+  | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void }
+  | { kind: "integrations" }
+  | { kind: "config-check" }
+  | { kind: "hook-log" };
 
-export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "priority", group: "repo", showArchived: false };
+export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
 const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome };
 
@@ -76,6 +85,8 @@ let state: State = {
   selection: new Set(),
   selectionAnchor: null,
   prs: {},
+  zoomed: {},
+  healthChecked: false,
 };
 
 const listeners = new Set<() => void>();
@@ -137,8 +148,8 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
 }
 
 export function applySnapshot(snap: Snapshot): void {
-  const savedHome = (snap.ui_state?.home ?? {}) as Partial<HomeOptions>;
   const saved = (snap.ui_state ?? {}) as Partial<UiState>;
+  const savedHome = (saved.home ?? {}) as Partial<HomeOptions>;
   const ui: UiState = {
     ...defaultUi,
     ...saved,
@@ -160,6 +171,33 @@ export function applySnapshot(snap: Snapshot): void {
     resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
     ui,
   });
+  checkHealthOnce();
+}
+
+function checkHealthOnce(): void {
+  if (state.healthChecked) return;
+  setState({ healthChecked: true });
+  rpc<IntegrationStatus[]>("integrations_status")
+    .then((list) => {
+      const degraded = list.filter((i) => i.level === "partial" || i.level === "process_only");
+      if (degraded.length) notify("warning", `${degraded.map((i) => `${i.kind}: ${i.reason ?? i.level}`).join(" · ")} — see integration status`);
+    })
+    .catch(() => {});
+  rpc<ConfigIssue[]>("config_check")
+    .then((issues) => {
+      const errors = issues.filter((i) => i.level === "error");
+      if (errors.length) notify("error", `config: ${errors[0].key} — ${errors[0].message}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`);
+    })
+    .catch(() => {});
+}
+
+export function setZoom(tabId: Id, paneId: Id | null): void {
+  setState((s) => {
+    const zoomed = { ...s.zoomed };
+    if (paneId && zoomed[tabId] !== paneId) zoomed[tabId] = paneId;
+    else delete zoomed[tabId];
+    return { zoomed };
+  });
 }
 
 export function applyFrame(frame: Frame): void {
@@ -171,6 +209,21 @@ export function applyFrame(frame: Frame): void {
     case "worktrees_changed":
       setState({ worktrees: (d as { worktrees: Worktree[] }).worktrees });
       break;
+    case "worktree_archiving": {
+      const { worktree_id } = d as { worktree_id: Id };
+      setState((s) => ({ worktrees: s.worktrees.map((w) => (w.id === worktree_id ? { ...w, archiving: true } : w)) }));
+      break;
+    }
+    case "zoom_request": {
+      const { tab_id, pane_id } = d as { tab_id: Id; pane_id: Id | null };
+      setZoom(tab_id, pane_id);
+      break;
+    }
+    case "hook_ran": {
+      const { run } = d as { run: HookRun };
+      if (!run.ok) notify("error", `hook failed: ${run.event} — ${run.output_tail.trim().split("\n").pop() || `exit ${run.exit_code ?? "?"}`}`);
+      break;
+    }
     case "metadata_changed": {
       const { worktree_id, metadata } = d as { worktree_id: Id; metadata: Worktree["metadata"] };
       setState((s) => ({ worktrees: s.worktrees.map((w) => (w.id === worktree_id ? { ...w, metadata } : w)) }));
@@ -185,7 +238,8 @@ export function applyFrame(frame: Frame): void {
         const live = new Set(Object.values(next).flat().flatMap((t) => paneIds(t.layout)));
         const panes = Object.fromEntries(Object.entries(s.panes).filter(([id, p]) => p.worktree_id !== worktree_id || live.has(id)));
         const agents = Object.fromEntries(Object.entries(s.agents).filter(([id]) => panes[id]));
-        return { tabs: next, panes, agents };
+        const zoomed = Object.fromEntries(Object.entries(s.zoomed).filter(([, paneId]) => live.has(paneId)));
+        return { tabs: next, panes, agents, zoomed };
       });
       break;
     }
@@ -273,6 +327,10 @@ export function activeTab(s: State, worktreeId: Id | null): Tab | null {
 
 export function unviewedAttention(s: State): AttentionItem[] {
   return s.attention.filter((a) => !a.viewed_at_ms);
+}
+
+export function queryContext(s: State): QueryContext {
+  return { repos: s.repos, agents: Object.values(s.agents), attention: s.attention, states: s.config?.states ?? [] };
 }
 
 export function agentsOf(s: State, worktreeId: Id): AgentPresence[] {

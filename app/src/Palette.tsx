@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { actions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, spawnAgent } from "./actions";
+import { allActions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, spawnAgent } from "./actions";
 import { describeBinding } from "./keys";
 import { repoName, setState, setUi, useStore, visibleRepos } from "./store";
 
@@ -62,7 +62,7 @@ export function Palette() {
     const recent = recentIds();
     const boost = (key: string) => (recent.includes(key) ? 20 - recent.indexOf(key) : 0);
     const repoOf = (w: (typeof worktrees)[number]) => repoName({ repos } as never, w.repo_id);
-    const cmds: Item[] = actions
+    const cmds: Item[] = allActions()
       .filter((a) => (!a.whenWorktree || !!current) && (!a.when || a.when()))
       .map((a) => ({
         key: `cmd:${a.id}`,

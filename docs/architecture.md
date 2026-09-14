@@ -55,7 +55,7 @@ overwrite it.
 
 | Category                    | Examples                                                       | Rule                                                          |
 |-----------------------------|----------------------------------------------------------------|---------------------------------------------------------------|
-| Authoritative Tomo metadata | known repository roots; display name, project, priority, tags  | Only the user (through GUI or CLI) changes it.                 |
+| Authoritative Tomo metadata | known repository roots; display name, project, state, tags, town unlocks | Only the user (through GUI, CLI, or a hook script) changes it. |
 | Cached external observation | worktree path, gitdir name, branch, dirty state, diff counts   | Rediscovered from Git on every refresh. Never trusted forever. |
 | Recoverable runtime state   | tabs, layout tree, panes, cwd, agent kind, session reference, attention, UI state | Written so a restart can rebuild the shape of the work. |
 
@@ -141,6 +141,71 @@ reference always updates. See `agents::merge` and
 
 Why: a hook says "waiting". A CPU sample a second later says "working" because
 the terminal repainted. The weaker signal must not win.
+
+## States and tags
+
+A worktree has at most one **state** and any number of **tags**. State
+answers "where is this in my workflow?"; tags answer "what is this about?".
+The state values are personal configuration (`[[states]]` in
+`config.toml`), not protocol enums. The daemon rejects a state that the
+config does not list, so every client sees the same taxonomy. Priority is
+kept for compatibility but the UI no longer revolves around it.
+
+Why two dimensions: grouping, filtering, and hooks want one ordered axis
+(state) and one free-form axis (tags). A state disguised as a tag has no
+order and no single value.
+
+## Events and hooks
+
+Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
+worktree discovered, created, before_archive, archived, restored,
+state_changed; pane created and closed; agent started, working, waiting,
+idle, exited; attention created. Each event runs the matching `[[hooks]]`
+entries from `config.toml` as ordinary processes with the event JSON on
+stdin. A hook that wants to change Tomo calls the `tomo` CLI, so the GUI,
+the CLI, hooks, and agents share one behavioral API.
+
+Only `worktree.before_archive` is synchronous: the archive waits for it and
+a non-zero exit aborts. Every other hook runs detached with a timeout, and
+its result goes to `<data dir>/hooks.log` and to a `HookRan` event. Handlers
+queue events while they hold the state lock and dispatch them after the
+request finishes, so a slow script can never stall a keystroke.
+
+Why: hooks exist to react to reality after it changed. The one exception is
+a destructive operation, where a script may still say no. See
+[hooks.md](hooks.md).
+
+## Layout operations
+
+The tab layout is a binary split tree (`LayoutNode`). Pure functions in
+`layout.rs` implement split, remove, resize, equalize, swap, rotate, and
+`split_of`; `is_valid` checks unique pane ids and ratios in range after
+every mutation. Zoom is transient GUI state: the daemon only forwards a
+`ZoomRequest` event and never changes the persisted tree. Agent-driven
+spawns go to a new tab once a tab holds `max_panes_per_tab` panes.
+
+## Integration health
+
+`tomo integrations status` reports each agent as `full` (lifecycle hooks
+and resume), `partial` (resume only; for Codex, hooks installed but not
+trusted), `process_only` (binary found, no hooks installed), or
+`unavailable` (binary not on PATH), with a reason. The GUI shows the same
+list from the palette.
+
+## Feature boundary: Towns
+
+Japan Towns lives in `crates/tomod/src/features/towns.rs` (dataset and
+weighted pick), the `towns` table (unlocks), and `app/src/Towns.tsx`. The
+generic runtime touches it in worktree creation and two calls. See
+[features/towns.md](features/towns.md).
+
+## Generated bindings
+
+`crates/tomo-proto` is the canonical protocol. `ts-rs` exports every wire
+type to `app/src/generated/*.ts`. `cargo test -p tomo-proto` fails when
+those files are stale; `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto`
+rewrites them. The frontend re-exports them from `app/src/types.ts` and
+keeps only view-only types by hand.
 
 ## IPC
 

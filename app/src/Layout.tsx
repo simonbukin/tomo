@@ -1,12 +1,15 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { rpc } from "./api";
+import { paneIds, useStore } from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
 import type { Id, LayoutNode, Tab } from "./types";
 
 export function TabLayout({ tab }: { tab: Tab }) {
+  const zoomed = useStore((s) => s.zoomed[tab.id] ?? null);
+  const node: LayoutNode = zoomed && paneIds(tab.layout).includes(zoomed) ? { type: "leaf", pane_id: zoomed } : tab.layout;
   return (
     <div className="layout-root">
-      <Node node={tab.layout} tabId={tab.id} activePane={tab.active_pane_id} />
+      <Node node={node} tabId={tab.id} activePane={tab.active_pane_id} />
     </div>
   );
 }

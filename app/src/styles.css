@@ -381,3 +381,26 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 .check-failed { background: var(--hot); border-color: var(--hot); }
 .check-pending { background: var(--waiting); border-color: var(--waiting); }
 .check-none { border-color: var(--line-strong); }
+
+.wt-state { color: var(--fg-2); }
+.state-archiving { border-color: var(--fg-3); background: var(--fg-3); animation: pulse 1.2s ease-in-out infinite; }
+.wt-archiving, .card-archiving { opacity: 0.7; cursor: default; }
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.pane-zoomed { color: var(--accent); }
+.dialog-list { display: flex; flex-direction: column; gap: var(--sp-1); max-height: 50vh; overflow: auto; font-size: var(--fs-1); }
+.dialog-row { display: grid; grid-template-columns: 12px 90px minmax(0, 1fr); column-gap: var(--sp-2); align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.dialog-row:last-child { border-bottom: none; }
+.dialog-row .name { color: var(--fg); }
+.dialog-row .detail { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog-row .state { align-self: center; }
+.state-full { background: var(--working); border-color: var(--working); }
+.state-partial { background: var(--waiting); border-color: var(--waiting); }
+.state-process_only { border-color: var(--waiting); }
+.state-unavailable { border-color: var(--fg-3); }
+.state-ok { background: var(--working); border-color: var(--working); }
+.state-fail { background: var(--hot); border-color: var(--hot); }
+.state-warning { background: var(--waiting); border-color: var(--waiting); }
+.state-error { background: var(--hot); border-color: var(--hot); }
+.hook-row { cursor: pointer; }
+.hook-out { grid-column: 1 / -1; margin: var(--sp-1) 0 0; padding: var(--sp-2); background: var(--bg-1); border: 1px solid var(--line); border-radius: 3px; font-size: var(--fs-0); white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow: auto; color: var(--fg-1); }
+.toast-warning { border-color: var(--waiting); color: var(--waiting); }

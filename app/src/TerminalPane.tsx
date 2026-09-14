@@ -27,6 +27,7 @@ function isDark(theme: string): boolean {
 
 export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }) {
   const pane = useStore((s) => s.panes[paneId]);
+  const zoomed = useStore((s) => !!pane && s.zoomed[pane.tab_id] === paneId);
   const config = useStore((s) => s.config);
   const connectionNonce = useStore((s) => s.connectionNonce);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -139,6 +140,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
           <span className={`state ${stateClass}`} />
           <strong>{title}</strong>
           {agent && <span className="agent-state">{agent.state}</span>}
+          {zoomed && <span className="pane-note pane-zoomed" title="Only this pane is shown. Choose unzoom in the pane menu or press the zoom key again.">zoomed</span>}
           {originNote && <span className="pane-note" title="This pane was rebuilt after a daemon restart">{originNote}</span>}
           {pane && !pane.live && <span className="pane-note">exited {pane.exit_code ?? ""}</span>}
         </span>

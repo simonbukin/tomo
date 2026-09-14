@@ -42,7 +42,8 @@ scripts/install.sh         release build and install
 ## Build, run, test
 
 ```bash
-cargo test                       # Rust unit tests (proto, daemon)
+cargo test                       # Rust unit tests (proto, daemon); fails if app/src/generated is stale
+TOMO_WRITE_TYPES=1 cargo test -p tomo-proto   # regenerate app/src/generated from tomo-proto
 cargo build                      # debug binaries in target/debug
 pnpm --dir app install
 pnpm --dir app build             # tsc --noEmit, then vite build
@@ -75,9 +76,12 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
 ## Add a daemon operation end to end
 
 1. **Contract.** Add a variant to `Call` in `crates/tomo-proto/src/lib.rs`.
-   Put the payload in a named struct when it has more than three fields. Add
-   an `Event` variant when clients must learn about the change without
-   asking.
+   Put the payload in a named struct when it has more than three fields and
+   derive `TS` on it. Add an `Event` variant when clients must learn about
+   the change without asking. Then run
+   `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` to regenerate
+   `app/src/generated/`; commit those files. Plain `cargo test` fails while
+   they are stale.
 2. **Daemon.** Add a match arm in `Daemon::handle` in
    `crates/tomod/src/daemon.rs`. Lock `self.lock()` for as short a time as
    possible. Do not hold the lock across `.await`. Persist through `Store`
@@ -85,9 +89,15 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
    runs Git or anything else that takes more than a few milliseconds.
 3. **CLI.** Add a subcommand in `crates/tomo-cli/src/main.rs`, call
    `c.call(Call::…)`, and print through `print.rs` with a `--json` branch.
-4. **Frontend.** Mirror the types in `app/src/types.ts`. Handle the event in
-   `applyFrame` in `app/src/store.ts`. Expose the action in
-   `app/src/actions.ts` so the palette and keybindings get it for free.
+4. **Frontend.** Import the generated types (`app/src/types.ts` re-exports
+   `app/src/generated`). Handle the event in `applyFrame` in
+   `app/src/store.ts`. Expose the action in `app/src/actions.ts` so the
+   palette and keybindings get it for free.
+6. **Hook event.** If the change is a workflow transition, build a
+   `HookEvent` with `events::envelope` and push it to `inner.hook_queue`
+   while you hold the lock; `Daemon::handle` flushes the queue after the
+   request. Add the name to `HOOK_EVENTS` in `tomo-proto` and to
+   `docs/hooks.md`.
 5. **Docs.** Add the command to `docs/cli.md`.
 
 ## Conventions
@@ -118,6 +128,32 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
 | How a moved worktree keeps its data   | `Daemon::discover` (gitdir rebinding)   |
 | Which pane gets auto-closed on exit   | `Daemon::on_exit` (exit code 0 only)    |
 | Default keybindings                   | `config::default_keybindings`           |
+| Which hooks run for an event          | `events::matching_hooks`, `Daemon::dispatch` |
+| The only synchronous hook             | `Daemon::gate` (`worktree.before_archive`) |
+| Which states are valid                | `config.states`, checked in `MetadataSet` |
+| Config validation                     | `config::check`                         |
+| Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate}` |
+| Town naming and unlocks               | `features::towns`, `WorktreeCreate` handler |
+
+## Verification without model tokens
+
+Validate in this order; each step is cheaper than the next:
+
+1. Pure Rust and TypeScript unit tests (`cargo test`, `pnpm --dir app test`).
+2. Fake processes: `scripts/fixtures/fake-playwright-tree`,
+   `scripts/fixtures/memory-hog`, `scripts/fixtures/cwd-wanderer`.
+3. Fake agents and hooks: `scripts/fixtures/fake-agent` speaks the real
+   hook protocol through `tomo hook claude`; point `[agents.claude]` at it.
+4. Deterministic harnesses against a scratch daemon:
+   `scripts/torture/run-all.sh` (terminal, agents, provenance, layout) and
+   `scripts/soak/busy.sh <minutes> <report path>`.
+5. Real CLI and TUI programs in a pane (`vim`, `less`, `top`, `fzf`).
+6. One short real Claude, Codex, and Pi session each.
+7. Daily use.
+
+Never spawn a real agent only to create process activity or a state
+transition; the fixtures do that for free. `scripts/perf.sh` records the
+daemon numbers listed in `architecture.md`.
 
 ## Known limitations
 
