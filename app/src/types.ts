@@ -2,6 +2,9 @@ export type {
   ActionDef,
   ActionRunResult,
   ActionSet,
+  ActivityEvent,
+  ActivityKind,
+  ActivityQuery,
   AgentCommand,
   AgentKind,
   AgentPresence,
@@ -10,6 +13,7 @@ export type {
   AgentSpawn,
   AgentState,
   AttentionItem,
+  AttentionKind,
   AttentionLevel,
   ArchiveResult,
   Authority,
@@ -42,6 +46,8 @@ export type {
   PullRequest,
   Repo,
   RpcError,
+  RuntimeEndpoint,
+  RuntimeProtocol,
   Snapshot,
   SpawnResult,
   SplitDirection,
@@ -50,6 +56,8 @@ export type {
   Tab,
   Town,
   TownUnlock,
+  UsageBucket,
+  UsageSnapshot,
   Worktree,
   WorktreeCreate,
   WorktreeMetadata,
@@ -82,7 +90,7 @@ export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type SidebarSort = "name" | "recent" | "created" | "attention" | "state";
 
 export interface UiState {
-  view: "home" | "worktree" | "towns";
+  view: "home" | "worktree" | "towns" | "activity";
   activeWorktreeId: Id | null;
   leftOpen: boolean;
   rightOpen: boolean;

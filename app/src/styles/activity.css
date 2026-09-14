@@ -1,0 +1,31 @@
+/* Activity: one dense feed grouped by day, with the usage strip in the header. */
+
+.activity { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); font-size: var(--fs-1); }
+.activity-bar { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); min-height: 26px; }
+.activity-title { color: var(--fg-2); }
+.segmented { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.seg { background: none; border: none; border-radius: 0; padding: 1px 8px; font-size: var(--fs-1); color: var(--fg-2); }
+.seg + .seg { border-left: 1px solid var(--line-strong); }
+.seg-active { background: var(--accent-soft); color: var(--accent); }
+.activity-empty { padding: 48px 0; text-align: center; }
+.activity-day { margin-bottom: var(--sp-3); }
+.activity-row { display: grid; grid-template-columns: 40px minmax(90px, 0.8fr) minmax(0, 2.4fr) auto; align-items: center; column-gap: var(--sp-3); height: 30px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line); }
+.activity-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-row:hover { background: var(--bg-1); }
+.activity-time { color: var(--fg-3); font-size: var(--fs-0); font-variant-numeric: tabular-nums; }
+.activity-who { display: inline-flex; align-items: center; gap: 5px; color: var(--fg-2); }
+.activity-title-text { color: var(--fg); font-weight: 500; }
+.activity-actions { display: inline-flex; gap: var(--sp-3); }
+.activity-more { margin-top: var(--sp-2); }
+
+/* ---- usage */
+.usage-strip { display: inline-flex; align-items: center; gap: var(--sp-3); }
+.usage-item { font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+.usage-waiting { color: var(--waiting); }
+.usage-hot { color: var(--hot); }
+.usage-row { display: grid; grid-template-columns: 48px 60px 40px auto; align-items: center; column-gap: var(--sp-2); min-height: 22px; }
+.usage-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-bar { height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+.usage-fill { display: block; height: 100%; background: var(--fg-2); }
+.usage-fill.usage-waiting { background: var(--waiting); }
+.usage-fill.usage-hot { background: var(--hot); }

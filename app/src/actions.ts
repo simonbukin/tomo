@@ -1,8 +1,9 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
-import { activeTab, agentsOf, clearSelection, getState, notify, paneIds, setState, setUi, unviewedAttention } from "./store";
+import { activeTab, agentsOf, clearSelection, getState, needsMe, notify, paneIds, setState, setUi } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
-import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
+import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
@@ -140,7 +141,7 @@ export function focusDirection(dir: "left" | "right" | "up" | "down"): void {
 
 export async function nextAttention(): Promise<void> {
   const s = getState();
-  const item = unviewedAttention(s)[0];
+  const item = needsMe(s)[0];
   if (!item) {
     notify("info", "Nothing needs attention");
     return;
@@ -236,6 +237,23 @@ export function stopWorktreeAction(worktreeId: Id, actionId: string): void {
 
 export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
   rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
+}
+
+/** ponytail: system browser only; call `openInBrowser(worktreeId, url)` here once the browser pane lands. */
+export function openEndpoint(url: string, _worktreeId?: Id): void {
+  openUrl(url).catch((e) => notify("error", (e as Error).message));
+}
+
+export function resolveCheckpoint(id: Id): void {
+  rpc("checkpoint_resolve", { id })
+    .then(() => setState((s) => ({ attention: s.attention.filter((a) => a.id !== id) })))
+    .catch(() => {});
+}
+
+export function refreshUsage(): void {
+  rpc<UsageSnapshot[]>("usage_get", { refresh: true })
+    .then((list) => Array.isArray(list) && setState({ usage: list }))
+    .catch(() => {});
 }
 
 export function restoreWorktree(worktreeId: Id): void {
@@ -462,6 +480,7 @@ export function openExternal(target: "finder" | "editor", relPath = ""): void {
 export const actions: Action[] = [
   { id: "home", label: "Go to Home", run: () => setUi({ view: "home" }) },
   { id: "towns", label: "Open Japan map", run: () => setUi({ view: "towns" }) },
+  { id: "activity", label: "Activity", run: () => setUi({ view: "activity" }) },
   { id: "palette", label: "Command palette", run: () => setState((s) => ({ paletteOpen: !s.paletteOpen })) },
   { id: "next_attention", label: "Jump to next attention item", run: nextAttention },
   { id: "prev_worktree", label: "Previous worktree", run: () => cycleWorktree(-1) },

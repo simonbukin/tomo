@@ -1,3 +1,4 @@
+import { needsMeItem } from "./activityModel";
 import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, StateDef, Worktree } from "./types";
 
 export interface QueryContext {
@@ -33,7 +34,7 @@ export function agentsOf(agents: AgentPresence[], worktreeId: string): AgentPres
 }
 
 export function needsAttention(w: Worktree, ctx: QueryContext): boolean {
-  return agentsOf(ctx.agents, w.id).some((a) => a.state === "waiting") || ctx.attention.some((a) => a.worktree_id === w.id && !a.viewed_at_ms);
+  return agentsOf(ctx.agents, w.id).some((a) => a.state === "waiting") || ctx.attention.some((a) => a.worktree_id === w.id && needsMeItem(a));
 }
 
 function agentStateOf(w: Worktree, ctx: QueryContext): string {
