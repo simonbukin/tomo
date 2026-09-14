@@ -245,6 +245,18 @@ tomo agent spawn codex --cwd .
 Codex starts in a new pane of the same worktree and appears in the GUI at
 once.
 
+### browser
+
+```bash
+tomo browser open [worktree] [--url U]
+```
+
+Opens a browser pane in a new tab titled `Browser` and prints the pane id.
+Without `--url` the pane shows `about:blank`. The pane has no shell:
+`pane send`, `pane kill-tree`, and the terminal calls refuse it. The url
+is saved, so a daemon restart restores the page. See
+[browser.md](browser.md).
+
 ### ps
 
 ```bash

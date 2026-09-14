@@ -1,3 +1,4 @@
+mod activity;
 mod agents;
 mod config;
 mod daemon;

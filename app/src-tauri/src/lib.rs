@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Rect, State, Url, Webview, WebviewUrl};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::{mpsc, oneshot};
@@ -176,6 +177,134 @@ fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
     link.tx.lock().unwrap().is_some()
 }
 
+const ANNOTATE_JS: &str = include_str!("annotate.js");
+
+fn browser_label(pane_id: &str) -> String {
+    format!("browser-{pane_id}")
+}
+
+fn browser_webview(app: &AppHandle, pane_id: &str) -> Result<Webview, String> {
+    app.get_webview(&browser_label(pane_id)).ok_or_else(|| format!("no browser webview for pane {pane_id}"))
+}
+
+fn emit_browser_state(app: &AppHandle, pane_id: &str, patch: Value) {
+    let mut payload = json!({ "pane_id": pane_id });
+    if let (Some(out), Some(fields)) = (payload.as_object_mut(), patch.as_object()) {
+        out.extend(fields.clone());
+    }
+    let _ = app.emit_to("main", "browser://state", payload);
+}
+
+fn bounds(x: f64, y: f64, width: f64, height: f64) -> Rect {
+    Rect { position: LogicalPosition::new(x, y).into(), size: LogicalSize::new(width.max(1.0), height.max(1.0)).into() }
+}
+
+#[tauri::command]
+async fn browser_create(app: AppHandle, pane_id: String, url: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
+    if let Ok(existing) = browser_webview(&app, &pane_id) {
+        return existing.set_bounds(bounds(x, y, width, height)).map_err(|e| e.to_string());
+    }
+    let window = app.get_window("main").ok_or("main window missing")?;
+    let target = Url::parse(&url).map_err(|e| e.to_string())?;
+    let label = browser_label(&pane_id);
+    let (nav_app, nav_pane) = (app.clone(), pane_id.clone());
+    let (load_app, load_pane) = (app.clone(), pane_id.clone());
+    let (title_app, title_pane) = (app.clone(), pane_id.clone());
+    let (popup_app, popup_label) = (app.clone(), label.clone());
+    let builder = WebviewBuilder::new(&label, WebviewUrl::External(target))
+        .initialization_script(ANNOTATE_JS)
+        .on_navigation(move |u| {
+            emit_browser_state(&nav_app, &nav_pane, json!({ "url": u.as_str(), "loading": true }));
+            true
+        })
+        .on_page_load(move |_, payload| {
+            let loading = matches!(payload.event(), PageLoadEvent::Started);
+            emit_browser_state(&load_app, &load_pane, json!({ "url": payload.url().as_str(), "loading": loading }));
+        })
+        .on_document_title_changed(move |_, title| emit_browser_state(&title_app, &title_pane, json!({ "title": title })))
+        .on_new_window(move |u, _| {
+            if let Some(wv) = popup_app.get_webview(&popup_label) {
+                let _ = wv.navigate(u);
+            }
+            NewWindowResponse::Deny
+        });
+    window.add_child(builder, LogicalPosition::new(x, y), LogicalSize::new(width.max(1.0), height.max(1.0))).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn browser_set_bounds(app: AppHandle, pane_id: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
+    browser_webview(&app, &pane_id)?.set_bounds(bounds(x, y, width, height)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn browser_set_visible(app: AppHandle, pane_id: String, visible: bool) -> Result<(), String> {
+    let wv = browser_webview(&app, &pane_id)?;
+    if visible { wv.show() } else { wv.hide() }.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn browser_navigate(app: AppHandle, pane_id: String, url: String) -> Result<(), String> {
+    let target = Url::parse(&url).map_err(|e| e.to_string())?;
+    browser_webview(&app, &pane_id)?.navigate(target).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn browser_back(app: AppHandle, pane_id: String) -> Result<(), String> {
+    browser_webview(&app, &pane_id)?.eval("history.back()").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn browser_forward(app: AppHandle, pane_id: String) -> Result<(), String> {
+    browser_webview(&app, &pane_id)?.eval("history.forward()").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn browser_reload(app: AppHandle, pane_id: String) -> Result<(), String> {
+    browser_webview(&app, &pane_id)?.reload().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn browser_close(app: AppHandle, pane_id: String) -> Result<(), String> {
+    match browser_webview(&app, &pane_id) {
+        Ok(wv) => wv.close().map_err(|e| e.to_string()),
+        Err(_) => Ok(()),
+    }
+}
+
+#[tauri::command]
+async fn browser_set_annotate(app: AppHandle, pane_id: String, enabled: bool) -> Result<(), String> {
+    let wv = browser_webview(&app, &pane_id)?;
+    wv.eval(format!("window.__tomoAnnotate && window.__tomoAnnotate.set({enabled})")).map_err(|e| e.to_string())?;
+    if enabled {
+        wv.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn browser_clear_annotations(app: AppHandle, pane_id: String) -> Result<(), String> {
+    browser_webview(&app, &pane_id)?.eval("window.__tomoAnnotate && window.__tomoAnnotate.clear()").map_err(|e| e.to_string())
+}
+
+/// Called by the page inside a browser webview. The pane comes from the webview label, never from the page.
+#[tauri::command]
+fn browser_annotations(app: AppHandle, webview: Webview, annotations: Value) -> Result<(), String> {
+    let pane_id = webview.label().strip_prefix("browser-").ok_or("not a browser webview")?;
+    app.emit_to("main", "browser://annotations", json!({ "pane_id": pane_id, "annotations": annotations })).map_err(|e| e.to_string())
+}
+
+// The main webview must be a child of the window, like the browser webviews. On macOS
+// a webview created as the window content replaces the content view, and a child added
+// later lands in the old, detached view and never paints.
+fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
+    let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or_else(|| tauri::Error::WindowNotFound)?;
+    let window = tauri::window::WindowBuilder::from_config(app, &config)?.build()?;
+    let size = window.inner_size()?.to_logical::<f64>(window.scale_factor()?);
+    window.add_child(WebviewBuilder::from_config(&config).auto_resize(), LogicalPosition::new(0.0, 0.0), size)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     STARTED.get_or_init(std::time::Instant::now);
@@ -185,9 +314,24 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(link)
-        .invoke_handler(tauri::generate_handler![rpc, daemon_connected])
+        .invoke_handler(tauri::generate_handler![
+            rpc,
+            daemon_connected,
+            browser_create,
+            browser_set_bounds,
+            browser_set_visible,
+            browser_navigate,
+            browser_back,
+            browser_forward,
+            browser_reload,
+            browser_close,
+            browser_set_annotate,
+            browser_clear_annotations,
+            browser_annotations
+        ])
         .setup(|app| {
             mark("tauri setup");
+            open_main_window(app.handle())?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(connect_loop(handle));
             Ok(())
