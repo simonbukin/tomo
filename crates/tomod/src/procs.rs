@@ -8,6 +8,9 @@ pub struct ProcRow {
     pub pid: u32,
     pub ppid: Option<u32>,
     pub name: String,
+    /// Refreshed on every poll for pane shells only; `name` is fixed at first sight,
+    /// so a shell that exec'd its command keeps the shell's name.
+    pub exe: Option<PathBuf>,
     pub cmd: String,
     pub cwd: Option<PathBuf>,
     pub cpu_percent: f32,
@@ -43,7 +46,7 @@ impl ProcMonitor {
         self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, cheap);
         if !roots.is_empty() {
             let pids: Vec<sysinfo::Pid> = roots.iter().map(|p| sysinfo::Pid::from_u32(*p)).collect();
-            self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), false, ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always));
+            self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), false, ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always).with_exe(UpdateKind::Always));
         }
         self.sys
             .processes()
@@ -52,6 +55,7 @@ impl ProcMonitor {
                 pid: p.pid().as_u32(),
                 ppid: p.parent().map(|x| x.as_u32()),
                 name: p.name().to_string_lossy().into_owned(),
+                exe: p.exe().map(Path::to_path_buf),
                 cmd: p.cmd().iter().map(|c| c.to_string_lossy()).collect::<Vec<_>>().join(" "),
                 cwd: p.cwd().map(Path::to_path_buf),
                 cpu_percent: p.cpu_usage(),
@@ -60,6 +64,11 @@ impl ProcMonitor {
             })
             .collect()
     }
+}
+
+/// The program a process runs now: the exe basename when refreshed, else the first-seen name.
+pub fn program_name(row: &ProcRow) -> String {
+    row.exe.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| row.name.clone())
 }
 
 pub fn children_index(rows: &[ProcRow]) -> HashMap<u32, Vec<u32>> {
@@ -181,7 +190,7 @@ mod tests {
     use super::*;
 
     fn row(pid: u32, ppid: u32, name: &str, cwd: &str, rss: u64) -> ProcRow {
-        ProcRow { pid, ppid: Some(ppid), name: name.into(), cmd: name.into(), cwd: Some(PathBuf::from(cwd)), cpu_percent: 1.0, rss_bytes: rss, start_time_s: 0 }
+        ProcRow { pid, ppid: Some(ppid), name: name.into(), exe: None, cmd: name.into(), cwd: Some(PathBuf::from(cwd)), cpu_percent: 1.0, rss_bytes: rss, start_time_s: 0 }
     }
 
     #[test]
@@ -216,7 +225,7 @@ mod tests {
     }
 
     fn row_at(pid: u32, ppid: u32, name: &str, cwd: Option<&str>, rss: u64) -> ProcRow {
-        ProcRow { pid, ppid: Some(ppid), name: name.into(), cmd: name.into(), cwd: cwd.map(PathBuf::from), cpu_percent: 0.5, rss_bytes: rss, start_time_s: 0 }
+        ProcRow { pid, ppid: Some(ppid), name: name.into(), exe: None, cmd: name.into(), cwd: cwd.map(PathBuf::from), cpu_percent: 0.5, rss_bytes: rss, start_time_s: 0 }
     }
 
     #[test]

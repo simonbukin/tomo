@@ -1,3 +1,4 @@
+mod activity;
 mod agents;
 mod config;
 mod daemon;
@@ -10,6 +11,7 @@ mod layout;
 mod monitor;
 mod procs;
 mod pty;
+mod runtime;
 mod server;
 mod store;
 mod usage;
