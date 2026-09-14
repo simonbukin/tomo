@@ -9,7 +9,7 @@
 .seg-active { background: var(--accent-soft); color: var(--accent); }
 .activity-empty { padding: 48px 0; text-align: center; }
 .activity-day { margin-bottom: var(--sp-3); }
-.activity-row { display: grid; grid-template-columns: 40px minmax(90px, 0.8fr) minmax(0, 2.4fr) auto; align-items: center; column-gap: var(--sp-3); height: 30px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line); }
+.activity-row { display: grid; grid-template-columns: 40px 160px minmax(0, 1fr) 220px; align-items: center; column-gap: var(--sp-3); height: 30px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line); }
 .activity-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity-row:hover { background: var(--bg-1); }
 .activity-time { color: var(--fg-3); font-size: var(--fs-0); font-variant-numeric: tabular-nums; }
@@ -19,7 +19,7 @@
 .activity-more { margin-top: var(--sp-2); }
 
 /* ---- usage */
-.usage-strip { display: inline-flex; align-items: center; gap: var(--sp-3); }
+.usage-strip { display: inline-flex; align-items: center; gap: var(--sp-3); white-space: nowrap; overflow: hidden; }
 .usage-item { font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
 .usage-waiting { color: var(--waiting); }
 .usage-hot { color: var(--hot); }
