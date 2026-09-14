@@ -159,8 +159,9 @@ order and no single value.
 Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
 worktree discovered, created, before_archive, archived, restored,
 state_changed; pane created and closed; agent started, working, waiting,
-idle, exited; attention created; action started and exited. Each event
-runs the matching `[[hooks]]`
+idle, exited; attention created; action started, exited, and crashed;
+runtime endpoint discovered and removed; checkpoint created and resolved.
+Each event runs the matching `[[hooks]]`
 entries from `config.toml` as ordinary processes with the event JSON on
 stdin. A hook that wants to change Tomo calls the `tomo` CLI, so the GUI,
 the CLI, hooks, and agents share one behavioral API.
@@ -230,6 +231,25 @@ Protocol version 3 adds:
 - the `actions_changed` event with one `ActionSet` per worktree;
 - `Pane.action_id`, `Snapshot.actions`, and `GitSummary.conflicts`;
 - the `action` field on `HookEvent`.
+
+Phase 3 adds, at the same protocol version:
+
+- calls `runtime_list`, `activity_list`, `checkpoint_create`, and
+  `checkpoint_resolve`;
+- events `endpoints_changed`, `activity_added`, and `attention_resolved`;
+- `Snapshot.endpoints`, and `kind`, `url`, `agent_kind`, `resolved_at_ms`
+  on `AttentionItem`;
+- hook events `action.crashed`, `runtime.endpoint_discovered`,
+  `runtime.endpoint_removed`, `checkpoint.created`, `checkpoint.resolved`.
+
+## Feature boundary: runtime endpoints and activity
+
+`crates/tomod/src/runtime.rs` finds listening TCP ports with one `lsof`
+call per monitor tick, attributes each pid to the pane whose PTY root is
+its ancestor, and debounces a restart. `crates/tomod/src/activity.rs`
+holds `Daemon::record`, the one way an event enters the `activity` table.
+`PaneState.stop_intent` is how `Daemon::on_exit` tells a crash from a
+stop. See [runtime.md](runtime.md) and [activity.md](activity.md).
 
 ## IPC
 

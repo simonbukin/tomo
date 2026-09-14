@@ -99,17 +99,23 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
     }
 }
 
+/// One monitor tick: the process poll under the lock, then the endpoint scan
+/// (`lsof`) with the lock released, then the queued hooks. Blocking; call it
+/// from a blocking task.
+pub fn poll_and_scan(daemon: &Arc<Daemon>, force_full: bool) {
+    {
+        let mut inner = daemon.lock();
+        poll_once(daemon, &mut inner, force_full);
+    }
+    daemon.scan_endpoints();
+    daemon.flush_hooks();
+}
+
 pub async fn run(daemon: Arc<Daemon>) {
     loop {
         let subscribed = daemon.lock().clients.values().any(|c| c.subscribed);
         tokio::time::sleep(if subscribed { Duration::from_secs(2) } else { Duration::from_secs(15) }).await;
         let d = daemon.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            let mut inner = d.lock();
-            poll_once(&d, &mut inner, false);
-            drop(inner);
-            d.flush_hooks();
-        })
-        .await;
+        let _ = tokio::task::spawn_blocking(move || poll_and_scan(&d, false)).await;
     }
 }

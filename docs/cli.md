@@ -303,6 +303,56 @@ tomo attention next     # focuses the pane and marks the item viewed
 tomo attention clear
 ```
 
+`list` prints unresolved items only, with their kind (`waiting`,
+`checkpoint`, `crash`) and URL. A resolved item is history; see
+`tomo activity`.
+
+### checkpoint
+
+```bash
+tomo checkpoint "<message>" [--url U] [--title T] [--worktree W] [--pane P]
+tomo checkpoint resolve <id>
+```
+
+Asks a human for a review or a decision. The worktree and pane default
+from `TOMO_WORKTREE_ID` and `TOMO_PANE_ID`, then from the current
+directory, so an agent inside a pane needs no arguments. `--title` becomes
+the attention message and the message becomes the activity detail. The
+result is the attention item; with `--json` it is one object. `resolve`
+closes a checkpoint or a crash item by id and records
+`checkpoint_resolved`. Because `resolve` is a subcommand, a checkpoint
+whose message is the single word `resolve` needs `--title`. See
+[activity.md](activity.md).
+
+### activity
+
+```bash
+tomo activity [--limit N] [--needs-me] [--worktree W]
+```
+
+The history of meaningful events, newest first, 100 by default:
+
+```text
+14:02  Storybook listens on 6006 · localhost:6006
+14:01  Claude is waiting for you
+13:58  Storybook started
+```
+
+`--needs-me` keeps only the events whose attention item is still open.
+`--worktree` filters by worktree; without it every worktree is listed,
+also inside a pane. See [activity.md](activity.md).
+
+### runtime
+
+```bash
+tomo runtime [worktree]
+```
+
+Ports that processes inside Tomo panes listen on: `port protocol pid
+process action pane`. Without an argument it uses `TOMO_WORKTREE_ID`, else
+every worktree. A process outside every pane is never listed. See
+[runtime.md](runtime.md).
+
 ### hook
 
 ```bash

@@ -197,6 +197,10 @@ impl Daemon {
         let mut inner = self.lock();
         if !run.ok {
             Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("hook failed ({}): {}", run.event, run.command) });
+            let mut ev = crate::activity::event(ActivityKind::HookFailed, run.worktree_id.as_deref(), format!("hook failed: {}", run.event));
+            ev.detail = Some(run.command.clone());
+            ev.payload = serde_json::json!({ "command": run.command, "exit_code": run.exit_code, "output_tail": run.output_tail.lines().last().unwrap_or("") });
+            Self::record(&mut inner, ev);
         }
         Self::emit(&mut inner, Event::HookRan { run });
     }

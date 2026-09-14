@@ -3,7 +3,7 @@
 //! Every table falls into one of three categories (PRD §25):
 //! - authoritative Tomo metadata: `repos`, `towns`, the user-set columns of `worktree_meta`
 //! - cached external observation: `worktree_meta.path`, `.gitdir`, `.first_seen_ms`, `.archived_at_ms`, `.archived_branch`
-//! - recoverable runtime state: `tabs`, `panes`, `attention`, `kv`
+//! - recoverable runtime state: `tabs`, `panes`, `attention`, `activity`, `kv`
 //!
 //! `worktree_meta.town_slug` is unused since Phase 2; the `towns` table owns
 //! the worktree→town mapping. The column stays because SQLite cannot drop it cheaply.
@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
-use tomo_proto::{AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, TownUnlock, WorktreeMetadata};
+use tomo_proto::{ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, TownUnlock, WorktreeMetadata};
 
 pub struct Store {
     conn: Connection,
@@ -122,6 +122,19 @@ CREATE TABLE IF NOT EXISTS towns (
   repo_id TEXT NOT NULL,
   unlocked_at_ms INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS activity (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  occurred_at_ms INTEGER NOT NULL,
+  worktree_id TEXT,
+  pane_id TEXT,
+  agent_kind TEXT,
+  title TEXT NOT NULL,
+  detail TEXT,
+  payload TEXT NOT NULL DEFAULT 'null',
+  attention_id TEXT
+);
+CREATE INDEX IF NOT EXISTS activity_occurred_at ON activity(occurred_at_ms);
 "#;
 
 const META_COLUMNS: [(&str, &str); 5] = [
@@ -134,20 +147,28 @@ const META_COLUMNS: [(&str, &str); 5] = [
 
 const PANE_COLUMNS: [(&str, &str); 1] = [("action_id", "TEXT")];
 
-fn migrate(conn: &Connection) -> Result<()> {
-    let existing: Vec<String> = conn
-        .prepare("PRAGMA table_info(worktree_meta)")?
-        .query_map([], |r| r.get::<_, String>(1))?
-        .filter_map(|r| r.ok())
-        .collect();
-    for (name, ty) in META_COLUMNS.iter().filter(|(n, _)| !existing.iter().any(|e| e == n)) {
-        conn.execute(&format!("ALTER TABLE worktree_meta ADD COLUMN {name} {ty}"), [])?;
-    }
-    let pane_cols: Vec<String> = conn.prepare("PRAGMA table_info(panes)")?.query_map([], |r| r.get::<_, String>(1))?.filter_map(|r| r.ok()).collect();
-    for (name, ty) in PANE_COLUMNS.iter().filter(|(n, _)| !pane_cols.iter().any(|e| e == n)) {
-        conn.execute(&format!("ALTER TABLE panes ADD COLUMN {name} {ty}"), [])?;
+const ATTENTION_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("agent_kind", "TEXT"), ("resolved_at_ms", "INTEGER")];
+
+fn add_missing_columns(conn: &Connection, table: &str, columns: &[(&str, &str)]) -> Result<()> {
+    let existing: Vec<String> = conn.prepare(&format!("PRAGMA table_info({table})"))?.query_map([], |r| r.get::<_, String>(1))?.filter_map(|r| r.ok()).collect();
+    for (name, ty) in columns.iter().filter(|(n, _)| !existing.iter().any(|e| e == n)) {
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {name} {ty}"), [])?;
     }
     Ok(())
+}
+
+fn migrate(conn: &Connection) -> Result<()> {
+    add_missing_columns(conn, "worktree_meta", &META_COLUMNS)?;
+    add_missing_columns(conn, "panes", &PANE_COLUMNS)?;
+    add_missing_columns(conn, "attention", &ATTENTION_COLUMNS)
+}
+
+fn enum_str<T: serde::Serialize>(v: T) -> String {
+    serde_json::to_value(v).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+}
+
+fn parse_enum<T: serde::de::DeserializeOwned>(s: Option<String>) -> Option<T> {
+    s.and_then(|s| serde_json::from_value(serde_json::Value::String(s)).ok())
 }
 
 fn agent_kind_str(k: AgentKind) -> &'static str {
@@ -376,7 +397,7 @@ impl Store {
 
     pub fn attention_insert(&self, item: &AttentionItem) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO attention (id, worktree_id, pane_id, level, message, created_at_ms, viewed_at_ms) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+            "INSERT INTO attention (id, worktree_id, pane_id, level, message, created_at_ms, viewed_at_ms, kind, url, agent_kind, resolved_at_ms) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
             params![
                 item.id,
                 item.worktree_id,
@@ -384,31 +405,106 @@ impl Store {
                 level_str(item.level),
                 item.message,
                 item.created_at_ms as i64,
-                item.viewed_at_ms.map(|v| v as i64)
+                item.viewed_at_ms.map(|v| v as i64),
+                enum_str(item.kind),
+                item.url,
+                item.agent_kind.map(agent_kind_str),
+                item.resolved_at_ms.map(|v| v as i64)
             ],
         )?;
         Ok(())
     }
 
+    const ATTENTION_SELECT: &'static str = "SELECT id, worktree_id, pane_id, level, message, created_at_ms, viewed_at_ms, kind, url, agent_kind, resolved_at_ms FROM attention";
+
+    fn attention_row(r: &rusqlite::Row) -> rusqlite::Result<AttentionItem> {
+        Ok(AttentionItem {
+            id: r.get(0)?,
+            worktree_id: r.get(1)?,
+            pane_id: r.get(2)?,
+            level: parse_level(&r.get::<_, String>(3)?),
+            message: r.get(4)?,
+            created_at_ms: r.get::<_, i64>(5)? as u64,
+            viewed_at_ms: r.get::<_, Option<i64>>(6)?.map(|v| v as u64),
+            kind: parse_enum::<AttentionKind>(r.get(7)?).unwrap_or_default(),
+            url: r.get(8)?,
+            agent_kind: r.get::<_, Option<String>>(9)?.and_then(|s| s.parse().ok()),
+            resolved_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
+        })
+    }
+
+    /// Unresolved items only. A resolved item is history; `activity` keeps it.
     pub fn attention_list(&self) -> Result<Vec<AttentionItem>> {
-        let mut st = self.conn.prepare(
-            "SELECT id, worktree_id, pane_id, level, message, created_at_ms, viewed_at_ms FROM attention ORDER BY created_at_ms",
+        let mut st = self.conn.prepare(&format!("{} WHERE resolved_at_ms IS NULL ORDER BY created_at_ms", Self::ATTENTION_SELECT))?;
+        let rows = st.query_map([], Self::attention_row)?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn attention_get(&self, id: &str) -> Result<Option<AttentionItem>> {
+        Ok(self.conn.query_row(&format!("{} WHERE id = ?1", Self::ATTENTION_SELECT), params![id], Self::attention_row).optional()?)
+    }
+
+    pub fn attention_resolve(&self, id: &str, now_ms: u64) -> Result<bool> {
+        let n = self.conn.execute("UPDATE attention SET resolved_at_ms = ?2 WHERE id = ?1 AND resolved_at_ms IS NULL", params![id, now_ms as i64])?;
+        Ok(n > 0)
+    }
+
+    pub fn activity_insert(&self, e: &ActivityEvent) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO activity (id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            params![
+                e.id,
+                enum_str(e.kind),
+                e.occurred_at_ms as i64,
+                e.worktree_id,
+                e.pane_id,
+                e.agent_kind.map(agent_kind_str),
+                e.title,
+                e.detail,
+                e.payload.to_string(),
+                e.attention_id
+            ],
         )?;
-        let rows = st.query_map([], |r| {
-            Ok(AttentionItem {
-                id: r.get(0)?,
-                worktree_id: r.get(1)?,
-                pane_id: r.get(2)?,
-                level: parse_level(&r.get::<_, String>(3)?),
-                message: r.get(4)?,
-                created_at_ms: r.get::<_, i64>(5)? as u64,
-                viewed_at_ms: r.get::<_, Option<i64>>(6)?.map(|v| v as u64),
-                kind: AttentionKind::Waiting,
-                url: None,
-                agent_kind: None,
-                resolved_at_ms: None,
-            })
-        })?;
+        Ok(())
+    }
+
+    pub fn activity_trim(&self, keep: usize) -> Result<()> {
+        self.conn.execute("DELETE FROM activity WHERE rowid NOT IN (SELECT rowid FROM activity ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?1)", params![keep as i64])?;
+        Ok(())
+    }
+
+    fn activity_row(r: &rusqlite::Row) -> rusqlite::Result<ActivityEvent> {
+        let payload: String = r.get(8)?;
+        Ok(ActivityEvent {
+            id: r.get(0)?,
+            kind: parse_enum::<ActivityKind>(r.get(1)?).unwrap_or(ActivityKind::HookFailed),
+            occurred_at_ms: r.get::<_, i64>(2)? as u64,
+            worktree_id: r.get(3)?,
+            pane_id: r.get(4)?,
+            agent_kind: r.get::<_, Option<String>>(5)?.and_then(|s| s.parse().ok()),
+            title: r.get(6)?,
+            detail: r.get(7)?,
+            payload: serde_json::from_str(&payload).unwrap_or(serde_json::Value::Null),
+            attention_id: r.get(9)?,
+        })
+    }
+
+    /// Newest first. `needs_me` keeps only events whose attention item is still open:
+    /// unresolved, and for a `waiting` item also not yet viewed.
+    pub fn activity_list(&self, q: &ActivityQuery) -> Result<Vec<ActivityEvent>> {
+        let mut st = self.conn.prepare(
+            "SELECT id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id FROM activity
+             WHERE (?1 IS NULL OR occurred_at_ms < ?1) AND (?2 IS NULL OR worktree_id = ?2)
+               AND (?3 = 0 OR attention_id IN (SELECT id FROM attention WHERE resolved_at_ms IS NULL AND (COALESCE(kind, 'waiting') != 'waiting' OR viewed_at_ms IS NULL)))
+             ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?4",
+        )?;
+        let rows = st.query_map(params![q.before_ms.map(|v| v as i64), q.worktree_id, q.needs_me as i64, q.limit.unwrap_or(100) as i64], Self::activity_row)?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn activity_since(&self, kind: ActivityKind, since_ms: u64) -> Result<Vec<ActivityEvent>> {
+        let mut st = self.conn.prepare("SELECT id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id FROM activity WHERE kind = ?1 AND occurred_at_ms >= ?2")?;
+        let rows = st.query_map(params![enum_str(kind), since_ms as i64], Self::activity_row)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
@@ -505,6 +601,39 @@ mod tests {
         s.town_unlock(&TownUnlock { slug: "x".into(), worktree_id: "w".into(), repo_id: "r".into(), unlocked_at_ms: 1 }).unwrap();
         assert_eq!(s.town_unlocks().unwrap().len(), 1);
         assert!(s.meta_all().unwrap().is_empty());
+    }
+
+    fn item(id: &str, kind: AttentionKind) -> AttentionItem {
+        AttentionItem { id: id.into(), worktree_id: "w".into(), pane_id: None, level: AttentionLevel::Attention, message: id.into(), created_at_ms: 1, viewed_at_ms: None, kind, url: None, agent_kind: None, resolved_at_ms: None }
+    }
+
+    fn activity(id: &str, at: u64, kind: ActivityKind, attention_id: Option<&str>) -> ActivityEvent {
+        ActivityEvent { id: id.into(), kind, occurred_at_ms: at, worktree_id: Some("w".into()), pane_id: None, agent_kind: None, title: id.into(), detail: None, payload: serde_json::json!({ "port": 3000 }), attention_id: attention_id.map(String::from) }
+    }
+
+    #[test]
+    fn activity_lists_newest_first_and_needs_me_follows_attention_state() {
+        let s = Store::open_in_memory().unwrap();
+        s.attention_insert(&item("chk", AttentionKind::Checkpoint)).unwrap();
+        s.attention_insert(&item("wait", AttentionKind::Waiting)).unwrap();
+        s.activity_insert(&activity("a", 10, ActivityKind::ActionStarted, None)).unwrap();
+        s.activity_insert(&activity("b", 20, ActivityKind::CheckpointCreated, Some("chk"))).unwrap();
+        s.activity_insert(&activity("c", 20, ActivityKind::AgentWaiting, Some("wait"))).unwrap();
+        let ids = |q: ActivityQuery| s.activity_list(&q).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(ActivityQuery::default()), vec!["c", "b", "a"]);
+        assert_eq!(ids(ActivityQuery { before_ms: Some(20), ..Default::default() }), vec!["a"]);
+        assert_eq!(ids(ActivityQuery { needs_me: true, ..Default::default() }), vec!["c", "b"]);
+        s.attention_view("wait", 5).unwrap();
+        assert_eq!(ids(ActivityQuery { needs_me: true, ..Default::default() }), vec!["b"]);
+        assert!(s.attention_resolve("chk", 6).unwrap());
+        assert!(!s.attention_resolve("chk", 7).unwrap());
+        assert!(ids(ActivityQuery { needs_me: true, ..Default::default() }).is_empty());
+        assert_eq!(s.attention_list().unwrap().iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["wait"]);
+        assert_eq!(s.attention_get("chk").unwrap().unwrap().resolved_at_ms, Some(6));
+        assert_eq!(s.activity_list(&ActivityQuery::default()).unwrap()[0].payload["port"], 3000);
+        assert_eq!(s.activity_since(ActivityKind::CheckpointCreated, 15).unwrap().len(), 1);
+        s.activity_trim(2).unwrap();
+        assert_eq!(ids(ActivityQuery::default()), vec!["c", "b"]);
     }
 
     #[test]

@@ -80,6 +80,37 @@ enum Cmd {
     States(StatesCmd),
     #[command(subcommand, about = "Repo-defined actions from .tomo.toml")]
     Action(ActionCmd),
+    #[command(about = "Ports that processes in Tomo panes listen on")]
+    Runtime { worktree: Option<String> },
+    #[command(about = "History of meaningful events, newest first")]
+    Activity {
+        #[arg(long, default_value_t = 100)]
+        limit: usize,
+        #[arg(long, help = "Only events whose attention item is still open")]
+        needs_me: bool,
+        #[arg(long)]
+        worktree: Option<String>,
+    },
+    #[command(about = "Ask a human to review or decide; `checkpoint resolve <id>` closes it", args_conflicts_with_subcommands = true)]
+    Checkpoint {
+        #[command(subcommand)]
+        cmd: Option<CheckpointCmd>,
+        message: Option<String>,
+        #[arg(long, help = "Link to open when the checkpoint is picked up")]
+        url: Option<String>,
+        #[arg(long, help = "Short title; the message becomes the detail")]
+        title: Option<String>,
+        #[arg(long)]
+        worktree: Option<String>,
+        #[arg(long)]
+        pane: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum CheckpointCmd {
+    #[command(about = "Mark a checkpoint or crash item as handled")]
+    Resolve { id: String },
 }
 
 #[derive(Subcommand)]
@@ -643,7 +674,7 @@ async fn run() -> Result<()> {
                         let _: Value = c.call(Call::PaneFocus { pane_id: p.clone() }).await?;
                     }
                     let _: Value = c.call(Call::AttentionView { id: item.id.clone() }).await?;
-                    print::attention(&[item], json);
+                    print::attention_item(&item, json);
                 }
                 None => {
                     if json {
@@ -691,6 +722,37 @@ async fn run() -> Result<()> {
         }
         Cmd::Kill { pid } => {
             let _: Value = c.call(Call::ProcessKillTree { pid }).await?;
+        }
+        Cmd::Runtime { worktree } => {
+            let worktree_id = match worktree.or_else(|| std::env::var("TOMO_WORKTREE_ID").ok()) {
+                Some(w) => Some(resolve_worktree_id(&c, Some(w)).await?),
+                None => None,
+            };
+            let list: Vec<RuntimeEndpoint> = c.call(Call::RuntimeList { worktree_id }).await?;
+            print::runtime(&list, json);
+        }
+        Cmd::Activity { limit, needs_me, worktree } => {
+            let worktree_id = match worktree {
+                Some(w) => Some(resolve_worktree_id(&c, Some(w)).await?),
+                None => None,
+            };
+            let list: Vec<ActivityEvent> = c.call(Call::ActivityList(ActivityQuery { limit: Some(limit), before_ms: None, worktree_id, needs_me })).await?;
+            print::activity(&list, json);
+        }
+        Cmd::Checkpoint { cmd: Some(CheckpointCmd::Resolve { id }), .. } => {
+            let item: AttentionItem = c.call(Call::CheckpointResolve { id }).await?;
+            print::attention_item(&item, json);
+        }
+        Cmd::Checkpoint { cmd: None, message, url, title, worktree, pane } => {
+            let message = message.ok_or_else(|| anyhow!("message required: tomo checkpoint \"<message>\""))?;
+            let pane_id = pane.or_else(|| std::env::var("TOMO_PANE_ID").ok());
+            let worktree_id = match (worktree.or_else(|| std::env::var("TOMO_WORKTREE_ID").ok()), &pane_id) {
+                (Some(w), _) => Some(resolve_worktree_id(&c, Some(w)).await?),
+                (None, Some(_)) => None,
+                (None, None) => Some(resolve_worktree_id(&c, None).await?),
+            };
+            let item: AttentionItem = c.call(Call::CheckpointCreate(CheckpointSpec { message, url, title, worktree_id, pane_id })).await?;
+            print::attention_item(&item, json);
         }
         Cmd::Hook { .. } | Cmd::Daemon(_) => unreachable!(),
     }

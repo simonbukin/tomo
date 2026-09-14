@@ -100,8 +100,30 @@ and only a known agent kind with a session reference gets a resume line.
 | `message`       | R        | Text                             |
 | `created_at_ms` | R        | Creation time; orders "next"     |
 | `viewed_at_ms`  | R        | NULL until focused or viewed     |
+| `kind`          | R        | `waiting`, `checkpoint`, or `crash`; NULL reads as `waiting` |
+| `url`           | R        | Link given to `tomo checkpoint`, or NULL |
+| `agent_kind`    | R        | Agent in the pane when the item was made, or NULL |
+| `resolved_at_ms`| R        | NULL until `tomo checkpoint resolve`; a resolved item is hidden from `attention list` |
 
 The daemon keeps the newest 200 viewed items.
+
+## activity
+
+| Column           | Category | Meaning                                              |
+|------------------|----------|------------------------------------------------------|
+| `id`             | R        | Random id                                            |
+| `kind`           | R        | `ActivityKind` in snake case, e.g. `action_crashed`  |
+| `occurred_at_ms` | R        | Event time; indexed, orders the list newest first    |
+| `worktree_id`    | R        | Worktree, or NULL for a hook with no worktree        |
+| `pane_id`        | R        | Pane, or NULL                                        |
+| `agent_kind`     | R        | `claude`, `codex`, `pi`, or NULL                     |
+| `title`          | R        | One line for a person                                |
+| `detail`         | R        | Optional second line                                 |
+| `payload`        | R        | JSON text; `action_crashed` holds `action_id`, `exit_code`, `pane_id` |
+| `attention_id`   | R        | The attention item the event opened or resolved      |
+
+The daemon keeps the newest 10 000 rows. It is a log for people, not a
+source of truth; delete it freely. See [activity.md](activity.md).
 
 ## kv
 
