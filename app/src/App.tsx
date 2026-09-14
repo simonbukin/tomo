@@ -1,3 +1,4 @@
+import { PanelLeft, PanelRight } from "lucide-react";
 import { useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { runAction } from "./actions";
@@ -72,13 +73,16 @@ export function App() {
   return (
     <div className={`app${ui.leftOpen ? "" : " no-left"}${ui.rightOpen && showWorktree ? "" : " no-right"}`} style={{ ["--left-w" as string]: `${ui.leftWidth}px`, ["--right-w" as string]: `${ui.rightWidth}px` }}>
       <div className="titlebar" data-tauri-drag-region>
-        <span className="titlebar-text" data-tauri-drag-region>{showWorktree ? worktree.name : "Home"}</span>
+        <span className="titlebar-text" data-tauri-drag-region>
+          <span>{showWorktree ? worktree.name : "home"}</span>
+          {showWorktree && <span className="faint">{worktree.branch ?? ""}{worktree.git?.dirty ? " *" : ""}</span>}
+        </span>
         <span className="spacer" data-tauri-drag-region />
-        {attention > 0 && <button className="attention-btn" onClick={() => runAction("next_attention")} title="Jump to next attention item">◉ {attention}</button>}
+        {attention > 0 && <button className="attention-btn" onClick={() => runAction("next_attention")} title="Jump to next attention item"><span className="state state-waiting" /> {attention} waiting</button>}
         {!connected && <span className="conn-bad">daemon offline</span>}
-        <button className="icon-btn" title="Command palette" onClick={() => runAction("palette")}>⌘K</button>
-        <button className="icon-btn" title="Toggle left sidebar" onClick={() => setUi({ leftOpen: !ui.leftOpen })}>◧</button>
-        <button className="icon-btn" title="Toggle right sidebar" onClick={() => setUi({ rightOpen: !ui.rightOpen })}>◨</button>
+        <button className="ghost" title="Command palette" onClick={() => runAction("palette")}><span className="kbd">⌘K</span></button>
+        <button className="ghost" title="Toggle left sidebar" onClick={() => setUi({ leftOpen: !ui.leftOpen })}><PanelLeft className="icon" /></button>
+        <button className="ghost" title="Toggle right sidebar" onClick={() => setUi({ rightOpen: !ui.rightOpen })}><PanelRight className="icon" /></button>
       </div>
       {ui.leftOpen && <Sidebar />}
       <main className="center">

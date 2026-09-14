@@ -1,7 +1,9 @@
+import { FolderGit2, Search } from "lucide-react";
 import { useMemo } from "react";
 import { openWorktree } from "./actions";
 import { agentsOf, defaultHome, formatBytes, repoName, setState, setUi, useStore, type State } from "./store";
-import { KIND_LABEL, STATE_GLYPH, type HomeOptions, type Worktree } from "./types";
+import { summarizeState } from "./Sidebar";
+import type { HomeOptions, Worktree } from "./types";
 
 function matches(w: Worktree, s: State, o: HomeOptions): boolean {
   if (o.repo && w.repo_id !== o.repo) return false;
@@ -48,40 +50,44 @@ export function Home() {
   return (
     <div className="home">
       <div className="home-bar">
-        <input className="home-search" placeholder="Search worktrees, branches, projects, tags" value={o.query} onChange={(e) => set({ query: e.target.value })} autoFocus />
+        <label className="home-search">
+          <Search className="icon" />
+          <input placeholder="search worktrees, branches, projects, tags" value={o.query} onChange={(e) => set({ query: e.target.value })} autoFocus />
+        </label>
         <select value={o.repo} onChange={(e) => set({ repo: e.target.value })}>
-          <option value="">All repos</option>
+          <option value="">all repos</option>
           {s.repos.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
         <select value={o.project} onChange={(e) => set({ project: e.target.value })}>
-          <option value="">All projects</option>
+          <option value="">all projects</option>
           {projects.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         <select value={o.tag} onChange={(e) => set({ tag: e.target.value })}>
-          <option value="">All tags</option>
+          <option value="">all tags</option>
           {tags.map((t) => <option key={t} value={t}>#{t}</option>)}
         </select>
         <select value={o.sort} onChange={(e) => set({ sort: e.target.value as HomeOptions["sort"] })}>
-          <option value="priority">Sort: priority</option>
-          <option value="recent">Sort: recent</option>
+          <option value="priority">sort: priority</option>
+          <option value="recent">sort: recent</option>
         </select>
         <select value={o.group} onChange={(e) => set({ group: e.target.value as HomeOptions["group"] })}>
-          <option value="repo">Group: repo</option>
-          <option value="project">Group: project</option>
-          <option value="none">Group: none</option>
+          <option value="repo">group: repo</option>
+          <option value="project">group: project</option>
+          <option value="none">group: none</option>
         </select>
         <label className="check"><input type="checkbox" checked={o.attentionOnly} onChange={(e) => set({ attentionOnly: e.target.checked })} /> needs attention</label>
         {(o.query || o.repo || o.project || o.tag || o.attentionOnly) && <button className="link" onClick={() => set(defaultHome)}>clear</button>}
       </div>
       {s.worktrees.length === 0 && (
         <div className="home-empty">
+          <FolderGit2 className="icon" />
           <p>No worktrees yet.</p>
           <button onClick={() => setState({ dialog: { kind: "add-repo" } })}>Add a repository</button>
         </div>
       )}
       {groups.map((g) => (
         <section key={g.key} className="home-group">
-          {g.title && <h2>{g.title}</h2>}
+          {g.title && <div className="section-label">{g.title}<span className="right">{g.items.length}</span></div>}
           <div className="cards">
             {g.items.map((w) => <Card key={w.id} w={w} />)}
           </div>
@@ -97,28 +103,40 @@ function Card({ w }: { w: Worktree }) {
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => s.attention.some((a) => a.worktree_id === w.id && !a.viewed_at_ms));
   const g = w.git;
-  const sub = [w.metadata.project ?? repo, w.branch && w.branch !== w.name ? w.branch : null].filter(Boolean).join(" · ");
+  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
+  const sub = [w.metadata.project ?? repo, branch].filter(Boolean).join(" · ");
+  const summary = summarizeState(agents, attention);
   return (
     <div className={`card${attention ? " card-attention" : ""}${w.exists ? "" : " card-missing"}`} onClick={() => openWorktree(w.id)}>
       <div className="card-title">
-        <span>{w.name}</span>
-        {w.metadata.priority && <span className={`prio prio-${w.metadata.priority}`}>P{w.metadata.priority}</span>}
+        <span className={`state state-${summary}`} />
+        <span className="name">{w.name}</span>
+        <span className="wt-meta">
+          {w.metadata.priority && <span className={`prio prio-${w.metadata.priority}`}>p{w.metadata.priority}</span>}
+        </span>
       </div>
-      <div className="card-sub">{sub}{!w.exists && " · missing"}</div>
-      {w.metadata.tags.length > 0 && <div className="card-tags">{w.metadata.tags.map((t) => <span key={t}>#{t}</span>)}</div>}
+      <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && " · missing"}</div>
+      {w.metadata.tags.length > 0 && <div className="card-sub">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</div>}
       {agents.length > 0 && (
         <div className="card-agents">
           {agents.map((a) => (
-            <div key={a.pane_id} className={`dot dot-${a.state}`}>{STATE_GLYPH[a.state]} {KIND_LABEL[a.kind]} <span className="muted">{a.state}</span></div>
+            <span key={a.pane_id} className={`agent-line is-${a.state}`}>
+              <span className={`state state-${a.state}`} />
+              <span className="agent-state">{a.state}</span>
+              <span className="agent-kind">· {a.kind}</span>
+            </span>
           ))}
         </div>
       )}
-      <div className="card-foot">
-        {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
-        {g && g.dirty && !(g.insertions || g.deletions) && <span className="muted">dirty</span>}
-        {w.pane_count > 0 && <span className="muted">{w.pane_count} pane{w.pane_count === 1 ? "" : "s"}</span>}
-        {res && res.rss_bytes > 64 * 1024 * 1024 && <span className="muted">{formatBytes(res.rss_bytes)}</span>}
-      </div>
+      {(g && (g.insertions > 0 || g.deletions > 0)) || w.pane_count > 0 || (res && res.rss_bytes > 64 * 1024 * 1024) ? (
+        <div className="card-foot">
+          {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
+          <span className="right">
+            {w.pane_count > 0 && <span>{w.pane_count} pane{w.pane_count === 1 ? "" : "s"}</span>}
+            {res && res.rss_bytes > 64 * 1024 * 1024 && <span>{formatBytes(res.rss_bytes)}</span>}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

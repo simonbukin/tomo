@@ -209,9 +209,9 @@ export function applyFrame(frame: Frame): void {
       const req = d as { worktree_id: Id; tab_id: Id; pane_id: Id };
       setState((s) => ({
         focusRequest: { ...req, nonce: (s.focusRequest?.nonce ?? 0) + 1 },
-        ui: { ...s.ui, view: "worktree", activeWorktreeId: req.worktree_id },
         attention: s.attention.map((a) => (a.pane_id === req.pane_id && !a.viewed_at_ms ? { ...a, viewed_at_ms: Date.now() } : a)),
       }));
+      setUi({ view: "worktree", activeWorktreeId: req.worktree_id });
       break;
     }
     case "notice": {

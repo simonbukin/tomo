@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { setMetadata } from "./actions";
@@ -28,7 +29,7 @@ function MetadataSection({ w }: { w: Worktree }) {
   const commit = (patch: Record<string, unknown>) => setMetadata(w.id, patch);
   return (
     <section className="side-section">
-      <h3>Worktree</h3>
+      <div className="section-label">worktree</div>
       <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label><input value={project} onChange={(e) => setProject(e.target.value)} onBlur={() => commit({ project: project.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>priority</label>
@@ -50,15 +51,15 @@ function GitSection({ w }: { w: Worktree }) {
   }, [w.id]);
   return (
     <section className="side-section">
-      <h3>Git <button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></h3>
-      <div className="kv"><label>branch</label><span className="mono">{w.detached ? `detached ${w.head.slice(0, 7)}` : w.branch ?? "—"}</span></div>
+      <div className="section-label">git <button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></div>
+      <div className="kv"><label>branch</label><span>{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
       {g ? (
         <>
           <div className="kv"><label>state</label><span>{g.dirty ? "dirty" : "clean"}</span></div>
           {g.files_changed > 0 && <div className="kv"><label>changed</label><span>{g.files_changed} file{g.files_changed === 1 ? "" : "s"}{g.untracked ? `, ${g.untracked} untracked` : ""}</span></div>}
           {!g.files_changed && g.untracked > 0 && <div className="kv"><label>untracked</label><span>{g.untracked}</span></div>}
           {(g.insertions > 0 || g.deletions > 0) && <div className="kv"><label>diff</label><span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span></div>}
-          {g.upstream && <div className="kv"><label>upstream</label><span className="mono">{g.upstream}{g.ahead || g.behind ? ` (↑${g.ahead ?? 0} ↓${g.behind ?? 0})` : ""}</span></div>}
+          {g.upstream && <div className="kv"><label>upstream</label><span>{g.upstream}{g.ahead || g.behind ? ` (↑${g.ahead ?? 0} ↓${g.behind ?? 0})` : ""}</span></div>}
         </>
       ) : (
         <div className="muted">{w.exists ? "no status yet" : "worktree directory is missing"}</div>
@@ -81,7 +82,7 @@ function ProcessSection({ w }: { w: Worktree }) {
   const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch((e) => notify("error", (e as Error).message));
   return (
     <section className="side-section">
-      <h3>Processes <button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></h3>
+      <div className="section-label">processes <button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></div>
       {res ? (
         <div className="kv"><label>total</label><span>{res.process_count} proc · {res.cpu_percent.toFixed(0)}% cpu · {formatBytes(res.rss_bytes)}</span></div>
       ) : (
@@ -91,9 +92,9 @@ function ProcessSection({ w }: { w: Worktree }) {
         <div className="proc-list">
           {[...procs].sort((a, b) => b.rss_bytes - a.rss_bytes).slice(0, 25).map((p) => (
             <div key={p.pid} className="proc-row" title={p.cmd}>
-              <span className="mono muted">{p.pid}</span>
+              <span className="num">{p.pid}</span>
               <span className="proc-name" style={{ paddingLeft: p.depth * 8 }}>{p.name}{p.ownership === "observed" ? <span className="muted"> (observed)</span> : null}</span>
-              <span className="mono">{formatBytes(p.rss_bytes)}</span>
+              <span className="num">{formatBytes(p.rss_bytes)}</span>
               {p.ownership === "owned" && p.depth > 0 && <button className="link" title="Kill this process and its children" onClick={() => kill(p.pid)}>kill</button>}
             </div>
           ))}
@@ -129,21 +130,21 @@ function FilesSection({ w }: { w: Worktree }) {
     (dirs[rel] ?? []).map((e) => (
       <div key={e.rel_path}>
         <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(() => {})}>
-          <span className="muted">{e.is_dir ? (openDirs.has(e.rel_path) ? "▾" : "▸") : " "}</span> {e.name}
+          {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />} {e.name}
         </div>
         {e.is_dir && openDirs.has(e.rel_path) && render(e.rel_path, depth + 1)}
       </div>
     ));
   return (
     <section className="side-section side-files">
-      <h3>Files</h3>
+      <div className="section-label">files</div>
       <div className="file-actions">
-        <button className="link" onClick={() => act("finder")}>reveal</button>
-        <button className="link" onClick={copy}>copy path</button>
-        <button className="link" onClick={() => act("editor")}>open in editor</button>
+        <button className="link" onClick={() => act("finder")}><Eye className="icon" /> reveal</button>
+        <button className="link" onClick={copy}><Copy className="icon" /> copy path</button>
+        <button className="link" onClick={() => act("editor")}><ExternalLink className="icon" /> editor</button>
       </div>
       <div className="file-tree">
-        <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")}>{w.name}/</div>
+        <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")}><Folder className="icon" /> {w.name}/</div>
         {render("", 1)}
       </div>
     </section>

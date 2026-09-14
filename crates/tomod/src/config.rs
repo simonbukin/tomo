@@ -76,8 +76,8 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # worktree_parent_dir = "~/worktrees"
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
-# font_family = "JetBrains Mono, Menlo, monospace"
-# font_size = 12
+# font_family = "Geist Mono Variable, Menlo, monospace"
+# font_size = 13
 # theme = "system"   # system | dark | light
 
 # [keybindings]
@@ -164,8 +164,8 @@ fn merge(file: FileConfig) -> Config {
         worktree_parent_dir: file.worktree_parent_dir.map(|p| expand_tilde(&p)),
         resource_warning_bytes: (file.resource_warning_gb.unwrap_or(2.0) * 1024.0 * 1024.0 * 1024.0) as u64,
         scrollback_lines: file.scrollback_lines.unwrap_or(10_000),
-        font_family: file.font_family.unwrap_or_else(|| "JetBrains Mono, Menlo, monospace".into()),
-        font_size: file.font_size.unwrap_or(12),
+        font_family: file.font_family.unwrap_or_else(|| "Geist Mono Variable, Menlo, monospace".into()),
+        font_size: file.font_size.unwrap_or(13),
         theme: file.theme.unwrap_or_else(|| "system".into()),
         keybindings,
         agents,

@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { actions, currentWorktree, openWorktree, runAction } from "./actions";
 import { describeBinding } from "./keys";
@@ -40,14 +41,14 @@ export function Palette() {
   const items = useMemo<Item[]>(() => {
     const ws: Item[] = worktrees.map((w) => ({
       key: `wt:${w.id}`,
-      label: `Open worktree: ${w.name}`,
+      label: `open ${w.name}`,
       hint: [repoName({ repos } as never, w.repo_id), w.metadata.project, w.branch].filter(Boolean).join(" · "),
       run: () => openWorktree(w.id),
     }));
     const cmds: Item[] = actions
       .filter((a) => !a.whenWorktree || hasWorktree)
       .map((a) => ({ key: `cmd:${a.id}`, label: a.label, hint: bindings[a.id] ? describeBinding(bindings[a.id]) : undefined, run: () => runAction(a.id) }));
-    const rs: Item[] = repos.map((r) => ({ key: `repo:${r.id}`, label: `New worktree in ${r.name}…`, hint: r.path, run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }) }));
+    const rs: Item[] = repos.map((r) => ({ key: `repo:${r.id}`, label: `new worktree in ${r.name}`, hint: r.path, run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }) }));
     return [...ws, ...cmds, ...rs];
   }, [worktrees, repos, bindings, hasWorktree]);
 
@@ -80,10 +81,12 @@ export function Palette() {
   return (
     <div className="overlay" onMouseDown={close}>
       <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
+        <label className="palette-input">
+        <Search className="icon" />
         <input
           ref={inputRef}
           value={query}
-          placeholder="Type a worktree name or a command"
+          placeholder="worktree or command"
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") close();
@@ -94,16 +97,17 @@ export function Palette() {
             e.preventDefault();
           }}
         />
+        </label>
         <div className="palette-list">
           {results.map((it, i) => (
             <div key={it.key} className={`palette-item${i === index ? " palette-active" : ""}`} onMouseEnter={() => setIndex(i)} onClick={() => choose(it)}>
-              <span>{it.label}</span>
+              <span className="palette-label">{it.label}</span>
               {it.hint && <span className="palette-hint">{it.hint}</span>}
             </div>
           ))}
           {results.length === 0 && <div className="palette-item muted">No matches</div>}
         </div>
-        <div className="palette-foot muted">↑↓ navigate · ↩ run · ⎋ close · Home: {describeBinding(bindings.home ?? "")}</div>
+        <div className="palette-foot"><span>↑↓ move</span><span>↩ run</span><span>esc close</span></div>
       </div>
     </div>
   );
