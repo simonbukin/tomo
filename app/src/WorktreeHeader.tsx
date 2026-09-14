@@ -6,8 +6,10 @@ import { stateLabel } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
 import { overflowMenu, runningActionItems } from "./menus";
-import { endpointsOf, liveEndpointFor, runningActionIds, useStore } from "./store";
-import { KIND_LABEL, type RuntimeEndpoint, type Worktree } from "./types";
+import { endpointsOf, liveEndpointFor, runningActionIds, setState, useStore } from "./store";
+import { rpc } from "./api";
+import { useEffect } from "react";
+import { KIND_LABEL, type ActionSet, type RuntimeEndpoint, type Worktree } from "./types";
 
 /** One compact line: name, branch, state on the left; repo Actions and the overflow menu on the right. */
 export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
@@ -36,6 +38,12 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
 
 function ActionBar({ worktree: w }: { worktree: Worktree }) {
   const set = useStore((s) => s.actions[w.id] ?? null);
+  useEffect(() => {
+    if (set) return;
+    rpc<ActionSet>("action_list", { worktree_id: w.id })
+      .then((loaded) => setState((s) => ({ actions: { ...s.actions, [w.id]: loaded } })))
+      .catch(() => {});
+  }, [w.id, set === null]);
   const running = useStore((s) => runningActionIds(s, w.id));
   const endpoints = useStore((s) => endpointsOf(s, w.id));
   const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");

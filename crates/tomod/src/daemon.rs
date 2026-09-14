@@ -1082,10 +1082,13 @@ impl Daemon {
         for t in &tabs {
             inner.tabs.insert(t.id.clone(), t.clone());
         }
-        for row in panes {
+        for mut row in panes {
             if !referenced.contains(&row.id) {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
+            }
+            if row.action_id.take().is_some() {
+                let _ = inner.store.pane_upsert(&row);
             }
             let resume_ref = row.session_ref.clone().or_else(|| (row.agent_kind == Some(AgentKind::Codex)).then(|| "--last".to_string()));
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
@@ -1147,8 +1150,12 @@ impl Daemon {
         Ok(())
     }
 
+    /// Hangs up every pane. A daemon stop is never a crash, so every pane carries stop intent first.
     pub fn shutdown(&self) {
-        let inner = self.lock();
+        let mut inner = self.lock();
+        for pane in inner.panes.values_mut() {
+            pane.stop_intent = true;
+        }
         for id in inner.panes.keys() {
             self.persist_scrollback(&inner, id);
         }
