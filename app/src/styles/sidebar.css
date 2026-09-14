@@ -1,0 +1,37 @@
+/* Left navigation: repos, worktrees, agents. Flat rows, no cards. */
+
+.sidebar { grid-area: left; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--line); overflow: hidden; }
+.sidebar-top { display: flex; align-items: center; gap: 2px; height: var(--bar-h); padding: 0 var(--sp-1) 0 var(--sp-3); border-bottom: 1px solid var(--line); }
+.sidebar-top .brand-mark { margin-right: var(--sp-1); }
+.side-btn { background: none; color: var(--fg-2); padding: 2px 8px; font-size: var(--fs-1); }
+.side-btn-active { background: var(--accent-soft); color: var(--accent); }
+.sidebar-scroll { overflow-y: auto; flex: 1; padding: var(--sp-1) 0 var(--sp-5); }
+.sidebar-empty { padding: var(--sp-4); color: var(--fg-2); line-height: 1.6; font-size: var(--fs-1); }
+.selection-bar { display: flex; align-items: center; gap: var(--sp-2); height: 26px; padding: 0 var(--sp-3); margin: 0 0 var(--sp-1); font-size: var(--fs-1); color: var(--accent); background: var(--accent-soft); }
+
+.repo-group { padding: var(--sp-1) 0; }
+.repo-head { padding: 0 var(--sp-1) 0 var(--sp-2); cursor: default; }
+.repo-head .btn-icon { visibility: hidden; margin-left: auto; }
+.repo-head:hover .btn-icon, .repo-head:focus-within .btn-icon { visibility: visible; }
+.repo-toggle { display: inline-flex; align-items: center; color: var(--fg-3); }
+.repo-toggle .chevron { width: 12px; height: 12px; }
+.repo-name { color: var(--fg-2); font-weight: 500; }
+.repo-head:hover .repo-name { color: var(--fg-1); }
+.repo-avatar { border-radius: var(--radius-sm); flex: none; }
+
+.wt-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: var(--sp-2); row-gap: 0; align-items: center; padding: 4px var(--sp-1) 4px var(--sp-3); border-left: 2px solid transparent; transition: background-color var(--dur-fast) ease-out; }
+.wt-row:hover { background: var(--bg-1); }
+.wt-active { background: var(--bg-1); border-left-color: var(--accent); }
+.wt-selected, .wt-selected:hover { background: var(--accent-soft); }
+.wt-missing .wt-name { color: var(--fg-3); text-decoration: line-through; }
+.wt-archived .wt-name { color: var(--fg-2); }
+.wt-archiving { opacity: 0.7; }
+.wt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
+.wt-active .wt-name { color: var(--accent); }
+.wt-branch { grid-column: 2 / 4; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-state { font-family: var(--font-ui); color: var(--fg-2); }
+.wt-agents { grid-column: 2 / 4; display: flex; flex-direction: column; gap: 0; margin-top: 1px; }
+.wt-meta { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.wt-more { visibility: hidden; }
+.wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }
+.tag { color: var(--fg-3); font-size: var(--fs-0); }

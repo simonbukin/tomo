@@ -79,6 +79,7 @@ export async function closePane(paneId?: Id): Promise<void> {
           title: "Close pane?",
           body: "Processes are still running in this pane. Closing it sends a hangup to the shell and its jobs.",
           confirmLabel: "Close pane",
+          destructive: true,
           onConfirm: () => rpc("pane_close", { pane_id: id, force: true }).catch((err) => notify("error", (err as Error).message)),
         },
       });
@@ -97,6 +98,7 @@ export async function closeTab(tabId: Id): Promise<void> {
           title: "Close tab?",
           body: "Processes are still running in this tab. Closing it sends a hangup to every shell in it.",
           confirmLabel: "Close tab",
+          destructive: true,
           onConfirm: () => rpc("tab_close", { tab_id: tabId, force: true }).catch((err) => notify("error", (err as Error).message)),
         },
       });
@@ -363,6 +365,7 @@ export function removeRepo(repoId: Id): void {
       title: `Remove ${repo.name} from Tomo?`,
       body: "Tomo forgets the repository. Nothing on disk changes; worktrees with open terminals stay listed until you close them.",
       confirmLabel: "Remove",
+          destructive: true,
       onConfirm: () => rpc("repo_remove", { repo_id: repoId }).catch((e) => notify("error", (e as Error).message)),
     },
   });

@@ -11,7 +11,8 @@ import { findAction } from "./keys";
 import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
 import { X } from "lucide-react";
-import { openMenu } from "./ContextMenu";
+import { openMenu } from "./MenuHost";
+import { IconButton } from "./components/ui";
 import { paneMenu } from "./menus";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
@@ -146,7 +147,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
         <span className="chip right" title={pane?.cwd}>
           <span>{shortPath(pane?.cwd ?? "")}</span>
-          <button className="pane-close" title="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></button>
+          <IconButton label="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></IconButton>
         </span>
       </div>
       <div className="pane-body" ref={hostRef} />

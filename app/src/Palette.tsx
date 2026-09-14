@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { allActions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, runWorktreeAction, spawnAgent } from "./actions";
+import { Dialog, DialogContent } from "./components/ui";
 import { describeBinding } from "./keys";
 import { activeActionSet, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 
@@ -29,7 +30,7 @@ function remember(key: string): void {
   } catch {}
 }
 
-function score(query: string, text: string): number {
+export function score(query: string, text: string): number {
   const q = query.toLowerCase();
   const t = text.toLowerCase();
   if (!q) return 1;
@@ -46,13 +47,14 @@ function score(query: string, text: string): number {
   return Math.max(1, 30 - gaps);
 }
 
+/** Tomo's own ranking and list inside the shared Dialog shell. */
 export function Palette() {
   const open = useStore((s) => s.paletteOpen);
   const worktrees = useStore((s) => s.worktrees);
   const repos = useStore(visibleRepos);
   const bindings = useStore((s) => s.config?.keybindings ?? {});
   const current = useStore((s) => s.worktrees.find((w) => w.id === s.ui.activeWorktreeId && s.ui.view === "worktree") ?? null);
-  const tabs = useStore((s) => (current ? s.tabs[current.id] ?? [] : []));
+  const tabs = useStore((s) => (current ? (s.tabs[current.id] ?? []) : []));
   const worktreeActions = useStore((s) => activeActionSet(s)?.actions ?? []);
   const selectionSize = useStore((s) => s.selection.size);
   const [query, setQuery] = useState("");
@@ -119,13 +121,11 @@ export function Palette() {
     if (open) {
       setQuery("");
       setIndex(0);
-      window.setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
   useEffect(() => setIndex(0), [query]);
 
-  if (!open) return null;
   const close = () => setState({ paletteOpen: false });
   const choose = (it: Item | undefined) => {
     if (!it) return;
@@ -134,37 +134,40 @@ export function Palette() {
     it.run();
   };
   return (
-    <div className="overlay" onMouseDown={close}>
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent className="palette" initialFocus={inputRef} aria-label="Command palette">
         <label className="palette-input">
-        <Search className="icon" />
-        <input
-          ref={inputRef}
-          value={query}
-          placeholder="worktree, tab, or command"
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") close();
-            else if (e.key === "ArrowDown") setIndex((i) => Math.min(results.length - 1, i + 1));
-            else if (e.key === "ArrowUp") setIndex((i) => Math.max(0, i - 1));
-            else if (e.key === "Enter") choose(results[index]);
-            else return;
-            e.preventDefault();
-          }}
-        />
+          <Search className="icon" />
+          <input
+            ref={inputRef}
+            value={query}
+            placeholder="worktree, tab, or command"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") setIndex((i) => Math.min(results.length - 1, i + 1));
+              else if (e.key === "ArrowUp") setIndex((i) => Math.max(0, i - 1));
+              else if (e.key === "Enter") choose(results[index]);
+              else return;
+              e.preventDefault();
+            }}
+          />
         </label>
-        <div className="palette-list">
+        <div className="palette-list" role="listbox">
           {results.map((it, i) => (
-            <div key={it.key} className={`palette-item${i === index ? " palette-active" : ""}`} onMouseEnter={() => setIndex(i)} onClick={() => choose(it)}>
+            <div key={it.key} role="option" aria-selected={i === index} className={`palette-item${i === index ? " palette-active" : ""}`} onMouseEnter={() => setIndex(i)} onClick={() => choose(it)}>
               <span className="palette-label">{it.label}</span>
               {it.hint && <span className="palette-hint">{it.hint}</span>}
             </div>
           ))}
           {results.length === 0 && <div className="palette-item muted">No matches</div>}
         </div>
-        <div className="palette-foot"><span>↑↓ move</span><span>↩ run</span><span>esc close</span></div>
-      </div>
-    </div>
+        <div className="palette-foot">
+          <span>↑↓ move</span>
+          <span>↩ run</span>
+          <span>esc close</span>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

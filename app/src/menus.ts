@@ -1,5 +1,5 @@
 import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openWorktree, promptMetadata, removeRepo, renamePane, restartWorktreeAction, restoreWorktree, rotateSplit, runWorktreeAction, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, stopWorktreeAction, swapPanes, toggleZoom } from "./actions";
-import type { MenuItem } from "./ContextMenu";
+import type { MenuItem } from "./components/ui";
 import { orderedStates } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { activeTab, clearSelection, getState, paneIds, runningActionIds, setState } from "./store";
