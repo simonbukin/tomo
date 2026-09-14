@@ -38,9 +38,12 @@ Tomo, not like a component library.
 
 `MenuItems` renders the declarative `MenuItem[]` shape that `menus.ts`
 builds. Pass a function so the items are computed when the menu opens.
-`AnchoredMenu` opens a menu at a point or next to an element without a
-trigger; `MenuHost.tsx` uses it for every `openMenu(e, items)` call and puts
-focus back where it was, a terminal included.
+`AnchoredMenu` opens a menu at a point or next to an element; `MenuHost.tsx`
+uses it for every `openMenu(e, items)` call and puts focus back where it was,
+a terminal included. It renders a zero-size hidden `Menu.Trigger` at the
+anchor on purpose: Base UI registers a root menu's floating node through its
+trigger, and a root without one closes itself (reason `sibling-open`) as soon
+as a submenu opens.
 
 ## Tokens
 
