@@ -74,6 +74,12 @@ tomo ps --worktree .                 # process tree and memory for this worktree
 
 Add `--json` to any command for structured output.
 
+## Pull requests
+
+With the GitHub CLI logged in (`gh auth login`), the right panel and
+`tomo pr` show the pull request for the current branch: state, review
+decision, and check results. Tomo does not manage pull requests.
+
 ## Worktree names
 
 A new worktree without an explicit path is named after a Japanese

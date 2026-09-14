@@ -176,6 +176,17 @@ Processes that Tomo owns (descendants of a pane shell) and processes it
 observes (cwd inside a worktree), grouped by worktree with a memory total.
 Owned processes are indented by depth. Observed ones are labeled.
 
+### pr
+
+```bash
+tomo pr [worktree]
+```
+
+Shows the GitHub pull request for the worktree's branch: number, title,
+state, draft flag, review decision, check counts, and URL. Needs the `gh`
+CLI logged in. The daemon caches the answer for one minute per worktree
+and the right panel shows the same data.
+
 ### kill
 
 ```bash
