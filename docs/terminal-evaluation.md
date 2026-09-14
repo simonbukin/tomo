@@ -43,7 +43,7 @@ one of those paths was.
 
 | Observation | Cause class | Fix complexity | Status |
 |-------------|-------------|----------------|--------|
-| A stranger process that `cd`s into a worktree after Tomo first saw it is never classified observed; one that leaves stays observed | Tomo process poll: cwd is read once per process (`procs.rs`, `UpdateKind::OnlyIfNotSet`) to keep the 2 s poll near 10 ms | Small: re-read cwd for observed and candidate pids every N polls, or on `tomo ps` | Known, marked `KNOWN` in `provenance.sh` |
+| A stranger process that `cd`s into a worktree after Tomo first saw it was never classified observed; one that left stayed observed | Tomo process poll read cwd once per process to keep the 2 s poll near 10 ms | Fixed: every cwd is re-read at most every 20 s and on every `tomo ps`; `provenance.sh` now fails if this regresses | Fixed |
 | Memory hog RSS decays within seconds after allocation | macOS memory management (compression, paging), not Tomo; `ps` agrees with Tomo | None; harness samples the peak | Closed |
 | Split ratios differ by 1 ulp after SQLite round trip | `serde_json` default float parsing | None visible; test compares with tolerance | Closed |
 | `%` mark on a fresh zsh prompt after restore | zsh `PROMPT_SP` printed before the client reports its size | Fixed earlier by clearing `PROMPT_EOL_MARK` in pane env | Closed |
