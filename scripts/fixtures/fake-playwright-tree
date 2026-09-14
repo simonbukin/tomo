@@ -1,0 +1,10 @@
+#!/bin/bash
+# node-like parent -> 2 children -> 2 grandchildren each; one child daemonizes via setsid.
+# Prints the parent pid, sleeps ${1:-60}s, then tears the tree down.
+DUR="${1:-60}"
+child() { sleep "$DUR" & sleep "$DUR" & wait; }
+child & C1=$!
+( setsid bash -c "sleep $DUR & sleep $DUR & wait" >/dev/null 2>&1 & ) ; 
+echo "parent $$ child $C1"
+sleep "$DUR"
+kill $C1 2>/dev/null

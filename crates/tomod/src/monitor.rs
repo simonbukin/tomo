@@ -18,10 +18,16 @@ pub fn classify_all(inner: &Inner) -> Vec<ProcessInfo> {
     procs::classify(&inner.proc_rows, &roots, &paths)
 }
 
-pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner) {
+const FULL_CWD_REFRESH_MS: u64 = 20_000;
+
+pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
     let _ = daemon;
     let roots: Vec<u32> = inner.panes.values().filter(|p| p.exit_code.is_none()).filter_map(|p| p.pty.as_ref().map(|x| x.pid)).collect();
-    inner.proc_rows = inner.procs.refresh(&roots);
+    let full = force_full || now_ms().saturating_sub(inner.last_full_poll_ms) >= FULL_CWD_REFRESH_MS;
+    if full {
+        inner.last_full_poll_ms = now_ms();
+    }
+    inner.proc_rows = inner.procs.refresh(&roots, full);
     inner.proc_rows_at_ms = now_ms();
     let by_pid: HashMap<u32, usize> = inner.proc_rows.iter().enumerate().map(|(i, r)| (r.pid, i)).collect();
     let index = procs::children_index(&inner.proc_rows);
@@ -97,7 +103,7 @@ pub async fn run(daemon: Arc<Daemon>) {
         let d = daemon.clone();
         let _ = tokio::task::spawn_blocking(move || {
             let mut inner = d.lock();
-            poll_once(&d, &mut inner);
+            poll_once(&d, &mut inner, false);
             drop(inner);
             d.flush_hooks();
         })

@@ -1,0 +1,29 @@
+#!/bin/bash
+# Pretends to be Claude Code for tests: same flags, same hook events, no model calls.
+# stdin commands: work N | wait | quit
+SESSION="${FAKE_SESSION:-}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --resume|--session-id) SESSION="$2"; shift 2 ;;
+    --settings) shift 2 ;;
+    --tomo) TOMO_BIN="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ -z "$SESSION" ] && SESSION="$(uuidgen 2>/dev/null | tr 'A-Z' 'a-z' || date +%s)"
+TOMO="${TOMO_BIN:-$(dirname "${TOMO_DAEMON_BIN:-/nonexistent}")/tomo}"
+[ -x "$TOMO" ] || TOMO=tomo
+hook() { printf '{"hook_event_name":"%s","session_id":"%s"%s}' "$1" "$SESSION" "${2:-}" | "$TOMO" hook claude; }
+hook SessionStart
+echo "fake-agent session $SESSION (work N | wait | quit)"
+trap 'hook SessionEnd; exit 0' TERM HUP
+while IFS= read -r line; do
+  set -- $line
+  case "${1:-}" in
+    work) hook UserPromptSubmit; ( yes >/dev/null & p=$!; sleep "${2:-2}"; kill $p 2>/dev/null ); echo "done ${2:-2}s"; hook Stop ;;
+    wait) hook Notification ',"notification_type":"permission_prompt"'; echo "waiting for approval" ;;
+    quit) hook SessionEnd; echo bye; exit 0 ;;
+    *) echo "unknown: $line" ;;
+  esac
+done
+hook SessionEnd

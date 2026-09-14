@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+"""Writes 1 MiB of filler, then an escape sequence and a multibyte character that the 1 MiB cap will cut through, then 200 KB more."""
+import sys
+sys.stdout.buffer.write(b"x" * 1048576 + b"\x1b[38;2;10;20;30m" + "日本".encode() + b"\x1b[0m" + b"y" * 200000 + b"\n")
+sys.stdout.flush()

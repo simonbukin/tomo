@@ -1,0 +1,3 @@
+#!/bin/bash
+# Holds ${1:-512} MB of incompressible resident memory for ${2:-60} s.
+exec perl -e 'my $n = $ARGV[0] * 1024 * 1024; open my $f, "<", "/dev/urandom" or die; my $x = ""; while (length $x < $n) { read $f, my $b, 1 << 20 or last; $x .= $b } sleep $ARGV[1]' "${1:-512}" "${2:-60}"

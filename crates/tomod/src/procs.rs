@@ -30,13 +30,15 @@ impl ProcMonitor {
         ProcMonitor { sys: System::new() }
     }
 
-    /// Command lines and working directories are fetched once per process;
-    /// only the pane shells (`roots`) get their cwd re-read on every poll.
-    pub fn refresh(&mut self, roots: &[u32]) -> Vec<ProcRow> {
+    /// Command lines are fetched once per process. Working directories are
+    /// fetched once and re-read on every poll only for the pane shells (`roots`);
+    /// `full` re-reads every cwd so strangers that enter or leave a worktree
+    /// are noticed. Callers pass `full` on every tenth poll.
+    pub fn refresh(&mut self, roots: &[u32], full: bool) -> Vec<ProcRow> {
         let cheap = ProcessRefreshKind::nothing()
             .with_cpu()
             .with_memory()
-            .with_cwd(UpdateKind::OnlyIfNotSet)
+            .with_cwd(if full { UpdateKind::Always } else { UpdateKind::OnlyIfNotSet })
             .with_cmd(UpdateKind::OnlyIfNotSet);
         self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, cheap);
         if !roots.is_empty() {
@@ -211,5 +213,52 @@ mod tests {
         assert_eq!(detect_agent("codex-aarch64-apple-darwin", ""), Some(AgentKind::Codex));
         assert_eq!(detect_agent("node", "node /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi));
         assert_eq!(detect_agent("zsh", "-zsh"), None);
+    }
+
+    fn row_at(pid: u32, ppid: u32, name: &str, cwd: Option<&str>, rss: u64) -> ProcRow {
+        ProcRow { pid, ppid: Some(ppid), name: name.into(), cmd: name.into(), cwd: cwd.map(PathBuf::from), cpu_percent: 0.5, rss_bytes: rss, start_time_s: 0 }
+    }
+
+    #[test]
+    fn torture_deep_tree_and_reparented_child() {
+        let rows = vec![
+            row_at(10, 1, "zsh", Some("/wt/a"), 1),
+            row_at(11, 10, "node", Some("/wt/a"), 10),
+            row_at(12, 11, "playwright", Some("/wt/a"), 20),
+            row_at(13, 12, "chromium", Some("/tmp"), 300),
+            row_at(14, 12, "chromium", Some("/tmp"), 300),
+            row_at(15, 1, "chromium-daemonized", Some("/wt/a"), 50),
+            row_at(16, 1, "unrelated", Some("/wt/a/sub"), 5),
+            row_at(17, 1, "elsewhere", Some("/other"), 5),
+        ];
+        let roots = vec![Root { pid: 10, pane_id: "p".into(), worktree_id: "wa".into() }];
+        let paths = vec![("wa".to_string(), PathBuf::from("/wt/a"))];
+        let infos = classify(&rows, &roots, &paths);
+        let by = |pid: u32| infos.iter().find(|i| i.pid == pid);
+        assert_eq!(by(14).unwrap().depth, 3);
+        assert_eq!(by(14).unwrap().ownership, Ownership::Owned);
+        assert_eq!(by(15).unwrap().ownership, Ownership::Observed, "reparented child is never owned");
+        assert_eq!(by(16).unwrap().ownership, Ownership::Observed);
+        assert!(by(17).is_none());
+        let ids: Vec<u32> = infos.iter().map(|i| i.pid).collect();
+        let unique: std::collections::HashSet<u32> = ids.iter().copied().collect();
+        assert_eq!(ids.len(), unique.len(), "no pid twice");
+        let agg = aggregate(&infos);
+        assert_eq!(agg[0].rss_bytes, 1 + 10 + 20 + 300 + 300 + 50 + 5);
+        assert_eq!(agg[0].process_count, 7);
+    }
+
+    #[test]
+    fn torture_cwd_moves_change_only_observed_status() {
+        let paths = vec![("wa".to_string(), PathBuf::from("/wt/a"))];
+        let inside = vec![row_at(20, 1, "stranger", Some("/wt/a"), 1)];
+        assert_eq!(classify(&inside, &[], &paths)[0].ownership, Ownership::Observed);
+        let outside = vec![row_at(20, 1, "stranger", Some("/"), 1)];
+        assert!(classify(&outside, &[], &paths).is_empty(), "leaving the worktree drops the observation");
+        let roots = vec![Root { pid: 30, pane_id: "p".into(), worktree_id: "wa".into() }];
+        let owned_elsewhere = vec![row_at(30, 1, "zsh", Some("/wt/a"), 1), row_at(31, 30, "child", Some("/"), 1)];
+        let infos = classify(&owned_elsewhere, &roots, &paths);
+        assert_eq!(infos.iter().find(|i| i.pid == 31).unwrap().ownership, Ownership::Owned, "owned stays owned when it cds away");
+        assert!(descendants(&owned_elsewhere, 30).contains(&31));
     }
 }

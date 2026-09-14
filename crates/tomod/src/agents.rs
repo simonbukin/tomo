@@ -255,4 +255,42 @@ mod tests {
         assert_eq!(resumed.argv, vec!["codex", "resume", "abc"]);
         assert_eq!(shell_line(&["a b".to_string(), "c'd".to_string()]), "'a b' 'c'\\''d'");
     }
+
+    fn rep(pane: &str, auth: Authority, state: Option<AgentState>, at: u64) -> AgentReport {
+        AgentReport { pane_id: pane.into(), kind: AgentKind::Claude, state, session_ref: None, authority: auth, at_ms: at }
+    }
+
+    #[test]
+    fn torture_authority_battery() {
+        let waiting = merge(None, &rep("p", Authority::Lifecycle, Some(AgentState::Waiting), 10_000), "w", Some(7)).unwrap();
+        assert!(merge(Some(&waiting), &rep("p", Authority::Heuristic, Some(AgentState::Working), 11_000), "w", Some(7)).is_none(), "heuristic must not beat fresh lifecycle");
+        assert!(merge(Some(&waiting), &rep("p", Authority::Lifecycle, Some(AgentState::Idle), 9_000), "w", Some(7)).is_none(), "older lifecycle is ignored");
+        assert!(merge(Some(&waiting), &rep("p", Authority::Report, Some(AgentState::Idle), 12_000), "w", Some(7)).is_none(), "explicit report is weaker than lifecycle");
+        let stale = merge(Some(&waiting), &rep("p", Authority::Heuristic, Some(AgentState::Working), 10_000 + STALE_MS + 1), "w", Some(7)).unwrap();
+        assert_eq!((stale.state, stale.authority), (AgentState::Working, Authority::Heuristic), "silent lifecycle yields to heuristic");
+        let back = merge(Some(&stale), &rep("p", Authority::Lifecycle, Some(AgentState::Idle), 10_000 + STALE_MS + 2), "w", Some(7)).unwrap();
+        assert_eq!(back.state, AgentState::Idle, "lifecycle regains authority immediately");
+        let exited = merge(Some(&back), &rep("p", Authority::Lifecycle, Some(AgentState::Exited), 10_000 + STALE_MS + 3), "w", None).unwrap();
+        assert_eq!(exited.state, AgentState::Exited);
+        assert_eq!(exited.pid, Some(7), "pid is kept until a new one is seen");
+    }
+
+    #[test]
+    fn torture_same_kind_agents_are_independent() {
+        let a = merge(None, &rep("a", Authority::Lifecycle, Some(AgentState::Working), 1), "w", Some(1)).unwrap();
+        let b = merge(None, &rep("b", Authority::Lifecycle, Some(AgentState::Idle), 1), "w", Some(2)).unwrap();
+        let a2 = merge(Some(&a), &rep("a", Authority::Lifecycle, Some(AgentState::Waiting), 2), "w", Some(1)).unwrap();
+        assert_eq!(a2.pane_id, "a");
+        assert_eq!(b.state, AgentState::Idle);
+        assert!(merge(Some(&b), &rep("b", Authority::Heuristic, None, 3), "w", Some(2)).is_none(), "presence-only report with nothing new is a no-op");
+    }
+
+    #[test]
+    fn torture_resumed_process_rebuilds_presence() {
+        let old = merge(None, &rep("p", Authority::Lifecycle, Some(AgentState::Exited), 5), "w", Some(10)).unwrap();
+        let mut fresh = rep("p", Authority::Lifecycle, Some(AgentState::Idle), 6);
+        fresh.session_ref = Some("sess".into());
+        let next = merge(Some(&old), &fresh, "w", Some(11)).unwrap();
+        assert_eq!((next.state, next.pid, next.session_ref.as_deref()), (AgentState::Idle, Some(11), Some("sess")));
+    }
 }

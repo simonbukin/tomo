@@ -219,4 +219,31 @@ mod tests {
         }
         assert!(String::from_utf8_lossy(&all).contains("hello-tomo"));
     }
+
+    #[test]
+    fn torture_query_split_across_chunks_is_stripped_when_joined() {
+        let whole = b"abc\x1b[6ndef";
+        let mut joined = Vec::new();
+        for chunk in [&whole[..5], &whole[5..]] {
+            joined.extend_from_slice(chunk);
+        }
+        assert_eq!(strip_terminal_queries(&joined), b"abcdef");
+        let dangling = b"abc\x1b[6";
+        assert_eq!(strip_terminal_queries(dangling), dangling.to_vec(), "an incomplete sequence is left for the client to finish");
+    }
+
+    #[test]
+    fn torture_scrollback_tail_is_bounded_and_contiguous() {
+        let mut sb = Scrollback::default();
+        let mut expected = Vec::new();
+        for i in 0..40u8 {
+            let chunk = vec![i; 64 * 1024];
+            sb.push(&chunk);
+            expected.extend_from_slice(&chunk);
+        }
+        let snap = sb.snapshot();
+        assert!(snap.len() <= SCROLLBACK_CAP + SCROLLBACK_CAP / 4);
+        assert!(snap.len() >= SCROLLBACK_CAP);
+        assert_eq!(&expected[expected.len() - snap.len()..], &snap[..], "snapshot is exactly the most recent tail");
+    }
 }
