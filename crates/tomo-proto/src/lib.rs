@@ -63,6 +63,8 @@ pub enum Call {
     WorktreeList,
     WorktreeRefresh,
     WorktreeCreate(WorktreeCreate),
+    WorktreeArchive { worktree_id: Id },
+    WorktreeRestore { worktree_id: Id },
     WorktreeOpen { worktree_id: Id },
     WorktreeResolve { path: PathBuf },
     MetadataGet { worktree_id: Id },
@@ -106,6 +108,9 @@ pub enum Call {
 
     UiStateGet,
     UiStateSet { state: Value },
+
+    TownList,
+    TownPick,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +120,8 @@ pub struct WorktreeCreate {
     pub new_branch: bool,
     pub start_ref: Option<String>,
     pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub town_slug: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -179,6 +186,7 @@ pub enum Event {
     Resources { worktrees: Vec<WorktreeResources> },
     FocusRequest { worktree_id: Id, tab_id: Id, pane_id: Id },
     Notice { level: NoticeLevel, message: String },
+    TownUnlocked { unlock: TownUnlock },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -234,6 +242,10 @@ pub struct Config {
     pub theme: String,
     pub keybindings: BTreeMap<String, String>,
     pub agents: BTreeMap<String, AgentCommand>,
+    #[serde(default)]
+    pub archive_cleanup: Vec<String>,
+    #[serde(default)]
+    pub hooks: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,6 +276,12 @@ pub struct Worktree {
     pub git: Option<GitSummary>,
     pub metadata: WorktreeMetadata,
     pub last_active_ms: Option<u64>,
+    #[serde(default)]
+    pub first_seen_ms: Option<u64>,
+    #[serde(default)]
+    pub archived_at_ms: Option<u64>,
+    #[serde(default)]
+    pub town_slug: Option<String>,
     pub tab_count: usize,
     pub pane_count: usize,
 }
@@ -495,6 +513,28 @@ pub struct AttentionItem {
     pub message: String,
     pub created_at_ms: u64,
     pub viewed_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Town {
+    pub slug: String,
+    pub name: String,
+    pub ja: String,
+    pub pref: String,
+    pub kind: String,
+    pub population: Option<u64>,
+    pub lat: f64,
+    pub lon: f64,
+    pub wiki: String,
+    pub rarity: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TownUnlock {
+    pub slug: String,
+    pub worktree_id: Id,
+    pub repo_id: Id,
+    pub unlocked_at_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

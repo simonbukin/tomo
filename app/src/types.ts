@@ -49,6 +49,9 @@ export interface Worktree {
   git: GitSummary | null;
   metadata: WorktreeMetadata;
   last_active_ms: number | null;
+  first_seen_ms?: number | null;
+  archived_at_ms?: number | null;
+  town_slug?: string | null;
   tab_count: number;
   pane_count: number;
 }
@@ -145,6 +148,30 @@ export interface Config {
   theme: string;
   keybindings: Record<string, string>;
   agents: Record<string, { command: string; args: string[] }>;
+  archive_cleanup?: string[];
+  hooks?: Record<string, string>;
+}
+
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+export interface Town {
+  slug: string;
+  name: string;
+  ja: string;
+  pref: string;
+  kind: string;
+  population: number | null;
+  lat: number;
+  lon: number;
+  wiki: string;
+  rarity: Rarity;
+}
+
+export interface TownUnlock {
+  slug: string;
+  worktree_id: Id;
+  repo_id: Id;
+  unlocked_at_ms: number;
 }
 
 export interface Status {
@@ -174,24 +201,34 @@ export interface Snapshot {
   ui_state: UiState | null;
 }
 
+export type SidebarSort = "name" | "recent" | "created" | "attention" | "priority";
+
 export interface UiState {
-  view: "home" | "worktree";
+  view: "home" | "worktree" | "towns";
   activeWorktreeId: Id | null;
   leftOpen: boolean;
   rightOpen: boolean;
   leftWidth: number;
   rightWidth: number;
+  sidebarSort: SidebarSort;
+  showArchivedInSidebar: boolean;
   home: HomeOptions;
+}
+
+export type FilterKind = "repo" | "project" | "tag" | "priority" | "agent" | "archived" | "attention";
+
+export interface Filter {
+  kind: FilterKind;
+  value: string;
 }
 
 export interface HomeOptions {
   query: string;
-  repo: Id | "";
-  project: string;
-  tag: string;
-  sort: "priority" | "recent";
-  group: "repo" | "project" | "none";
-  attentionOnly: boolean;
+  filters: Filter[];
+  view: "list" | "board";
+  sort: "priority" | "recent" | "created" | "name";
+  group: "repo" | "project" | "priority" | "none";
+  showArchived: boolean;
 }
 
 export type Frame = { seq: number; event: string; data?: unknown };

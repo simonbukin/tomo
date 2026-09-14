@@ -34,10 +34,27 @@ No table stores a branch name.
 | `priority`       | A        | 1–4 or NULL; values outside 1–4 clamp on read           |
 | `tags`           | A        | JSON array of strings; unparsable text reads as `[]`    |
 | `last_active_ms` | R        | Set when a worktree is opened or a pane is focused      |
+| `first_seen_ms`  | C        | When discovery first saw the worktree                   |
+| `archived_at_ms` | C        | Set by `worktree archive`; NULL once the path exists again |
+| `archived_branch`| C        | Branch at archive time; used by `worktree restore`      |
+| `town_slug`      | A        | The Japanese town that named the worktree               |
 
 Discovery inserts a row for every worktree it sees, so metadata can attach
 to it later. Deleting a row loses organization only; the worktree stays
 usable.
+
+## towns
+
+| Column           | Category | Meaning                                  |
+|------------------|----------|------------------------------------------|
+| `slug`           | A        | Town slug from `app/src/data/japan-towns.json` |
+| `worktree_id`    | A        | Worktree that unlocked the town          |
+| `repo_id`        | A        | Repository of that worktree              |
+| `unlocked_at_ms` | A        | When the worktree was created            |
+
+A town unlocks once. Archiving or deleting the worktree keeps the unlock.
+The dataset itself (1681 municipalities with coordinates, population,
+Wikipedia link, and a rarity tier from population) ships in the binary.
 
 ## tabs
 
@@ -148,7 +165,7 @@ commented copy when the file is missing.
 | Key                   | Default                                   | Meaning                                 |
 |-----------------------|-------------------------------------------|-----------------------------------------|
 | `shell`               | `$SHELL`, else `/bin/zsh`                 | Started as a login shell (`-l`)         |
-| `editor_command`      | `["code", "{path}"]`                      | `{path}` is replaced; appended if absent |
+| `editor_command`      | `["zed", "{path}"]`                       | `{path}` is replaced; appended if absent; falls back to `open` when the program is missing |
 | `worktree_parent_dir` | unset (sibling of the repository)         | Where `worktree create` puts new trees  |
 | `resource_warning_gb` | `2.0`                                     | Memory above which the sidebar shows a total |
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
@@ -157,6 +174,8 @@ commented copy when the file is missing.
 | `theme`               | `system`                                  | `system`, `dark`, or `light`            |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
+| `archive_cleanup`     | `["node_modules","target","dist",".next",".turbo",".venv","build"]` | Direct children deleted by `worktree archive` |
+| `[hooks]`             | none                                      | `worktree_create` and `worktree_archive`: shell strings run with `sh -c` in the worktree; env `TOMO_WORKTREE_ID`, `TOMO_WORKTREE_PATH`, `TOMO_REPO_PATH`, `TOMO_BRANCH`; 60 s timeout; failures only warn |
 
 Default keybindings (`mod` is ⌘):
 

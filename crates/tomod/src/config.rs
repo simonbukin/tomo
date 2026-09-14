@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -60,6 +60,9 @@ struct FileConfig {
     keybindings: BTreeMap<String, String>,
     #[serde(default)]
     agents: BTreeMap<String, AgentCommandFile>,
+    archive_cleanup: Option<Vec<String>>,
+    #[serde(default)]
+    hooks: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +75,7 @@ struct AgentCommandFile {
 pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is optional.
 
 # shell = "/bin/zsh"
-# editor_command = ["code", "{path}"]
+# editor_command = ["zed", "{path}"]
 # worktree_parent_dir = "~/worktrees"
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
@@ -99,7 +102,20 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # [agents.claude]
 # command = "claude"
 # args = []
+
+# Directories removed from a worktree when you archive it.
+# archive_cleanup = ["node_modules", "target", "dist", ".next", ".turbo", ".venv", "build"]
+
+# Shell commands that run in the worktree directory. Env: TOMO_WORKTREE_ID,
+# TOMO_WORKTREE_PATH, TOMO_REPO_PATH, TOMO_BRANCH.
+# [hooks]
+# worktree_create = "pnpm install"
+# worktree_archive = "docker compose down"
 "#;
+
+pub fn default_archive_cleanup() -> Vec<String> {
+    ["node_modules", "target", "dist", ".next", ".turbo", ".venv", "build"].into_iter().map(String::from).collect()
+}
 
 pub fn default_keybindings() -> BTreeMap<String, String> {
     [
@@ -143,7 +159,13 @@ pub fn expand_tilde(p: &Path) -> PathBuf {
 
 pub fn load(path: &Path) -> Result<Config> {
     let file: FileConfig = match std::fs::read_to_string(path) {
-        Ok(text) => toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?,
+        Ok(text) => match toml::from_str(&text) {
+            Ok(file) => file,
+            Err(e) => {
+                tracing::warn!("{}: {e}; using defaults", path.display());
+                FileConfig::default()
+            }
+        },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let _ = std::fs::write(path, DEFAULT_CONFIG_TOML);
             FileConfig::default()
@@ -160,7 +182,7 @@ fn merge(file: FileConfig) -> Config {
     agents.extend(file.agents.into_iter().map(|(k, v)| (k, AgentCommand { command: v.command, args: v.args })));
     Config {
         shell: file.shell.or_else(|| std::env::var("SHELL").ok()).unwrap_or_else(|| "/bin/zsh".into()),
-        editor_command: file.editor_command.unwrap_or_else(|| vec!["code".into(), "{path}".into()]),
+        editor_command: file.editor_command.unwrap_or_else(|| vec!["zed".into(), "{path}".into()]),
         worktree_parent_dir: file.worktree_parent_dir.map(|p| expand_tilde(&p)),
         resource_warning_bytes: (file.resource_warning_gb.unwrap_or(2.0) * 1024.0 * 1024.0 * 1024.0) as u64,
         scrollback_lines: file.scrollback_lines.unwrap_or(10_000),
@@ -169,6 +191,8 @@ fn merge(file: FileConfig) -> Config {
         theme: file.theme.unwrap_or_else(|| "system".into()),
         keybindings,
         agents,
+        archive_cleanup: file.archive_cleanup.unwrap_or_else(default_archive_cleanup),
+        hooks: file.hooks,
     }
 }
 
@@ -183,6 +207,8 @@ mod tests {
         assert_eq!(cfg.keybindings["home"], "mod+shift+h");
         assert_eq!(cfg.keybindings["palette"], "mod+k");
         assert_eq!(cfg.resource_warning_bytes, 2 * 1024 * 1024 * 1024);
+        assert!(cfg.archive_cleanup.contains(&"node_modules".to_string()));
+        assert!(cfg.hooks.is_empty());
     }
 
     #[test]

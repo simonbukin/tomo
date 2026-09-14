@@ -11,6 +11,8 @@ import { findAction } from "./keys";
 import { getState, useStore } from "./store";
 import { registerTerminal } from "./terminals";
 import { X } from "lucide-react";
+import { openMenu } from "./ContextMenu";
+import { paneMenu } from "./menus";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -122,7 +124,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   return (
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
-      <div className="pane-legend" onMouseDown={() => focusPane(paneId)}>
+      <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
         <span className="chip">
           <span className={`state ${stateClass}`} />
           <strong>{title}</strong>

@@ -1,6 +1,9 @@
 import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc } from "./api";
+import { openMenu } from "./ContextMenu";
+import { fileMenu } from "./menus";
+import { ResizeHandle } from "./Sidebar";
 import { setMetadata } from "./actions";
 import { formatBytes, notify, useStore } from "./store";
 import type { FsEntry, Id, ProcessInfo, Worktree } from "./types";
@@ -8,6 +11,7 @@ import type { FsEntry, Id, ProcessInfo, Worktree } from "./types";
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
   return (
     <aside className="rightbar">
+      <ResizeHandle side="right" />
       <MetadataSection w={worktree} />
       <GitSection w={worktree} />
       <ProcessSection w={worktree} />
@@ -129,7 +133,7 @@ function FilesSection({ w }: { w: Worktree }) {
   const render = (rel: string, depth: number): React.ReactNode =>
     (dirs[rel] ?? []).map((e) => (
       <div key={e.rel_path}>
-        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(() => {})}>
+        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(() => {})}>
           {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />} {e.name}
         </div>
         {e.is_dir && openDirs.has(e.rel_path) && render(e.rel_path, depth + 1)}
@@ -144,7 +148,7 @@ function FilesSection({ w }: { w: Worktree }) {
         <button className="link" onClick={() => act("editor")}><ExternalLink className="icon" /> editor</button>
       </div>
       <div className="file-tree">
-        <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")}><Folder className="icon" /> {w.name}/</div>
+        <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")} onContextMenu={(ev) => { setSelected(""); openMenu(ev, fileMenu(w, "")); }}><Folder className="icon" /> {w.name}/</div>
         {render("", 1)}
       </div>
     </section>

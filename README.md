@@ -74,6 +74,13 @@ tomo ps --worktree .                 # process tree and memory for this worktree
 
 Add `--json` to any command for structured output.
 
+## Worktree names
+
+A new worktree without an explicit path is named after a Japanese
+municipality (city, town, or village). Each town has a rarity tier by
+population, a Wikipedia link, and a place on the map view. Creating
+worktrees unlocks towns; `tomo towns list --unlocked` shows the collection.
+
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — parts, invariants, what is
