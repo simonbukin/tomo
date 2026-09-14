@@ -74,6 +74,7 @@ pub struct Inner {
     pub hook_queue: Vec<HookEvent>,
     pub town_by_worktree: HashMap<Id, String>,
     pub discovered_once: bool,
+    pub last_full_poll_ms: u64,
 }
 
 pub struct Daemon {
@@ -155,6 +156,7 @@ impl Daemon {
                 hook_queue: Vec::new(),
                 town_by_worktree: HashMap::new(),
                 discovered_once: false,
+                last_full_poll_ms: 0,
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
@@ -532,6 +534,7 @@ impl Daemon {
             ("TOMO_SESSION_ID".into(), self.session_id.clone()),
             ("TOMO_SOCKET".into(), self.paths.socket.to_string_lossy().into_owned()),
             ("TOMO_DATA_DIR".into(), self.paths.data_dir.to_string_lossy().into_owned()),
+            ("TOMO_BIN".into(), self.tomo_bin.to_string_lossy().into_owned()),
             ("TERM".into(), "xterm-256color".into()),
             ("COLORTERM".into(), "truecolor".into()),
             ("TERM_PROGRAM".into(), "tomo".into()),
@@ -1617,7 +1620,7 @@ impl Daemon {
             Call::Ps { worktree_id } => {
                 let mut inner = self.lock();
                 if now_ms().saturating_sub(inner.proc_rows_at_ms) > 1500 {
-                    crate::monitor::poll_once(self, &mut inner);
+                    crate::monitor::poll_once(self, &mut inner, true);
                 }
                 let infos = crate::monitor::classify_all(&inner);
                 ok(infos.into_iter().filter(|p| worktree_id.as_deref().map_or(true, |w| p.worktree_id.as_deref() == Some(w))).collect::<Vec<_>>())

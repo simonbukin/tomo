@@ -217,4 +217,61 @@ mod tests {
         }
         assert_eq!(resize(&root, "nope", 0.2), root);
     }
+
+    #[test]
+    fn torture_random_operations_keep_the_tree_valid() {
+        let mut seed: u64 = 0x9e3779b97f4a7c15;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let mut tree = leaf("p0");
+        let mut counter = 1;
+        for step in 0..400 {
+            let ids = pane_ids(&tree);
+            let pick = |n: u64| ids[(n % ids.len() as u64) as usize].clone();
+            match next() % 6 {
+                0 | 1 => {
+                    let dir = if next() % 2 == 0 { SplitDirection::Horizontal } else { SplitDirection::Vertical };
+                    let new = format!("p{counter}");
+                    counter += 1;
+                    tree = split(&tree, &pick(next()), dir, &new, &format!("s{step}"));
+                }
+                2 => {
+                    if ids.len() > 1 {
+                        tree = remove(&tree, &pick(next())).unwrap();
+                    }
+                }
+                3 => {
+                    if ids.len() > 1 {
+                        let a = pick(next());
+                        let b = pick(next());
+                        if a != b {
+                            let before = pane_ids(&tree);
+                            tree = swap(&tree, &a, &b);
+                            let mut after = pane_ids(&tree);
+                            after.sort();
+                            let mut before_sorted = before.clone();
+                            before_sorted.sort();
+                            assert_eq!(after, before_sorted, "swap keeps the pane set");
+                        }
+                    }
+                }
+                4 => {
+                    if let Some(sid) = split_of(&tree, &pick(next())) {
+                        tree = rotate(&tree, &sid);
+                    }
+                }
+                _ => {
+                    tree = if next() % 2 == 0 { equalize(&tree) } else if let Some(sid) = split_of(&tree, &pick(next())) { resize(&tree, &sid, (next() % 100) as f64 / 100.0) } else { tree };
+                }
+            }
+            assert!(is_valid(&tree), "step {step}: {tree:?}");
+            let round: LayoutNode = serde_json::from_str(&serde_json::to_string(&tree).unwrap()).unwrap();
+            assert_eq!(pane_ids(&round), pane_ids(&tree), "layout survives JSON round trip");
+            assert!(is_valid(&round));
+        }
+    }
 }

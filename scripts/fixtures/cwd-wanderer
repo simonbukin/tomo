@@ -1,0 +1,8 @@
+#!/bin/bash
+# enter <worktree> [secs]: starts elsewhere, then cds into the worktree.
+# leave <worktree> [secs]: starts inside the worktree, then cds to /.
+mode="$1"; wt="$2"; secs="${3:-20}"
+case "$mode" in
+  enter) cd /; sleep 3; cd "$wt" && exec sleep "$secs" ;;
+  leave) cd "$wt"; sleep 3; cd / && exec sleep "$secs" ;;
+esac
