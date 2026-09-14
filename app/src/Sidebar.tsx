@@ -4,12 +4,12 @@ import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import "./sidebar.css";
 import { Mark } from "./Brand";
 import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
-import { needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
+import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
-import { agentsOf, clearSelection, formatBytes, getState, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
+import { agentsOf, clearSelection, formatBytes, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Repo, SidebarSort, Worktree } from "./types";
 
-const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "priority"];
+const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state", "priority"];
 
 export function Sidebar() {
   const repos = useStore(visibleRepos);
@@ -17,9 +17,10 @@ export function Sidebar() {
   const selectionSize = useStore((s) => s.selection.size);
   const agents = useStore((s) => s.agents);
   const attention = useStore((s) => s.attention);
+  const states = useStore((s) => s.config?.states ?? []);
   const ui = useStore((s) => s.ui);
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
-  const ctx: QueryContext = useMemo(() => ({ repos, agents: Object.values(agents), attention }), [repos, agents, attention]);
+  const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
   const shown = worktrees.filter((w) => ui.showArchivedInSidebar || !w.archived_at_ms);
   const grouped = repos.map((r) => ({ repo: r, items: sortWorktrees(shown.filter((w) => w.repo_id === r.id), ui.sidebarSort, ctx) })).filter((g) => g.items.length || !g.repo.exists);
   const orphans = sortWorktrees(shown.filter((w) => !repos.some((r) => r.id === w.repo_id)), ui.sidebarSort, ctx);
@@ -102,7 +103,7 @@ function currentWidth(side: "left" | "right"): number {
 function RepoGroup({ repo, items, active }: { repo: Repo; items: Worktree[]; active: string | null }) {
   const collapsed = useStore((s) => s.ui.collapsedRepos.includes(repo.id));
   const hidden = useStore((s) => s.ui.hiddenRepos.includes(repo.id));
-  const attention = useStore((s) => items.some((w) => needsAttention(w, { repos: s.repos, agents: Object.values(s.agents), attention: s.attention })));
+  const attention = useStore((s) => items.some((w) => needsAttention(w, queryContext(s))));
   const toggle = () => repo.id && toggleRepoCollapsed(repo.id);
   return (
     <div className="repo-group">
@@ -160,33 +161,34 @@ export function summarizeState(agents: AgentPresence[], attention: boolean): Age
 export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active: boolean; siblings?: Worktree[] }) {
   const selected = useStore((s) => s.selection.has(w.id));
   const agents = useStore((s) => agentsOf(s, w.id));
-  const attention = useStore((s) => needsAttention(w, { repos: s.repos, agents: Object.values(s.agents), attention: s.attention }));
+  const attention = useStore((s) => needsAttention(w, queryContext(s)));
+  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const res = useStore((s) => s.resources[w.id]);
   const threshold = useStore((s) => s.config?.resource_warning_bytes ?? Infinity);
   const hot = res && res.rss_bytes >= threshold;
   const archived = !!w.archived_at_ms;
+  const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   const summary = archived ? "none" : summarizeState(agents, attention);
   const menuBtn = useRef<HTMLButtonElement>(null);
   return (
     <div
-      className={`wt-row${active ? " wt-active" : ""}${w.exists || archived ? "" : " wt-missing"}${archived ? " wt-archived" : ""}${selected ? " wt-selected" : ""}`}
-      onClick={(e) => { if (!selectRow(e, w, siblings) && !archived) openWorktree(w.id); }}
+      className={`wt-row${active ? " wt-active" : ""}${w.exists || archived ? "" : " wt-missing"}${archived ? " wt-archived" : ""}${busy ? " wt-archiving" : ""}${selected ? " wt-selected" : ""}`}
+      onClick={(e) => { if (!selectRow(e, w, siblings) && !archived && !busy) openWorktree(w.id); }}
       onContextMenu={(e) => {
         const sel = getState().selection;
         openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
       }}
-      title={w.path}
+      title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}
     >
-      <span className={`state state-${summary}${selected ? " state-selected" : ""}`} />
+      <span className={`state state-${busy ? "archiving" : summary}${selected ? " state-selected" : ""}`} />
       <span className="wt-name">{w.name}</span>
       <span className="wt-meta">
-        {w.metadata.priority && <span className={`prio prio-${w.metadata.priority}`}>p{w.metadata.priority}</span>}
         {hot && <span className="hot">{formatBytes(res.rss_bytes)}</span>}
         <button ref={menuBtn} className="ghost wt-more" title="More" onClick={(e) => { e.stopPropagation(); openMenuAt(menuBtn.current!, worktreeMenu(w)); }}><Ellipsis className="icon" /></button>
       </span>
       <span className="wt-branch">
-        {archived ? "archived · " : ""}{branch}
+        {busy ? <span className="wt-state">archiving… · </span> : archived ? "archived · " : state ? <span className="wt-state">{state} · </span> : null}{branch}
         {w.git?.dirty ? " *" : ""}
         {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
       </span>

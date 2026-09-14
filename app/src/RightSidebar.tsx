@@ -5,6 +5,7 @@ import { openMenu } from "./ContextMenu";
 import { fileMenu } from "./menus";
 import { ResizeHandle } from "./Sidebar";
 import { setMetadata } from "./actions";
+import { orderedStates } from "./homeQuery";
 import { formatBytes, notify, setState, useStore } from "./store";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { FsEntry, Id, PrStatusResult, ProcessInfo, Worktree } from "./types";
@@ -24,6 +25,7 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
 
 function MetadataSection({ w }: { w: Worktree }) {
   const m = w.metadata;
+  const states = useStore((s) => orderedStates(s.config?.states ?? []));
   const [name, setName] = useState(m.display_name ?? "");
   const [project, setProject] = useState(m.project ?? "");
   const [tags, setTags] = useState(m.tags.join(", "));
@@ -38,9 +40,11 @@ function MetadataSection({ w }: { w: Worktree }) {
       <div className="section-label">worktree</div>
       <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label><input value={project} onChange={(e) => setProject(e.target.value)} onBlur={() => commit({ project: project.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
-      <div className="kv"><label>priority</label>
-        <select value={m.priority ?? ""} onChange={(e) => commit({ priority: e.target.value ? Number(e.target.value) : null })}>
-          <option value="">unset</option><option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4">P4</option>
+      <div className="kv"><label>state</label>
+        <select value={m.state ?? ""} onChange={(e) => commit({ state: e.target.value || null })}>
+          <option value="">no state</option>
+          {states.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {m.state && !states.some((s) => s.id === m.state) && <option value={m.state}>{m.state}</option>}
         </select>
       </div>
       <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>

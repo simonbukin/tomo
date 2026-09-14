@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { openWorktree } from "./actions";
 import { notify, setState, useStore } from "./store";
-import type { Repo, Town, Worktree } from "./types";
+import type { ConfigIssue, HookRun, IntegrationStatus, Repo, Town, Worktree } from "./types";
 
 export function Dialogs() {
   const dialog = useStore((s) => s.dialog);
@@ -25,6 +25,9 @@ export function Dialogs() {
           </>
         )}
         {dialog.kind === "prompt" && <Prompt close={close} title={dialog.title} initial={dialog.initial} placeholder={dialog.placeholder} onSubmit={dialog.onSubmit} />}
+        {dialog.kind === "integrations" && <IntegrationsDialog close={close} />}
+        {dialog.kind === "config-check" && <ConfigCheckDialog close={close} />}
+        {dialog.kind === "hook-log" && <HookLogDialog close={close} />}
       </div>
     </div>
   );
@@ -140,6 +143,93 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
         <button onClick={close}>Cancel</button>
         <button className="primary" disabled={busy || !repo || !branch.trim()} onClick={create}>{busy ? "Creating…" : "Create"}</button>
       </div>
+    </>
+  );
+}
+
+function useRpcList<T>(method: string, params?: Record<string, unknown>): { items: T[] | null; reload: () => void } {
+  const [items, setItems] = useState<T[] | null>(null);
+  const reload = () => rpc<T[]>(method, params).then(setItems).catch((e) => { notify("error", (e as Error).message); setItems([]); });
+  useEffect(() => { reload(); }, [method]);
+  return { items, reload };
+}
+
+function IntegrationsDialog({ close }: { close: () => void }) {
+  const { items, reload } = useRpcList<IntegrationStatus>("integrations_status");
+  const [busy, setBusy] = useState(false);
+  const install = async () => {
+    setBusy(true);
+    try {
+      await rpc("integrations_install");
+      notify("info", "hooks installed");
+      reload();
+    } catch (e) {
+      notify("error", (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <h2>integration status</h2>
+      <div className="dialog-list">
+        {items === null && <div className="faint">checking…</div>}
+        {items?.map((i) => (
+          <div key={i.kind} className="dialog-row" title={i.binary ?? "binary not found"}>
+            <span className={`state state-${i.level}`} />
+            <span className="name">{i.kind}</span>
+            <span className="detail">{i.level.replace("_", " ")}{i.reason ? ` · ${i.reason}` : ""}{i.lifecycle ? "" : " · no lifecycle"}{i.resume ? "" : " · no resume"}</span>
+          </div>
+        ))}
+      </div>
+      <div className="dialog-actions">
+        <button onClick={close}>Close</button>
+        <button className="primary" disabled={busy} onClick={install}>{busy ? "Installing…" : "install hooks"}</button>
+      </div>
+    </>
+  );
+}
+
+function ConfigCheckDialog({ close }: { close: () => void }) {
+  const { items } = useRpcList<ConfigIssue>("config_check");
+  return (
+    <>
+      <h2>config check</h2>
+      <div className="dialog-list">
+        {items === null && <div className="faint">checking…</div>}
+        {items?.length === 0 && <div className="muted">no issues</div>}
+        {items?.map((i, n) => (
+          <div key={`${i.key}-${n}`} className="dialog-row">
+            <span className={`state state-${i.level}`} />
+            <span className="name">{i.key}</span>
+            <span className="detail" title={i.message}>{i.message}</span>
+          </div>
+        ))}
+      </div>
+      <div className="dialog-actions"><button onClick={close}>Close</button></div>
+    </>
+  );
+}
+
+function HookLogDialog({ close }: { close: () => void }) {
+  const { items } = useRpcList<HookRun>("hook_log", { limit: 20 });
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <>
+      <h2>hook log</h2>
+      <div className="dialog-list">
+        {items === null && <div className="faint">loading…</div>}
+        {items?.length === 0 && <div className="muted">no hook runs yet</div>}
+        {items?.map((r, n) => (
+          <div key={`${r.started_at_ms}-${n}`} className="dialog-row hook-row" onClick={() => setOpen(open === n ? null : n)}>
+            <span className={`state state-${r.ok ? "ok" : "fail"}`} />
+            <span className="name">{r.event}</span>
+            <span className="detail" title={r.command}>{r.command} · {r.duration_ms} ms{r.exit_code != null && !r.ok ? ` · exit ${r.exit_code}` : ""}</span>
+            {open === n && <pre className="hook-out">{r.output_tail.trim() || "(no output)"}</pre>}
+          </div>
+        ))}
+      </div>
+      <div className="dialog-actions"><button onClick={close}>Close</button></div>
     </>
   );
 }

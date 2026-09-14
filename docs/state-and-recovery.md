@@ -111,13 +111,30 @@ viewed items beyond the newest 200 on start.
 ## Archived worktrees
 
 `tomo worktree archive` is the only Tomo action that removes a worktree
-directory. It is deliberate and explicit: terminals close, owned processes
-die, the `worktree_archive` hook runs, the `archive_cleanup` directories go,
-then `git worktree remove --force` runs. Git keeps the branch. Tomo keeps
-the metadata row with `archived_at_ms` and `archived_branch`, so the
-worktree still shows in Home (archived filter) and can be restored with
-`tomo worktree restore`, which runs `git worktree add` at the old path.
-Tabs and panes are not restored; the worktree opens with a fresh shell.
+directory. The steps, in order:
+
+1. The worktree enters the `archiving` state (`Worktree.archiving`), and
+   clients see it at once. A second archive of the same worktree is refused.
+2. `worktree.before_archive` hooks run and Tomo waits for them. A non-zero
+   exit or a timeout aborts with error code `aborted`; nothing changed.
+3. Every pane of the worktree closes and the processes those panes own are
+   killed. Observed processes are never touched.
+4. The `[archive] cleanup` directories directly under the worktree are
+   deleted in a blocking task, off the request path.
+5. `git worktree remove --force` runs. Git keeps the branch.
+6. The metadata row gets `archived_at_ms` and `archived_branch`, and
+   `worktree.archived` fires.
+
+The worktree still shows in Home under the archived filter with its
+metadata and town identity. `tomo worktree restore` first checks that the
+branch still exists, then runs `git worktree add` at the old path (or under
+the configured parent when the old parent is gone), clears the archived
+mark, and fires `worktree.restored`. Tabs and panes are not restored; the
+worktree opens with a fresh shell.
+
+Hooks never block recovery. A failed or missing hook script logs a warning
+and a `HookRan` event; only the `before_archive` gate can stop anything, and
+it can stop only an archive.
 
 ## What is not recovered
 

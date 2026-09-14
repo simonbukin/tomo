@@ -1,4 +1,5 @@
 import { rpc, RpcFailure } from "./api";
+import { orderedStates } from "./homeQuery";
 import { activeTab, agentsOf, clearSelection, getState, notify, paneIds, setState, setUi, unviewedAttention } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { AgentKind, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
@@ -219,8 +220,37 @@ export function restoreWorktree(worktreeId: Id): void {
 }
 
 export async function bulkMetadata(ids: Id[], patch: Record<string, unknown>): Promise<void> {
-  for (const id of ids) await setMetadata(id, patch);
+  await Promise.allSettled(ids.map((id) => setMetadata(id, patch)));
   notify("info", `Updated ${ids.length} worktrees`);
+}
+
+export function setWorktreeState(worktreeId: Id, state: string | null): Promise<void> {
+  return setMetadata(worktreeId, { state });
+}
+
+function tabOfPane(paneId: Id): Tab | null {
+  const s = getState();
+  const pane = s.panes[paneId];
+  return pane ? Object.values(s.tabs).flat().find((t) => t.id === pane.tab_id) ?? null : null;
+}
+
+export function toggleZoom(paneId?: Id): void {
+  const id = paneId ?? focusedPaneId();
+  const tab = id ? tabOfPane(id) : null;
+  if (!id || !tab) return;
+  rpc("pane_zoom", { pane_id: id, tab_id: tab.id }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function equalizeTab(tabId: Id): void {
+  rpc("layout_equalize", { tab_id: tabId }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function rotateSplit(tabId: Id): void {
+  rpc("layout_rotate", { tab_id: tabId, split_id: null }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function swapPanes(a: Id, b: Id): void {
+  rpc("pane_swap", { pane_a: a, pane_b: b }).catch((e) => notify("error", (e as Error).message));
 }
 
 export function bulkAddTag(ids: Id[]): void {
@@ -274,15 +304,9 @@ export function bulkArchive(ids: Id[]): void {
       confirmLabel: "Archive all",
       onConfirm: async () => {
         if (targets.some((w) => w.id === getState().ui.activeWorktreeId)) setUi({ view: "home" });
-        let ok = 0;
-        for (const w of targets) {
-          try {
-            await rpc("worktree_archive", { worktree_id: w.id });
-            ok += 1;
-          } catch (e) {
-            notify("error", `${w.name}: ${(e as Error).message}`);
-          }
-        }
+        const results = await Promise.allSettled(targets.map((w) => rpc("worktree_archive", { worktree_id: w.id })));
+        results.forEach((r, i) => r.status === "rejected" && notify("error", `${targets[i].name}: ${(r.reason as Error).message}`));
+        const ok = results.filter((r) => r.status === "fulfilled").length;
         clearSelection();
         notify("info", `Archived ${ok} of ${targets.length}${skipped ? `, skipped ${skipped}` : ""}`);
       },
@@ -292,15 +316,9 @@ export function bulkArchive(ids: Id[]): void {
 
 export async function bulkRestore(ids: Id[]): Promise<void> {
   const targets = ids.map(byId).filter((w): w is Worktree => !!w && !!w.archived_at_ms);
-  let ok = 0;
-  for (const w of targets) {
-    try {
-      await rpc("worktree_restore", { worktree_id: w.id });
-      ok += 1;
-    } catch (e) {
-      notify("error", `${w.name}: ${(e as Error).message}`);
-    }
-  }
+  const results = await Promise.allSettled(targets.map((w) => rpc("worktree_restore", { worktree_id: w.id })));
+  results.forEach((r, i) => r.status === "rejected" && notify("error", `${targets[i].name}: ${(r.reason as Error).message}`));
+  const ok = results.filter((r) => r.status === "fulfilled").length;
   clearSelection();
   notify("info", `Restored ${ok} of ${targets.length}`);
 }
@@ -425,6 +443,7 @@ export const actions: Action[] = [
   { id: "split_vertical", label: "New terminal (split down)", run: () => splitPane("vertical"), whenWorktree: true },
   { id: "new_tab", label: "New tab", run: newTab, whenWorktree: true },
   { id: "close_pane", label: "Close pane", run: () => closePane(), whenWorktree: true },
+  { id: "zoom_pane", label: "Zoom pane (toggle)", run: () => toggleZoom(), whenWorktree: true },
   { id: "rename_tab", label: "Rename tab", run: renameCurrentTab, whenWorktree: true },
   { id: "next_tab", label: "Next tab", run: () => cycleTab(1), whenWorktree: true },
   { id: "prev_tab", label: "Previous tab", run: () => cycleTab(-1), whenWorktree: true },
@@ -440,6 +459,9 @@ export const actions: Action[] = [
   { id: "add_repo", label: "Add repository…", run: () => setState({ dialog: { kind: "add-repo" } }) },
   { id: "create_worktree", label: "Create worktree…", run: () => setState({ dialog: { kind: "create-worktree", repoId: currentWorktree()?.repo_id } }) },
   { id: "refresh", label: "Refresh repositories and worktrees", run: () => rpc("worktree_refresh").then(() => undefined) },
+  { id: "integrations", label: "Integration status…", run: () => setState({ dialog: { kind: "integrations" } }) },
+  { id: "config_check", label: "Check config…", run: () => setState({ dialog: { kind: "config-check" } }) },
+  { id: "hook_log", label: "Hook log…", run: () => setState({ dialog: { kind: "hook-log" } }) },
   { id: "set_priority_1", label: "Set worktree priority: P1", run: () => setMetadata(currentWorktree()!.id, { priority: 1 }), whenWorktree: true },
   { id: "set_priority_2", label: "Set worktree priority: P2", run: () => setMetadata(currentWorktree()!.id, { priority: 2 }), whenWorktree: true },
   { id: "set_priority_3", label: "Set worktree priority: P3", run: () => setMetadata(currentWorktree()!.id, { priority: 3 }), whenWorktree: true },
@@ -466,11 +488,24 @@ export const actions: Action[] = [
   { id: "collapse_repos", label: "Collapse all repos", run: () => setAllReposCollapsed(true) },
   { id: "expand_repos", label: "Expand all repos", run: () => setAllReposCollapsed(false) },
   { id: "clear_selection", label: "Clear selection", run: clearSelection, when: () => getState().selection.size > 0 },
-  ...(["name", "recent", "created", "attention", "priority"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
+  ...(["name", "recent", "created", "attention", "state", "priority"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
 ];
 
+export function stateActions(): Action[] {
+  const current = currentWorktree();
+  const states = orderedStates(getState().config?.states ?? []);
+  return [
+    ...states.map((s) => ({ id: `state_${s.id}`, label: `state ${s.label}`, run: () => setWorktreeState(currentWorktree()!.id, s.id), whenWorktree: true, when: () => current?.metadata.state !== s.id })),
+    { id: "state_clear", label: "state clear", run: () => setWorktreeState(currentWorktree()!.id, null), whenWorktree: true, when: () => !!current?.metadata.state },
+  ];
+}
+
+export function allActions(): Action[] {
+  return [...actions, ...stateActions()];
+}
+
 export function runAction(id: string): void {
-  const a = actions.find((x) => x.id === id);
+  const a = allActions().find((x) => x.id === id);
   if (!a) return;
   if (a.whenWorktree && !currentWorktree()) {
     notify("info", "Open a worktree first");

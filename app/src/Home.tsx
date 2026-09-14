@@ -3,20 +3,20 @@ import { Wordmark } from "./Brand";
 import { useMemo, useRef } from "react";
 import { openWorktree } from "./actions";
 import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
-import { filterWorktrees, groupWorktrees, needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
+import { filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
 import { worktreeMenu } from "./menus";
-import { agentsOf, formatBytes, repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { agentsOf, formatBytes, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
 
-const KIND_LABEL: Record<FilterKind, string> = { repo: "repo", project: "project", tag: "tag", priority: "priority", agent: "agent", archived: "archived", attention: "attention" };
+const KIND_LABEL: Record<FilterKind, string> = { state: "state", repo: "repo", project: "project", tag: "tag", priority: "priority", agent: "agent", archived: "archived", attention: "attention" };
 
 export function Home() {
   const s = useStore((x) => x);
   const o = s.ui.home;
   const set = (patch: Partial<HomeOptions>) => setUi({ home: { ...o, ...patch } });
-  const ctx: QueryContext = useMemo(() => ({ repos: s.repos, agents: Object.values(s.agents), attention: s.attention }), [s.repos, s.agents, s.attention]);
+  const ctx = useMemo(() => queryContext(s), [s.repos, s.agents, s.attention, s.config?.states]);
   const repos = visibleRepos(s);
   const visible = sortWorktrees(filterWorktrees(s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)), o, ctx), o.sort, ctx);
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
@@ -28,6 +28,8 @@ export function Home() {
   const removeFilter = (f: Filter) => set({ filters: o.filters.filter((x) => !(x.kind === f.kind && x.value === f.value)) });
   const values = (kind: FilterKind): { value: string; label: string }[] => {
     switch (kind) {
+      case "state":
+        return orderedStates(ctx.states).map((st) => ({ value: st.id, label: st.label })).concat({ value: "", label: "no state" });
       case "repo":
         return s.repos.map((r) => ({ value: r.id, label: r.name }));
       case "project":
@@ -51,8 +53,8 @@ export function Home() {
     }));
   const displayMenu = (): MenuItem[] => [
     { label: "view", submenu: (["list", "board"] as const).map((v) => ({ label: v, checked: o.view === v, run: () => set({ view: v }) })) },
-    { label: "group by", submenu: (["repo", "project", "priority", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
-    { label: "sort", submenu: (["priority", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
+    { label: "group by", submenu: (["state", "repo", "project", "priority", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
+    { label: "sort", submenu: (["state", "priority", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
     { separator: true },
     { label: "show archived", checked: o.showArchived, run: () => set({ showArchived: !o.showArchived }) },
   ];
@@ -112,24 +114,26 @@ function Card({ w }: { w: Worktree }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const res = useStore((s) => s.resources[w.id]);
   const repo = useStore((s) => repoName(s, w.repo_id));
-  const attention = useStore((s) => needsAttention(w, { repos: s.repos, agents: Object.values(s.agents), attention: s.attention }));
+  const attention = useStore((s) => needsAttention(w, queryContext(s)));
+  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const g = w.git;
   const archived = !!w.archived_at_ms;
+  const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   const sub = [w.metadata.project ?? repo, branch].filter(Boolean).join(" · ");
   const summary = summarizeState(agents, attention);
   return (
     <div
-      className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}`}
-      onClick={() => !archived && openWorktree(w.id)}
+      className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}`}
+      onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
+      title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}
     >
       <div className="card-title">
-        <span className={`state state-${archived ? "none" : summary}`} />
+        <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
         <span className="name">{w.name}</span>
         <span className="wt-meta">
-          {archived && <span className="faint">archived</span>}
-          {w.metadata.priority && <span className={`prio prio-${w.metadata.priority}`}>p{w.metadata.priority}</span>}
+          {busy ? <span className="wt-state">archiving…</span> : archived ? <span className="faint">archived</span> : state ? <span className="wt-state">{state}</span> : null}
         </span>
       </div>
       <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>

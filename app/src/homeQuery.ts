@@ -1,9 +1,27 @@
-import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
+import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, StateDef, Worktree } from "./types";
 
 export interface QueryContext {
   repos: Repo[];
   agents: AgentPresence[];
   attention: AttentionItem[];
+  states: StateDef[];
+}
+
+export const NO_STATE = "no state";
+
+export function orderedStates(states: StateDef[]): StateDef[] {
+  return [...states].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+}
+
+export function stateLabel(states: StateDef[], id: string | null | undefined): string | null {
+  if (!id) return null;
+  return states.find((s) => s.id === id)?.label ?? id;
+}
+
+function stateRank(states: StateDef[], id: string | null): number {
+  if (!id) return Number.MAX_SAFE_INTEGER;
+  const idx = orderedStates(states).findIndex((s) => s.id === id);
+  return idx < 0 ? Number.MAX_SAFE_INTEGER - 1 : idx;
 }
 
 export function repoName(repos: Repo[], repoId: string): string {
@@ -28,6 +46,8 @@ function agentStateOf(w: Worktree, ctx: QueryContext): string {
 
 export function matchesFilter(w: Worktree, f: Filter, ctx: QueryContext): boolean {
   switch (f.kind) {
+    case "state":
+      return (w.metadata.state ?? "") === f.value;
     case "repo":
       return w.repo_id === f.value;
     case "project":
@@ -48,7 +68,9 @@ export function matchesFilter(w: Worktree, f: Filter, ctx: QueryContext): boolea
 export function matchesQuery(w: Worktree, query: string, ctx: QueryContext): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const hay = [w.name, w.branch ?? "", w.metadata.project ?? "", w.metadata.tags.join(" "), repoName(ctx.repos, w.repo_id), w.path].join(" ").toLowerCase();
+  const hay = [w.name, w.branch ?? "", w.metadata.project ?? "", w.metadata.state ?? "", stateLabel(ctx.states, w.metadata.state) ?? "", w.metadata.tags.join(" "), repoName(ctx.repos, w.repo_id), w.path]
+    .join(" ")
+    .toLowerCase();
   return hay.includes(q);
 }
 
@@ -78,12 +100,16 @@ export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | Side
         return rank(a) - rank(b) || recent(b) - recent(a) || a.name.localeCompare(b.name);
       case "priority":
         return (a.metadata.priority ?? 9) - (b.metadata.priority ?? 9) || recent(b) - recent(a) || a.name.localeCompare(b.name);
+      case "state":
+        return stateRank(ctx.states, a.metadata.state) - stateRank(ctx.states, b.metadata.state) || recent(b) - recent(a) || a.name.localeCompare(b.name);
     }
   });
 }
 
 export function groupKey(w: Worktree, group: HomeOptions["group"], ctx: QueryContext): string {
   switch (group) {
+    case "state":
+      return stateLabel(ctx.states, w.metadata.state) ?? NO_STATE;
     case "repo":
       return repoName(ctx.repos, w.repo_id);
     case "project":
@@ -96,17 +122,22 @@ export function groupKey(w: Worktree, group: HomeOptions["group"], ctx: QueryCon
 }
 
 export function groupWorktrees(list: Worktree[], group: HomeOptions["group"], ctx: QueryContext): { key: string; items: Worktree[] }[] {
-  const order = group === "priority" ? ["p1", "p2", "p3", "p4", "no priority"] : null;
+  const order = group === "priority" ? ["p1", "p2", "p3", "p4", "no priority"] : group === "state" ? [...orderedStates(ctx.states).map((s) => s.label), NO_STATE] : null;
   const map = new Map<string, Worktree[]>();
+  if (group === "state") for (const key of order ?? []) map.set(key, []);
   for (const w of list) {
     const key = groupKey(w, group, ctx);
     map.set(key, [...(map.get(key) ?? []), w]);
   }
   const keys = [...map.keys()].sort((a, b) => {
-    if (order) return order.indexOf(a) - order.indexOf(b);
+    if (order) {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      return (ia < 0 ? order.length - 1 : ia) - (ib < 0 ? order.length - 1 : ib) || a.localeCompare(b);
+    }
     if (a.startsWith("no ")) return 1;
     if (b.startsWith("no ")) return -1;
     return a.localeCompare(b);
   });
-  return keys.map((key) => ({ key, items: map.get(key) ?? [] }));
+  return keys.map((key) => ({ key, items: map.get(key) ?? [] })).filter((g) => g.items.length > 0 || (group === "state" && g.key !== NO_STATE));
 }

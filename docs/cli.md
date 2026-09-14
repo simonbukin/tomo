@@ -79,8 +79,8 @@ tomo worktree archive <worktree>
 tomo worktree restore <worktree>
 tomo worktree open <worktree>
 tomo worktree metadata get [worktree]
-tomo worktree metadata set [worktree] [--name N] [--project P] [--priority 1-4] [--tags a,b]
-                                     [--clear-name] [--clear-project] [--clear-priority] [--clear-tags]
+tomo worktree metadata set [worktree] [--name N] [--project P] [--state S] [--priority 1-4] [--tags a,b]
+                                     [--clear-name] [--clear-project] [--clear-state] [--clear-priority] [--clear-tags]
 ```
 
 `create` runs `git worktree add`. Without `--path` Tomo names the directory
@@ -89,19 +89,36 @@ after a Japanese town: `<parent>/<town slug>`, where the parent is
 `--town` picks a specific town that is not unlocked yet; otherwise Tomo
 picks one by rarity weight. The town becomes the display name unless you
 set one. `--new` passes `-b`; `--from` gives the start point for a new
-branch. After a successful create the `worktree_create` hook runs.
+branch. After a successful create the `worktree.created` hooks run.
 
-`archive` closes the worktree's terminals, kills the processes they own,
-runs the `worktree_archive` hook, deletes the `archive_cleanup` directories
-under the worktree, and runs `git worktree remove --force`. The branch is
-kept. The worktree stays listed as archived. `restore` runs
-`git worktree add <old path> <branch>` and clears the archived mark. Both
-refuse the main worktree.
+`archive` marks the worktree as archiving, runs the `worktree.before_archive`
+hooks (a non-zero exit aborts), closes the worktree's terminals, kills the
+processes they own, deletes the `[archive] cleanup` directories under the
+worktree, and runs `git worktree remove --force`. The branch is kept. The
+worktree stays listed as archived. `restore` checks that the branch exists,
+runs `git worktree add <old path> <branch>`, and clears the archived mark.
+Both refuse the main worktree. See
+[state-and-recovery.md](state-and-recovery.md).
 
 `open` makes sure the worktree has a tab and a pane, then focuses that pane
 in the GUI.
 
 `metadata set --tags` replaces the whole tag list. Tags keep no leading `#`.
+`--state` must name a state from `[[states]]` in the config; an unknown
+state is a bad request that lists the known ones. A state change fires
+`worktree.state_changed` with the previous state.
+
+```bash
+tomo worktree metadata set . --state waiting-review
+```
+
+### states
+
+```bash
+tomo states list
+```
+
+Prints the configured workflow states with order, id, and label.
 
 ### towns
 
@@ -121,17 +138,24 @@ tomo tab list [worktree]
 tomo tab create [worktree] [--title T]
 tomo tab rename <tab> <title>
 tomo tab close <tab> [--force]
+tomo tab equalize [tab]
+tomo tab rotate [tab]
 ```
 
 A new tab always gets one shell pane. `close` fails with a conflict error
 when a pane still runs child processes; `--force` closes anyway.
+`equalize` gives every pane in the tab the same size. `rotate` flips the
+split around the active pane between side-by-side and stacked. Without an
+argument both use `TOMO_TAB_ID`, else the tab of `TOMO_PANE_ID`.
 
 ### pane
 
 ```bash
 tomo pane list [--worktree W]
 tomo pane create [--worktree W] [--cwd DIR] [--tab T] [--title T] [-- <command...>]
-tomo pane split [pane] [--vertical] [-- <command...>]
+tomo pane split [pane] [--right] [--down] [-- <command...>]
+tomo pane swap <pane-a> <pane-b>
+tomo pane zoom [pane]
 tomo pane focus [pane]
 tomo pane send <text> [--pane P] [--no-newline]
 tomo pane close [pane] [--force]
@@ -141,9 +165,12 @@ tomo pane kill-tree [pane]
 
 `create` splits the active pane of the active tab; without a tab it creates
 one. A trailing `-- cmd args` runs that program instead of a login shell.
-`send` writes to the PTY as if typed; a newline is appended unless
-`--no-newline`. `kill-tree` sends SIGKILL to every process under the pane
-shell and keeps the shell.
+`split --right` (default) puts the new pane beside the target; `--down`
+puts it below (`--vertical` still works). `swap` exchanges two panes of the
+same tab. `zoom` asks the GUI to show one pane full size or to unzoom it;
+the saved layout does not change. `send` writes to the PTY as if typed; a
+newline is appended unless `--no-newline`. `kill-tree` sends SIGKILL to
+every process under the pane shell and keeps the shell.
 
 ### agent
 
@@ -229,9 +256,43 @@ tomo integrations status
 tomo integrations install
 ```
 
+`status` prints one line per agent with a level and a reason:
+
+```text
+Claude  ✓ full            lifecycle + resume
+Codex   ⚠ partial         resume only  (hooks installed but not trusted; start Codex and press t in its hooks panel)
+Pi      ✓ full            lifecycle + resume
+```
+
+Levels: `full` (hooks and resume), `partial` (resume only), `process-only`
+(binary found, hooks not installed), `unavailable` (binary not on PATH).
+
 `install` merges Tomo hooks into `~/.claude/settings.json` and
 `~/.codex/hooks.json` and writes `~/.pi/agent/extensions/tomo-status.ts`.
 Re-run it after moving the `tomo` binary.
+
+### config
+
+```bash
+tomo config check
+```
+
+Validates `config.toml` and prints one line per issue with a level, a key,
+and a message. Exits 2 when any issue is an error. The daemon applies
+defaults for anything invalid, so the app still starts.
+
+### hooks
+
+```bash
+tomo hooks log [-n 20]
+```
+
+Prints the most recent hook runs from `<data dir>/hooks.log`: status,
+event, duration, exit code, command, and the last output lines of a failed
+run. Hook scripts get these variables: `TOMO_EVENT`, `TOMO_EVENT_JSON`,
+`TOMO_WORKTREE_ID`, `TOMO_WORKTREE_PATH`, `TOMO_REPO_PATH`, `TOMO_BRANCH`,
+`TOMO_STATE`, `TOMO_PANE_ID`, `TOMO_AGENT_KIND`, `TOMO_AGENT_STATE`,
+`TOMO_SOCKET`, `TOMO_BIN`. See [hooks.md](hooks.md).
 
 ## Exit codes
 
@@ -239,4 +300,5 @@ Re-run it after moving the `tomo` binary.
 |------|----------------------------------------------|
 | 0    | Success                                      |
 | 1    | Daemon error or bad arguments; message on stderr |
+| 2    | `config check`: at least one error-level issue   |
 | 3    | `daemon status`: the daemon is not running   |

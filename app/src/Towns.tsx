@@ -1,11 +1,11 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Minus, Plus, RotateCcw } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { ExternalLink, Minus, Plus, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { openWorktree } from "./actions";
 import outline from "./data/japan-outline.json";
 import towns from "./data/japan-towns.json";
 import { useStore } from "./store";
-import type { Rarity, Town } from "./types";
+import type { Rarity, Town, TownUnlock } from "./types";
 import "./towns.css";
 
 const ALL = towns as Town[];
@@ -15,6 +15,7 @@ const LAT_SCALE = Math.cos((36 * Math.PI) / 180);
 const WIDTH = 1000;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 12;
+const HIDE_DELAY_MS = 180;
 
 const ringPoints = RINGS.flat();
 const minLon = Math.min(...ringPoints.map((p) => p[0])) - 0.3;
@@ -39,17 +40,30 @@ function zoomAt(v: View, factor: number, px: number, py: number): View {
   return { k, tx: px - (px - v.tx) * ratio, ty: py - (py - v.ty) * ratio };
 }
 
+type Hover = { town: Town; unlock: TownUnlock | null; x: number; y: number };
+
 export function Towns() {
   const unlocks = useStore((s) => s.unlocks);
   const worktrees = useStore((s) => s.worktrees);
-  const [hover, setHover] = useState<Town | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
   const [view, setView] = useState<View>(HOME);
   const svgRef = useRef<SVGSVGElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const hideTimer = useRef<number | undefined>(undefined);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
   const bySlug = useMemo(() => new Map(ALL.map((t) => [t.slug, t])), []);
+  const unlockBySlug = useMemo(() => new Map(unlocks.map((u) => [u.slug, u])), [unlocks]);
   const unlocked = useMemo(() => [...unlocks].sort((a, b) => b.unlocked_at_ms - a.unlocked_at_ms).flatMap((u) => (bySlug.get(u.slug) ? [{ town: bySlug.get(u.slug)!, unlock: u }] : [])), [unlocks, bySlug]);
-  const unlockedSet = useMemo(() => new Set(unlocks.map((u) => u.slug)), [unlocks]);
   const counts = RARITIES.map((r) => ({ r, total: ALL.filter((t) => t.rarity === r).length, have: unlocked.filter((u) => u.town.rarity === r).length }));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setHover(null);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearTimeout(hideTimer.current);
+    };
+  }, []);
 
   const toSvg = (clientX: number, clientY: number): [number, number] => {
     const svg = svgRef.current;
@@ -61,6 +75,17 @@ export function Towns() {
     return [p.x, p.y];
   };
   const unitsPerPixel = () => 1 / (svgRef.current?.getScreenCTM()?.a ?? 1);
+
+  const show = (town: Town, e: { clientX: number; clientY: number }) => {
+    window.clearTimeout(hideTimer.current);
+    const box = mapRef.current?.getBoundingClientRect();
+    setHover({ town, unlock: unlockBySlug.get(town.slug) ?? null, x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0) });
+  };
+  const scheduleHide = () => {
+    window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => setHover(null), HIDE_DELAY_MS);
+  };
+  const keep = () => window.clearTimeout(hideTimer.current);
 
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -83,10 +108,16 @@ export function Towns() {
   };
   const zoomCenter = (factor: number) => setView((v) => zoomAt(v, factor, WIDTH / 2, HEIGHT / 2));
   const r = (base: number) => base / view.k;
+  const cardStyle = (h: Hover): React.CSSProperties => {
+    const box = mapRef.current?.getBoundingClientRect();
+    const flipX = box ? h.x > box.width - 240 : false;
+    const flipY = box ? h.y > box.height - 150 : false;
+    return { left: flipX ? h.x - 232 : h.x + 14, top: flipY ? h.y - 130 : h.y + 14 };
+  };
 
   return (
     <div className="towns rise">
-      <div className="towns-map">
+      <div className="towns-map" ref={mapRef}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -102,13 +133,14 @@ export function Towns() {
           <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
             <path d={OUTLINE_PATH} className="map-land" />
             {ALL.map((t) => {
+              if (unlockBySlug.has(t.slug)) return null;
               const [x, y] = project(t.lon, t.lat);
-              return <circle key={t.slug} cx={x} cy={y} r={r(1.6)} className="town-dot" />;
+              return <circle key={t.slug} cx={x} cy={y} r={r(1.8)} className={`town-dot rarity-${t.rarity}`} onMouseEnter={(e) => show(t, e)} onMouseLeave={scheduleHide} />;
             })}
             {unlocked.map(({ town }) => {
               const [x, y] = project(town.lon, town.lat);
               return (
-                <g key={town.slug} className={`town-unlocked rarity-${town.rarity}`} onMouseEnter={() => setHover(town)} onMouseLeave={() => setHover(null)}>
+                <g key={town.slug} className={`town-unlocked rarity-${town.rarity}`} onMouseEnter={(e) => show(town, e)} onMouseLeave={scheduleHide}>
                   <circle cx={x} cy={y} r={r(9)} className="town-ring" />
                   <circle cx={x} cy={y} r={r(4.5)} className="town-core" />
                 </g>
@@ -121,12 +153,7 @@ export function Towns() {
           <button className="ghost" title="Zoom out" onClick={() => zoomCenter(1 / 1.5)}><Minus className="icon" /></button>
           <button className="ghost" title="Reset view" onClick={() => setView(HOME)}><RotateCcw className="icon" /></button>
         </div>
-        {hover && (
-          <div className="town-tip rise">
-            <span className={`rarity-dot rarity-${hover.rarity}`} /> {hover.name} <span className="muted">{hover.ja}</span>
-            <div className="faint">{hover.pref} · {hover.kind} · {hover.rarity}</div>
-          </div>
-        )}
+        {hover && <TownCard hover={hover} style={cardStyle(hover)} onEnter={keep} onLeave={scheduleHide} worktreeName={worktrees.find((w) => w.id === hover.unlock?.worktree_id)?.name} openWorktree={() => hover.unlock && openWorktree(hover.unlock.worktree_id)} />}
       </div>
       <div className="towns-list">
         <div className="section-label">collection<span className="right">{unlocked.length} / {ALL.length}</span></div>
@@ -141,7 +168,7 @@ export function Towns() {
         {unlocked.map(({ town, unlock }) => {
           const w = worktrees.find((x) => x.id === unlock.worktree_id);
           return (
-            <div key={town.slug} className="town-row" onMouseEnter={() => setHover(town)} onMouseLeave={() => setHover(null)}>
+            <div key={town.slug} className="town-row">
               <span className={`rarity-dot rarity-${town.rarity}`} title={town.rarity} />
               <div className="town-main">
                 <div>
@@ -157,8 +184,29 @@ export function Towns() {
             </div>
           );
         })}
-        <div className="faint towns-note">{ALL.length - unlockedSet.size} towns still locked</div>
+        <div className="faint towns-note">{ALL.length - unlockBySlug.size} towns still locked</div>
       </div>
+    </div>
+  );
+}
+
+function TownCard({ hover, style, onEnter, onLeave, worktreeName, openWorktree }: { hover: Hover; style: React.CSSProperties; onEnter: () => void; onLeave: () => void; worktreeName?: string; openWorktree: () => void }) {
+  const t = hover.town;
+  return (
+    <div className="town-card rise" style={style} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <div className="town-card-title">
+        <span className={`rarity-dot rarity-${t.rarity}`} />
+        <strong>{t.name}</strong>
+        <span className="muted">{t.ja}</span>
+      </div>
+      <div className="faint">{t.pref} · {t.kind} · {t.rarity}{t.population != null ? ` · ${t.population.toLocaleString()} people` : ""}</div>
+      {hover.unlock && (
+        <div className="faint">
+          unlocked {new Date(hover.unlock.unlocked_at_ms).toLocaleDateString()}
+          {worktreeName && <> · <button className="link" onClick={openWorktree}>{worktreeName}</button></>}
+        </div>
+      )}
+      <button className="link" onClick={() => openUrl(t.wiki).catch(() => {})}><ExternalLink className="icon" /> wikipedia</button>
     </div>
   );
 }

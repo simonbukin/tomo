@@ -31,13 +31,14 @@ No table stores a branch name.
 | `gitdir`         | C        | Name under `<common>/worktrees/`; NULL for the main worktree |
 | `display_name`   | A        | Optional; the path's last component is the fallback     |
 | `project`        | A        | Optional grouping label                                 |
-| `priority`       | A        | 1–4 or NULL; values outside 1–4 clamp on read           |
+| `state`          | A        | Workflow state id from `[[states]]` in config; NULL when unset |
+| `priority`       | A        | 1–4 or NULL; kept for compatibility                     |
 | `tags`           | A        | JSON array of strings; unparsable text reads as `[]`    |
 | `last_active_ms` | R        | Set when a worktree is opened or a pane is focused      |
 | `first_seen_ms`  | C        | When discovery first saw the worktree                   |
 | `archived_at_ms` | C        | Set by `worktree archive`; NULL once the path exists again |
 | `archived_branch`| C        | Branch at archive time; used by `worktree restore`      |
-| `town_slug`      | A        | The Japanese town that named the worktree               |
+| `town_slug`      | —        | Unused since Phase 2; the `towns` table owns the mapping |
 
 Discovery inserts a row for every worktree it sees, so metadata can attach
 to it later. Deleting a row loses organization only; the worktree stays
@@ -52,7 +53,7 @@ usable.
 | `repo_id`        | A        | Repository of that worktree              |
 | `unlocked_at_ms` | A        | When the worktree was created            |
 
-A town unlocks once. Archiving or deleting the worktree keeps the unlock.
+This table is the only owner of the worktree→town mapping; `Worktree.town_slug` is derived from it. A town unlocks once. Archiving or deleting the worktree keeps the unlock; a restore at a new path moves the row to the new worktree id.
 The dataset itself (1681 municipalities with coordinates, population,
 Wikipedia link, and a rarity tier from population) ships in the binary.
 
@@ -172,10 +173,12 @@ commented copy when the file is missing.
 | `font_family`         | `Geist Mono Variable, Menlo, monospace`   | UI terminal font                        |
 | `font_size`           | `13`                                      | Terminal font size                      |
 | `theme`               | `system`                                  | `system`, `dark`, or `light`            |
+| `max_panes_per_tab`   | `4`                                       | Spawns without a target open a new tab once a tab holds this many panes |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
-| `archive_cleanup`     | `["node_modules","target","dist",".next",".turbo",".venv","build"]` | Direct children deleted by `worktree archive` |
-| `[hooks]`             | none                                      | `worktree_create` and `worktree_archive`: shell strings run with `sh -c` in the worktree; env `TOMO_WORKTREE_ID`, `TOMO_WORKTREE_PATH`, `TOMO_REPO_PATH`, `TOMO_BRANCH`; 60 s timeout; failures only warn |
+| `[archive] cleanup`   | `["node_modules","target","dist",".next",".turbo",".venv","build"]` | Direct children deleted by `worktree archive`; plain names only |
+| `[[states]]`          | exploring, active, waiting-review, merged | `id`, `label` (default: humanized id), `order` (default: position × 10) |
+| `[[hooks]]`           | none                                      | `event`, `command`, optional `state`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
 
 Default keybindings (`mod` is ⌘):
 
@@ -188,4 +191,16 @@ new_tab = "mod+t"              close_pane = "mod+w"
 next_tab = "mod+shift+right"   prev_tab = "mod+shift+left"
 focus_left/right/up/down = "mod+alt+<arrow>"
 toggle_left_sidebar = "mod+b"  toggle_right_sidebar = "mod+shift+b"
+zoom_pane = "mod+shift+enter"
 ```
+
+`tomo config check` validates the file: unknown hook events, duplicate
+state ids, missing programs, bad keybindings, and cleanup entries that are
+not plain names. Malformed config never stops the daemon; it logs a
+warning and uses defaults.
+
+## hooks.log
+
+`<data dir>/hooks.log` holds one JSON `HookRun` per line: event, command,
+worktree id, start time, duration, exit code, success flag, and the last
+4 KB of output. It is a log, not state; delete it freely.
