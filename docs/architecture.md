@@ -43,7 +43,7 @@ Every agent presence, attention item, and process classification carries a
 known worktree.
 
 Tomo has no Task, Job, Run, or Project object. Organization is metadata on the
-worktree (display name, project, priority, tags).
+worktree (display name, project, state, tags).
 
 Why: one durable unit makes recovery, resource roll-up, and attention routing
 simple. The user thinks in worktrees, so Tomo does too.
@@ -148,8 +148,7 @@ A worktree has at most one **state** and any number of **tags**. State
 answers "where is this in my workflow?"; tags answer "what is this about?".
 The state values are personal configuration (`[[states]]` in
 `config.toml`), not protocol enums. The daemon rejects a state that the
-config does not list, so every client sees the same taxonomy. Priority is
-kept for compatibility but the UI no longer revolves around it.
+config does not list, so every client sees the same taxonomy.
 
 Why two dimensions: grouping, filtering, and hooks want one ordered axis
 (state) and one free-form axis (tags). A state disguised as a tag has no
@@ -160,7 +159,8 @@ order and no single value.
 Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
 worktree discovered, created, before_archive, archived, restored,
 state_changed; pane created and closed; agent started, working, waiting,
-idle, exited; attention created. Each event runs the matching `[[hooks]]`
+idle, exited; attention created; action started and exited. Each event
+runs the matching `[[hooks]]`
 entries from `config.toml` as ordinary processes with the event JSON on
 stdin. A hook that wants to change Tomo calls the `tomo` CLI, so the GUI,
 the CLI, hooks, and agents share one behavioral API.
@@ -174,6 +174,21 @@ request finishes, so a slow script can never stall a keystroke.
 Why: hooks exist to react to reality after it changed. The one exception is
 a destructive operation, where a script may still say no. See
 [hooks.md](hooks.md).
+
+A PTY exit callback runs on the PTY reader thread, outside tokio. The
+callback enters the daemon's runtime handle before it calls
+`Daemon::on_exit`, so the hooks that this path fires (`pane.closed`,
+`action.exited`) can spawn their processes. Before this fix those hooks
+never ran.
+
+## Feature boundary: Actions
+
+Repo-defined Actions live in `crates/tomod/src/features/actions.rs` (the
+`.tomo.toml` parser), `Daemon::reload_actions`, `Daemon::run_action`, and
+`Daemon::stop_action`. The watcher treats a change to `.tomo.toml` at a
+worktree root as an actions change, not a Git change. A pane started by an
+action carries `Pane.action_id`, which is how a second run finds the live
+pane. See [actions.md](actions.md).
 
 ## Layout operations
 
@@ -201,11 +216,20 @@ generic runtime touches it in worktree creation and two calls. See
 
 ## Generated bindings
 
-`crates/tomo-proto` is the canonical protocol. `ts-rs` exports every wire
-type to `app/src/generated/*.ts`. `cargo test -p tomo-proto` fails when
-those files are stale; `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto`
-rewrites them. The frontend re-exports them from `app/src/types.ts` and
-keeps only view-only types by hand.
+`crates/tomo-proto` is the only source of truth for the protocol. `ts-rs`
+exports every wire type to `app/src/generated/*.ts`. `cargo test -p
+tomo-proto` fails when those files are stale; `TOMO_WRITE_TYPES=1 cargo
+test -p tomo-proto` rewrites them. The frontend re-exports them from
+`app/src/types.ts` and keeps only view-only types by hand.
+
+Protocol version 3 adds:
+
+- calls `action_list`, `action_run`, `action_stop`, `action_restart`, and
+  a `checkpoint` field (`checkpoint`, `require_clean`, `discard`) on
+  `worktree_archive`, which now returns an `ArchiveResult`;
+- the `actions_changed` event with one `ActionSet` per worktree;
+- `Pane.action_id`, `Snapshot.actions`, and `GitSummary.conflicts`;
+- the `action` field on `HookEvent`.
 
 ## IPC
 
@@ -227,9 +251,9 @@ Responses and events:
 ```
 
 Error codes: `bad_request`, `not_found`, `conflict`, `git`, `io`,
-`unsupported`, `internal`.
+`unsupported`, `internal`, `aborted`.
 
-A client sends `hello` with `protocol: 1`. The daemon rejects other versions.
+A client sends `hello` with `protocol: 3`. The daemon rejects other versions.
 A client sends `subscribe` to receive events and gets a full snapshot back.
 Pane output flows only to clients that sent `pane_attach` for that pane. The
 first output after attach is the stored scrollback.
@@ -240,7 +264,7 @@ Requests on one connection run in order. Git-backed calls (`repo_add`,
 keystroke.
 
 The Rust types in `crates/tomo-proto` are the contract. The TypeScript
-mirror lives in `app/src/types.ts`.
+types are generated into `app/src/generated/` (see "Generated bindings").
 
 ## Lifetime
 

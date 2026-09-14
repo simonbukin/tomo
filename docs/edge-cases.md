@@ -13,13 +13,17 @@ and the GUI as one surface, because most failures cross all three.
 | 1 | Add a path that is not a Git repository | `tomo repo add /tmp` | Git error returned as `git` error code; GUI toast; nothing stored | Med | Low | Med |
 | 2 | Create a worktree with an invalid branch name | branch `bad name` | Git rejects; error surfaces verbatim; no directory created | Med | Low | Med |
 | 3 | Create a worktree at an existing path | path exists | Git rejects; no metadata written | Med | Low | Med |
-| 4 | Metadata with whitespace or `#` | name `"  "`, tag `"#lr "` | Name trimmed to unset; tags trimmed and `#` stripped; priority clamped 1–4 | High | Low | Med |
-| 5 | Priority outside 1–4 from the CLI | `--priority 9` | CLI rejects before the request | Med | Low | Low |
+| 4 | Metadata with whitespace or `#` | name `"  "`, tag `"#lr "` | Name trimmed to unset; tags trimmed and `#` stripped | High | Low | Med |
+| 5 | Unknown workflow state from the CLI | `--state nope` | Bad request that lists the known states | Med | Low | Low |
 | 6 | Empty notify message | `tomo notify ""` | Rejected as bad request | Low | Low | Low |
 | 7 | Invalid base64 in `pane_send` | garbage | Bad request; nothing written to the PTY | Low | Low | Low |
 | 8 | Pane resize to 0×0 | cols 0 | PTY resized to at least 2×2; stored size clamped | Low | Low | Low |
 | 9 | File tree path with `..` | `rel_path=../..` | Rejected; symlinks inside the worktree are still followed (single-user machine) | Low | Low | Low |
 | 10 | Malformed hook payload on stdin | not JSON | Ignored; exit 0 so the agent is not blocked | Med | Low | Low |
+| 10a | `.tomo.toml` has a bad entry | missing `id`, bad `mode`, duplicate `id` | Entry dropped; the rest load; first problem shown once as a notice and in `tomo action list` | Med | Low | Med |
+| 10b | `.tomo.toml` is not valid TOML | syntax error | No actions; parse error reported; worktree still usable | Med | Low | Med |
+| 10c | Archive of a worktree on a detached HEAD or with merge conflicts | `tomo worktree archive` | Conflict error before any pane closes; `--discard` skips the check | Low | High | High |
+| 10d | Archive with `--no-checkpoint` on a dirty tree | uncommitted changes | Conflict error; nothing changed | Med | Med | Med |
 
 ### Boundary Conditions
 | # | Scenario | Boundary | Expected Behavior | Likelihood | Impact | Priority |
@@ -56,6 +60,8 @@ and the GUI as one surface, because most failures cross all three.
 | 32 | Heuristic report while a hook source is fresh | CPU spike | Heuristic ignored until the hook source is silent for 15 min | High | Med | High |
 | 33 | User types while a queued agent command is pending | fast typing | Both land in the shell; the queued line waits for 300 ms of quiet | Low | Low | Low |
 | 34 | Daemon stops while the GUI sends | `tomo daemon stop` | Requests fail with `io`; GUI shows offline and reconnects when the daemon returns | Med | Med | Med |
+| 35 | Same pane action run twice | second click | No new pane; the live pane is focused and reported as reused | High | Low | Med |
+| 36 | `.tomo.toml` saved while a Git change lands | editor save plus commit | One 400 ms debounce; a Git change in the burst runs discovery, which also reloads actions | Med | Low | Low |
 
 ## Error Messages
 | Scenario | User-facing message | Tone/placement |
@@ -81,4 +87,7 @@ and the GUI as one surface, because most failures cross all three.
 - [ ] Set `editor_command = ["nope"]`; "open in editor" falls back to Finder
 - [ ] Close every pane of a worktree; a fresh shell appears
 - [ ] Set `shell = "/nope"`; pane creation fails and `tomo pane list` shows no orphan
-- [ ] `tomo worktree metadata set --priority 9` is rejected by the CLI
+- [ ] `tomo worktree metadata set --state nope` is rejected with the known states
+- [ ] Archive a dirty worktree; the branch has a `tomo: archive checkpoint` commit with the untracked files
+- [ ] Archive a worktree with a merge conflict; the archive is refused and every pane stays open
+- [ ] Add an `[[actions]]` entry without `id`; the other actions still list and a warning shows once

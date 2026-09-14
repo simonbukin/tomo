@@ -1,16 +1,16 @@
 import { ListFilter, Search, SlidersHorizontal, X } from "lucide-react";
 import { Wordmark } from "./Brand";
-import { useMemo, useRef } from "react";
-import { openWorktree } from "./actions";
+import { useMemo, useRef, useState } from "react";
+import { openWorktree, setMetadata } from "./actions";
 import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
-import { filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
+import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
 import { worktreeMenu } from "./menus";
 import { agentsOf, formatBytes, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
 
-const KIND_LABEL: Record<FilterKind, string> = { state: "state", repo: "repo", project: "project", tag: "tag", priority: "priority", agent: "agent", archived: "archived", attention: "attention" };
+const KIND_LABEL: Record<FilterKind, string> = { state: "state", repo: "repo", project: "project", tag: "tag", agent: "agent", archived: "archived", attention: "attention" };
 
 export function Home() {
   const s = useStore((x) => x);
@@ -21,6 +21,15 @@ export function Home() {
   const visible = sortWorktrees(filterWorktrees(s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)), o, ctx), o.sort, ctx);
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
+  const [over, setOver] = useState<string | null>(null);
+  const stateIdOf = (key: string) => (key === NO_STATE ? null : orderedStates(ctx.states).find((st) => st.label === key)?.id ?? key);
+  const dropTo = (key: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setOver(null);
+    const id = e.dataTransfer.getData("text/plain");
+    const w = s.worktrees.find((x) => x.id === id);
+    if (w && w.metadata.state !== stateIdOf(key)) setMetadata(id, { state: stateIdOf(key) });
+  };
   const filterBtn = useRef<HTMLButtonElement>(null);
   const displayBtn = useRef<HTMLButtonElement>(null);
 
@@ -36,8 +45,6 @@ export function Home() {
         return [...new Set(s.worktrees.map((w) => w.metadata.project).filter((p): p is string => !!p))].sort().map((p) => ({ value: p, label: p }));
       case "tag":
         return [...new Set(s.worktrees.flatMap((w) => w.metadata.tags))].sort().map((t) => ({ value: t, label: `#${t}` }));
-      case "priority":
-        return ["1", "2", "3", "4"].map((p) => ({ value: p, label: `p${p}` })).concat({ value: "", label: "unset" });
       case "agent":
         return ["waiting", "working", "idle", "none"].map((v) => ({ value: v, label: v }));
       case "archived":
@@ -53,8 +60,8 @@ export function Home() {
     }));
   const displayMenu = (): MenuItem[] => [
     { label: "view", submenu: (["list", "board"] as const).map((v) => ({ label: v, checked: o.view === v, run: () => set({ view: v }) })) },
-    { label: "group by", submenu: (["state", "repo", "project", "priority", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
-    { label: "sort", submenu: (["state", "priority", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
+    { label: "group by", submenu: (["state", "repo", "project", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
+    { label: "sort", submenu: (["state", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
     { separator: true },
     { label: "show archived", checked: o.showArchived, run: () => set({ showArchived: !o.showArchived }) },
   ];
@@ -92,9 +99,15 @@ export function Home() {
       {o.view === "board" ? (
         <div className="board">
           {groups.map((g) => (
-            <section key={g.key || "all"} className="board-col">
+            <section
+              key={g.key || "all"}
+              className={`board-col${over === g.key ? " board-col-over" : ""}`}
+              onDragOver={(e) => { if (o.group === "state") { e.preventDefault(); setOver(g.key); } }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null); }}
+              onDrop={(e) => o.group === "state" && dropTo(g.key, e)}
+            >
               <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key || "all"}<span className="right">{g.items.length}</span></div>
-              <div className="board-cards">{g.items.map((w) => <Card key={w.id} w={w} />)}</div>
+              <div className="board-cards">{g.items.map((w) => <Card key={w.id} w={w} draggable={o.group === "state"} />)}</div>
             </section>
           ))}
         </div>
@@ -110,7 +123,7 @@ export function Home() {
   );
 }
 
-function Card({ w }: { w: Worktree }) {
+function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const res = useStore((s) => s.resources[w.id]);
   const repo = useStore((s) => repoName(s, w.repo_id));
@@ -125,6 +138,8 @@ function Card({ w }: { w: Worktree }) {
   return (
     <div
       className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}`}
+      draggable={draggable && !archived && !busy}
+      onDragStart={(e) => e.dataTransfer.setData("text/plain", w.id)}
       onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
       title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}

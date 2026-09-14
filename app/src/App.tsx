@@ -11,7 +11,7 @@ import { TabLayout } from "./Layout";
 import { Palette } from "./Palette";
 import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./Sidebar";
-import { activeTab, applyFrame, applySnapshot, getState, setState, setUi, unviewedAttention, useStore } from "./store";
+import { activeTab, applyFrame, applySnapshot, getState, keyBindings, setState, setUi, unviewedAttention, useStore } from "./store";
 import { TabBar } from "./Tabs";
 import { focusTerminal } from "./terminals";
 import type { Snapshot } from "./types";
@@ -50,7 +50,7 @@ export function App() {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest(".xterm")) return;
-      const action = findAction(e, getState().config?.keybindings ?? {});
+      const action = findAction(e, keyBindings(getState()));
       if (!action) return;
       const typing = target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA");
       if (typing && !["palette", "home", "toggle_left_sidebar", "toggle_right_sidebar", "next_attention"].includes(action)) return;

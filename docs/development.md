@@ -20,15 +20,19 @@ crates/tomod/              daemon
   src/monitor.rs           periodic poll: cwd, titles, heuristics, resources
   src/agents.rs            authority merge, hook mapping, spawn plans, hook JSON
   src/integrations.rs      user-level hook installation
-  src/watch.rs             Git directory watcher and discovery trigger
+  src/watch.rs             Git directory and .tomo.toml watcher, discovery trigger
   src/config.rs            config.toml, defaults, paths
+  src/events.rs            hook envelopes, hook processes, the archive gate
+  src/features/actions.rs  .tomo.toml parser for repo-defined Actions
+  src/features/towns.rs    Japan Towns dataset and pick
 crates/tomo-cli/           `tomo` binary
   src/main.rs              clap definitions and command handlers
   src/client.rs            socket client, daemon autostart
   src/print.rs             human output
 app/                       Tauri client
   src-tauri/src/lib.rs     socket bridge, `rpc` command, daemon autostart
-  src/types.ts             TypeScript mirror of tomo-proto
+  src/generated/           TypeScript types generated from tomo-proto; do not edit
+  src/types.ts             re-exports src/generated plus view-only types
   src/api.ts               invoke wrapper, event pump, pane output fan-out
   src/store.ts             state, event reducer, selectors
   src/actions.ts           every user action; the palette and keys call these
@@ -134,6 +138,9 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate}` |
 | Town naming and unlocks               | `features::towns`, `WorktreeCreate` handler |
+| What `.tomo.toml` accepts             | `features::actions::parse`              |
+| How an action runs, reuses, or stops  | `Daemon::run_action`, `Daemon::stop_action` |
+| Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
 
 ## Verification without model tokens
 

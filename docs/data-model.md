@@ -32,7 +32,7 @@ No table stores a branch name.
 | `display_name`   | A        | Optional; the path's last component is the fallback     |
 | `project`        | A        | Optional grouping label                                 |
 | `state`          | A        | Workflow state id from `[[states]]` in config; NULL when unset |
-| `priority`       | A        | 1–4 or NULL; kept for compatibility                     |
+| `priority`       | —        | Unused since Phase 2.5; always written as NULL          |
 | `tags`           | A        | JSON array of strings; unparsable text reads as `[]`    |
 | `last_active_ms` | R        | Set when a worktree is opened or a pane is focused      |
 | `first_seen_ms`  | C        | When discovery first saw the worktree                   |
@@ -84,6 +84,7 @@ A row whose `layout` fails to parse is skipped on load.
 | `agent_kind`    | R        | `claude`, `codex`, `pi`, or NULL                         |
 | `session_ref`   | R        | Native session reference for resume                      |
 | `created_at_ms` | R        | Creation time                                            |
+| `action_id`     | R        | Id of the `.tomo.toml` action that started the pane, or NULL |
 
 Nothing here records the running command. On restart a pane gets a shell,
 and only a known agent kind with a session reference gets a resume line.
@@ -198,6 +199,12 @@ zoom_pane = "mod+shift+enter"
 state ids, missing programs, bad keybindings, and cleanup entries that are
 not plain names. Malformed config never stops the daemon; it logs a
 warning and uses defaults.
+
+## .tomo.toml
+
+`<worktree>/.tomo.toml` is not Tomo state. It belongs to the repository and
+holds `[[actions]]`. The daemon reads it on discovery and on change and
+keeps the result only in memory. See [actions.md](actions.md).
 
 ## hooks.log
 

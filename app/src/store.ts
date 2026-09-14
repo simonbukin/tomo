@@ -1,6 +1,7 @@
 import { useRef, useSyncExternalStore } from "react";
 import { rpc } from "./api";
 import type {
+  ActionSet,
   AgentPresence,
   AttentionItem,
   Config,
@@ -26,6 +27,7 @@ import type { QueryContext } from "./homeQuery";
 
 export interface State {
   connected: boolean;
+  actions: Record<Id, ActionSet>;
   loaded: boolean;
   config: Config | null;
   repos: Repo[];
@@ -53,7 +55,7 @@ export interface State {
 export type Dialog =
   | { kind: "add-repo" }
   | { kind: "create-worktree"; repoId?: Id }
-  | { kind: "confirm"; title: string; body: string; confirmLabel: string; onConfirm: () => void }
+  | { kind: "confirm"; title: string; body: string; confirmLabel: string; check?: string; onConfirm: (checked: boolean) => void }
   | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void }
   | { kind: "integrations" }
   | { kind: "config-check" }
@@ -65,6 +67,7 @@ const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: tru
 
 let state: State = {
   connected: false,
+  actions: {},
   loaded: false,
   config: null,
   repos: [],
@@ -147,15 +150,24 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
   return out;
 }
 
+const oneOf = <T extends string>(allowed: readonly T[], value: unknown, fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
+
 export function applySnapshot(snap: Snapshot): void {
   const saved = (snap.ui_state ?? {}) as Partial<UiState>;
   const savedHome = (saved.home ?? {}) as Partial<HomeOptions>;
   const ui: UiState = {
     ...defaultUi,
     ...saved,
+    sidebarSort: oneOf(["name", "recent", "created", "attention", "state"], saved.sidebarSort, defaultUi.sidebarSort),
     collapsedRepos: Array.isArray(saved.collapsedRepos) ? saved.collapsedRepos : [],
     hiddenRepos: Array.isArray(saved.hiddenRepos) ? saved.hiddenRepos : [],
-    home: { ...defaultHome, ...savedHome, filters: Array.isArray(savedHome.filters) ? savedHome.filters : [] },
+    home: {
+      ...defaultHome,
+      ...savedHome,
+      sort: oneOf(["state", "recent", "created", "name"], savedHome.sort, defaultHome.sort),
+      group: oneOf(["state", "repo", "project", "none"], savedHome.group, defaultHome.group),
+      filters: Array.isArray(savedHome.filters) ? savedHome.filters.filter((f) => f.kind !== ("priority" as string)) : [],
+    },
   };
   if (ui.view === "worktree" && !snap.worktrees.some((w) => w.id === ui.activeWorktreeId)) ui.view = "home";
   rpc<{ unlocks: TownUnlock[] }>("town_list").then((r) => setState({ unlocks: r.unlocks ?? [] })).catch(() => {});
@@ -169,6 +181,7 @@ export function applySnapshot(snap: Snapshot): void {
     agents: Object.fromEntries(snap.agents.map((a) => [a.pane_id, a])),
     attention: snap.attention,
     resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
+    actions: Object.fromEntries((snap.actions ?? []).map((a) => [a.worktree_id, a])),
     ui,
   });
   checkHealthOnce();
@@ -217,6 +230,11 @@ export function applyFrame(frame: Frame): void {
     case "zoom_request": {
       const { tab_id, pane_id } = d as { tab_id: Id; pane_id: Id | null };
       setZoom(tab_id, pane_id);
+      break;
+    }
+    case "actions_changed": {
+      const { set } = d as { set: ActionSet };
+      setState((s) => ({ actions: { ...s.actions, [set.worktree_id]: set } }));
       break;
     }
     case "hook_ran": {
@@ -323,6 +341,22 @@ export function activeTab(s: State, worktreeId: Id | null): Tab | null {
   if (!worktreeId) return null;
   const tabs = s.tabs[worktreeId] ?? [];
   return tabs.find((t) => t.is_active) ?? tabs[0] ?? null;
+}
+
+export function activeActionSet(s: State): ActionSet | null {
+  return s.ui.view === "worktree" && s.ui.activeWorktreeId ? s.actions[s.ui.activeWorktreeId] ?? null : null;
+}
+
+export function runningActionIds(s: State, worktreeId: Id): string[] {
+  return Object.values(s.panes)
+    .filter((p) => p.worktree_id === worktreeId && p.action_id && p.live && p.exit_code == null)
+    .map((p) => p.action_id!)
+    .sort();
+}
+
+export function keyBindings(s: State): Record<string, string> {
+  const shortcuts = (activeActionSet(s)?.actions ?? []).filter((a) => a.shortcut).map((a) => [`action:${a.id}`, a.shortcut!]);
+  return { ...(s.config?.keybindings ?? {}), ...Object.fromEntries(shortcuts) };
 }
 
 export function unviewedAttention(s: State): AttentionItem[] {

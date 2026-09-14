@@ -75,12 +75,12 @@ tomo worktree list
 tomo worktree current
 tomo worktree refresh
 tomo worktree create --repo <repo> --branch <name> [--new] [--from <ref>] [--path <dir>] [--town <slug>]
-tomo worktree archive <worktree>
+tomo worktree archive <worktree> [--no-checkpoint] [--discard]
 tomo worktree restore <worktree>
 tomo worktree open <worktree>
 tomo worktree metadata get [worktree]
-tomo worktree metadata set [worktree] [--name N] [--project P] [--state S] [--priority 1-4] [--tags a,b]
-                                     [--clear-name] [--clear-project] [--clear-state] [--clear-priority] [--clear-tags]
+tomo worktree metadata set [worktree] [--name N] [--project P] [--state S] [--tags a,b]
+                                     [--clear-name] [--clear-project] [--clear-state] [--clear-tags]
 ```
 
 `create` runs `git worktree add`. Without `--path` Tomo names the directory
@@ -92,11 +92,38 @@ set one. `--new` passes `-b`; `--from` gives the start point for a new
 branch. After a successful create the `worktree.created` hooks run.
 
 `archive` marks the worktree as archiving, runs the `worktree.before_archive`
-hooks (a non-zero exit aborts), closes the worktree's terminals, kills the
-processes they own, deletes the `[archive] cleanup` directories under the
-worktree, and runs `git worktree remove --force`. The branch is kept. The
-worktree stays listed as archived. `restore` checks that the branch exists,
-runs `git worktree add <old path> <branch>`, and clears the archived mark.
+hooks (a non-zero exit aborts), commits a checkpoint when the tree is
+dirty, closes the worktree's terminals, kills the processes they own,
+deletes the `[archive] cleanup` directories under the worktree, and runs
+`git worktree remove --force`. The branch is kept, with the checkpoint on
+it. The worktree stays listed as archived.
+
+`--no-checkpoint` refuses a dirty tree with a conflict error instead of a
+commit. `--discard` skips the checkpoint and its checks; uncommitted
+changes are lost. Without `--discard`, a detached HEAD or an unresolved
+merge conflict is refused before any pane closes. The printed result:
+
+```text
+archived a3dc426aa592
+checkpoint 1f3a9c2 tomo: archive checkpoint
+removed node_modules, dist
+branch kept: feat/labor-relations
+```
+
+The second line reads `checkpoint not needed (clean)` when nothing was
+committed. With `--json` the result is an `ArchiveResult`:
+
+```json
+{
+  "worktree_id": "a3dc426aa592",
+  "branch": "feat/labor-relations",
+  "checkpoint_commit": "1f3a9c2…",
+  "cleanup_removed": ["node_modules", "dist"]
+}
+```
+
+`restore` checks that the branch exists, runs
+`git worktree add <old path> <branch>`, and clears the archived mark.
 Both refuse the main worktree. See
 [state-and-recovery.md](state-and-recovery.md).
 
@@ -119,6 +146,31 @@ tomo states list
 ```
 
 Prints the configured workflow states with order, id, and label.
+
+### action
+
+```bash
+tomo action list [worktree]
+tomo action run <action> [worktree]
+tomo action stop <action> [worktree]
+tomo action restart <action> [worktree]
+```
+
+Actions come from `[[actions]]` in `<worktree>/.tomo.toml`. See
+[actions.md](actions.md). `list` prints one line per action with id,
+label, mode, show, and command; a malformed file adds a `warning:` line
+with the first problem. `run` starts the action, or focuses its pane when
+the same action already runs there:
+
+```text
+Storybook started in pane 5cac1495a647
+Storybook already running in pane 5cac1495a647
+Zed launched
+```
+
+`stop` kills the processes in the action's pane and closes it; nothing
+happens when the action does not run. `restart` is a stop followed by a
+run. An unknown action id is a not-found error that lists the known ids.
 
 ### towns
 

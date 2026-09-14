@@ -28,7 +28,7 @@ case "$orphans" in *owned*) check 1 "reparented child must not be owned" "$orpha
 # memory hog attribution
 H=$($T pane create --worktree "$WT"); sleep 1.5
 $RPC send "$H" "$FIX/memory-hog 300 40 &\r"
-hog=0; for i in 1 2 3 4 5 6 7; do sleep 1.6; v=$(ps_json | jq_ "print(max([p['rss_bytes'] for p in d if p['name']=='perl'] or [0]))"); [ "$v" -gt "$hog" ] && hog=$v; done
+hog=0; for i in $(seq 1 15); do sleep 1.6; v=$(ps_json | jq_ "print(max([p['rss_bytes'] for p in d if p['name']=='perl'] or [0]))"); [ "$v" -gt "$hog" ] && hog=$v; [ "$hog" -ge 150000000 ] && break; done
 [ "$hog" -ge 150000000 ] && check 0 "memory hog attributed (peak $((hog/1048576)) MB)" || check 1 "memory hog" "peak $hog bytes"
 $RPC call ps '{"worktree_id":null}' | python3 -c "
 import json,sys; d=json.load(sys.stdin); mine=[p for p in d if p['worktree_id']=='$WT']
