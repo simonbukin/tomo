@@ -74,22 +74,45 @@ level. `remove` forgets the root; worktree metadata stays in the database.
 tomo worktree list
 tomo worktree current
 tomo worktree refresh
-tomo worktree create --repo <repo> --branch <name> [--new] [--from <ref>] [--path <dir>]
+tomo worktree create --repo <repo> --branch <name> [--new] [--from <ref>] [--path <dir>] [--town <slug>]
+tomo worktree archive <worktree>
+tomo worktree restore <worktree>
 tomo worktree open <worktree>
 tomo worktree metadata get [worktree]
 tomo worktree metadata set [worktree] [--name N] [--project P] [--priority 1-4] [--tags a,b]
                                      [--clear-name] [--clear-project] [--clear-priority] [--clear-tags]
 ```
 
-`create` runs `git worktree add`. Without `--path` the directory is
-`<worktree_parent_dir>/<repo>-<branch>` when the config sets a parent, else
-a sibling of the repository. `--new` passes `-b`; `--from` gives the start
-point for a new branch.
+`create` runs `git worktree add`. Without `--path` Tomo names the directory
+after a Japanese town: `<parent>/<town slug>`, where the parent is
+`worktree_parent_dir` from the config, else the parent of the repository.
+`--town` picks a specific town that is not unlocked yet; otherwise Tomo
+picks one by rarity weight. The town becomes the display name unless you
+set one. `--new` passes `-b`; `--from` gives the start point for a new
+branch. After a successful create the `worktree_create` hook runs.
+
+`archive` closes the worktree's terminals, kills the processes they own,
+runs the `worktree_archive` hook, deletes the `archive_cleanup` directories
+under the worktree, and runs `git worktree remove --force`. The branch is
+kept. The worktree stays listed as archived. `restore` runs
+`git worktree add <old path> <branch>` and clears the archived mark. Both
+refuse the main worktree.
 
 `open` makes sure the worktree has a tab and a pane, then focuses that pane
 in the GUI.
 
 `metadata set --tags` replaces the whole tag list. Tags keep no leading `#`.
+
+### towns
+
+```bash
+tomo towns list [--unlocked]
+tomo towns pick
+```
+
+`list` prints every town with slug, name, Japanese name, prefecture, and
+rarity; `--unlocked` limits it to towns that name a worktree. `pick` prints
+the town that the next `worktree create` would use, without unlocking it.
 
 ### tab
 

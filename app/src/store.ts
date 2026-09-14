@@ -11,10 +11,13 @@ import type {
   Repo,
   Snapshot,
   Tab,
+  TownUnlock,
   UiState,
   Worktree,
   WorktreeResources,
 } from "./types";
+import type { MenuItem } from "./ContextMenu";
+import townData from "./data/japan-towns.json";
 
 export interface State {
   connected: boolean;
@@ -33,6 +36,8 @@ export interface State {
   paletteOpen: boolean;
   dialog: Dialog | null;
   connectionNonce: number;
+  menu: { x: number; y: number; items: MenuItem[] } | null;
+  unlocks: TownUnlock[];
 }
 
 export type Dialog =
@@ -41,9 +46,9 @@ export type Dialog =
   | { kind: "confirm"; title: string; body: string; confirmLabel: string; onConfirm: () => void }
   | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void };
 
-export const defaultHome: HomeOptions = { query: "", repo: "", project: "", tag: "", sort: "priority", group: "repo", attentionOnly: false };
+export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "priority", group: "repo", showArchived: false };
 
-const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, home: defaultHome };
+const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, home: defaultHome };
 
 let state: State = {
   connected: false,
@@ -62,6 +67,8 @@ let state: State = {
   paletteOpen: false,
   dialog: null,
   connectionNonce: 0,
+  menu: null,
+  unlocks: [],
 };
 
 const listeners = new Set<() => void>();
@@ -123,8 +130,10 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
 }
 
 export function applySnapshot(snap: Snapshot): void {
-  const ui: UiState = { ...defaultUi, ...(snap.ui_state ?? {}), home: { ...defaultHome, ...(snap.ui_state?.home ?? {}) } };
+  const savedHome = (snap.ui_state?.home ?? {}) as Partial<HomeOptions>;
+  const ui: UiState = { ...defaultUi, ...(snap.ui_state ?? {}), home: { ...defaultHome, ...savedHome, filters: Array.isArray(savedHome.filters) ? savedHome.filters : [] } };
   if (ui.view === "worktree" && !snap.worktrees.some((w) => w.id === ui.activeWorktreeId)) ui.view = "home";
+  rpc<{ unlocks: TownUnlock[] }>("town_list").then((r) => setState({ unlocks: r.unlocks ?? [] })).catch(() => {});
   setState({
     loaded: true,
     config: snap.config,
@@ -219,6 +228,13 @@ export function applyFrame(frame: Frame): void {
     case "notice": {
       const n = d as { level: string; message: string };
       setState((s) => ({ notice: { ...n, nonce: (s.notice?.nonce ?? 0) + 1 } }));
+      break;
+    }
+    case "town_unlocked": {
+      const { unlock } = d as { unlock: TownUnlock };
+      setState((s) => ({ unlocks: [...s.unlocks.filter((u) => u.slug !== unlock.slug), unlock] }));
+      const town = (townData as { slug: string; name: string; rarity: string }[]).find((t) => t.slug === unlock.slug);
+      if (town) notify("info", `unlocked ${town.name} (${town.rarity})`);
       break;
     }
   }

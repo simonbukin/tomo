@@ -2,7 +2,9 @@ import { PanelLeft, PanelRight } from "lucide-react";
 import { useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { runAction } from "./actions";
+import { ContextMenu } from "./ContextMenu";
 import { Dialogs } from "./Dialogs";
+import { Towns } from "./Towns";
 import { Home } from "./Home";
 import { findAction } from "./keys";
 import { TabLayout } from "./Layout";
@@ -60,6 +62,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (ui.view === "worktree" && worktree && loaded && !tab) rpc("worktree_open", { worktree_id: worktree.id }).catch(() => {});
+  }, [ui.view, worktree?.id, loaded, tab?.id]);
+
+  useEffect(() => {
     if (!notice) return;
     const t = window.setTimeout(() => setState({ notice: null }), 4000);
     return () => window.clearTimeout(t);
@@ -74,7 +80,7 @@ export function App() {
     <div className={`app${ui.leftOpen ? "" : " no-left"}${ui.rightOpen && showWorktree ? "" : " no-right"}`} style={{ ["--left-w" as string]: `${ui.leftWidth}px`, ["--right-w" as string]: `${ui.rightWidth}px` }}>
       <div className="titlebar" data-tauri-drag-region>
         <span className="titlebar-text" data-tauri-drag-region>
-          <span>{showWorktree ? worktree.name : "home"}</span>
+          <span>{showWorktree ? worktree.name : ui.view === "towns" ? "japan" : "home"}</span>
           {showWorktree && <span className="faint">{worktree.branch ?? ""}{worktree.git?.dirty ? " *" : ""}</span>}
         </span>
         <span className="spacer" data-tauri-drag-region />
@@ -82,12 +88,13 @@ export function App() {
         {!connected && <span className="conn-bad">daemon offline</span>}
         <button className="ghost" title="Command palette" onClick={() => runAction("palette")}><span className="kbd">⌘K</span></button>
         <button className="ghost" title="Toggle left sidebar" onClick={() => setUi({ leftOpen: !ui.leftOpen })}><PanelLeft className="icon" /></button>
-        <button className="ghost" title="Toggle right sidebar" onClick={() => setUi({ rightOpen: !ui.rightOpen })}><PanelRight className="icon" /></button>
+        {showWorktree && <button className="ghost" title="Toggle right sidebar" onClick={() => setUi({ rightOpen: !ui.rightOpen })}><PanelRight className="icon" /></button>}
       </div>
       {ui.leftOpen && <Sidebar />}
       <main className="center">
         {!loaded && <div className="center-empty muted">{connected ? "Loading…" : "Starting tomod…"}</div>}
-        {loaded && !showWorktree && <Home />}
+        {loaded && !showWorktree && ui.view === "towns" && <Towns />}
+        {loaded && !showWorktree && ui.view !== "towns" && <Home />}
         {loaded && showWorktree && (
           <>
             <TabBar worktreeId={worktree.id} />
@@ -98,7 +105,8 @@ export function App() {
       {ui.rightOpen && showWorktree && <RightSidebar worktree={worktree} />}
       <Palette />
       <Dialogs />
-      {notice && <div className={`toast toast-${notice.level}`}>{notice.message}</div>}
+      <ContextMenu />
+      {notice && <div key={notice.nonce} className={`toast toast-${notice.level}`}>{notice.message}</div>}
     </div>
   );
 }

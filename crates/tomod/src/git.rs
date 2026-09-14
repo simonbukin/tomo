@@ -144,6 +144,10 @@ pub async fn worktree_add(repo: &Path, path: &Path, branch: &str, new_branch: bo
     git(repo, &args).await.map(|_| ())
 }
 
+pub async fn worktree_remove(repo: &Path, path: &Path) -> Result<()> {
+    git(repo, &["worktree", "remove", "--force", &path.to_string_lossy()]).await.map(|_| ())
+}
+
 pub async fn clone(url: &str, dest: &Path) -> Result<()> {
     let out = Command::new("git").arg("clone").arg(url).arg(dest).output().await.context("run git clone")?;
     if !out.status.success() {

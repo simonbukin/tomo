@@ -1,8 +1,8 @@
 //! SQLite persistence.
 //!
 //! Every table falls into one of three categories (PRD §25):
-//! - authoritative Tomo metadata: `repos`, the user-set columns of `worktree_meta`
-//! - cached external observation: `worktree_meta.path`, `worktree_meta.gitdir`
+//! - authoritative Tomo metadata: `repos`, `towns`, the user-set columns of `worktree_meta`
+//! - cached external observation: `worktree_meta.path`, `.gitdir`, `.first_seen_ms`, `.archived_at_ms`, `.archived_branch`
 //! - recoverable runtime state: `tabs`, `panes`, `attention`, `kv`
 //!
 //! Git remains the authority for branches and worktree existence; nothing here
@@ -11,7 +11,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
-use tomo_proto::{AgentKind, AttentionItem, AttentionLevel, Id, LayoutNode, WorktreeMetadata};
+use tomo_proto::{AgentKind, AttentionItem, AttentionLevel, Id, LayoutNode, TownUnlock, WorktreeMetadata};
 
 pub struct Store {
     conn: Connection,
@@ -31,6 +31,10 @@ pub struct MetaRow {
     pub gitdir: Option<String>,
     pub metadata: WorktreeMetadata,
     pub last_active_ms: Option<u64>,
+    pub first_seen_ms: Option<u64>,
+    pub archived_at_ms: Option<u64>,
+    pub archived_branch: Option<String>,
+    pub town_slug: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +113,32 @@ CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS towns (
+  slug TEXT PRIMARY KEY,
+  worktree_id TEXT NOT NULL,
+  repo_id TEXT NOT NULL,
+  unlocked_at_ms INTEGER NOT NULL
+);
 "#;
+
+const META_COLUMNS: [(&str, &str); 4] = [
+    ("first_seen_ms", "INTEGER"),
+    ("archived_at_ms", "INTEGER"),
+    ("archived_branch", "TEXT"),
+    ("town_slug", "TEXT"),
+];
+
+fn migrate(conn: &Connection) -> Result<()> {
+    let existing: Vec<String> = conn
+        .prepare("PRAGMA table_info(worktree_meta)")?
+        .query_map([], |r| r.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for (name, ty) in META_COLUMNS.iter().filter(|(n, _)| !existing.iter().any(|e| e == n)) {
+        conn.execute(&format!("ALTER TABLE worktree_meta ADD COLUMN {name} {ty}"), [])?;
+    }
+    Ok(())
+}
 
 fn agent_kind_str(k: AgentKind) -> &'static str {
     match k {
@@ -137,6 +166,7 @@ impl Store {
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Store { conn })
     }
 
@@ -144,6 +174,7 @@ impl Store {
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Store { conn })
     }
 
@@ -168,7 +199,7 @@ impl Store {
 
     pub fn meta_all(&self) -> Result<Vec<MetaRow>> {
         let mut st = self.conn.prepare(
-            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms FROM worktree_meta",
+            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, town_slug FROM worktree_meta",
         )?;
         let rows = st.query_map([], |r| {
             let tags: String = r.get(7)?;
@@ -184,6 +215,10 @@ impl Store {
                     tags: serde_json::from_str(&tags).unwrap_or_default(),
                 },
                 last_active_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+                first_seen_ms: r.get::<_, Option<i64>>(9)?.map(|v| v as u64),
+                archived_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
+                archived_branch: r.get(11)?,
+                town_slug: r.get(12)?,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -191,11 +226,12 @@ impl Store {
 
     pub fn meta_upsert(&self, row: &MetaRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO worktree_meta (id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "INSERT INTO worktree_meta (id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, town_slug)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(id) DO UPDATE SET repo_id=excluded.repo_id, path=excluded.path, gitdir=excluded.gitdir,
                display_name=excluded.display_name, project=excluded.project, priority=excluded.priority,
-               tags=excluded.tags, last_active_ms=excluded.last_active_ms",
+               tags=excluded.tags, last_active_ms=excluded.last_active_ms, first_seen_ms=excluded.first_seen_ms,
+               archived_at_ms=excluded.archived_at_ms, archived_branch=excluded.archived_branch, town_slug=excluded.town_slug",
             params![
                 row.id,
                 row.repo_id,
@@ -206,6 +242,10 @@ impl Store {
                 row.metadata.priority.map(|p| p as i64),
                 serde_json::to_string(&row.metadata.tags)?,
                 row.last_active_ms.map(|v| v as i64),
+                row.first_seen_ms.map(|v| v as i64),
+                row.archived_at_ms.map(|v| v as i64),
+                row.archived_branch,
+                row.town_slug,
             ],
         )?;
         Ok(())
@@ -383,6 +423,22 @@ impl Store {
         Ok(())
     }
 
+    pub fn town_unlocks(&self) -> Result<Vec<TownUnlock>> {
+        let mut st = self.conn.prepare("SELECT slug, worktree_id, repo_id, unlocked_at_ms FROM towns ORDER BY unlocked_at_ms")?;
+        let rows = st.query_map([], |r| {
+            Ok(TownUnlock { slug: r.get(0)?, worktree_id: r.get(1)?, repo_id: r.get(2)?, unlocked_at_ms: r.get::<_, i64>(3)? as u64 })
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn town_unlock(&self, u: &TownUnlock) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO towns (slug, worktree_id, repo_id, unlocked_at_ms) VALUES (?1, ?2, ?3, ?4)",
+            params![u.slug, u.worktree_id, u.repo_id, u.unlocked_at_ms as i64],
+        )?;
+        Ok(())
+    }
+
     pub fn kv_get(&self, key: &str) -> Result<Option<String>> {
         Ok(self.conn.query_row("SELECT value FROM kv WHERE key = ?1", params![key], |r| r.get(0)).optional()?)
     }
@@ -410,13 +466,32 @@ mod tests {
             gitdir: Some("w1".into()),
             metadata: WorktreeMetadata { display_name: Some("Labor".into()), project: Some("Holly".into()), priority: Some(1), tags: vec!["lr".into()] },
             last_active_ms: None,
+            first_seen_ms: Some(5),
+            archived_at_ms: Some(9),
+            archived_branch: Some("feat".into()),
+            town_slug: Some("aogashima".into()),
         };
         s.meta_upsert(&row).unwrap();
+        let back = s.meta_all().unwrap();
+        assert_eq!((back[0].first_seen_ms, back[0].archived_at_ms, back[0].archived_branch.as_deref(), back[0].town_slug.as_deref()), (Some(5), Some(9), Some("feat"), Some("aogashima")));
         s.conn.execute("UPDATE worktree_meta SET tags = 'not json', priority = 99", []).unwrap();
         let all = s.meta_all().unwrap();
         assert_eq!(all.len(), 1);
         assert!(all[0].metadata.tags.is_empty());
         assert_eq!(all[0].metadata.priority, Some(4));
+    }
+
+    #[test]
+    fn migration_adds_columns_to_an_old_schema() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE worktree_meta (id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, path TEXT NOT NULL, gitdir TEXT, display_name TEXT, project TEXT, priority INTEGER, tags TEXT NOT NULL DEFAULT '[]', last_active_ms INTEGER);").unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        migrate(&conn).unwrap();
+        migrate(&conn).unwrap();
+        let s = Store { conn };
+        s.town_unlock(&TownUnlock { slug: "x".into(), worktree_id: "w".into(), repo_id: "r".into(), unlocked_at_ms: 1 }).unwrap();
+        assert_eq!(s.town_unlocks().unwrap().len(), 1);
+        assert!(s.meta_all().unwrap().is_empty());
     }
 
     #[test]

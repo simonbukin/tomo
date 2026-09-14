@@ -3,6 +3,8 @@ import { activeTab, agentsOf, getState, notify, paneIds, setState, setUi, unview
 import { focusTerminal, neighbor } from "./terminals";
 import type { AgentKind, Id, SplitDirection, Tab, Worktree } from "./types";
 
+const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
+
 export interface Action {
   id: string;
   label: string;
@@ -148,19 +150,117 @@ export async function nextAttention(): Promise<void> {
   await rpc("attention_view", { id: item.id }).catch(() => {});
 }
 
-export async function spawnAgent(kind: AgentKind): Promise<void> {
-  const w = currentWorktree();
+export async function spawnAgent(kind: AgentKind, worktreeId?: Id): Promise<void> {
+  const w = worktreeId ? byId(worktreeId) : currentWorktree();
   if (!w) {
     notify("info", "Open a worktree first");
     return;
   }
-  const from = focusedPaneId();
+  const from = w.id === currentWorktree()?.id ? focusedPaneId() : null;
   try {
     const r = await rpc<{ pane: { id: Id } }>("agent_spawn", { kind, worktree_id: w.id, cwd: null, tab_id: null, split_from: from, resume: null, extra_args: [] });
+    if (w.id !== getState().ui.activeWorktreeId) await openWorktree(w.id);
     window.setTimeout(() => focusPane(r.pane.id), 80);
   } catch (e) {
     notify("error", (e as Error).message);
   }
+}
+
+export async function newTerminalIn(worktreeId: Id): Promise<void> {
+  try {
+    const r = await rpc<{ pane: { id: Id } }>("pane_create", { worktree_id: worktreeId, tab_id: null, cwd: null, command: null, title: null });
+    await openWorktree(worktreeId);
+    window.setTimeout(() => focusPane(r.pane.id), 80);
+  } catch (e) {
+    notify("error", (e as Error).message);
+  }
+}
+
+export async function newTabIn(worktreeId: Id): Promise<void> {
+  try {
+    const tab = await rpc<Tab>("tab_create", { worktree_id: worktreeId, title: null });
+    await openWorktree(worktreeId);
+    if (tab.active_pane_id) window.setTimeout(() => focusPane(tab.active_pane_id!), 80);
+  } catch (e) {
+    notify("error", (e as Error).message);
+  }
+}
+
+export function closeOtherTabs(tabId: Id): void {
+  const s = getState();
+  const tab = Object.values(s.tabs).flat().find((t) => t.id === tabId);
+  if (!tab) return;
+  for (const t of s.tabs[tab.worktree_id] ?? []) if (t.id !== tabId) closeTab(t.id);
+}
+
+export function archiveWorktree(worktreeId: Id): void {
+  const w = byId(worktreeId);
+  if (!w) return;
+  const cleanup = (getState().config?.archive_cleanup ?? []).join(", ");
+  setState({
+    dialog: {
+      kind: "confirm",
+      title: `Archive ${w.name}?`,
+      body: `This closes its terminals and kills their processes, runs the archive hook, deletes ${cleanup || "no"} build directories, and removes the worktree with git. The branch ${w.branch ?? ""} is kept; you can restore it later.`,
+      confirmLabel: "Archive",
+      onConfirm: () => {
+        if (getState().ui.activeWorktreeId === worktreeId) setUi({ view: "home" });
+        rpc("worktree_archive", { worktree_id: worktreeId }).catch((e) => notify("error", (e as Error).message));
+      },
+    },
+  });
+}
+
+export function restoreWorktree(worktreeId: Id): void {
+  rpc<Worktree>("worktree_restore", { worktree_id: worktreeId })
+    .then((w) => openWorktree(w.id))
+    .catch((e) => notify("error", (e as Error).message));
+}
+
+export function removeRepo(repoId: Id): void {
+  const repo = getState().repos.find((r) => r.id === repoId);
+  if (!repo) return;
+  setState({
+    dialog: {
+      kind: "confirm",
+      title: `Remove ${repo.name} from Tomo?`,
+      body: "Tomo forgets the repository. Nothing on disk changes; worktrees with open terminals stay listed until you close them.",
+      confirmLabel: "Remove",
+      onConfirm: () => rpc("repo_remove", { repo_id: repoId }).catch((e) => notify("error", (e as Error).message)),
+    },
+  });
+}
+
+export function copyText(text: string, what = "Path"): void {
+  navigator.clipboard.writeText(text).then(() => notify("info", `${what} copied`)).catch(() => notify("error", "Clipboard unavailable"));
+}
+
+export function openExternalFor(worktreeId: Id, target: "finder" | "editor", relPath = ""): void {
+  rpc("open_external", { worktree_id: worktreeId, rel_path: relPath, target }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function renamePane(paneId: Id): void {
+  const pane = getState().panes[paneId];
+  if (!pane) return;
+  setState({
+    dialog: {
+      kind: "prompt",
+      title: "Rename pane",
+      initial: pane.user_title ?? "",
+      placeholder: pane.title,
+      onSubmit: (value) => rpc("pane_rename", { pane_id: paneId, title: value.trim() || null }).catch((e) => notify("error", (e as Error).message)),
+    },
+  });
+}
+
+export function killPaneTree(paneId: Id): void {
+  rpc("pane_kill_tree", { pane_id: paneId }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function splitPaneById(paneId: Id, direction: SplitDirection): void {
+  rpc<{ pane: { id: Id } }>("pane_split", { pane_id: paneId, direction, command: null })
+    .then((r) => window.setTimeout(() => focusPane(r.pane.id), 50))
+    .catch((e) => notify("error", (e as Error).message));
 }
 
 export async function setMetadata(worktreeId: Id, patch: Record<string, unknown>): Promise<void> {
@@ -171,8 +271,8 @@ export async function setMetadata(worktreeId: Id, patch: Record<string, unknown>
   }
 }
 
-export function promptMetadata(field: "display_name" | "project" | "tags"): void {
-  const w = currentWorktree();
+export function promptMetadata(field: "display_name" | "project" | "tags", worktreeId?: Id): void {
+  const w = worktreeId ? byId(worktreeId) : currentWorktree();
   if (!w) return;
   const labels = { display_name: "Display name", project: "Project", tags: "Tags (comma-separated)" };
   const initial = field === "tags" ? w.metadata.tags.join(", ") : (w.metadata[field] ?? "");
@@ -214,6 +314,7 @@ export function openExternal(target: "finder" | "editor", relPath = ""): void {
 
 export const actions: Action[] = [
   { id: "home", label: "Go to Home", run: () => setUi({ view: "home" }) },
+  { id: "towns", label: "Open Japan map", run: () => setUi({ view: "towns" }) },
   { id: "palette", label: "Command palette", run: () => setState((s) => ({ paletteOpen: !s.paletteOpen })) },
   { id: "next_attention", label: "Jump to next attention item", run: nextAttention },
   { id: "prev_worktree", label: "Previous worktree", run: () => cycleWorktree(-1) },
@@ -249,6 +350,7 @@ export const actions: Action[] = [
   { id: "reveal_finder", label: "Reveal worktree in Finder", run: () => openExternal("finder"), whenWorktree: true },
   { id: "copy_path", label: "Copy worktree path", run: () => navigator.clipboard.writeText(currentWorktree()?.path ?? "").then(() => notify("info", "Path copied")), whenWorktree: true },
   { id: "clear_attention", label: "Clear all attention items", run: () => rpc("attention_clear").then(() => undefined) },
+  { id: "archive_worktree", label: "Archive worktree…", run: () => archiveWorktree(currentWorktree()!.id), whenWorktree: true },
 ];
 
 export function runAction(id: string): void {

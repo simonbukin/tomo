@@ -38,6 +38,9 @@ pub struct WorktreeState {
     pub git: Option<GitSummary>,
     pub metadata: WorktreeMetadata,
     pub last_active_ms: Option<u64>,
+    pub first_seen_ms: Option<u64>,
+    pub archived_at_ms: Option<u64>,
+    pub town_slug: Option<String>,
 }
 
 pub struct PaneState {
@@ -230,6 +233,9 @@ impl Daemon {
             git: w.git.clone(),
             metadata: w.metadata.clone(),
             last_active_ms: w.last_active_ms,
+            first_seen_ms: w.first_seen_ms,
+            archived_at_ms: w.archived_at_ms,
+            town_slug: w.town_slug.clone(),
             tab_count,
             pane_count,
         }
@@ -369,8 +375,13 @@ impl Daemon {
                     gitdir: gitdir.clone(),
                     metadata: existing.as_ref().map(|m| m.metadata.clone()).unwrap_or_default(),
                     last_active_ms: existing.as_ref().and_then(|m| m.last_active_ms),
+                    first_seen_ms: existing.as_ref().and_then(|m| m.first_seen_ms).or(Some(now_ms())),
+                    archived_at_ms: None,
+                    archived_branch: None,
+                    town_slug: existing.as_ref().and_then(|m| m.town_slug.clone()),
                 };
-                if existing.as_ref().map_or(true, |m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id) {
+                let needs_write = existing.as_ref().map_or(true, |m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id || m.first_seen_ms.is_none() || m.archived_at_ms.is_some());
+                if needs_write {
                     inner.store.meta_upsert(&row)?;
                 }
                 next.insert(
@@ -388,12 +399,19 @@ impl Daemon {
                         git: summaries.get(&path).cloned().or_else(|| previous.and_then(|p| p.git.clone())),
                         metadata: row.metadata,
                         last_active_ms: row.last_active_ms,
+                        first_seen_ms: row.first_seen_ms,
+                        archived_at_ms: None,
+                        town_slug: row.town_slug,
                     },
                 );
             }
         }
         let runtime_ids: HashSet<Id> = inner.tabs.values().map(|t| t.worktree_id.clone()).collect();
-        let orphans: Vec<MetaRow> = meta_rows.iter().filter(|m| !next.contains_key(&m.id) && runtime_ids.contains(&m.id)).cloned().collect();
+        let orphans: Vec<MetaRow> = meta_rows
+            .iter()
+            .filter(|m| !next.contains_key(&m.id) && (runtime_ids.contains(&m.id) || (m.archived_at_ms.is_some() && !m.path.exists())))
+            .cloned()
+            .collect();
         for m in orphans.iter() {
             next.insert(
                 m.id.clone(),
@@ -401,7 +419,7 @@ impl Daemon {
                     id: m.id.clone(),
                     repo_id: m.repo_id.clone(),
                     path: m.path.clone(),
-                    branch: None,
+                    branch: m.archived_branch.clone(),
                     head: String::new(),
                     detached: false,
                     is_main: false,
@@ -410,6 +428,9 @@ impl Daemon {
                     git: None,
                     metadata: m.metadata.clone(),
                     last_active_ms: m.last_active_ms,
+                    first_seen_ms: m.first_seen_ms,
+                    archived_at_ms: m.archived_at_ms,
+                    town_slug: m.town_slug.clone(),
                 },
             );
         }
@@ -704,7 +725,12 @@ impl Daemon {
             inner.agents.insert(id.clone(), presence.clone());
             Self::emit(inner, Event::AgentChanged { agent: presence });
         }
-        self.start_pty(inner, &id, command)?;
+        if let Err(e) = self.start_pty(inner, &id, command) {
+            inner.panes.remove(&id);
+            inner.agents.remove(&id);
+            let _ = inner.store.pane_delete(&id);
+            return Err(e);
+        }
         Ok(id)
     }
 
@@ -780,12 +806,12 @@ impl Daemon {
         let mut inner = self.lock();
         let tabs = inner.store.tabs()?;
         let panes = inner.store.panes()?;
-        let tab_ids: HashSet<Id> = tabs.iter().map(|t| t.id.clone()).collect();
+        let referenced: HashSet<Id> = tabs.iter().flat_map(|t| layout::pane_ids(&t.layout)).collect();
         for t in &tabs {
             inner.tabs.insert(t.id.clone(), t.clone());
         }
         for row in panes {
-            if !tab_ids.contains(&row.tab_id) {
+            if !referenced.contains(&row.id) {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
@@ -910,6 +936,122 @@ impl Daemon {
         Self::emit(inner, Event::AttentionAdded { item });
     }
 
+    fn meta_row_of(inner: &Inner, w: &WorktreeState, metadata: WorktreeMetadata) -> MetaRow {
+        let archived_branch = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == w.id).and_then(|m| m.archived_branch);
+        MetaRow {
+            id: w.id.clone(),
+            repo_id: w.repo_id.clone(),
+            path: w.path.clone(),
+            gitdir: w.gitdir.clone(),
+            metadata,
+            last_active_ms: w.last_active_ms,
+            first_seen_ms: w.first_seen_ms,
+            archived_at_ms: w.archived_at_ms,
+            archived_branch,
+            town_slug: w.town_slug.clone(),
+        }
+    }
+
+    async fn run_hook(self: &Arc<Self>, name: &str, worktree_id: &str, path: &Path, repo_path: &Path, branch: &str) {
+        let Some(command) = self.lock().config.hooks.get(name).cloned().filter(|c| !c.trim().is_empty()) else { return };
+        let run = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .current_dir(path)
+            .env("TOMO_WORKTREE_ID", worktree_id)
+            .env("TOMO_WORKTREE_PATH", path)
+            .env("TOMO_REPO_PATH", repo_path)
+            .env("TOMO_BRANCH", branch)
+            .stdin(std::process::Stdio::null())
+            .output();
+        let outcome = match tokio::time::timeout(std::time::Duration::from_secs(60), run).await {
+            Ok(Ok(out)) if out.status.success() => return,
+            Ok(Ok(out)) => format!("exit {}: {}", out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stderr).trim()),
+            Ok(Err(e)) => e.to_string(),
+            Err(_) => "timed out after 60s".to_string(),
+        };
+        tracing::warn!("hook {name} failed: {outcome}");
+        let mut inner = self.lock();
+        Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("hook {name} failed: {outcome}") });
+    }
+
+    fn close_worktree_panes(inner: &mut Inner, worktree_id: &str) {
+        let tab_ids: Vec<Id> = inner.tabs.values().filter(|t| t.worktree_id == worktree_id).map(|t| t.id.clone()).collect();
+        for tab_id in tab_ids {
+            let panes = inner.tabs.get(&tab_id).map(|t| layout::pane_ids(&t.layout)).unwrap_or_default();
+            for pane_id in panes {
+                if let Some(pid) = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
+                    for child in procs::descendants(&inner.proc_rows, pid) {
+                        procs::kill_tree(&inner.proc_rows, child);
+                    }
+                }
+                Self::remove_pane(inner, &pane_id);
+            }
+            inner.tabs.remove(&tab_id);
+            let _ = inner.store.tab_delete(&tab_id);
+        }
+        Self::emit_tabs(inner, worktree_id);
+    }
+
+    fn remove_cleanup_dirs(path: &Path, names: &[String]) -> usize {
+        names.iter().map(|n| path.join(n)).filter(|p| p.is_dir()).filter(|p| std::fs::remove_dir_all(p).is_ok()).count()
+    }
+
+    async fn archive_worktree(self: &Arc<Self>, worktree_id: &str) -> Result<Value, RpcError> {
+        let (path, repo_path, branch, name) = {
+            let inner = self.lock();
+            let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+            if w.is_main {
+                return Err(err(ErrorCode::BadRequest, "the main worktree cannot be archived"));
+            }
+            if w.archived_at_ms.is_some() {
+                return Err(err(ErrorCode::Conflict, "worktree is already archived"));
+            }
+            let repo_path = inner.repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+            (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), Self::worktree_view(&inner, w).name)
+        };
+        {
+            let mut inner = self.lock();
+            Self::close_worktree_panes(&mut inner, worktree_id);
+        }
+        self.run_hook("worktree_archive", worktree_id, &path, &repo_path, &branch).await;
+        let cleanup = self.lock().config.archive_cleanup.clone();
+        let removed = Self::remove_cleanup_dirs(&path, &cleanup);
+        git::worktree_remove(&repo_path, &path).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
+        {
+            let mut inner = self.lock();
+            let Some(w) = inner.worktrees.get(worktree_id).cloned() else { return Err(err(ErrorCode::NotFound, "worktree not found")) };
+            let mut row = Self::meta_row_of(&inner, &w, w.metadata.clone());
+            row.archived_at_ms = Some(now_ms());
+            row.archived_branch = (!branch.is_empty()).then(|| branch.clone());
+            inner.store.meta_upsert(&row).map_err(internal)?;
+            Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Info, message: format!("archived {name} ({removed} build dirs removed)") });
+        }
+        self.discover().await.map_err(internal)?;
+        let inner = self.lock();
+        inner.worktrees.get(worktree_id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "archived worktree vanished")).and_then(ok)
+    }
+
+    async fn restore_worktree(self: &Arc<Self>, worktree_id: &str) -> Result<Value, RpcError> {
+        let (path, repo_path, branch, row) = {
+            let inner = self.lock();
+            let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+            let row = Self::meta_row_of(&inner, w, w.metadata.clone());
+            let branch = row.archived_branch.clone().ok_or_else(|| err(ErrorCode::BadRequest, "worktree is not archived or has no branch to restore"))?;
+            let repo_path = inner.repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+            (w.path.clone(), repo_path, branch, row)
+        };
+        git::worktree_add(&repo_path, &path, &branch, false, None).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
+        {
+            let inner = self.lock();
+            inner.store.meta_upsert(&MetaRow { archived_at_ms: None, archived_branch: None, ..row }).map_err(internal)?;
+        }
+        self.discover().await.map_err(internal)?;
+        let inner = self.lock();
+        let id = path_id(&canonical(&path));
+        inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "restored worktree not discovered")).and_then(ok)
+    }
+
     // ------------------------------------------------------------ dispatch
 
     pub async fn handle(self: &Arc<Self>, client_id: u64, call: Call) -> Result<Value, RpcError> {
@@ -999,26 +1141,55 @@ impl Daemon {
                 ok(Self::worktree_views(&self.lock()))
             }
             Call::WorktreeCreate(spec) => {
-                let (repo_path, repo_name_s, parent_dir) = {
+                let (repo_path, parent_dir, unlocked) = {
                     let inner = self.lock();
                     let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
-                    (repo.path.clone(), repo.name.clone(), inner.config.worktree_parent_dir.clone())
+                    let unlocked: HashSet<String> = inner.store.town_unlocks().map_err(internal)?.into_iter().map(|u| u.slug).collect();
+                    (repo.path.clone(), inner.config.worktree_parent_dir.clone(), unlocked)
                 };
-                let path = spec.path.map(|p| config::expand_tilde(&p)).unwrap_or_else(|| {
-                    let slug = spec.branch.replace('/', "-");
-                    match parent_dir {
-                        Some(dir) => dir.join(format!("{repo_name_s}-{slug}")),
-                        None => repo_path.parent().unwrap_or(&repo_path).join(format!("{repo_name_s}-{slug}")),
-                    }
-                });
+                let parent = parent_dir.unwrap_or_else(|| repo_path.parent().unwrap_or(&repo_path).to_path_buf());
+                let town = match (&spec.path, &spec.town_slug) {
+                    (Some(_), _) => None,
+                    (None, Some(slug)) => Some(crate::towns::find(slug).filter(|t| !unlocked.contains(&t.slug)).ok_or_else(|| err(ErrorCode::BadRequest, format!("town {slug} is unknown or already unlocked")))?),
+                    (None, None) => Some(crate::towns::pick(&unlocked).ok_or_else(|| err(ErrorCode::Conflict, "every town is unlocked; pass a path"))?),
+                };
+                let path = match (&spec.path, town) {
+                    (Some(p), _) => config::expand_tilde(p),
+                    (None, Some(t)) => parent.join(&t.slug),
+                    (None, None) => unreachable!(),
+                };
                 git::worktree_add(&repo_path, &path, &spec.branch, spec.new_branch, spec.start_ref.as_deref())
                     .await
                     .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
                 self.discover().await.map_err(internal)?;
-                let inner = self.lock();
                 let id = path_id(&canonical(&path));
+                if let Some(t) = town {
+                    let mut inner = self.lock();
+                    let unlock = TownUnlock { slug: t.slug.clone(), worktree_id: id.clone(), repo_id: spec.repo_id.clone(), unlocked_at_ms: now_ms() };
+                    inner.store.town_unlock(&unlock).map_err(internal)?;
+                    if let Some(w) = inner.worktrees.get_mut(&id) {
+                        w.town_slug = Some(t.slug.clone());
+                        if w.metadata.display_name.is_none() {
+                            w.metadata.display_name = Some(t.name.clone());
+                        }
+                        let w = w.clone();
+                        let row = Self::meta_row_of(&inner, &w, w.metadata.clone());
+                        inner.store.meta_upsert(&row).map_err(internal)?;
+                    }
+                    Self::emit(&mut inner, Event::TownUnlocked { unlock });
+                    let worktrees = Self::worktree_views(&inner);
+                    Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
+                }
+                let hook_daemon = self.clone();
+                let (hook_id, hook_path, hook_repo, hook_branch) = (id.clone(), path.clone(), repo_path.clone(), spec.branch.clone());
+                tokio::spawn(async move {
+                    hook_daemon.run_hook("worktree_create", &hook_id, &hook_path, &hook_repo, &hook_branch).await;
+                });
+                let inner = self.lock();
                 inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
             }
+            Call::WorktreeArchive { worktree_id } => self.archive_worktree(&worktree_id).await,
+            Call::WorktreeRestore { worktree_id } => self.restore_worktree(&worktree_id).await,
             Call::WorktreeOpen { worktree_id } => {
                 let needs_pane = {
                     let inner = self.lock();
@@ -1055,9 +1226,11 @@ impl Daemon {
                 let mut inner = self.lock();
                 let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
                 let mut next = patch.apply(&w.metadata);
+                next.display_name = next.display_name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+                next.project = next.project.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
                 next.tags = next.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect();
                 next.priority = next.priority.map(|p| p.clamp(1, 4));
-                let row = MetaRow { id: w.id.clone(), repo_id: w.repo_id.clone(), path: w.path.clone(), gitdir: w.gitdir.clone(), metadata: next.clone(), last_active_ms: w.last_active_ms };
+                let row = Self::meta_row_of(&inner, w, next.clone());
                 inner.store.meta_upsert(&row).map_err(internal)?;
                 inner.worktrees.get_mut(&worktree_id).unwrap().metadata = next.clone();
                 Self::emit(&mut inner, Event::MetadataChanged { worktree_id: worktree_id.clone(), metadata: next.clone() });
@@ -1313,6 +1486,10 @@ impl Daemon {
             }
 
             Call::Notify { pane_id, worktree_id, level, message } => {
+                let message = message.trim().to_string();
+                if message.is_empty() {
+                    return Err(err(ErrorCode::BadRequest, "message is empty"));
+                }
                 let mut inner = self.lock();
                 let worktree_id = worktree_id
                     .or_else(|| pane_id.as_ref().and_then(|p| inner.panes.get(p)).map(|p| p.row.worktree_id.clone()))
@@ -1380,17 +1557,33 @@ impl Daemon {
                 if argv.is_empty() {
                     return Err(err(ErrorCode::BadRequest, "editor_command is empty"));
                 }
-                std::process::Command::new(&argv[0])
+                let launched = std::process::Command::new(&argv[0])
                     .args(&argv[1..])
                     .current_dir(&root)
                     .stdin(std::process::Stdio::null())
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
-                    .spawn()
-                    .map_err(|e| err(ErrorCode::Io, format!("{}: {e}", argv[0])))?;
-                Ok(Value::Null)
+                    .spawn();
+                match launched {
+                    Ok(_) => Ok(Value::Null),
+                    Err(e) if target == ExternalTarget::Editor => {
+                        let _ = std::process::Command::new("open").arg(&path).spawn();
+                        let mut inner = self.lock();
+                        Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{} not found ({e}); opened with the default app instead", argv[0]) });
+                        Ok(Value::Null)
+                    }
+                    Err(e) => Err(err(ErrorCode::Io, format!("{}: {e}", argv[0]))),
+                }
             }
 
+            Call::TownList => {
+                let unlocks = self.lock().store.town_unlocks().map_err(internal)?;
+                Ok(json!({ "towns": crate::towns::all(), "unlocks": unlocks }))
+            }
+            Call::TownPick => {
+                let unlocked: HashSet<String> = self.lock().store.town_unlocks().map_err(internal)?.into_iter().map(|u| u.slug).collect();
+                ok(crate::towns::pick(&unlocked).ok_or_else(|| err(ErrorCode::Conflict, "every town is unlocked"))?)
+            }
             Call::UiStateGet => {
                 let inner = self.lock();
                 let v = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);

@@ -55,6 +55,8 @@ enum Cmd {
     },
     #[command(subcommand, about = "Agent hook and extension installation")]
     Integrations(IntegrationsCmd),
+    #[command(subcommand, about = "Japanese towns that name new worktrees")]
+    Towns(TownsCmd),
     #[command(about = "Kill an owned process tree by pid")]
     Kill { pid: u32 },
 }
@@ -91,9 +93,15 @@ enum WorktreeCmd {
         from: Option<String>,
         #[arg(long)]
         path: Option<PathBuf>,
+        #[arg(long, help = "Town slug to name the worktree directory (default: random)")]
+        town: Option<String>,
     },
     #[command(about = "Open a worktree: make sure it has a terminal and focus it in the GUI")]
     Open { worktree: String },
+    #[command(about = "Stop its processes, remove build dirs, and remove the worktree; the branch stays")]
+    Archive { worktree: String },
+    #[command(about = "Re-create an archived worktree from its branch")]
+    Restore { worktree: String },
     #[command(subcommand)]
     Metadata(MetadataCmd),
 }
@@ -107,7 +115,7 @@ enum MetadataCmd {
         name: Option<String>,
         #[arg(long)]
         project: Option<String>,
-        #[arg(long, help = "1-4")]
+        #[arg(long, help = "1-4", value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: Option<u8>,
         #[arg(long, help = "Comma-separated tags; replaces the tag list")]
         tags: Option<String>,
@@ -212,6 +220,15 @@ enum AttentionCmd {
     List,
     Next,
     Clear,
+}
+
+#[derive(Subcommand)]
+enum TownsCmd {
+    List {
+        #[arg(long)]
+        unlocked: bool,
+    },
+    Pick,
 }
 
 #[derive(Subcommand)]
@@ -349,9 +366,9 @@ async fn run() -> Result<()> {
             let w = ws.into_iter().find(|w| w.id == id).ok_or_else(|| anyhow!("worktree vanished"))?;
             print::worktrees(&[w], &repos, &[], json);
         }
-        Cmd::Worktree(WorktreeCmd::Create { repo, branch, new, from, path }) => {
+        Cmd::Worktree(WorktreeCmd::Create { repo, branch, new, from, path, town }) => {
             let repo_id = resolve_repo_id(&c, &repo).await?;
-            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch, new_branch: new, start_ref: from, path })).await?;
+            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch, new_branch: new, start_ref: from, path, town_slug: town })).await?;
             let repos: Vec<Repo> = c.call(Call::RepoList).await?;
             print::worktrees(&[w], &repos, &[], json);
         }
@@ -362,6 +379,28 @@ async fn run() -> Result<()> {
                 let _: Value = c.call(Call::PaneFocus { pane_id: pane.to_string() }).await?;
             }
             print::value(&v, json);
+        }
+        Cmd::Worktree(WorktreeCmd::Archive { worktree }) => {
+            let id = resolve_worktree_id(&c, Some(worktree)).await?;
+            let w: Worktree = c.call(Call::WorktreeArchive { worktree_id: id }).await?;
+            let repos: Vec<Repo> = c.call(Call::RepoList).await?;
+            print::worktrees(&[w], &repos, &[], json);
+        }
+        Cmd::Worktree(WorktreeCmd::Restore { worktree }) => {
+            let id = resolve_worktree_id(&c, Some(worktree)).await?;
+            let w: Worktree = c.call(Call::WorktreeRestore { worktree_id: id }).await?;
+            let repos: Vec<Repo> = c.call(Call::RepoList).await?;
+            print::worktrees(&[w], &repos, &[], json);
+        }
+        Cmd::Towns(TownsCmd::List { unlocked }) => {
+            let v: Value = c.call(Call::TownList).await?;
+            let towns: Vec<Town> = serde_json::from_value(v["towns"].clone())?;
+            let unlocks: Vec<TownUnlock> = serde_json::from_value(v["unlocks"].clone())?;
+            print::towns(&towns, &unlocks, unlocked, json);
+        }
+        Cmd::Towns(TownsCmd::Pick) => {
+            let t: Town = c.call(Call::TownPick).await?;
+            print::towns(&[t], &[], false, json);
         }
         Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Get { worktree })) => {
             let id = resolve_worktree_id(&c, worktree).await?;

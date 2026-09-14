@@ -64,10 +64,11 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
         let tags = if w.metadata.tags.is_empty() { String::new() } else { format!(" #{}", w.metadata.tags.join(" #")) };
         let branch = if w.detached { "detached".to_string() } else { w.branch.clone().unwrap_or_default() };
         let dirty = w.git.as_ref().map_or("", |g| if g.dirty { " *" } else { "" });
-        let missing = if w.exists { "" } else { " (missing)" };
+        let missing = if w.archived_at_ms.is_some() { " (archived)" } else if w.exists { "" } else { " (missing)" };
         let project = w.metadata.project.as_deref().map(|p| format!(" [{p}]")).unwrap_or_default();
         println!("{}  {} / {}{}{}{}  {}{}{}", w.id, repo, w.name, project, prio, tags, branch, dirty, missing);
-        println!("    {}", w.path.display());
+        let town = w.town_slug.as_deref().map(|t| format!("  town {t}")).unwrap_or_default();
+        println!("    {}{}", w.path.display(), town);
         for a in agents.iter().filter(|a| a.worktree_id == w.id) {
             println!("    {} {:<7} {:?}", a.state.glyph(), a.kind.label(), a.state);
         }
@@ -157,6 +158,22 @@ pub fn ps(procs: &[ProcessInfo], ws: &[Worktree], json: bool) {
 
 fn truncate(s: &str, n: usize) -> String {
     if s.chars().count() <= n { s.to_string() } else { format!("{}…", s.chars().take(n).collect::<String>()) }
+}
+
+pub fn towns(towns: &[Town], unlocks: &[TownUnlock], only_unlocked: bool, json: bool) {
+    let rows: Vec<(&Town, Option<&TownUnlock>)> = towns
+        .iter()
+        .map(|t| (t, unlocks.iter().find(|u| u.slug == t.slug)))
+        .filter(|(_, u)| !only_unlocked || u.is_some())
+        .collect();
+    if json {
+        let v: Vec<Value> = rows.iter().map(|(t, u)| serde_json::json!({ "town": t, "unlock": u })).collect();
+        return emit_json(&v);
+    }
+    for (t, u) in rows {
+        let when = u.map(|u| format!("  unlocked {}", u.unlocked_at_ms)).unwrap_or_default();
+        println!("{:<28} {:<16} {:<8} {:<12} {:<9}{}", t.slug, t.name, t.ja, t.pref, t.rarity, when);
+    }
 }
 
 pub fn attention(items: &[AttentionItem], json: bool) {

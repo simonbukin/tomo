@@ -9,6 +9,7 @@ mod procs;
 mod pty;
 mod server;
 mod store;
+mod towns;
 mod watch;
 
 use anyhow::{Context, Result};
@@ -25,6 +26,11 @@ struct Args {
     socket: Option<PathBuf>,
 }
 
+fn try_lock(file: &std::fs::File) -> bool {
+    use std::os::unix::io::AsRawFd;
+    unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) == 0 }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -39,7 +45,8 @@ async fn main() -> Result<()> {
         paths.socket = s;
     }
 
-    if UnixStream::connect(&paths.socket).await.is_ok() {
+    let lock = std::fs::OpenOptions::new().create(true).write(true).open(paths.data_dir.join("tomod.lock"))?;
+    if !try_lock(&lock) || UnixStream::connect(&paths.socket).await.is_ok() {
         eprintln!("tomod already running at {}", paths.socket.display());
         return Ok(());
     }
@@ -65,5 +72,6 @@ async fn main() -> Result<()> {
     }
     daemon.shutdown();
     let _ = std::fs::remove_file(&daemon.paths.socket);
+    drop(lock);
     Ok(())
 }

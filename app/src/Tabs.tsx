@@ -2,6 +2,8 @@ import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { rpc } from "./api";
 import { activateTab, closeTab, newTab } from "./actions";
+import { openMenu } from "./ContextMenu";
+import { tabMenu } from "./menus";
 import { useStore } from "./store";
 import type { Id, Tab } from "./types";
 
@@ -28,6 +30,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
             else if (!editing) activateTab(t.id);
           }}
           onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
+          onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
         >
           {waiting(t) && <span className="state state-waiting" />}
           {editing?.id === t.id ? (

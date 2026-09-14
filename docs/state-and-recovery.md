@@ -108,6 +108,17 @@ Attention items live in SQLite and survive restarts. Focusing a pane marks its
 unviewed items viewed. `tomo attention clear` removes all. The daemon prunes
 viewed items beyond the newest 200 on start.
 
+## Archived worktrees
+
+`tomo worktree archive` is the only Tomo action that removes a worktree
+directory. It is deliberate and explicit: terminals close, owned processes
+die, the `worktree_archive` hook runs, the `archive_cleanup` directories go,
+then `git worktree remove --force` runs. Git keeps the branch. Tomo keeps
+the metadata row with `archived_at_ms` and `archived_branch`, so the
+worktree still shows in Home (archived filter) and can be restored with
+`tomo worktree restore`, which runs `git worktree add` at the old path.
+Tabs and panes are not restored; the worktree opens with a fresh shell.
+
 ## What is not recovered
 
 - Environment variables a user exported by hand in a pane.
