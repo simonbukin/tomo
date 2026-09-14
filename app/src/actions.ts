@@ -276,7 +276,6 @@ export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
   rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
 }
 
-/** ponytail: system browser only; call `openInBrowser(worktreeId, url)` here once the browser pane lands. */
 /** Opens a runtime endpoint in the worktree's browser surface, or externally when no worktree is known. */
 export function openEndpoint(url: string, worktreeId?: Id): void {
   if (worktreeId) void openInBrowser(worktreeId, url);
