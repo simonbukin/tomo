@@ -38,10 +38,9 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
         let Some(root_pid) = inner.panes.get(&pane_id).filter(|p| p.exit_code.is_none()).and_then(|p| p.pty.as_ref()).map(|p| p.pid) else { continue };
         let Some(&root_idx) = by_pid.get(&root_pid) else { continue };
         let cwd = inner.proc_rows[root_idx].cwd.clone();
-        let title = index
-            .get(&root_pid)
-            .and_then(|kids| kids.iter().filter_map(|k| by_pid.get(k)).map(|&i| &inner.proc_rows[i]).max_by_key(|r| r.start_time_s))
-            .map(|r| r.name.clone());
+        let newest = index.get(&root_pid).and_then(|kids| kids.iter().filter_map(|k| by_pid.get(k)).map(|&i| &inner.proc_rows[i]).max_by_key(|r| r.start_time_s));
+        let title = newest.map(|r| r.name.clone());
+        let cmd = newest.map(|r| r.cmd.chars().take(200).collect::<String>());
         let mut changed = false;
         {
             let pane = inner.panes.get_mut(&pane_id).unwrap();
@@ -53,6 +52,10 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
             }
             if pane.process_title != title {
                 pane.process_title = title;
+                changed = true;
+            }
+            if pane.process_cmd != cmd {
+                pane.process_cmd = cmd;
                 changed = true;
             }
         }

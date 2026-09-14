@@ -78,3 +78,11 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 
 .brand-mark { flex: none; color: var(--fg); }
 .brand-wordmark { color: var(--fg); }
+
+/* ---- sessions and process icons */
+.session-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--sp-2); min-height: 24px; font-size: var(--fs-1); }
+.session-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-1); }
+.proc-icon { flex: none; color: var(--fg-2); opacity: 0.9; }
+.pane-active .pane-legend .proc-icon { color: inherit; }
+.tab .proc-icon { color: var(--fg-3); }
+.tab-active .proc-icon { color: var(--fg-1); }

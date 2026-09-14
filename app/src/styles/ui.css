@@ -23,7 +23,9 @@ button.link:hover, .btn-link:hover { color: var(--accent); background: none; }
 .menu-popup[data-starting-style], .menu-popup[data-ending-style],
 .popover[data-starting-style], .popover[data-ending-style],
 .select-popup[data-starting-style], .select-popup[data-ending-style],
-.tip[data-starting-style], .tip[data-ending-style] { opacity: 0; transform: scale(0.98); }
+.tip[data-starting-style], .tip[data-ending-style] { opacity: 0; transform: scale(0.97) translateY(-3px); }
+.menu-popup, .popover, .select-popup { transition-duration: var(--dur); }
+.menu-popup[data-side="top"][data-starting-style], .menu-popup[data-side="top"][data-ending-style] { transform: scale(0.97) translateY(3px); }
 .tip[data-instant] { transition: none; }
 
 /* ---- menu */

@@ -57,6 +57,12 @@ enum Cmd {
     Integrations(IntegrationsCmd),
     #[command(subcommand, about = "Japanese towns that name new worktrees")]
     Towns(TownsCmd),
+    #[command(about = "Claude and Codex sessions rooted at a worktree")]
+    Sessions {
+        worktree: Option<String>,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
     #[command(about = "Kill an owned process tree by pid")]
     Kill { pid: u32 },
     #[command(about = "Show the GitHub pull request for a worktree's branch (needs gh)")]
@@ -476,6 +482,11 @@ async fn run() -> Result<()> {
             let repos: Vec<Repo> = c.call(Call::RepoList).await?;
             print::worktrees(&[w], &repos, &[], json);
         }
+        Cmd::Sessions { worktree, limit } => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let list: Vec<AgentSession> = c.call(Call::SessionList { worktree_id: id, limit: Some(limit) }).await?;
+            print::sessions(&list, json);
+        }
         Cmd::Towns(TownsCmd::List { unlocked }) => {
             let v: Value = c.call(Call::TownList).await?;
             let towns: Vec<Town> = serde_json::from_value(v["towns"].clone())?;
@@ -593,7 +604,7 @@ async fn run() -> Result<()> {
                 (None, None, None) => Some(resolve_worktree_id(&c, None).await?),
                 _ => None,
             };
-            let r: SpawnResult = c.call(Call::AgentSpawn(AgentSpawn { kind, worktree_id, cwd, tab_id: None, split_from, resume, extra_args: args })).await?;
+            let r: SpawnResult = c.call(Call::AgentSpawn(AgentSpawn { kind, worktree_id, cwd, tab_id: None, split_from, resume, new_tab: false, extra_args: args })).await?;
             print::spawn(&r, json);
         }
         Cmd::Ps { worktree } => {

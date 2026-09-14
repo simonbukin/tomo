@@ -157,7 +157,7 @@ export interface AnchoredMenuProps {
 export function AnchoredMenu({ open, anchor, items, onOpenChange, onOpenChangeComplete, side, align }: AnchoredMenuProps) {
   const point = !(anchor instanceof Element);
   return (
-    <Menu.Root open={open} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete} modal={false}>
+    <Menu.Root open={open} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete}>
       <DropdownMenuContent anchor={anchorOf(anchor)} side={side ?? (point ? "right" : "bottom")} align={align ?? "start"} sideOffset={point ? 0 : 4}>
         <MenuItems items={items} />
       </DropdownMenuContent>

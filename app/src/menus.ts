@@ -132,6 +132,26 @@ export function tabMenu(t: Tab, rename: () => void): MenuItem[] {
   ];
 }
 
+/** The last pane of the last tab cannot close: the worktree view would open a new one at once. */
+export function isLastPane(paneId: Id): boolean {
+  const s = getState();
+  const pane = s.panes[paneId];
+  if (!pane) return false;
+  const tabs = s.tabs[pane.worktree_id] ?? [];
+  return tabs.length <= 1 && tabs.every((t) => paneIds(t.layout).length <= 1);
+}
+
+export function spawnMenu(worktreeId: Id): MenuItem[] {
+  return [
+    { label: "terminal", shortcut: describeBinding(getState().config?.keybindings.new_tab ?? "mod+t"), run: () => newTabIn(worktreeId) },
+    { label: "browser", disabled: true },
+    sep,
+    { label: "claude", run: () => spawnAgent("claude", worktreeId, { newTab: true }) },
+    { label: "codex", run: () => spawnAgent("codex", worktreeId, { newTab: true }) },
+    { label: "pi", run: () => spawnAgent("pi", worktreeId, { newTab: true }) },
+  ];
+}
+
 export function paneMenu(paneId: Id): MenuItem[] {
   const s = getState();
   const pane = s.panes[paneId];
@@ -146,7 +166,7 @@ export function paneMenu(paneId: Id): MenuItem[] {
     { label: "rename pane…", run: () => renamePane(paneId) },
     { separator: true },
     { label: "kill process tree", danger: true, run: () => killPaneTree(paneId) },
-    { label: "close", run: () => closePane(paneId) },
+    { label: "close", disabled: isLastPane(paneId), run: () => closePane(paneId) },
   ];
 }
 

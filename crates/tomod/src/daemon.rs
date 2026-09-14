@@ -5,7 +5,7 @@ use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::{actions, towns};
+use crate::features::{actions, sessions, towns};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -50,6 +50,7 @@ pub struct PaneState {
     pub origin: PaneOrigin,
     pub exit_code: Option<i32>,
     pub process_title: Option<String>,
+    pub process_cmd: Option<String>,
     pub pending_line: Option<String>,
     pub last_output_ms: u64,
     pub scrollback: Scrollback,
@@ -318,6 +319,9 @@ impl Daemon {
             agent,
             created_at_ms: p.row.created_at_ms,
             action_id: p.row.action_id.clone(),
+            process_cmd: p.process_cmd.clone(),
+            kind: PaneKind::Terminal,
+            url: None,
         })
     }
 
@@ -888,7 +892,7 @@ impl Daemon {
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin, exit_code: None, process_title: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default() },
+            PaneState { row, pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default() },
         );
         if let Some(kind) = agent_kind {
             let presence = AgentPresence {
@@ -1026,7 +1030,7 @@ impl Daemon {
             }
             inner.panes.insert(
                 row.id.clone(),
-                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, pending_line: pending, last_output_ms: 0, scrollback },
+                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line: pending, last_output_ms: 0, scrollback },
             );
             if let Err(e) = self.start_pty(&mut inner, &row.id, None) {
                 tracing::warn!("restore pane {}: {e}", row.id);
@@ -1120,6 +1124,10 @@ impl Daemon {
             message,
             created_at_ms: now_ms(),
             viewed_at_ms: None,
+            kind: AttentionKind::Waiting,
+            url: None,
+            agent_kind: None,
+            resolved_at_ms: None,
         };
         let _ = inner.store.attention_insert(&item);
         let mut ev = events::envelope(inner, "attention.created", Some(worktree_id));
@@ -1340,6 +1348,8 @@ impl Daemon {
                     attention,
                     resources: inner.resources.clone(),
                     actions: inner.actions.values().cloned().collect(),
+                    endpoints: Vec::new(),
+                    usage: Vec::new(),
                     ui_state,
                 })
             }
@@ -1764,11 +1774,12 @@ impl Daemon {
                 let cmd = inner.config.agents.get(&key).cloned().unwrap_or(AgentCommand { command: key.clone(), args: vec![] });
                 let plan = agents::spawn_plan(spec.kind, &cmd, spec.resume.as_deref(), &self.claude_settings_path(), &self.pi_extension_path(), &spec.extra_args);
                 let line = agents::shell_line(&plan.argv);
+                let tab_id = if spec.new_tab { Some(Self::create_tab(&mut inner, &worktree_id, Some(spec.kind.label().to_string())).id) } else { spec.tab_id.clone() };
                 let (tab_id, pane_id) = self.spawn_in_worktree(
                     &mut inner,
                     &worktree_id,
                     cwd,
-                    spec.tab_id.as_deref(),
+                    tab_id.as_deref(),
                     spec.split_from.as_deref(),
                     SplitDirection::Horizontal,
                     None,
@@ -1923,6 +1934,15 @@ impl Daemon {
                 }
             }
 
+            Call::SessionList { worktree_id, limit } => {
+                let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+                let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;
+                let list = tokio::task::spawn_blocking(move || sessions::list(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+                ok(list)
+            }
+            Call::RuntimeList { .. } | Call::ActivityList(_) | Call::CheckpointCreate(_) | Call::CheckpointResolve { .. } | Call::UsageGet { .. } | Call::BrowserOpen { .. } | Call::BrowserNavigate { .. } | Call::AnnotationsSend { .. } => {
+                Err(err(ErrorCode::Unsupported, "not implemented yet"))
+            }
             Call::TownList => {
                 let unlocks = self.lock().store.town_unlocks().map_err(internal)?;
                 Ok(json!({ "towns": towns::all(), "unlocks": unlocks }))

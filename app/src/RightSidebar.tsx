@@ -5,11 +5,12 @@ import { openMenu } from "./MenuHost";
 import { Select } from "./components/ui";
 import { fileMenu } from "./menus";
 import { ResizeHandle } from "./Sidebar";
-import { setMetadata } from "./actions";
+import { setMetadata, spawnAgent } from "./actions";
+import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
 import { formatBytes, notify, setState, useStore } from "./store";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { FsEntry, Id, PrStatusResult, ProcessInfo, Worktree } from "./types";
+import type { AgentSession, FsEntry, Id, PrStatusResult, ProcessInfo, Worktree } from "./types";
 
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
   return (
@@ -19,6 +20,7 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
       <GitSection w={worktree} />
       <PrSection w={worktree} />
       <ProcessSection w={worktree} />
+      <SessionsSection w={worktree} />
       <FilesSection w={worktree} />
     </aside>
   );
@@ -146,6 +148,44 @@ function ProcessSection({ w }: { w: Worktree }) {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function ago(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86_400)}d`;
+}
+
+/** Claude and Codex conversations that started in this worktree, read from the agents' own stores. */
+function SessionsSection({ w }: { w: Worktree }) {
+  const [items, setItems] = useState<AgentSession[] | null>(null);
+  const live = useStore((s) => Object.values(s.agents).filter((a) => a.worktree_id === w.id && a.session_ref).map((a) => a.session_ref!));
+  useEffect(() => {
+    setItems(null);
+    if (!w.exists) return;
+    const load = () => rpc<AgentSession[]>("session_list", { worktree_id: w.id, limit: 8 }).then(setItems).catch(() => setItems([]));
+    load();
+    const t = window.setInterval(load, 30_000);
+    return () => window.clearInterval(t);
+  }, [w.id, w.exists, live.join(",")]);
+  const resumable = (items ?? []).filter((s) => !live.includes(s.id));
+  return (
+    <section className="side-section">
+      <div className="section-label">sessions{items && items.length > 0 && <span className="right">{items.length}</span>}</div>
+      {items === null && <div className="faint">looking…</div>}
+      {items?.length === 0 && <div className="muted">no agent sessions rooted here</div>}
+      {resumable.map((s) => (
+        <div key={`${s.kind}-${s.id}`} className="session-row" title={`${s.path}\n${s.turns} turns`}>
+          <ProcessIcon agent={s.kind} size={11} />
+          <span className="session-title">{s.title ?? s.id.slice(0, 8)}</span>
+          <span className="faint">{ago(s.updated_at_ms)}</span>
+          <button className="link" onClick={() => spawnAgent(s.kind, w.id, { resume: s.id, newTab: true })}>resume</button>
+        </div>
+      ))}
     </section>
   );
 }
