@@ -68,6 +68,7 @@ pub struct Inner {
     pub proc_rows: Vec<ProcRow>,
     pub proc_rows_at_ms: u64,
     pub resources: Vec<WorktreeResources>,
+    pub prs: HashMap<Id, PrStatusResult>,
 }
 
 pub struct Daemon {
@@ -144,6 +145,7 @@ impl Daemon {
                 proc_rows: Vec::new(),
                 proc_rows_at_ms: 0,
                 resources: Vec::new(),
+                prs: HashMap::new(),
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
@@ -1526,6 +1528,25 @@ impl Daemon {
             }
 
             Call::GitSummary { worktree_id } => ok(self.refresh_git(&worktree_id).await),
+            Call::PrStatus { worktree_id } => {
+                let (path, cached) = {
+                    let inner = self.lock();
+                    let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+                    (w.path.clone(), inner.prs.get(&worktree_id).cloned())
+                };
+                let fresh = cached.as_ref().and_then(|c| c.pr.as_ref()).map_or(false, |pr| now_ms().saturating_sub(pr.fetched_at_ms) < 60_000);
+                if fresh {
+                    return ok(cached);
+                }
+                let result = crate::github::pr_status(&path).await;
+                let mut inner = self.lock();
+                let changed = inner.prs.get(&worktree_id).map(|c| &c.pr) != Some(&result.pr);
+                inner.prs.insert(worktree_id.clone(), result.clone());
+                if changed {
+                    Self::emit(&mut inner, Event::PrChanged { worktree_id, pr: result.pr.clone() });
+                }
+                ok(result)
+            }
             Call::FsList { worktree_id, rel_path } => {
                 let root = self.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
                 let dir = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;

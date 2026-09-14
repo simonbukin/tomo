@@ -2,6 +2,7 @@ import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, Map, Plus, RotateCw }
 import { useEffect, useMemo, useRef } from "react";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import "./sidebar.css";
+import { Mark } from "./Brand";
 import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
 import { needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
@@ -38,6 +39,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
+        <Mark size={14} />
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
         <button className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} title="Japan map" onClick={() => setUi({ view: "towns" })}><Map className="icon" /></button>
         <span className="spacer" />

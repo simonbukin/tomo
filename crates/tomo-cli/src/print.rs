@@ -185,3 +185,19 @@ pub fn attention(items: &[AttentionItem], json: bool) {
         println!("{}  {seen}  {:?}  wt {}  pane {}  {}", i.id, i.level, i.worktree_id, i.pane_id.as_deref().unwrap_or("-"), i.message);
     }
 }
+
+pub fn pr(r: &PrStatusResult, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    match (&r.pr, &r.reason) {
+        (Some(pr), _) => {
+            let review = pr.review_decision.as_deref().unwrap_or("no review");
+            println!("#{} {}  {}{}  {}", pr.number, pr.title, pr.state, if pr.draft { " (draft)" } else { "" }, review);
+            println!("checks  {} passed  {} failed  {} pending", pr.checks_passed, pr.checks_failed, pr.checks_pending);
+            println!("{}", pr.url);
+        }
+        (None, Some(reason)) => println!("unavailable: {reason}"),
+        (None, None) => println!("no pull request for this branch"),
+    }
+}

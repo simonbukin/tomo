@@ -1,4 +1,5 @@
-import { FolderGit2, ListFilter, Search, SlidersHorizontal, X } from "lucide-react";
+import { ListFilter, Search, SlidersHorizontal, X } from "lucide-react";
+import { Wordmark } from "./Brand";
 import { useMemo, useRef } from "react";
 import { openWorktree } from "./actions";
 import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
@@ -81,7 +82,7 @@ export function Home() {
       </div>
       {s.worktrees.length === 0 && (
         <div className="home-empty rise">
-          <FolderGit2 className="icon" />
+          <Wordmark height={28} />
           <p>No worktrees yet.</p>
           <button onClick={() => setState({ dialog: { kind: "add-repo" } })}>Add a repository</button>
         </div>

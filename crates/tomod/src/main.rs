@@ -2,6 +2,7 @@ mod agents;
 mod config;
 mod daemon;
 mod git;
+mod github;
 mod integrations;
 mod layout;
 mod monitor;

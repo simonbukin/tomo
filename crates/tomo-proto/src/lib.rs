@@ -111,6 +111,8 @@ pub enum Call {
 
     TownList,
     TownPick,
+
+    PrStatus { worktree_id: Id },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,6 +189,7 @@ pub enum Event {
     FocusRequest { worktree_id: Id, tab_id: Id, pane_id: Id },
     Notice { level: NoticeLevel, message: String },
     TownUnlocked { unlock: TownUnlock },
+    PrChanged { worktree_id: Id, pr: Option<PullRequest> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -523,6 +526,28 @@ pub struct AttentionItem {
     pub message: String,
     pub created_at_ms: u64,
     pub viewed_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PullRequest {
+    pub number: u64,
+    pub title: String,
+    pub url: String,
+    pub state: String,
+    pub draft: bool,
+    pub review_decision: Option<String>,
+    pub mergeable: Option<String>,
+    pub checks_passed: u32,
+    pub checks_failed: u32,
+    pub checks_pending: u32,
+    pub fetched_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrStatusResult {
+    pub available: bool,
+    pub reason: Option<String>,
+    pub pr: Option<PullRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
