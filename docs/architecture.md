@@ -184,3 +184,35 @@ Closing the window does not stop the daemon. The daemon stops only on
 scrollback to disk and sends SIGHUP to each pane shell.
 
 A second `tomod` refuses to start when the socket already answers.
+
+## Performance
+
+Measured with `scripts/perf.sh` on an Apple Silicon Mac, release build,
+2 repositories and 27 worktrees, 3 restored panes:
+
+| Step                                   | Time     |
+|----------------------------------------|----------|
+| tomod start to socket accepting        | ~90 ms   |
+| first request answered                 | ~5 ms    |
+| worktrees visible (names, branches)    | ~150 ms after launch |
+| git summaries for all 27 worktrees     | ~600 ms after launch |
+| `worktree_refresh` on a quiet daemon   | ~450 ms  |
+| process poll (`ps`, fresh)             | ~10 ms   |
+| daemon idle CPU with a GUI attached    | ~0.3 %   |
+| daemon resident memory                 | ~13 MB   |
+
+Design choices behind these numbers:
+
+- The socket is served before discovery runs. Discovery has two phases:
+  a fast pass that lists worktrees from `git worktree list` and keeps the
+  cached summaries, then a full pass that runs `git status` for every
+  worktree concurrently. Clients see names first and diff counts later.
+- Git watcher events trigger only the fast pass. Explicit refresh, repo
+  changes, and startup run the full pass.
+- `git diff --numstat` runs only for worktrees that `git status` reports
+  dirty.
+- The process poll fetches command lines and working directories once per
+  process. Only pane shells get their cwd re-read on every poll, which
+  keeps the 2-second poll near 10 ms.
+- The GUI loads the town dataset and the map view lazily, so the main
+  bundle stays under 800 KB.
