@@ -67,6 +67,8 @@ enum Cmd {
     Hooks(HooksCmd),
     #[command(subcommand, about = "Workflow states")]
     States(StatesCmd),
+    #[command(subcommand, about = "Repo-defined actions from .tomo.toml")]
+    Action(ActionCmd),
 }
 
 #[derive(Subcommand)]
@@ -87,6 +89,14 @@ enum HooksCmd {
 #[derive(Subcommand)]
 enum StatesCmd {
     List,
+}
+
+#[derive(Subcommand)]
+enum ActionCmd {
+    List { worktree: Option<String> },
+    Run { action: String, worktree: Option<String> },
+    Stop { action: String, worktree: Option<String> },
+    Restart { action: String, worktree: Option<String> },
 }
 
 #[derive(Subcommand)]
@@ -127,7 +137,13 @@ enum WorktreeCmd {
     #[command(about = "Open a worktree: make sure it has a terminal and focus it in the GUI")]
     Open { worktree: String },
     #[command(about = "Stop its processes, remove build dirs, and remove the worktree; the branch stays")]
-    Archive { worktree: String },
+    Archive {
+        worktree: String,
+        #[arg(long, help = "Refuse when the tree has uncommitted changes")]
+        no_checkpoint: bool,
+        #[arg(long, help = "Throw away uncommitted changes instead of committing a checkpoint")]
+        discard: bool,
+    },
     #[command(about = "Re-create an archived worktree from its branch")]
     Restore { worktree: String },
     #[command(subcommand)]
@@ -143,8 +159,6 @@ enum MetadataCmd {
         name: Option<String>,
         #[arg(long)]
         project: Option<String>,
-        #[arg(long, help = "1-4", value_parser = clap::value_parser!(u8).range(1..=4))]
-        priority: Option<u8>,
         #[arg(long, help = "Comma-separated tags; replaces the tag list")]
         tags: Option<String>,
         #[arg(long, help = "Workflow state id from config.toml")]
@@ -155,8 +169,6 @@ enum MetadataCmd {
         clear_name: bool,
         #[arg(long)]
         clear_project: bool,
-        #[arg(long)]
-        clear_priority: bool,
         #[arg(long)]
         clear_tags: bool,
     },
@@ -433,11 +445,30 @@ async fn run() -> Result<()> {
             }
             print::value(&v, json);
         }
-        Cmd::Worktree(WorktreeCmd::Archive { worktree }) => {
+        Cmd::Worktree(WorktreeCmd::Archive { worktree, no_checkpoint, discard }) => {
             let id = resolve_worktree_id(&c, Some(worktree)).await?;
-            let w: Worktree = c.call(Call::WorktreeArchive { worktree_id: id }).await?;
-            let repos: Vec<Repo> = c.call(Call::RepoList).await?;
-            print::worktrees(&[w], &repos, &[], json);
+            let checkpoint = if discard { CheckpointMode::Discard } else if no_checkpoint { CheckpointMode::RequireClean } else { CheckpointMode::Checkpoint };
+            let r: ArchiveResult = c.call(Call::WorktreeArchive { worktree_id: id, checkpoint }).await?;
+            print::archive_result(&r, json);
+        }
+        Cmd::Action(ActionCmd::List { worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let set: ActionSet = c.call(Call::ActionList { worktree_id: id }).await?;
+            print::actions(&set, json);
+        }
+        Cmd::Action(ActionCmd::Run { action, worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let r: ActionRunResult = c.call(Call::ActionRun { worktree_id: id, action_id: action }).await?;
+            print::action_run(&r, json);
+        }
+        Cmd::Action(ActionCmd::Restart { action, worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let r: ActionRunResult = c.call(Call::ActionRestart { worktree_id: id, action_id: action }).await?;
+            print::action_run(&r, json);
+        }
+        Cmd::Action(ActionCmd::Stop { action, worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let _: Value = c.call(Call::ActionStop { worktree_id: id, action_id: action }).await?;
         }
         Cmd::Worktree(WorktreeCmd::Restore { worktree }) => {
             let id = resolve_worktree_id(&c, Some(worktree)).await?;
@@ -460,13 +491,12 @@ async fn run() -> Result<()> {
             let m: WorktreeMetadata = c.call(Call::MetadataGet { worktree_id: id }).await?;
             print::metadata(&m, json);
         }
-        Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Set { worktree, name, project, priority, tags, state, clear_state, clear_name, clear_project, clear_priority, clear_tags })) => {
+        Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Set { worktree, name, project, tags, state, clear_state, clear_name, clear_project, clear_tags })) => {
             let id = resolve_worktree_id(&c, worktree).await?;
             let patch = MetadataPatch {
                 display_name: if clear_name { Some(None) } else { name.map(Some) },
                 project: if clear_project { Some(None) } else { project.map(Some) },
                 state: if clear_state { Some(None) } else { state.map(Some) },
-                priority: if clear_priority { Some(None) } else { priority.map(Some) },
                 tags: if clear_tags { Some(vec![]) } else { tags.map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()) },
             };
             let m: WorktreeMetadata = c.call(Call::MetadataSet { worktree_id: id, patch }).await?;

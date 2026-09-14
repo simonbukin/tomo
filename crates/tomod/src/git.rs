@@ -100,7 +100,10 @@ pub fn parse_status(text: &str) -> GitSummary {
             let mut parts = rest.split_whitespace();
             s.ahead = parts.next().and_then(|a| a.trim_start_matches('+').parse().ok());
             s.behind = parts.next().and_then(|b| b.trim_start_matches('-').parse().ok());
-        } else if line.starts_with("1 ") || line.starts_with("2 ") || line.starts_with("u ") {
+        } else if line.starts_with("u ") {
+            s.files_changed += 1;
+            s.conflicts += 1;
+        } else if line.starts_with("1 ") || line.starts_with("2 ") {
             s.files_changed += 1;
         } else if line.starts_with("? ") {
             s.untracked += 1;
@@ -145,6 +148,18 @@ pub async fn worktree_add(repo: &Path, path: &Path, branch: &str, new_branch: bo
         args.extend([&path_s, branch]);
     }
     git(repo, &args).await.map(|_| ())
+}
+
+/// Commits every non-ignored change as one checkpoint. Returns the new commit id,
+/// or `None` when the tree was already clean.
+pub async fn checkpoint(worktree: &Path, message: &str) -> Result<Option<String>> {
+    let status = parse_status(&git(worktree, &["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]).await?);
+    if !status.dirty {
+        return Ok(None);
+    }
+    git(worktree, &["add", "-A"]).await?;
+    git(worktree, &["commit", "-m", message]).await?;
+    Ok(Some(git(worktree, &["rev-parse", "HEAD"]).await?.trim().to_string()))
 }
 
 pub async fn branch_exists(repo: &Path, branch: &str) -> bool {

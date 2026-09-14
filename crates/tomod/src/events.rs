@@ -68,14 +68,14 @@ pub fn hook_env(event: &HookEvent) -> Vec<(String, String)> {
     env
 }
 
-fn tail(bytes: &[u8]) -> String {
+/// Last `OUTPUT_TAIL` bytes as text, cut only on a UTF-8 character boundary.
+pub fn tail(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
-    let start = text.len().saturating_sub(OUTPUT_TAIL);
-    let mut s = text[start..].to_string();
-    while !s.is_char_boundary(0) {
-        s.remove(0);
+    let mut start = text.len().saturating_sub(OUTPUT_TAIL);
+    while start < text.len() && !text.is_char_boundary(start) {
+        start += 1;
     }
-    s.trim().to_string()
+    text[start..].trim().to_string()
 }
 
 /// Runs one hook to completion and returns its record. Never panics on a bad command.
@@ -92,8 +92,10 @@ pub async fn run_process(hook: &HookDef, event: &HookEvent, cwd: Option<&Path>, 
     }
     cmd.env("TOMO_SOCKET", socket).env("TOMO_BIN", tomo_bin);
     cmd.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    cmd.process_group(0);
     let (exit_code, output, timed_out) = match cmd.spawn() {
         Ok(mut child) => {
+            let pgid = child.id().map(|p| p as i32);
             if let Some(mut stdin) = child.stdin.take() {
                 use tokio::io::AsyncWriteExt;
                 let _ = stdin.write_all(&json).await;
@@ -101,7 +103,12 @@ pub async fn run_process(hook: &HookDef, event: &HookEvent, cwd: Option<&Path>, 
             match tokio::time::timeout(Duration::from_secs(hook.timeout_s), child.wait_with_output()).await {
                 Ok(Ok(out)) => (out.status.code(), [out.stdout, out.stderr].concat(), false),
                 Ok(Err(e)) => (None, e.to_string().into_bytes(), false),
-                Err(_) => (None, format!("timed out after {} s", hook.timeout_s).into_bytes(), true),
+                Err(_) => {
+                    if let Some(pgid) = pgid {
+                        kill_group(pgid);
+                    }
+                    (None, format!("timed out after {} s; process group killed", hook.timeout_s).into_bytes(), true)
+                }
             }
         }
         Err(e) => (None, e.to_string().into_bytes(), false),
@@ -115,6 +122,13 @@ pub async fn run_process(hook: &HookDef, event: &HookEvent, cwd: Option<&Path>, 
         exit_code,
         ok: exit_code == Some(0) && !timed_out,
         output_tail: tail(&output),
+    }
+}
+
+/// Kills every process in the hook's process group, so children and grandchildren die too.
+pub fn kill_group(pgid: i32) {
+    unsafe {
+        libc::killpg(pgid, libc::SIGKILL);
     }
 }
 
@@ -260,6 +274,30 @@ mod tests {
         assert!(bad.output_tail.contains("boom"));
         let slow = run_process(&HookDef { command: "sleep 5".into(), timeout_s: 1, ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
         assert!(!slow.ok && slow.output_tail.contains("timed out"));
+    }
+
+    #[test]
+    fn tail_never_splits_a_character() {
+        let mut text = "日本語".repeat(OUTPUT_TAIL / 3 + 5).into_bytes();
+        text.extend_from_slice("😀 end".as_bytes());
+        let t = tail(&text);
+        assert!(t.ends_with("😀 end"));
+        assert!(t.len() <= OUTPUT_TAIL);
+        assert!(std::str::from_utf8(t.as_bytes()).is_ok());
+        assert_eq!(tail(b"short"), "short");
+        assert_eq!(tail(b""), "");
+    }
+
+    #[tokio::test]
+    async fn timeout_kills_the_whole_process_tree() {
+        let marker = std::env::temp_dir().join(format!("tomo-hook-tree-{}", std::process::id()));
+        let cmd = format!("(sh -c 'sleep 30; touch {m}' &) ; sleep 30; touch {m}", m = marker.display());
+        let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(None)), ..Default::default() };
+        let run = run_process(&HookDef { command: cmd, timeout_s: 1, ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
+        assert!(!run.ok && run.output_tail.contains("killed"));
+        let out = std::process::Command::new("pgrep").args(["-f", &format!("touch {}", marker.display())]).output().unwrap();
+        assert!(out.stdout.is_empty(), "grandchild survived: {}", String::from_utf8_lossy(&out.stdout));
+        assert!(!marker.exists());
     }
 
     #[test]

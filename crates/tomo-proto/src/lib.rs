@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use ts_rs::TS;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 pub type Id = String;
 
@@ -72,7 +72,7 @@ pub enum Call {
     WorktreeList,
     WorktreeRefresh,
     WorktreeCreate(WorktreeCreate),
-    WorktreeArchive { worktree_id: Id },
+    WorktreeArchive { worktree_id: Id, #[serde(default)] checkpoint: CheckpointMode },
     WorktreeRestore { worktree_id: Id },
     WorktreeOpen { worktree_id: Id },
     WorktreeResolve { path: PathBuf },
@@ -125,6 +125,69 @@ pub enum Call {
 
     TownList,
     TownPick,
+
+    ActionList { worktree_id: Id },
+    ActionRun { worktree_id: Id, action_id: String },
+    ActionStop { worktree_id: Id, action_id: String },
+    ActionRestart { worktree_id: Id, action_id: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckpointMode {
+    #[default]
+    Checkpoint,
+    RequireClean,
+    Discard,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ArchiveResult {
+    pub worktree_id: Id,
+    pub branch: Option<String>,
+    pub checkpoint_commit: Option<String>,
+    pub cleanup_removed: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionMode {
+    #[default]
+    Pane,
+    External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionShow {
+    Topbar,
+    #[default]
+    Menu,
+}
+
+/// One entry of `[[actions]]` in a worktree's `.tomo.toml`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ActionDef {
+    pub id: String,
+    pub label: String,
+    pub command: String,
+    pub mode: ActionMode,
+    pub show: ActionShow,
+    pub shortcut: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ActionSet {
+    pub worktree_id: Id,
+    pub actions: Vec<ActionDef>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ActionRunResult {
+    pub action: ActionDef,
+    pub pane: Option<Pane>,
+    pub reused: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -205,6 +268,7 @@ pub enum Event {
     TownUnlocked { unlock: TownUnlock },
     PrChanged { worktree_id: Id, pr: Option<PullRequest> },
     HookRan { run: HookRun },
+    ActionsChanged { set: ActionSet },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -312,6 +376,13 @@ pub struct HookEvent {
     pub pane: Option<HookPane>,
     pub agent: Option<HookAgent>,
     pub attention: Option<AttentionItem>,
+    pub action: Option<HookAction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookAction {
+    pub id: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -356,6 +427,8 @@ pub const HOOK_EVENTS: &[&str] = &[
     "agent.idle",
     "agent.exited",
     "attention.created",
+    "action.started",
+    "action.exited",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -451,6 +524,8 @@ pub struct GitSummary {
     pub dirty: bool,
     pub files_changed: u32,
     pub untracked: u32,
+    #[serde(default)]
+    pub conflicts: u32,
     pub insertions: u32,
     pub deletions: u32,
     pub ahead: Option<u32>,
@@ -464,7 +539,6 @@ pub struct WorktreeMetadata {
     pub project: Option<String>,
     #[serde(default)]
     pub state: Option<String>,
-    pub priority: Option<u8>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -480,9 +554,6 @@ pub struct MetadataPatch {
     #[serde(default, with = "double_option")]
     #[ts(optional, type = "string | null")]
     pub state: Option<Option<String>>,
-    #[serde(default, with = "double_option")]
-    #[ts(optional, type = "number | null")]
-    pub priority: Option<Option<u8>>,
     #[serde(default)]
     #[ts(optional)]
     pub tags: Option<Vec<String>>,
@@ -507,7 +578,6 @@ impl MetadataPatch {
             display_name: self.display_name.clone().unwrap_or_else(|| base.display_name.clone()),
             project: self.project.clone().unwrap_or_else(|| base.project.clone()),
             state: self.state.clone().unwrap_or_else(|| base.state.clone()),
-            priority: self.priority.unwrap_or(base.priority),
             tags: self.tags.clone().unwrap_or_else(|| base.tags.clone()),
         }
     }
@@ -555,6 +625,8 @@ pub struct Pane {
     pub exit_code: Option<i32>,
     pub agent: Option<AgentPresence>,
     pub created_at_ms: u64,
+    #[serde(default)]
+    pub action_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -767,6 +839,8 @@ pub struct Snapshot {
     pub agents: Vec<AgentPresence>,
     pub attention: Vec<AttentionItem>,
     pub resources: Vec<WorktreeResources>,
+    #[serde(default)]
+    pub actions: Vec<ActionSet>,
     #[ts(type = "unknown")]
     pub ui_state: Value,
 }
@@ -793,13 +867,12 @@ mod tests {
 
     #[test]
     fn metadata_patch_distinguishes_unset_from_clear() {
-        let base = WorktreeMetadata { display_name: Some("a".into()), project: Some("p".into()), state: Some("active".into()), priority: Some(2), tags: vec!["x".into()] };
-        let patch: MetadataPatch = serde_json::from_str(r#"{"project": null, "priority": 1, "state": "merged"}"#).unwrap();
+        let base = WorktreeMetadata { display_name: Some("a".into()), project: Some("p".into()), state: Some("active".into()), tags: vec!["x".into()] };
+        let patch: MetadataPatch = serde_json::from_str(r#"{"project": null, "state": "merged"}"#).unwrap();
         let out = patch.apply(&base);
         assert_eq!(out.display_name.as_deref(), Some("a"));
         assert_eq!(out.project, None);
         assert_eq!(out.state.as_deref(), Some("merged"));
-        assert_eq!(out.priority, Some(1));
         assert_eq!(out.tags, vec!["x".to_string()]);
     }
 
@@ -838,6 +911,9 @@ mod bindings {
         AgentReport::export_all(&cfg).unwrap();
         RpcError::export_all(&cfg).unwrap();
         Hello::export_all(&cfg).unwrap();
+        ArchiveResult::export_all(&cfg).unwrap();
+        ActionRunResult::export_all(&cfg).unwrap();
+        CheckpointMode::export_all(&cfg).unwrap();
         let mut names: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|e| e.ok())

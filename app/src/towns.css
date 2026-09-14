@@ -10,3 +10,6 @@
 .town-card-title { display: flex; align-items: center; gap: 6px; }
 .town-card-title strong { font-weight: 500; }
 .town-card .link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
+
+.town-hit { fill: transparent; stroke: none; pointer-events: all; }
+.town-card .link svg { width: 12px; height: 12px; flex: none; }

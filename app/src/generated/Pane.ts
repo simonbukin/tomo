@@ -5,4 +5,4 @@
 import type { AgentPresence } from "./AgentPresence";
 import type { PaneOrigin } from "./PaneOrigin";
 
-export type Pane = { id: string, tab_id: string, worktree_id: string, title: string, user_title: string | null, cwd: string, cols: number, rows: number, pid: number | null, live: boolean, origin: PaneOrigin, exit_code: number | null, agent: AgentPresence | null, created_at_ms: number, };
+export type Pane = { id: string, tab_id: string, worktree_id: string, title: string, user_title: string | null, cwd: string, cols: number, rows: number, pid: number | null, live: boolean, origin: PaneOrigin, exit_code: number | null, agent: AgentPresence | null, created_at_ms: number, action_id: string | null, };
