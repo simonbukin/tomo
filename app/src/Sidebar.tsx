@@ -1,6 +1,6 @@
-import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, Map, Plus, RotateCw } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Map, Plus, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
-import { ProcessIcon } from "./ProcessIcon";
+import { Signals } from "./Signals";
 import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { Mark } from "./Brand";
@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Men
 import { openMenu } from "./MenuHost";
 import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
-import { agentsOf, clearSelection, formatBytes, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
+import { agentsOf, clearSelection, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Repo, SidebarSort, Worktree } from "./types";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state"];
@@ -46,6 +46,7 @@ export function Sidebar() {
       <div className="sidebar-top">
         <Mark size={14} />
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
+        <IconButton label="Activity" className={`side-btn${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" /></IconButton>
         <IconButton label="Japan map" className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "towns" })}><Map className="icon" /></IconButton>
         <span className="spacer" />
         <DropdownMenu>
@@ -170,9 +171,6 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
   const agents = useStore((s) => agentsOf(s, w.id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
   const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
-  const res = useStore((s) => s.resources[w.id]);
-  const threshold = useStore((s) => s.config?.resource_warning_bytes ?? Infinity);
-  const hot = res && res.rss_bytes >= threshold;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
@@ -190,7 +188,6 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
       <span className={`state state-${busy ? "archiving" : summary}${selected ? " state-selected" : ""}`} />
       <span className="wt-name">{w.name}</span>
       <span className="wt-meta">
-        {hot && <span className="hot">{formatBytes(res.rss_bytes)}</span>}
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
@@ -201,18 +198,7 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
         {w.git?.dirty ? " *" : ""}
         {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
       </span>
-      {agents.length > 0 && (
-        <span className="wt-agents">
-          {agents.map((a) => (
-            <span key={a.pane_id} className={`agent-line is-${a.state}`}>
-              <span className={`state state-${a.state}`} />
-              <ProcessIcon agent={a.kind} size={11} />
-              <span className="agent-kind">{a.kind}</span>
-              <span className="agent-state">· {a.state}</span>
-            </span>
-          ))}
-        </span>
-      )}
+      {!archived && <Signals worktreeId={w.id} className="wt-agents" />}
     </div>
   );
 }

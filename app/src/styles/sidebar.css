@@ -30,7 +30,7 @@
 .wt-active .wt-name { color: var(--accent); }
 .wt-branch { grid-column: 2 / 4; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt-state { font-family: var(--font-ui); color: var(--fg-2); }
-.wt-agents { grid-column: 2 / 4; display: flex; flex-direction: column; gap: 0; margin-top: 1px; }
+.wt-agents { grid-column: 2 / 4; display: flex; flex-direction: column; align-items: flex-start; gap: 0; margin-top: 1px; }
 .wt-meta { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .wt-more { visibility: hidden; }
 .wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }

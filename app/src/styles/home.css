@@ -41,6 +41,6 @@
 .card-title .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 .card-sub { padding-left: 22px; color: var(--fg-2); font-size: var(--fs-0); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-sub.tags { font-family: var(--font-ui); font-size: var(--fs-1); }
-.card-agents { padding-left: 22px; display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); margin-top: 3px; }
+.card-signals { padding-left: 22px; display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); margin-top: 3px; }
 .card-foot { padding-left: 22px; display: flex; align-items: center; gap: var(--sp-3); margin-top: 3px; font-size: var(--fs-0); color: var(--fg-2); min-height: 16px; font-variant-numeric: tabular-nums; }
 .card-foot .right { margin-left: auto; display: inline-flex; gap: var(--sp-3); }
