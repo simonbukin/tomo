@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 use tomo_proto::Town;
 
-const DATA: &str = include_str!("../../../app/src/data/japan-towns.json");
+const DATA: &str = include_str!("../../../../app/src/data/japan-towns.json");
 const WEIGHTS: [(&str, u32); 5] = [("common", 55), ("uncommon", 25), ("rare", 13), ("epic", 5), ("legendary", 2)];
 
 pub fn all() -> &'static [Town] {

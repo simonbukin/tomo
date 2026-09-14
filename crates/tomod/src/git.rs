@@ -147,6 +147,10 @@ pub async fn worktree_add(repo: &Path, path: &Path, branch: &str, new_branch: bo
     git(repo, &args).await.map(|_| ())
 }
 
+pub async fn branch_exists(repo: &Path, branch: &str) -> bool {
+    git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).await.is_ok()
+}
+
 pub async fn worktree_remove(repo: &Path, path: &Path) -> Result<()> {
     git(repo, &["worktree", "remove", "--force", &path.to_string_lossy()]).await.map(|_| ())
 }

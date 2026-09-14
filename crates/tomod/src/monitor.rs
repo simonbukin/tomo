@@ -98,6 +98,8 @@ pub async fn run(daemon: Arc<Daemon>) {
         let _ = tokio::task::spawn_blocking(move || {
             let mut inner = d.lock();
             poll_once(&d, &mut inner);
+            drop(inner);
+            d.flush_hooks();
         })
         .await;
     }

@@ -5,6 +5,9 @@
 //! - cached external observation: `worktree_meta.path`, `.gitdir`, `.first_seen_ms`, `.archived_at_ms`, `.archived_branch`
 //! - recoverable runtime state: `tabs`, `panes`, `attention`, `kv`
 //!
+//! `worktree_meta.town_slug` is unused since Phase 2; the `towns` table owns
+//! the worktree→town mapping. The column stays because SQLite cannot drop it cheaply.
+//!
 //! Git remains the authority for branches and worktree existence; nothing here
 //! stores a branch name.
 
@@ -34,7 +37,6 @@ pub struct MetaRow {
     pub first_seen_ms: Option<u64>,
     pub archived_at_ms: Option<u64>,
     pub archived_branch: Option<String>,
-    pub town_slug: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,11 +123,12 @@ CREATE TABLE IF NOT EXISTS towns (
 );
 "#;
 
-const META_COLUMNS: [(&str, &str); 4] = [
+const META_COLUMNS: [(&str, &str); 5] = [
     ("first_seen_ms", "INTEGER"),
     ("archived_at_ms", "INTEGER"),
     ("archived_branch", "TEXT"),
     ("town_slug", "TEXT"),
+    ("state", "TEXT"),
 ];
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -199,7 +202,7 @@ impl Store {
 
     pub fn meta_all(&self) -> Result<Vec<MetaRow>> {
         let mut st = self.conn.prepare(
-            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, town_slug FROM worktree_meta",
+            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state FROM worktree_meta",
         )?;
         let rows = st.query_map([], |r| {
             let tags: String = r.get(7)?;
@@ -212,13 +215,13 @@ impl Store {
                     display_name: r.get(4)?,
                     project: r.get(5)?,
                     priority: r.get::<_, Option<i64>>(6)?.map(|p| p.clamp(1, 4) as u8),
+                    state: r.get(12)?,
                     tags: serde_json::from_str(&tags).unwrap_or_default(),
                 },
                 last_active_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
                 first_seen_ms: r.get::<_, Option<i64>>(9)?.map(|v| v as u64),
                 archived_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
                 archived_branch: r.get(11)?,
-                town_slug: r.get(12)?,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -226,12 +229,12 @@ impl Store {
 
     pub fn meta_upsert(&self, row: &MetaRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO worktree_meta (id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, town_slug)
+            "INSERT INTO worktree_meta (id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(id) DO UPDATE SET repo_id=excluded.repo_id, path=excluded.path, gitdir=excluded.gitdir,
                display_name=excluded.display_name, project=excluded.project, priority=excluded.priority,
                tags=excluded.tags, last_active_ms=excluded.last_active_ms, first_seen_ms=excluded.first_seen_ms,
-               archived_at_ms=excluded.archived_at_ms, archived_branch=excluded.archived_branch, town_slug=excluded.town_slug",
+               archived_at_ms=excluded.archived_at_ms, archived_branch=excluded.archived_branch, state=excluded.state",
             params![
                 row.id,
                 row.repo_id,
@@ -245,7 +248,7 @@ impl Store {
                 row.first_seen_ms.map(|v| v as i64),
                 row.archived_at_ms.map(|v| v as i64),
                 row.archived_branch,
-                row.town_slug,
+                row.metadata.state,
             ],
         )?;
         Ok(())
@@ -464,16 +467,15 @@ mod tests {
             repo_id: "r1".into(),
             path: PathBuf::from("/tmp/w1"),
             gitdir: Some("w1".into()),
-            metadata: WorktreeMetadata { display_name: Some("Labor".into()), project: Some("Holly".into()), priority: Some(1), tags: vec!["lr".into()] },
+            metadata: WorktreeMetadata { display_name: Some("Labor".into()), project: Some("Holly".into()), state: None, priority: Some(1), tags: vec!["lr".into()] },
             last_active_ms: None,
             first_seen_ms: Some(5),
             archived_at_ms: Some(9),
             archived_branch: Some("feat".into()),
-            town_slug: Some("aogashima".into()),
         };
         s.meta_upsert(&row).unwrap();
         let back = s.meta_all().unwrap();
-        assert_eq!((back[0].first_seen_ms, back[0].archived_at_ms, back[0].archived_branch.as_deref(), back[0].town_slug.as_deref()), (Some(5), Some(9), Some("feat"), Some("aogashima")));
+        assert_eq!((back[0].first_seen_ms, back[0].archived_at_ms, back[0].archived_branch.as_deref()), (Some(5), Some(9), Some("feat")));
         s.conn.execute("UPDATE worktree_meta SET tags = 'not json', priority = 99", []).unwrap();
         let all = s.meta_all().unwrap();
         assert_eq!(all.len(), 1);
