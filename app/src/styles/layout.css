@@ -30,6 +30,14 @@
 .action-btn { position: relative; }
 .action-btn .state { margin-right: 1px; }
 .action-warn { color: var(--waiting); }
+.action-live { display: inline-flex; color: var(--fg-2); margin-left: 1px; }
+.action-live .icon { width: 11px; height: 11px; }
+.runtime-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); min-height: 24px; }
+.runtime-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runtime-label { color: var(--fg); }
+.runtime-row .mono { font-size: var(--fs-0); }
+.checkpoint-banner { display: flex; align-items: center; gap: var(--sp-3); min-height: 26px; padding: 0 var(--sp-3); border-bottom: 1px solid var(--line); background: var(--waiting-soft); font-size: var(--fs-1); color: var(--fg-1); }
+.checkpoint-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- tabs */
 .tabbar { display: flex; align-items: stretch; height: var(--bar-h); background: var(--bg); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }

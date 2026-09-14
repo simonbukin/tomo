@@ -6,7 +6,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Men
 import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
 import { worktreeMenu } from "./menus";
-import { agentsOf, formatBytes, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { Signals } from "./Signals";
+import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
@@ -130,7 +131,6 @@ export function Home() {
 
 function Row({ w }: { w: Worktree }) {
   const agents = useStore((s) => agentsOf(s, w.id));
-  const res = useStore((s) => s.resources[w.id]);
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
   const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
@@ -152,18 +152,11 @@ function Row({ w }: { w: Worktree }) {
       <span className="muted">{busy ? "archiving…" : archived ? "archived" : (state ?? "")}</span>
       <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
       <span className="agents">
-        {agents.map((a) => (
-          <span key={a.pane_id} className={`agent-line is-${a.state}`}>
-            <span className={`state state-${a.state}`} />
-            <span className="agent-kind">{a.kind}</span>
-          </span>
-        ))}
+        {!archived && <Signals worktreeId={w.id} className="signals" />}
         {w.metadata.tags.length > 0 && <span className="tag">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
       </span>
       <span className="runtime">
         {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
-        {w.pane_count > 0 && <span>{w.pane_count} pane{w.pane_count === 1 ? "" : "s"}</span>}
-        {res && res.rss_bytes > 64 * 1024 * 1024 && <span>{formatBytes(res.rss_bytes)}</span>}
       </span>
     </div>
   );
@@ -171,15 +164,13 @@ function Row({ w }: { w: Worktree }) {
 
 function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const agents = useStore((s) => agentsOf(s, w.id));
-  const res = useStore((s) => s.resources[w.id]);
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
   const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
-  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  const sub = [w.metadata.project ?? repo, branch].filter(Boolean).join(" · ");
+  const sub = [w.metadata.project ?? repo, busy ? "archiving…" : archived ? "archived" : state].filter(Boolean).join(" · ");
   const summary = summarizeState(agents, attention);
   return (
     <div
@@ -193,32 +184,14 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
       <div className="card-title">
         <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
         <span className="name">{w.name}</span>
-        <span className="wt-meta">
-          {busy ? <span className="wt-state">archiving…</span> : archived ? <span className="faint">archived</span> : state ? <span className="wt-state">{state}</span> : null}
-        </span>
       </div>
       <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>
-      {w.metadata.tags.length > 0 && <div className="card-sub tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</div>}
-      {agents.length > 0 && (
-        <div className="card-agents">
-          {agents.map((a) => (
-            <span key={a.pane_id} className={`agent-line is-${a.state}`}>
-              <span className={`state state-${a.state}`} />
-              <span className="agent-state">{a.state}</span>
-              <span className="agent-kind">· {a.kind}</span>
-            </span>
-          ))}
+      {!archived && <Signals worktreeId={w.id} className="card-signals" />}
+      {g && (g.insertions > 0 || g.deletions > 0) && (
+        <div className="card-foot">
+          <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>
         </div>
       )}
-      {(g && (g.insertions > 0 || g.deletions > 0)) || w.pane_count > 0 || (res && res.rss_bytes > 64 * 1024 * 1024) ? (
-        <div className="card-foot">
-          {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
-          <span className="right">
-            {w.pane_count > 0 && <span>{w.pane_count} pane{w.pane_count === 1 ? "" : "s"}</span>}
-            {res && res.rss_bytes > 64 * 1024 * 1024 && <span>{formatBytes(res.rss_bytes)}</span>}
-          </span>
-        </div>
-      ) : null}
     </div>
   );
 }

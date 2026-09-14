@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { runAction } from "./actions";
 import { Button, IconButton, TooltipProvider } from "./components/ui";
+import { Activity } from "./Activity";
 import { Dialogs } from "./Dialogs";
 import { Home } from "./Home";
 import { findAction } from "./keys";
@@ -11,7 +12,7 @@ import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
 import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./Sidebar";
-import { activeTab, applyFrame, applySnapshot, getState, keyBindings, repoName, setState, setUi, unviewedAttention, useStore } from "./store";
+import { activeTab, applyFrame, applySnapshot, getState, keyBindings, needsMe, repoName, setState, setUi, useStore } from "./store";
 import { TabBar } from "./Tabs";
 import { focusTerminal } from "./terminals";
 import type { Snapshot } from "./types";
@@ -45,7 +46,7 @@ function Shell() {
   const tab = useStore((s) => activeTab(s, s.ui.view === "worktree" ? s.ui.activeWorktreeId : null));
   const focusRequest = useStore((s) => s.focusRequest);
   const notice = useStore((s) => s.notice);
-  const attention = useStore((s) => unviewedAttention(s).length);
+  const attention = useStore((s) => needsMe(s).length);
   const config = useStore((s) => s.config);
 
   useEffect(() => {
@@ -101,12 +102,12 @@ function Shell() {
     <div className={`app${ui.leftOpen ? "" : " no-left"}${ui.rightOpen && showWorktree ? "" : " no-right"}`} style={{ ["--left-w" as string]: `${ui.leftWidth}px`, ["--right-w" as string]: `${ui.rightWidth}px` }}>
       <div className="titlebar" data-tauri-drag-region>
         <span className="titlebar-text" data-tauri-drag-region>
-          {showWorktree ? repo : ui.view === "towns" ? "japan" : "home"}
+          {showWorktree ? repo : ui.view === "towns" ? "japan" : ui.view === "activity" ? "activity" : "home"}
         </span>
         <span className="spacer" data-tauri-drag-region />
         {attention > 0 && (
           <Button className="attention-btn" size="sm" onClick={() => runAction("next_attention")}>
-            <span className="state state-waiting" /> {attention} waiting
+            <span className="state state-waiting" /> {attention} need you
           </Button>
         )}
         {!connected && <span className="conn-bad">daemon offline</span>}
@@ -130,7 +131,8 @@ function Shell() {
             <Towns />
           </Suspense>
         )}
-        {loaded && !showWorktree && ui.view !== "towns" && <Home />}
+        {loaded && !showWorktree && ui.view === "activity" && <Activity />}
+        {loaded && !showWorktree && ui.view !== "towns" && ui.view !== "activity" && <Home />}
         {loaded && showWorktree && (
           <>
             <WorktreeHeader worktree={worktree} />
