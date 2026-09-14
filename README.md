@@ -26,6 +26,19 @@ Tomo has three parts:
 
 Close the window and nothing dies. Reopen it and everything reconnects.
 
+## What is happening right now
+
+Tomo watches the runtime for you. Listening ports that belong to a pane
+show up as endpoints next to their Action (`● App ↗`), open in a browser
+surface inside the worktree, and can be annotated and sent to the agent
+that already works there. Crashes, agent waits, checkpoints, state
+changes, and archives land in one Activity stream; `tomo checkpoint
+"Review the new costing UI" --url http://localhost:3000` is how an agent
+asks for a human. Usage limits for Claude and Codex show in the Activity
+header. See [docs/runtime.md](docs/runtime.md),
+[docs/activity.md](docs/activity.md), [docs/browser.md](docs/browser.md),
+and [docs/usage.md](docs/usage.md).
+
 ## Install
 
 ```bash
