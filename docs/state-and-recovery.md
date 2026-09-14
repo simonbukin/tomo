@@ -117,20 +117,47 @@ directory. The steps, in order:
    clients see it at once. A second archive of the same worktree is refused.
 2. `worktree.before_archive` hooks run and Tomo waits for them. A non-zero
    exit or a timeout aborts with error code `aborted`; nothing changed.
-3. Every pane of the worktree closes and the processes those panes own are
+3. The checkpoint (below). A refusal here is a `conflict` error; nothing
+   changed.
+4. Every pane of the worktree closes and the processes those panes own are
    killed. Observed processes are never touched.
-4. The `[archive] cleanup` directories directly under the worktree are
+5. The `[archive] cleanup` directories directly under the worktree are
    deleted in a blocking task, off the request path.
-5. `git worktree remove --force` runs. Git keeps the branch.
-6. The metadata row gets `archived_at_ms` and `archived_branch`, and
+6. `git worktree remove --force` runs. Git keeps the branch.
+7. The metadata row gets `archived_at_ms` and `archived_branch`, and
    `worktree.archived` fires.
+
+### The checkpoint
+
+A successful normal archive leaves all non-ignored user work recoverable
+from the branch. `git worktree remove --force` deletes the directory, so
+the checkpoint runs first.
+
+| Mode              | CLI               | Behavior                                                                 |
+|-------------------|-------------------|--------------------------------------------------------------------------|
+| `checkpoint`      | default           | When the tree is dirty, `git add -A` and commit `tomo: archive checkpoint`. A clean tree gets no commit. |
+| `require_clean`   | `--no-checkpoint` | Refuse a dirty tree.                                                     |
+| `discard`         | `--discard`       | No checks and no commit. Uncommitted changes are lost.                   |
+
+`git add -A` stages untracked files, so they are in the checkpoint. Ignored
+files are not; `node_modules` and the other cleanup directories are gone
+after an archive. Without `discard`, Tomo refuses a detached HEAD and a
+tree with unresolved merge conflicts. Both refusals happen before any pane
+closes, so the worktree stays as it was.
+
+The result carries `checkpoint_commit` (the new commit id, or `null` when
+nothing was committed) and `cleanup_removed`. The GUI reports the same
+in a notice: `archived <name> (checkpoint 1f3a9c2, 2 build dirs removed)`
+or `(clean, …)`.
 
 The worktree still shows in Home under the archived filter with its
 metadata and town identity. `tomo worktree restore` first checks that the
 branch still exists, then runs `git worktree add` at the old path (or under
 the configured parent when the old parent is gone), clears the archived
-mark, and fires `worktree.restored`. Tabs and panes are not restored; the
-worktree opens with a fresh shell.
+mark, and fires `worktree.restored`. The branch comes back with the
+checkpoint commit on it, so the restored tree holds the work that the
+archive found. Tabs and panes are not restored; the worktree opens with a
+fresh shell.
 
 Hooks never block recovery. A failed or missing hook script logs a warning
 and a `HookRan` event; only the `before_archive` gate can stop anything, and

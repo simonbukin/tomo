@@ -176,9 +176,6 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .wt-branch { grid-column: 2 / 4; font-size: var(--fs-1); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt-agents { grid-column: 2 / 4; display: flex; flex-direction: column; gap: 1px; }
 .wt-meta { display: inline-flex; align-items: center; gap: var(--sp-2); }
-.prio { font-size: var(--fs-0); color: var(--fg-2); }
-.prio-1 { color: var(--hot); }
-.prio-2 { color: var(--waiting); }
 .tag { color: var(--fg-3); font-size: var(--fs-1); }
 
 .center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
@@ -194,6 +191,11 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .tab-close:hover { opacity: 1; background: transparent; }
 .tab-new { background: none; padding: 0 var(--sp-3); color: var(--fg-3); }
 .tab-new:hover { color: var(--fg); background: transparent; }
+.actionbar { margin-left: auto; display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); flex: none; }
+.action-btn { font-size: var(--fs-1); white-space: nowrap; }
+.action-warn { display: inline-flex; color: var(--waiting); }
+.action-warn .icon { width: 12px; height: 12px; }
+.board-col-over { outline: 1px dashed var(--accent); outline-offset: 4px; border-radius: var(--radius); }
 
 .layout-root { flex: 1; min-height: 0; display: flex; padding: var(--sp-1) var(--sp-2) var(--sp-2); background: var(--bg); }
 .split { display: flex; flex: 1; min-width: 0; min-height: 0; }

@@ -54,8 +54,6 @@ export function matchesFilter(w: Worktree, f: Filter, ctx: QueryContext): boolea
       return (w.metadata.project ?? "") === f.value;
     case "tag":
       return w.metadata.tags.includes(f.value);
-    case "priority":
-      return String(w.metadata.priority ?? "") === f.value;
     case "agent":
       return agentStateOf(w, ctx) === f.value;
     case "archived":
@@ -98,8 +96,6 @@ export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | Side
         return (b.first_seen_ms ?? 0) - (a.first_seen_ms ?? 0) || a.name.localeCompare(b.name);
       case "attention":
         return rank(a) - rank(b) || recent(b) - recent(a) || a.name.localeCompare(b.name);
-      case "priority":
-        return (a.metadata.priority ?? 9) - (b.metadata.priority ?? 9) || recent(b) - recent(a) || a.name.localeCompare(b.name);
       case "state":
         return stateRank(ctx.states, a.metadata.state) - stateRank(ctx.states, b.metadata.state) || recent(b) - recent(a) || a.name.localeCompare(b.name);
     }
@@ -114,15 +110,13 @@ export function groupKey(w: Worktree, group: HomeOptions["group"], ctx: QueryCon
       return repoName(ctx.repos, w.repo_id);
     case "project":
       return w.metadata.project ?? "no project";
-    case "priority":
-      return w.metadata.priority ? `p${w.metadata.priority}` : "no priority";
     case "none":
       return "";
   }
 }
 
 export function groupWorktrees(list: Worktree[], group: HomeOptions["group"], ctx: QueryContext): { key: string; items: Worktree[] }[] {
-  const order = group === "priority" ? ["p1", "p2", "p3", "p4", "no priority"] : group === "state" ? [...orderedStates(ctx.states).map((s) => s.label), NO_STATE] : null;
+  const order = group === "state" ? [...orderedStates(ctx.states).map((s) => s.label), NO_STATE] : null;
   const map = new Map<string, Worktree[]>();
   if (group === "state") for (const key of order ?? []) map.set(key, []);
   for (const w of list) {

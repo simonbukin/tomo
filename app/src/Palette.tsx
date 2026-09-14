@@ -1,8 +1,8 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { allActions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, spawnAgent } from "./actions";
+import { allActions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, runWorktreeAction, spawnAgent } from "./actions";
 import { describeBinding } from "./keys";
-import { repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { activeActionSet, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 
 interface Item {
   key: string;
@@ -53,6 +53,7 @@ export function Palette() {
   const bindings = useStore((s) => s.config?.keybindings ?? {});
   const current = useStore((s) => s.worktrees.find((w) => w.id === s.ui.activeWorktreeId && s.ui.view === "worktree") ?? null);
   const tabs = useStore((s) => (current ? s.tabs[current.id] ?? [] : []));
+  const worktreeActions = useStore((s) => activeActionSet(s)?.actions ?? []);
   const selectionSize = useStore((s) => s.selection.size);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -71,6 +72,15 @@ export function Palette() {
         run: () => runAction(a.id),
         rank: (a.whenWorktree ? 10 : 0) + boost(`cmd:${a.id}`),
       }));
+    const acts: Item[] = current
+      ? worktreeActions.map((a) => ({
+          key: `action:${a.id}`,
+          label: `run ${a.label}`,
+          hint: ["actions", a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · "),
+          run: () => runWorktreeAction(current.id, a.id),
+          rank: 9 + boost(`action:${a.id}`),
+        }))
+      : [];
     const tabItems: Item[] = tabs.map((t) => ({ key: `tab:${t.id}`, label: `tab: ${t.title}`, hint: t.is_active ? "current" : undefined, run: () => activateTab(t.id), rank: 8 }));
     const ws: Item[] = worktrees.flatMap((w) => {
       const hint = [repoOf(w), w.metadata.project, w.branch].filter(Boolean).join(" · ");
@@ -93,8 +103,8 @@ export function Palette() {
       ];
     });
     const rs: Item[] = repos.map((r) => ({ key: `repo:${r.id}`, label: `new worktree in ${r.name}`, hint: r.path, run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }), rank: 2 + boost(`repo:${r.id}`) }));
-    return [...tabItems, ...cmds, ...ws, ...rs];
-  }, [worktrees, repos, bindings, current, tabs, selectionSize]);
+    return [...tabItems, ...acts, ...cmds, ...ws, ...rs];
+  }, [worktrees, repos, bindings, current, tabs, selectionSize, worktreeActions]);
 
   const results = useMemo(() => {
     return items

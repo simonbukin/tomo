@@ -61,3 +61,31 @@ in the terminal core. The open items are Tomo-side (cwd cache) and cosmetic
 §34 triggers: visible rendering lag with many panes, broken IME/CJK input,
 an escape sequence Tomo needs that xterm.js cannot support, or structural
 problems with state replay. A `libghostty` spike is not justified now.
+
+## Phase 2.5 smoke (2026-09-14)
+
+Partial smoke through the CLI against a scratch daemon under
+`/tmp/tomo-harness-gui`. The installed app runs against the default data
+dir, so it was not used. `scripts/torture/run-all.sh` now also runs
+`archive.sh` (17 checks) and `actions.sh` (24 checks, hook timeout and
+UTF-8 tail included).
+
+Verified by machine (`tomo worktree open`, `tomo pane split`,
+`tomo pane send`, RPC `attach` and `raw`):
+
+- [x] Resize survives: after `pane_resize` to 97x31 the shell prints
+      `COLUMNS=97 LINES=31`.
+- [x] Scrollback replay after daemon restart: a marker written before the
+      restart is in the raw replay; both panes come back as `restored`;
+      input works after the restart.
+- [x] Unicode round trip: Japanese, emoji, combining marks, and half-width
+      katakana sent with `tomo pane send` come back intact from `attach`.
+- [x] Exit code display data: a pane whose process exits 7 stays with
+      `exit_code: 7`; a pane whose process exits 0 is removed.
+
+Still needs a human in the GUI:
+
+- [ ] Paste (multi-line, bracketed paste into `vim` and a shell).
+- [ ] IME composition for CJK input.
+- [ ] Mouse selection and copy across a split.
+- [ ] WebGL renderer fallback to canvas when WebGL is unavailable.

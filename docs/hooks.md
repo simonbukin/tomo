@@ -55,6 +55,12 @@ filter on an event other than `worktree.state_changed`.
 | `agent.idle`              | Agent state became `idle`                                        | `worktree`, `pane`, `agent`       |
 | `agent.exited`            | Agent state became `exited`                                      | `worktree`, `pane`, `agent`       |
 | `attention.created`       | An attention item was added (`tomo notify` or a waiting agent)   | `worktree`, `attention`, `pane`?  |
+| `action.started`          | `tomo action run`, restart, or a GUI button started an action    | `worktree`, `action`, `pane`?     |
+| `action.exited`           | A pane-mode action exited or was stopped                         | `worktree`, `action`, `pane`      |
+
+`action.started` carries `pane` only for a pane-mode action. An external
+action is not tracked, so it never fires `action.exited`. See
+[actions.md](actions.md).
 
 Process start and exit are not events. They would fire on every poll and
 make Tomo slower. Read `tomo ps` from a hook when you need process state.
@@ -82,9 +88,13 @@ Every hook receives one JSON document on stdin. The same document is in
   "previous_state": null,
   "pane": { "id": "5cac1495a647", "tab_id": "ab30d81bed9a", "cwd": "/Users/me/work/aogashima" },
   "agent": { "kind": "claude", "state": "waiting", "session_ref": "4c424b05-..." },
-  "attention": null
+  "attention": null,
+  "action": null
 }
 ```
+
+`action` is `{ "id": "storybook", "label": "Storybook" }` on the two
+`action.*` events.
 
 The Rust type is `HookEvent` in `crates/tomo-proto`; the TypeScript type is
 generated in `app/src/generated/HookEvent.ts`.
@@ -130,11 +140,29 @@ returns to its previous state. Pane-mode hooks cannot gate.
 No other event waits for hooks. Pane focus, terminal output, and agent state
 updates never block on user scripts.
 
+### Archive order
+
+An archive runs these steps in this order:
+
+1. `worktree.before_archive` gate; a failure stops here.
+2. Checkpoint commit when the tree is dirty (see
+   [state-and-recovery.md](state-and-recovery.md)).
+3. Close the worktree's panes and kill the processes they own.
+4. Delete the `[archive] cleanup` directories.
+5. `git worktree remove --force`.
+6. `worktree.archived`.
+
+The gate runs before the checkpoint, so a gate script that inspects
+`git status` sees the tree as the user left it.
+
 ## Timeouts and logging
 
-Tomo kills a hook after `timeout_s` seconds. Every run appends one JSON line
-to `<data dir>/hooks.log` with the event, command, worktree id, duration,
-exit code, and the last 4 KB of combined output. Read it with:
+A hook runs in its own process group. After `timeout_s` seconds Tomo sends
+SIGKILL to the whole group, so children and grandchildren die with it, and
+the run's output ends with `timed out after <n> s; process group killed`.
+Every run appends one JSON line to `<data dir>/hooks.log` with the event,
+command, worktree id, duration, exit code, and `output_tail`: the last 4 KB
+of combined output, cut on a UTF-8 character boundary. Read it with:
 
 ```bash
 tomo hooks log -n 20

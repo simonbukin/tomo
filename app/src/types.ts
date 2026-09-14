@@ -1,4 +1,7 @@
 export type {
+  ActionDef,
+  ActionRunResult,
+  ActionSet,
   AgentCommand,
   AgentKind,
   AgentPresence,
@@ -7,7 +10,9 @@ export type {
   AgentState,
   AttentionItem,
   AttentionLevel,
+  ArchiveResult,
   Authority,
+  CheckpointMode,
   Config,
   ConfigIssue,
   ErrorCode,
@@ -73,7 +78,7 @@ export interface ProcessInfo {
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
-export type SidebarSort = "name" | "recent" | "created" | "attention" | "priority" | "state";
+export type SidebarSort = "name" | "recent" | "created" | "attention" | "state";
 
 export interface UiState {
   view: "home" | "worktree" | "towns";
@@ -90,7 +95,7 @@ export interface UiState {
   home: HomeOptions;
 }
 
-export type FilterKind = "state" | "repo" | "project" | "tag" | "priority" | "agent" | "archived" | "attention";
+export type FilterKind = "state" | "repo" | "project" | "tag" | "agent" | "archived" | "attention";
 
 export interface Filter {
   kind: FilterKind;
@@ -101,8 +106,8 @@ export interface HomeOptions {
   query: string;
   filters: Filter[];
   view: "list" | "board";
-  sort: "state" | "priority" | "recent" | "created" | "name";
-  group: "state" | "repo" | "project" | "priority" | "none";
+  sort: "state" | "recent" | "created" | "name";
+  group: "state" | "repo" | "project" | "none";
   showArchived: boolean;
 }
 

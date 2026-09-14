@@ -71,7 +71,7 @@ tomo agent spawn codex --cwd .       # start Codex in a new pane of this worktre
 tomo notify "Need approval"          # raise attention from inside a pane
 tomo ps --worktree .                 # process tree and memory for this worktree
 tomo worktree metadata set . --state waiting-review   # move it along your workflow
-tomo worktree archive .              # done: close terminals, remove the worktree, keep the branch
+tomo worktree archive .              # done: checkpoint, close terminals, remove the worktree, keep the branch
 tomo config check                    # validate config.toml
 ```
 
@@ -85,6 +85,24 @@ tags. Home groups by state. Events such as `worktree.state_changed`,
 `worktree.created`, and `agent.waiting` run the commands you list under
 `[[hooks]]`, with the event JSON on stdin; a hook acts on Tomo through the
 `tomo` CLI. See [docs/hooks.md](docs/hooks.md).
+
+An archive commits uncommitted work as `tomo: archive checkpoint` on the
+branch before it removes the directory, so a restore brings it back.
+
+## Actions
+
+A repository can name commands in `.tomo.toml`. They show as buttons and
+palette entries in each worktree, and `tomo action run <id>` runs them.
+
+```toml
+[[actions]]
+id = "storybook"
+label = "Storybook"
+command = "pnpm storybook"
+show = "topbar"
+```
+
+Tomo never runs an action by itself. See [docs/actions.md](docs/actions.md).
 
 ## Pull requests
 
@@ -109,6 +127,7 @@ worktrees unlocks towns; `tomo towns list --unlocked` shows the collection.
   and Pi signals and session resume
 - [docs/cli.md](docs/cli.md) — every `tomo` command
 - [docs/hooks.md](docs/hooks.md) — events, hook configuration, recipes
+- [docs/actions.md](docs/actions.md) — repo-defined commands in `.tomo.toml`
 - [docs/features/towns.md](docs/features/towns.md) — Japan Towns
 - [docs/development.md](docs/development.md) — build, run, test, and change
   Tomo (protocol types are generated from Rust; see there)

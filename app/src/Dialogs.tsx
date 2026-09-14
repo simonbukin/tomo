@@ -14,22 +14,28 @@ export function Dialogs() {
       <div className="dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && close()}>
         {dialog.kind === "add-repo" && <AddRepo close={close} />}
         {dialog.kind === "create-worktree" && <CreateWorktree close={close} repoId={dialog.repoId} />}
-        {dialog.kind === "confirm" && (
-          <>
-            <h2>{dialog.title}</h2>
-            <p>{dialog.body}</p>
-            <div className="dialog-actions">
-              <button onClick={close}>Cancel</button>
-              <button className="primary" autoFocus onClick={() => { close(); dialog.onConfirm(); }}>{dialog.confirmLabel}</button>
-            </div>
-          </>
-        )}
+        {dialog.kind === "confirm" && <Confirm close={close} title={dialog.title} body={dialog.body} confirmLabel={dialog.confirmLabel} check={dialog.check} onConfirm={dialog.onConfirm} />}
         {dialog.kind === "prompt" && <Prompt close={close} title={dialog.title} initial={dialog.initial} placeholder={dialog.placeholder} onSubmit={dialog.onSubmit} />}
         {dialog.kind === "integrations" && <IntegrationsDialog close={close} />}
         {dialog.kind === "config-check" && <ConfigCheckDialog close={close} />}
         {dialog.kind === "hook-log" && <HookLogDialog close={close} />}
       </div>
     </div>
+  );
+}
+
+function Confirm({ close, title, body, confirmLabel, check, onConfirm }: { close: () => void; title: string; body: string; confirmLabel: string; check?: string; onConfirm: (checked: boolean) => void }) {
+  const [checked, setChecked] = useState(false);
+  return (
+    <>
+      <h2>{title}</h2>
+      <p>{body}</p>
+      {check && <label className="check"><input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /> {check}</label>}
+      <div className="dialog-actions">
+        <button onClick={close}>Cancel</button>
+        <button className="primary" autoFocus onClick={() => { close(); onConfirm(checked); }}>{confirmLabel}</button>
+      </div>
+    </>
   );
 }
 

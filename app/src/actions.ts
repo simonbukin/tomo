@@ -2,7 +2,7 @@ import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
 import { activeTab, agentsOf, clearSelection, getState, notify, paneIds, setState, setUi, unviewedAttention } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
-import type { AgentKind, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
+import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
@@ -195,22 +195,38 @@ export function closeOtherTabs(tabId: Id): void {
   for (const t of s.tabs[tab.worktree_id] ?? []) if (t.id !== tabId) closeTab(t.id);
 }
 
+const ARCHIVE_BODY = "tomo commits a checkpoint of uncommitted changes to the branch, closes panes, removes build directories, and removes the worktree. The branch stays.";
+const DISCARD_LABEL = "discard uncommitted changes";
+const checkpointMode = (discard: boolean): CheckpointMode => (discard ? "discard" : "checkpoint");
+
 export function archiveWorktree(worktreeId: Id): void {
   const w = byId(worktreeId);
   if (!w) return;
-  const cleanup = (getState().config?.archive_cleanup ?? []).join(", ");
   setState({
     dialog: {
       kind: "confirm",
       title: `Archive ${w.name}?`,
-      body: `This closes its terminals and kills their processes, runs the archive hook, deletes ${cleanup || "no"} build directories, and removes the worktree with git. The branch ${w.branch ?? ""} is kept; you can restore it later.`,
+      body: ARCHIVE_BODY,
       confirmLabel: "Archive",
-      onConfirm: () => {
+      check: DISCARD_LABEL,
+      onConfirm: (discard) => {
         if (getState().ui.activeWorktreeId === worktreeId) setUi({ view: "home" });
-        rpc("worktree_archive", { worktree_id: worktreeId }).catch((e) => notify("error", (e as Error).message));
+        rpc("worktree_archive", { worktree_id: worktreeId, checkpoint: checkpointMode(discard) }).catch((e) => notify("error", (e as Error).message));
       },
     },
   });
+}
+
+export function runWorktreeAction(worktreeId: Id, actionId: string): void {
+  rpc<ActionRunResult>("action_run", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function stopWorktreeAction(worktreeId: Id, actionId: string): void {
+  rpc("action_stop", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
+}
+
+export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
+  rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
 }
 
 export function restoreWorktree(worktreeId: Id): void {
@@ -300,11 +316,12 @@ export function bulkArchive(ids: Id[]): void {
     dialog: {
       kind: "confirm",
       title: `Archive ${targets.length} worktrees?`,
-      body: `${targets.map((w) => w.name).join(", ")}. Terminals close, owned processes die, the archive hook runs, build directories are deleted, and git removes each worktree. Branches are kept.${skipped ? ` ${skipped} skipped (main or already archived).` : ""}`,
+      body: `${targets.map((w) => w.name).join(", ")}. ${ARCHIVE_BODY}${skipped ? ` ${skipped} skipped (main or already archived).` : ""}`,
       confirmLabel: "Archive all",
-      onConfirm: async () => {
+      check: DISCARD_LABEL,
+      onConfirm: async (discard) => {
         if (targets.some((w) => w.id === getState().ui.activeWorktreeId)) setUi({ view: "home" });
-        const results = await Promise.allSettled(targets.map((w) => rpc("worktree_archive", { worktree_id: w.id })));
+        const results = await Promise.allSettled(targets.map((w) => rpc("worktree_archive", { worktree_id: w.id, checkpoint: checkpointMode(discard) })));
         results.forEach((r, i) => r.status === "rejected" && notify("error", `${targets[i].name}: ${(r.reason as Error).message}`));
         const ok = results.filter((r) => r.status === "fulfilled").length;
         clearSelection();
@@ -462,11 +479,6 @@ export const actions: Action[] = [
   { id: "integrations", label: "Integration status…", run: () => setState({ dialog: { kind: "integrations" } }) },
   { id: "config_check", label: "Check config…", run: () => setState({ dialog: { kind: "config-check" } }) },
   { id: "hook_log", label: "Hook log…", run: () => setState({ dialog: { kind: "hook-log" } }) },
-  { id: "set_priority_1", label: "Set worktree priority: P1", run: () => setMetadata(currentWorktree()!.id, { priority: 1 }), whenWorktree: true },
-  { id: "set_priority_2", label: "Set worktree priority: P2", run: () => setMetadata(currentWorktree()!.id, { priority: 2 }), whenWorktree: true },
-  { id: "set_priority_3", label: "Set worktree priority: P3", run: () => setMetadata(currentWorktree()!.id, { priority: 3 }), whenWorktree: true },
-  { id: "set_priority_4", label: "Set worktree priority: P4", run: () => setMetadata(currentWorktree()!.id, { priority: 4 }), whenWorktree: true },
-  { id: "clear_priority", label: "Clear worktree priority", run: () => setMetadata(currentWorktree()!.id, { priority: null }), whenWorktree: true },
   { id: "set_display_name", label: "Set worktree display name…", run: () => promptMetadata("display_name"), whenWorktree: true },
   { id: "set_project", label: "Set worktree project…", run: () => promptMetadata("project"), whenWorktree: true },
   { id: "set_tags", label: "Set worktree tags…", run: () => promptMetadata("tags"), whenWorktree: true },
@@ -488,7 +500,7 @@ export const actions: Action[] = [
   { id: "collapse_repos", label: "Collapse all repos", run: () => setAllReposCollapsed(true) },
   { id: "expand_repos", label: "Expand all repos", run: () => setAllReposCollapsed(false) },
   { id: "clear_selection", label: "Clear selection", run: clearSelection, when: () => getState().selection.size > 0 },
-  ...(["name", "recent", "created", "attention", "state", "priority"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
+  ...(["name", "recent", "created", "attention", "state"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
 ];
 
 export function stateActions(): Action[] {
@@ -505,6 +517,11 @@ export function allActions(): Action[] {
 }
 
 export function runAction(id: string): void {
+  if (id.startsWith("action:")) {
+    const w = currentWorktree();
+    if (w) runWorktreeAction(w.id, id.slice("action:".length));
+    return;
+  }
   const a = allActions().find((x) => x.id === id);
   if (!a) return;
   if (a.whenWorktree && !currentWorktree()) {

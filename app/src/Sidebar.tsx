@@ -9,7 +9,7 @@ import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { agentsOf, clearSelection, formatBytes, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Repo, SidebarSort, Worktree } from "./types";
 
-const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state", "priority"];
+const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state"];
 
 export function Sidebar() {
   const repos = useStore(visibleRepos);

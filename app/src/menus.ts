@@ -1,8 +1,11 @@
-import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPaneById, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openWorktree, promptMetadata, removeRepo, renamePane, restartWorktreeAction, restoreWorktree, rotateSplit, runWorktreeAction, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, stopWorktreeAction, swapPanes, toggleZoom } from "./actions";
 import type { MenuItem } from "./ContextMenu";
 import { orderedStates } from "./homeQuery";
-import { clearSelection, getState, paneIds, setState } from "./store";
-import type { Id, Repo, Tab, Worktree } from "./types";
+import { describeBinding } from "./keys";
+import { activeTab, clearSelection, getState, paneIds, runningActionIds, setState } from "./store";
+import type { ActionDef, Id, Repo, Tab, Worktree } from "./types";
+
+const sep: MenuItem = { separator: true };
 
 function stateItems(current: string | null, apply: (state: string | null) => void): MenuItem[] {
   const states = orderedStates(getState().config?.states ?? []);
@@ -24,7 +27,46 @@ export function worktreeMenu(w: Worktree): MenuItem[] {
     { label: "start claude", disabled: !live, run: () => spawnAgent("claude", w.id) },
     { label: "start codex", disabled: !live, run: () => spawnAgent("codex", w.id) },
     { label: "start pi", disabled: !live, run: () => spawnAgent("pi", w.id) },
-    { separator: true },
+    sep,
+    ...worktreeDetailItems(w),
+  ];
+}
+
+export function runningActionItems(worktreeId: Id, actionId: string): MenuItem[] {
+  return [
+    { label: "focus", run: () => runWorktreeAction(worktreeId, actionId) },
+    { label: "restart", run: () => restartWorktreeAction(worktreeId, actionId) },
+    { label: "stop", danger: true, run: () => stopWorktreeAction(worktreeId, actionId) },
+  ];
+}
+
+function actionItem(worktreeId: Id, a: ActionDef, running: boolean): MenuItem {
+  const shortcut = a.shortcut ? describeBinding(a.shortcut) : undefined;
+  return running ? { label: a.label, shortcut, submenu: runningActionItems(worktreeId, a.id) } : { label: a.label, shortcut, run: () => runWorktreeAction(worktreeId, a.id) };
+}
+
+export function overflowMenu(w: Worktree): MenuItem[] {
+  const s = getState();
+  const running = runningActionIds(s, w.id);
+  const acts = (s.actions[w.id]?.actions ?? []).filter((a) => a.show === "menu" || running.includes(a.id)).map((a) => actionItem(w.id, a, running.includes(a.id)));
+  const tab = activeTab(s, w.id);
+  const multi = tab ? paneIds(tab.layout).length > 1 : false;
+  return [
+    ...acts,
+    ...(acts.length ? [sep] : []),
+    { label: "split right", run: () => splitPane("horizontal") },
+    { label: "split down", run: () => splitPane("vertical") },
+    { label: "equalize panes", disabled: !multi, run: () => equalizeTab(tab!.id) },
+    { label: "rotate split", disabled: !multi, run: () => rotateSplit(tab!.id) },
+    sep,
+    ...worktreeDetailItems(w),
+  ];
+}
+
+function worktreeDetailItems(w: Worktree): MenuItem[] {
+  const archived = !!w.archived_at_ms;
+  const busy = w.archiving;
+  return [
     { label: "state", disabled: busy, submenu: stateItems(w.metadata.state, (state) => setMetadata(w.id, { state })) },
     { label: "set project…", disabled: busy, run: () => promptMetadata("project", w.id) },
     { label: "rename…", disabled: busy, run: () => promptMetadata("display_name", w.id) },

@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
 import { closePane, focusPane, runAction } from "./actions";
 import { findAction } from "./keys";
-import { getState, useStore } from "./store";
+import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
 import { X } from "lucide-react";
 import { openMenu } from "./ContextMenu";
@@ -62,7 +62,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
-      const action = findAction(e, getState().config?.keybindings ?? {});
+      const action = findAction(e, keyBindings(getState()));
       if (action) {
         e.preventDefault();
         runAction(action);
