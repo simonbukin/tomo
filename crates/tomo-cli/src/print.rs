@@ -313,3 +313,27 @@ pub fn action_run(r: &ActionRunResult, json: bool) {
         (None, _) => println!("{} launched", r.action.label),
     }
 }
+
+pub fn sessions(list: &[AgentSession], json: bool) {
+    if json {
+        return emit_json(&list.to_vec());
+    }
+    if list.is_empty() {
+        println!("no agent sessions rooted here");
+    }
+    for s in list {
+        let age = age(s.updated_at_ms);
+        println!("{:<7} {:<38} {:>3} turns  {:<8} {}", s.kind.label().to_lowercase(), s.id, s.turns, age, s.title.as_deref().unwrap_or("-"));
+    }
+}
+
+fn age(at_ms: u64) -> String {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let secs = now.saturating_sub(at_ms) / 1000;
+    match secs {
+        s if s < 60 => format!("{s}s ago"),
+        s if s < 3600 => format!("{}m ago", s / 60),
+        s if s < 86_400 => format!("{}h ago", s / 3600),
+        s => format!("{}d ago", s / 86_400),
+    }
+}

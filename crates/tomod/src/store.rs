@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
-use tomo_proto::{AgentKind, AttentionItem, AttentionLevel, Id, LayoutNode, TownUnlock, WorktreeMetadata};
+use tomo_proto::{AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, TownUnlock, WorktreeMetadata};
 
 pub struct Store {
     conn: Connection,
@@ -403,6 +403,10 @@ impl Store {
                 message: r.get(4)?,
                 created_at_ms: r.get::<_, i64>(5)? as u64,
                 viewed_at_ms: r.get::<_, Option<i64>>(6)?.map(|v| v as u64),
+                kind: AttentionKind::Waiting,
+                url: None,
+                agent_kind: None,
+                resolved_at_ms: None,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())

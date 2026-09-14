@@ -13,7 +13,8 @@ import { registerTerminal } from "./terminals";
 import { X } from "lucide-react";
 import { openMenu } from "./MenuHost";
 import { IconButton } from "./components/ui";
-import { paneMenu } from "./menus";
+import { isLastPane, paneMenu } from "./menus";
+import { ProcessIcon } from "./ProcessIcon";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -133,12 +134,14 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const title = pane?.user_title ?? (agent ? agent.kind : (oscTitle ?? pane?.title ?? ""));
   const originNote = pane?.origin === "resumed" ? "resumed" : pane?.origin === "restored" ? "restored" : null;
   const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
+  const lastPane = useStore(() => isLastPane(paneId));
   return (
     <div className="pane-wrap">
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
       <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
         <span className="chip">
           <span className={`state ${stateClass}`} />
+          <ProcessIcon agent={agent?.kind} cmd={pane?.process_cmd} />
           <strong>{title}</strong>
           {agent && <span className="agent-state">{agent.state}</span>}
           {zoomed && <span className="pane-note pane-zoomed" title="Only this pane is shown. Choose unzoom in the pane menu or press the zoom key again.">zoomed</span>}
@@ -147,7 +150,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
         <span className="chip right" title={pane?.cwd}>
           <span>{shortPath(pane?.cwd ?? "")}</span>
-          <IconButton label="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></IconButton>
+          {!lastPane && <IconButton label="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></IconButton>}
         </span>
       </div>
       <div className="pane-body" ref={hostRef} />

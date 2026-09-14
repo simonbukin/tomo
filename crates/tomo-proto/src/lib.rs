@@ -125,6 +125,15 @@ pub enum Call {
 
     TownList,
     TownPick,
+    SessionList { worktree_id: Id, #[serde(default)] limit: Option<usize> },
+    RuntimeList { #[serde(default)] worktree_id: Option<Id> },
+    ActivityList(ActivityQuery),
+    CheckpointCreate(CheckpointSpec),
+    CheckpointResolve { id: Id },
+    UsageGet { #[serde(default)] refresh: bool },
+    BrowserOpen { worktree_id: Id, #[serde(default)] url: Option<String>, #[serde(default)] tab_id: Option<Id> },
+    BrowserNavigate { pane_id: Id, url: String },
+    AnnotationsSend { pane_id: Id, bundle: EvidenceBundle },
 
     ActionList { worktree_id: Id },
     ActionRun { worktree_id: Id, action_id: String },
@@ -218,6 +227,9 @@ pub struct AgentSpawn {
     pub tab_id: Option<Id>,
     pub split_from: Option<Id>,
     pub resume: Option<String>,
+    /// Open the agent in a fresh tab named after it instead of the active tab.
+    #[serde(default)]
+    pub new_tab: bool,
     pub extra_args: Vec<String>,
 }
 
@@ -248,6 +260,10 @@ pub enum ExternalTarget {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "event", content = "data", rename_all = "snake_case")]
 pub enum Event {
+    EndpointsChanged { worktree_id: Id, endpoints: Vec<RuntimeEndpoint> },
+    ActivityAdded { event: ActivityEvent },
+    AttentionResolved { id: Id },
+    UsageChanged { snapshots: Vec<UsageSnapshot> },
     ReposChanged { repos: Vec<Repo> },
     WorktreesChanged { worktrees: Vec<Worktree> },
     MetadataChanged { worktree_id: Id, metadata: WorktreeMetadata },
@@ -429,6 +445,12 @@ pub const HOOK_EVENTS: &[&str] = &[
     "attention.created",
     "action.started",
     "action.exited",
+    "action.crashed",
+    "runtime.endpoint_discovered",
+    "runtime.endpoint_removed",
+    "checkpoint.created",
+    "checkpoint.resolved",
+    "annotation.sent",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -627,6 +649,34 @@ pub struct Pane {
     pub created_at_ms: u64,
     #[serde(default)]
     pub action_id: Option<String>,
+    /// Command line of the newest child of the pane's shell, for icons and titles.
+    #[serde(default)]
+    pub process_cmd: Option<String>,
+    #[serde(default)]
+    pub kind: PaneKind,
+    /// Current URL of a browser surface.
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum PaneKind {
+    #[default]
+    Terminal,
+    Browser,
+}
+
+/// One agent conversation stored by the agent itself, rooted at a worktree.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct AgentSession {
+    pub kind: AgentKind,
+    pub id: String,
+    pub title: Option<String>,
+    pub branch: Option<String>,
+    pub updated_at_ms: u64,
+    pub turns: u32,
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -766,6 +816,157 @@ pub struct AttentionItem {
     pub message: String,
     pub created_at_ms: u64,
     pub viewed_at_ms: Option<u64>,
+    #[serde(default)]
+    pub kind: AttentionKind,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub agent_kind: Option<AgentKind>,
+    #[serde(default)]
+    pub resolved_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum AttentionKind {
+    #[default]
+    Waiting,
+    /// An agent asked a human to review or decide. Created by `tomo checkpoint`.
+    Checkpoint,
+    /// An Action process exited unexpectedly.
+    Crash,
+}
+
+/// `tomo checkpoint`: an explicit request for human review or a decision.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct CheckpointSpec {
+    pub message: String,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub worktree_id: Option<Id>,
+    #[serde(default)]
+    pub pane_id: Option<Id>,
+}
+
+// ---- runtime endpoints: observed listening sockets owned by tracked processes
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeProtocol {
+    Http,
+    Https,
+    Tcp,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct RuntimeEndpoint {
+    pub id: Id,
+    pub worktree_id: Id,
+    pub pane_id: Option<Id>,
+    pub action_id: Option<String>,
+    pub pid: u32,
+    pub process: String,
+    pub protocol: RuntimeProtocol,
+    pub host: String,
+    pub port: u16,
+    pub label: Option<String>,
+    pub discovered_at_ms: u64,
+}
+
+// ---- activity: one chronological stream of meaningful events
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityKind {
+    AgentStarted,
+    AgentWaiting,
+    AgentExited,
+    CheckpointCreated,
+    CheckpointResolved,
+    ActionStarted,
+    ActionStopped,
+    ActionCompleted,
+    ActionCrashed,
+    EndpointDiscovered,
+    AnnotationsSent,
+    StateChanged,
+    Archived,
+    Restored,
+    HookFailed,
+    PrMerged,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ActivityEvent {
+    pub id: Id,
+    pub kind: ActivityKind,
+    pub occurred_at_ms: u64,
+    pub worktree_id: Option<Id>,
+    pub pane_id: Option<Id>,
+    pub agent_kind: Option<AgentKind>,
+    pub title: String,
+    pub detail: Option<String>,
+    #[ts(type = "unknown")]
+    pub payload: Value,
+    /// The attention item this event opened or resolved, if any.
+    pub attention_id: Option<Id>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct ActivityQuery {
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub before_ms: Option<u64>,
+    #[serde(default)]
+    pub worktree_id: Option<Id>,
+    /// Only events whose attention item is still unresolved.
+    #[serde(default)]
+    pub needs_me: bool,
+}
+
+// ---- usage: provider-level allowance, never per worktree
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct UsageBucket {
+    pub label: String,
+    pub fraction_used: Option<f64>,
+    pub resets_at_ms: Option<u64>,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct UsageSnapshot {
+    pub provider: AgentKind,
+    pub available: bool,
+    pub reason: Option<String>,
+    pub buckets: Vec<UsageBucket>,
+    pub fetched_at_ms: u64,
+}
+
+// ---- evidence bundles: structured context sent to an existing agent session
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Annotation {
+    pub text: String,
+    pub url: String,
+    pub selector: Option<String>,
+    pub element_text: Option<String>,
+    /// x, y, width, height in CSS pixels.
+    pub rect: Option<[f64; 4]>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct EvidenceBundle {
+    pub source: String,
+    pub worktree_id: Id,
+    pub url: Option<String>,
+    pub action_id: Option<String>,
+    pub annotations: Vec<Annotation>,
+    pub instruction: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -841,6 +1042,10 @@ pub struct Snapshot {
     pub resources: Vec<WorktreeResources>,
     #[serde(default)]
     pub actions: Vec<ActionSet>,
+    #[serde(default)]
+    pub endpoints: Vec<RuntimeEndpoint>,
+    #[serde(default)]
+    pub usage: Vec<UsageSnapshot>,
     #[ts(type = "unknown")]
     pub ui_state: Value,
 }
@@ -912,6 +1117,13 @@ mod bindings {
         RpcError::export_all(&cfg).unwrap();
         Hello::export_all(&cfg).unwrap();
         ArchiveResult::export_all(&cfg).unwrap();
+        AgentSession::export_all(&cfg).unwrap();
+        ActivityEvent::export_all(&cfg).unwrap();
+        ActivityQuery::export_all(&cfg).unwrap();
+        CheckpointSpec::export_all(&cfg).unwrap();
+        EvidenceBundle::export_all(&cfg).unwrap();
+        UsageSnapshot::export_all(&cfg).unwrap();
+        RuntimeEndpoint::export_all(&cfg).unwrap();
         ActionRunResult::export_all(&cfg).unwrap();
         CheckpointMode::export_all(&cfg).unwrap();
         let mut names: Vec<String> = std::fs::read_dir(dir)

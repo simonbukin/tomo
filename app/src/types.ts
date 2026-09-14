@@ -6,6 +6,7 @@ export type {
   AgentKind,
   AgentPresence,
   AgentReport,
+  AgentSession,
   AgentSpawn,
   AgentState,
   AttentionItem,

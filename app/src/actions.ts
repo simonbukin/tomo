@@ -154,15 +154,22 @@ export async function nextAttention(): Promise<void> {
   await rpc("attention_view", { id: item.id }).catch(() => {});
 }
 
-export async function spawnAgent(kind: AgentKind, worktreeId?: Id): Promise<void> {
+export interface SpawnOptions {
+  /** Resume this agent session id instead of a fresh one. */
+  resume?: string;
+  /** Open the agent in its own tab instead of a split of the focused pane. */
+  newTab?: boolean;
+}
+
+export async function spawnAgent(kind: AgentKind, worktreeId?: Id, opts: SpawnOptions = {}): Promise<void> {
   const w = worktreeId ? byId(worktreeId) : currentWorktree();
   if (!w) {
     notify("info", "Open a worktree first");
     return;
   }
-  const from = w.id === currentWorktree()?.id ? focusedPaneId() : null;
+  const from = !opts.newTab && w.id === currentWorktree()?.id ? focusedPaneId() : null;
   try {
-    const r = await rpc<{ pane: { id: Id } }>("agent_spawn", { kind, worktree_id: w.id, cwd: null, tab_id: null, split_from: from, resume: null, extra_args: [] });
+    const r = await rpc<{ pane: { id: Id } }>("agent_spawn", { kind, worktree_id: w.id, cwd: null, tab_id: null, split_from: from, resume: opts.resume ?? null, new_tab: !!opts.newTab, extra_args: [] });
     if (w.id !== getState().ui.activeWorktreeId) await openWorktree(w.id);
     window.setTimeout(() => focusPane(r.pane.id), 80);
   } catch (e) {

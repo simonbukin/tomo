@@ -1,5 +1,7 @@
 import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, Map, Plus, RotateCw } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { ProcessIcon } from "./ProcessIcon";
+import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { Mark } from "./Brand";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
@@ -24,6 +26,9 @@ export function Sidebar() {
   const shown = worktrees.filter((w) => ui.showArchivedInSidebar || !w.archived_at_ms);
   const grouped = repos.map((r) => ({ repo: r, items: sortWorktrees(shown.filter((w) => w.repo_id === r.id), ui.sidebarSort, ctx) })).filter((g) => g.items.length || !g.repo.exists);
   const orphans = sortWorktrees(shown.filter((w) => !repos.some((r) => r.id === w.repo_id)), ui.sidebarSort, ctx);
+  const listRef = useRef<HTMLDivElement>(null);
+  const order = [...grouped.flatMap((g) => g.items), ...orphans].map((w) => w.id).join(",");
+  useFlip(listRef, [order, ui.collapsedRepos.join(","), selectionSize]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && clearSelection();
     window.addEventListener("keydown", onKey);
@@ -50,7 +55,7 @@ export function Sidebar() {
         <IconButton label="Add repository" onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
         <IconButton label="Refresh repositories and worktrees" onClick={() => runAction("refresh")}><RotateCw className="icon" /></IconButton>
       </div>
-      <div className="sidebar-scroll">
+      <div className="sidebar-scroll" ref={listRef}>
         {selectionSize > 0 && (
           <div className="selection-bar">
             <span>{selectionSize} selected</span>
@@ -174,6 +179,7 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
   const summary = archived ? "none" : summarizeState(agents, attention);
   return (
     <div
+      data-flip={w.id}
       className={`wt-row${active ? " wt-active" : ""}${w.exists || archived ? "" : " wt-missing"}${archived ? " wt-archived" : ""}${busy ? " wt-archiving" : ""}${selected ? " wt-selected" : ""}`}
       onClick={(e) => { if (!selectRow(e, w, siblings) && !archived && !busy) openWorktree(w.id); }}
       onContextMenu={(e) => {
@@ -200,8 +206,9 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
           {agents.map((a) => (
             <span key={a.pane_id} className={`agent-line is-${a.state}`}>
               <span className={`state state-${a.state}`} />
-              <span className="agent-state">{a.state}</span>
-              <span className="agent-kind">· {a.kind}</span>
+              <ProcessIcon agent={a.kind} size={11} />
+              <span className="agent-kind">{a.kind}</span>
+              <span className="agent-state">· {a.state}</span>
             </span>
           ))}
         </span>
