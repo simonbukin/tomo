@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-daemon-connected"
+description = "Enables the daemon_connected command without any pre-configured scope."
+commands.allow = ["daemon_connected"]
+
+[[permission]]
+identifier = "deny-daemon-connected"
+description = "Denies the daemon_connected command without any pre-configured scope."
+commands.deny = ["daemon_connected"]

@@ -2,6 +2,7 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { rpc } from "./api";
 import { paneIds, useStore } from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
+import { BrowserPane } from "./BrowserPane";
 import type { Id, LayoutNode, Tab } from "./types";
 
 export function TabLayout({ tab }: { tab: Tab }) {
@@ -15,6 +16,8 @@ export function TabLayout({ tab }: { tab: Tab }) {
 }
 
 function Node({ node, tabId, activePane }: { node: LayoutNode; tabId: Id; activePane: Id | null }) {
+  const kind = useStore((s) => (node.type === "leaf" ? s.panes[node.pane_id]?.kind : undefined));
+  if (node.type === "leaf" && kind === "browser") return <BrowserPane paneId={node.pane_id} active={node.pane_id === activePane} />;
   if (node.type === "leaf") return <Suspense fallback={<div className="pane-wrap" />}><TerminalPane paneId={node.pane_id} active={node.pane_id === activePane} /></Suspense>;
   return <Split node={node} tabId={tabId} activePane={activePane} />;
 }

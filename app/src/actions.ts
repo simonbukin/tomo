@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
@@ -198,6 +199,42 @@ export async function newTabIn(worktreeId: Id): Promise<void> {
   }
 }
 
+export async function openBrowser(worktreeId: Id, url: string | null = null): Promise<Id | null> {
+  try {
+    const r = await rpc<{ pane: { id: Id } }>("browser_open", { worktree_id: worktreeId, url, tab_id: null });
+    if (worktreeId !== getState().ui.activeWorktreeId) await openWorktree(worktreeId);
+    window.setTimeout(() => focusPane(r.pane.id), 80);
+    return r.pane.id;
+  } catch (e) {
+    notify("error", (e as Error).message);
+    return null;
+  }
+}
+
+/** Shows a page in the worktree's live browser pane, or opens one. */
+export async function openInBrowser(worktreeId: Id, url: string): Promise<void> {
+  const live = Object.values(getState().panes).find((p) => p.worktree_id === worktreeId && p.kind === "browser" && p.live);
+  if (!live) {
+    await openBrowser(worktreeId, url);
+    return;
+  }
+  try {
+    await rpc("browser_navigate", { pane_id: live.id, url });
+    if (worktreeId !== getState().ui.activeWorktreeId) await openWorktree(worktreeId);
+    focusPane(live.id);
+  } catch (e) {
+    notify("error", (e as Error).message);
+  }
+}
+
+export function browserCommand(paneId: Id, command: "browser_back" | "browser_forward" | "browser_reload"): void {
+  invoke(command, { paneId }).catch((e) => notify("error", String(e)));
+}
+
+export function openExternalUrl(url: string): void {
+  openUrl(url).catch((e) => notify("error", String(e)));
+}
+
 export function closeOtherTabs(tabId: Id): void {
   const s = getState();
   const tab = Object.values(s.tabs).flat().find((t) => t.id === tabId);
@@ -240,8 +277,10 @@ export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
 }
 
 /** ponytail: system browser only; call `openInBrowser(worktreeId, url)` here once the browser pane lands. */
-export function openEndpoint(url: string, _worktreeId?: Id): void {
-  openUrl(url).catch((e) => notify("error", (e as Error).message));
+/** Opens a runtime endpoint in the worktree's browser surface, or externally when no worktree is known. */
+export function openEndpoint(url: string, worktreeId?: Id): void {
+  if (worktreeId) void openInBrowser(worktreeId, url);
+  else openUrl(url).catch((e) => notify("error", (e as Error).message));
 }
 
 export function resolveCheckpoint(id: Id): void {

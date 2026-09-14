@@ -33,6 +33,8 @@ enum Cmd {
     Tab(TabCmd),
     #[command(subcommand, about = "Coding agents")]
     Agent(AgentCmd),
+    #[command(subcommand, about = "Browser panes")]
+    Browser(BrowserCmd),
     #[command(about = "Processes that belong to worktrees")]
     Ps {
         #[arg(long, help = "Worktree id, or a path inside it, or '.'")]
@@ -310,6 +312,16 @@ enum AgentCmd {
         resume: Option<String>,
         #[arg(last = true)]
         args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum BrowserCmd {
+    #[command(about = "Open a browser pane in a new tab of the worktree")]
+    Open {
+        worktree: Option<String>,
+        #[arg(long, help = "Page to load (default: about:blank)")]
+        url: Option<String>,
     },
 }
 
@@ -642,6 +654,11 @@ async fn run() -> Result<()> {
             };
             let r: SpawnResult = c.call(Call::AgentSpawn(AgentSpawn { kind, worktree_id, cwd, tab_id: None, split_from, resume, new_tab: false, extra_args: args })).await?;
             print::spawn(&r, json);
+        }
+        Cmd::Browser(BrowserCmd::Open { worktree, url }) => {
+            let worktree_id = resolve_worktree_id(&c, worktree).await?;
+            let v: Value = c.call(Call::BrowserOpen { worktree_id, url, tab_id: None }).await?;
+            print::pane_result(&v, json);
         }
         Cmd::Ps { worktree } => {
             let worktree_id = match worktree {

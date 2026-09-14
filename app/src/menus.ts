@@ -1,5 +1,5 @@
 import { endpointUrl, httpEndpoints } from "./activityModel";
-import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openEndpoint, openExternalFor, openWorktree, promptMetadata, removeRepo, renamePane, restartWorktreeAction, restoreWorktree, rotateSplit, runWorktreeAction, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, stopWorktreeAction, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, browserCommand, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openBrowser, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restartWorktreeAction, restoreWorktree, rotateSplit, runWorktreeAction, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, stopWorktreeAction, swapPanes, toggleZoom } from "./actions";
 import type { MenuItem } from "./components/ui";
 import { orderedStates } from "./homeQuery";
 import { describeBinding } from "./keys";
@@ -151,7 +151,7 @@ export function isLastPane(paneId: Id): boolean {
 export function spawnMenu(worktreeId: Id): MenuItem[] {
   return [
     { label: "terminal", shortcut: describeBinding(getState().config?.keybindings.new_tab ?? "mod+t"), run: () => newTabIn(worktreeId) },
-    { label: "browser", disabled: true },
+    { label: "browser", run: () => openBrowser(worktreeId) },
     sep,
     { label: "claude", run: () => spawnAgent("claude", worktreeId, { newTab: true }) },
     { label: "codex", run: () => spawnAgent("codex", worktreeId, { newTab: true }) },
@@ -173,6 +173,20 @@ export function paneMenu(paneId: Id): MenuItem[] {
     { label: "rename pane…", run: () => renamePane(paneId) },
     { separator: true },
     { label: "kill process tree", danger: true, run: () => killPaneTree(paneId) },
+    { label: "close", disabled: isLastPane(paneId), run: () => closePane(paneId) },
+  ];
+}
+
+export function browserMenu(paneId: Id): MenuItem[] {
+  const url = getState().panes[paneId]?.url ?? "";
+  return [
+    { label: "back", run: () => browserCommand(paneId, "browser_back") },
+    { label: "forward", run: () => browserCommand(paneId, "browser_forward") },
+    { label: "reload", run: () => browserCommand(paneId, "browser_reload") },
+    sep,
+    { label: "open in external browser", disabled: !url || url === "about:blank", run: () => openExternalUrl(url) },
+    { label: "copy url", disabled: !url, run: () => copyText(url, "URL") },
+    sep,
     { label: "close", disabled: isLastPane(paneId), run: () => closePane(paneId) },
   ];
 }
