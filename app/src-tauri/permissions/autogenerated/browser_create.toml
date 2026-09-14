@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-browser-create"
+description = "Enables the browser_create command without any pre-configured scope."
+commands.allow = ["browser_create"]
+
+[[permission]]
+identifier = "deny-browser-create"
+description = "Denies the browser_create command without any pre-configured scope."
+commands.deny = ["browser_create"]

@@ -191,6 +191,21 @@ worktree root as an actions change, not a Git change. A pane started by an
 action carries `Pane.action_id`, which is how a second run finds the live
 pane. See [actions.md](actions.md).
 
+## Feature boundary: Browser panes
+
+A pane has a `kind`: `terminal` or `browser`. A browser pane is a row in
+`panes` with `kind = browser` and a `url`, and no PTY. The daemon owns the
+pane and the url; the Tauri process owns the page in a child webview
+labelled `browser-<pane id>`. `annotations_send` turns an `EvidenceBundle`
+into plain text, types it into an agent pane inside a bracketed paste,
+records an `annotations_sent` activity event, and runs the
+`annotation.sent` hooks. See [browser.md](browser.md).
+
+Why the daemon owns the pane but not the page: the layout, the restore
+path, and the CLI must see one kind of thing. The page itself is display
+state; a restart reloads the url and loses nothing that Tomo promised to
+keep.
+
 ## Layout operations
 
 The tab layout is a binary split tree (`LayoutNode`). Pure functions in
@@ -250,6 +265,10 @@ its ancestor, and debounces a restart. `crates/tomod/src/activity.rs`
 holds `Daemon::record`, the one way an event enters the `activity` table.
 `PaneState.stop_intent` is how `Daemon::on_exit` tells a crash from a
 stop. See [runtime.md](runtime.md) and [activity.md](activity.md).
+
+Phase 3 adds `Pane.kind` and `Pane.url`, the calls `browser_open`,
+`browser_navigate`, and `annotations_send`, the `activity_added` event, and
+the `annotation.sent` hook event.
 
 ## IPC
 

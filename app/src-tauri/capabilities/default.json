@@ -2,10 +2,22 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
-  "windows": [
+  "webviews": [
     "main"
   ],
   "permissions": [
+    "allow-rpc",
+    "allow-daemon-connected",
+    "allow-browser-create",
+    "allow-browser-set-bounds",
+    "allow-browser-set-visible",
+    "allow-browser-navigate",
+    "allow-browser-back",
+    "allow-browser-forward",
+    "allow-browser-reload",
+    "allow-browser-close",
+    "allow-browser-set-annotate",
+    "allow-browser-clear-annotations",
     "core:default",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",

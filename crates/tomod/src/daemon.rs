@@ -324,15 +324,15 @@ impl Daemon {
             cols: p.row.cols,
             rows: p.row.rows,
             pid: p.pty.as_ref().map(|x| x.pid),
-            live: p.pty.is_some() && p.exit_code.is_none(),
+            live: p.row.kind == PaneKind::Browser || (p.pty.is_some() && p.exit_code.is_none()),
             origin: p.origin,
             exit_code: p.exit_code,
             agent,
             created_at_ms: p.row.created_at_ms,
             action_id: p.row.action_id.clone(),
             process_cmd: p.process_cmd.clone(),
-            kind: PaneKind::Terminal,
-            url: None,
+            kind: p.row.kind,
+            url: p.row.url.clone(),
         })
     }
 
@@ -724,6 +724,9 @@ impl Daemon {
     fn start_pty(self: &Arc<Self>, inner: &mut Inner, pane_id: &str, command: Option<&[String]>) -> Result<()> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
         let row = pane.row.clone();
+        if row.kind == PaneKind::Browser {
+            return Ok(());
+        }
         let cwd = if row.cwd.is_dir() { row.cwd.clone() } else { dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")) };
         let shell = inner.config.shell.clone();
         let (program, args): (String, Vec<String>) = match command {
@@ -931,6 +934,8 @@ impl Daemon {
             session_ref: session_ref.clone(),
             created_at_ms: now_ms(),
             action_id: None,
+            kind: PaneKind::Terminal,
+            url: None,
         };
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
@@ -962,6 +967,43 @@ impl Daemon {
         ev.pane = inner.panes.get(&id).map(|p| HookPane { id: p.row.id.clone(), tab_id: p.row.tab_id.clone(), cwd: p.row.cwd.clone() });
         inner.hook_queue.push(ev);
         Ok(id)
+    }
+
+    fn create_browser_pane(inner: &mut Inner, tab_id: &str, worktree_id: &str, cwd: PathBuf, url: String) -> Result<Id> {
+        let id = new_id();
+        let row = PaneRow {
+            id: id.clone(),
+            tab_id: tab_id.to_string(),
+            worktree_id: worktree_id.to_string(),
+            user_title: None,
+            cwd,
+            cols: 0,
+            rows: 0,
+            agent_kind: None,
+            session_ref: None,
+            created_at_ms: now_ms(),
+            action_id: None,
+            kind: PaneKind::Browser,
+            url: Some(url),
+        };
+        inner.store.pane_upsert(&row)?;
+        let hook_pane = HookPane { id: row.id.clone(), tab_id: row.tab_id.clone(), cwd: row.cwd.clone() };
+        inner.panes.insert(
+            id.clone(),
+            PaneState { row, pty: None, origin: PaneOrigin::Live, exit_code: None, process_title: None, process_cmd: None, stop_intent: false, pending_line: None, last_output_ms: 0, scrollback: Scrollback::default() },
+        );
+        let mut ev = events::envelope(inner, "pane.created", Some(worktree_id));
+        ev.pane = Some(hook_pane);
+        inner.hook_queue.push(ev);
+        Ok(id)
+    }
+
+    fn terminal_only(inner: &Inner, pane_id: &str) -> Result<(), RpcError> {
+        match inner.panes.get(pane_id) {
+            None => Err(err(ErrorCode::NotFound, "pane not found")),
+            Some(p) if p.row.kind == PaneKind::Browser => Err(err(ErrorCode::BadRequest, "browser panes have no terminal")),
+            Some(_) => Ok(()),
+        }
     }
 
     fn place_pane(inner: &mut Inner, tab_id: &str, pane_id: &str, split_from: Option<&str>, direction: SplitDirection) {
@@ -1833,12 +1875,14 @@ impl Daemon {
             }
             Call::PaneSend { pane_id, data_base64 } => {
                 let data = B64.decode(data_base64).map_err(|e| err(ErrorCode::BadRequest, e.to_string()))?;
+                Self::terminal_only(&self.lock(), &pane_id)?;
                 let pty = self.lock().panes.get(&pane_id).and_then(|p| p.pty.clone()).ok_or_else(|| err(ErrorCode::NotFound, "pane not live"))?;
                 pty.write(&data).map_err(internal)?;
                 Ok(Value::Null)
             }
             Call::PaneResize { pane_id, cols, rows } => {
                 let mut inner = self.lock();
+                Self::terminal_only(&inner, &pane_id)?;
                 let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
                 if pane.row.cols != cols || pane.row.rows != rows {
                     pane.row.cols = cols;
@@ -1853,6 +1897,7 @@ impl Daemon {
             }
             Call::PaneAttach { pane_id } => {
                 let mut inner = self.lock();
+                Self::terminal_only(&inner, &pane_id)?;
                 let snapshot = crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
                 let view = Self::pane_view(&inner, &pane_id);
                 if let Some(c) = inner.clients.get_mut(&client_id) {
@@ -2076,9 +2121,6 @@ impl Daemon {
                 }
                 ok(self.lock().usage.clone())
             }
-            Call::BrowserOpen { .. } | Call::BrowserNavigate { .. } | Call::AnnotationsSend { .. } => {
-                Err(err(ErrorCode::Unsupported, "not implemented yet"))
-            }
             Call::RuntimeList { worktree_id } => {
                 let stale = now_ms().saturating_sub(self.lock().endpoints_at_ms) > 1500;
                 if stale {
@@ -2156,6 +2198,81 @@ impl Daemon {
                 ok(item)
             }
             Call::UsageGet { .. } | Call::BrowserOpen { .. } | Call::BrowserNavigate { .. } | Call::AnnotationsSend { .. } => Err(err(ErrorCode::Unsupported, "not implemented yet")),
+            Call::BrowserOpen { worktree_id, url, tab_id } => {
+                let mut inner = self.lock();
+                let cwd = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+                let url = url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()).unwrap_or_else(|| "about:blank".to_string());
+                let tab_id = match tab_id {
+                    Some(t) if inner.tabs.contains_key(&t) => t,
+                    Some(_) => return Err(err(ErrorCode::NotFound, "tab not found")),
+                    None => {
+                        let tab = Self::create_tab(&mut inner, &worktree_id, Some("Browser".to_string()));
+                        for t in inner.tabs.values().filter(|t| t.worktree_id == worktree_id && t.id != tab.id).cloned().collect::<Vec<_>>() {
+                            let _ = inner.store.tab_upsert(&t);
+                        }
+                        tab.id
+                    }
+                };
+                let pane_id = Self::create_browser_pane(&mut inner, &tab_id, &worktree_id, cwd, url).map_err(internal)?;
+                Self::place_pane(&mut inner, &tab_id, &pane_id, None, SplitDirection::Horizontal);
+                Self::touch(&mut inner, &worktree_id);
+                Self::emit_tabs(&mut inner, &worktree_id);
+                Self::emit_pane(&mut inner, &pane_id);
+                ok(json!({ "pane": Self::pane_view(&inner, &pane_id), "tab": Self::tab_view(&inner, &inner.tabs[&tab_id]) }))
+            }
+            Call::BrowserNavigate { pane_id, url } => {
+                let mut inner = self.lock();
+                let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+                if pane.row.kind != PaneKind::Browser {
+                    return Err(err(ErrorCode::BadRequest, "pane is not a browser"));
+                }
+                pane.row.url = Some(url);
+                let row = pane.row.clone();
+                inner.store.pane_upsert(&row).map_err(internal)?;
+                Self::emit_pane(&mut inner, &pane_id);
+                ok(Self::pane_view(&inner, &pane_id))
+            }
+            Call::AnnotationsSend { pane_id, bundle } => {
+                let mut inner = self.lock();
+                let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+                let agent = inner.agents.get(&pane_id).filter(|a| a.state != AgentState::Exited).cloned().ok_or_else(|| err(ErrorCode::BadRequest, "pane has no live agent"))?;
+                let pty = pane.pty.clone().filter(|_| pane.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "agent pane is not live"))?;
+                let worktree_id = pane.row.worktree_id.clone();
+                let hook_pane = HookPane { id: pane.row.id.clone(), tab_id: pane.row.tab_id.clone(), cwd: pane.row.cwd.clone() };
+                let (name, branch) = inner
+                    .worktrees
+                    .get(&bundle.worktree_id)
+                    .or_else(|| inner.worktrees.get(&worktree_id))
+                    .map(|w| (Self::worktree_view(&inner, w).name, w.branch.clone().unwrap_or_else(|| "detached".to_string())))
+                    .unwrap_or_default();
+                let runtime = bundle
+                    .action_id
+                    .as_deref()
+                    .and_then(|a| Self::action_def(&inner, &worktree_id, a).ok())
+                    .map(|a| a.label)
+                    .or_else(|| bundle.url.clone())
+                    .unwrap_or_else(|| "-".to_string());
+                let text = evidence_text(&name, &branch, &runtime, &bundle);
+                pty.write(pasted(&text).as_bytes()).map_err(internal)?;
+                let event = ActivityEvent {
+                    id: new_id(),
+                    kind: ActivityKind::AnnotationsSent,
+                    occurred_at_ms: now_ms(),
+                    worktree_id: Some(worktree_id.clone()),
+                    pane_id: Some(pane_id.clone()),
+                    agent_kind: Some(agent.kind),
+                    title: format!("Sent {} annotations → {}", bundle.annotations.len(), agent.kind.label()),
+                    detail: bundle.url.clone(),
+                    payload: serde_json::to_value(&bundle).unwrap_or(Value::Null),
+                    attention_id: None,
+                };
+                Self::record(&mut inner, event.clone());
+                let mut ev = events::envelope(&inner, "annotation.sent", Some(&worktree_id));
+                ev.pane = Some(hook_pane);
+                ev.agent = Some(HookAgent { kind: agent.kind, state: agent.state, session_ref: agent.session_ref.clone() });
+                inner.hook_queue.push(ev);
+                ok(event)
+            }
             Call::TownList => {
                 let unlocks = self.lock().store.town_unlocks().map_err(internal)?;
                 Ok(json!({ "towns": towns::all(), "unlocks": unlocks }))
@@ -2175,6 +2292,27 @@ impl Daemon {
             }
         }
     }
+}
+
+/// The plain-text form of an evidence bundle, as typed into an agent's terminal.
+pub fn evidence_text(worktree_name: &str, branch: &str, runtime: &str, bundle: &EvidenceBundle) -> String {
+    let lines: Vec<String> = bundle
+        .annotations
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let selector = a.selector.as_deref().unwrap_or("-");
+            let element = a.element_text.as_deref().unwrap_or("").replace('\n', " ");
+            format!("{}. [{selector}] \"{element}\" — {}", i + 1, a.text.trim())
+        })
+        .collect();
+    format!("Browser annotations from Tomo\nworktree: {worktree_name} ({branch})\nruntime: {runtime}\n\n{}\n\n{}", lines.join("\n"), bundle.instruction.trim())
+}
+
+// Bracketed paste keeps a multi-line block as one input in Claude, Codex, and Pi;
+// a bare newline would submit the first line alone. The final CR submits.
+fn pasted(text: &str) -> String {
+    format!("\x1b[200~{text}\x1b[201~\r")
 }
 
 pub async fn repo_view(id: Id, path: PathBuf) -> Repo {
@@ -2217,4 +2355,30 @@ async fn futures_summaries(found: &[(Repo, Vec<git::WorktreeEntry>, PathBuf)]) -
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evidence_text_lists_annotations_in_order() {
+        let bundle = EvidenceBundle {
+            source: "browser annotation".into(),
+            worktree_id: "w".into(),
+            url: Some("http://localhost:1420/".into()),
+            action_id: None,
+            annotations: vec![
+                Annotation { text: "wrong color".into(), url: "http://localhost:1420/".into(), selector: Some("#save".into()), element_text: Some("Save".into()), rect: None },
+                Annotation { text: "cut off".into(), url: "http://localhost:1420/".into(), selector: None, element_text: None, rect: Some([1.0, 2.0, 3.0, 4.0]) },
+            ],
+            instruction: "Review and address these annotations.".into(),
+        };
+        let text = evidence_text("labor", "feat/x", "http://localhost:1420/", &bundle);
+        assert_eq!(
+            text,
+            "Browser annotations from Tomo\nworktree: labor (feat/x)\nruntime: http://localhost:1420/\n\n1. [#save] \"Save\" — wrong color\n2. [-] \"\" — cut off\n\nReview and address these annotations."
+        );
+        assert!(pasted("x").ends_with("\x1b[201~\r"));
+    }
 }
