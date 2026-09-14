@@ -28,7 +28,7 @@ export function App() {
   useEffect(() => {
     const offFrame = onFrame(applyFrame);
     const offConn = onConnection((up) => {
-      setState({ connected: up });
+      setState((s) => ({ connected: up, connectionNonce: up ? s.connectionNonce + 1 : s.connectionNonce }));
       if (up) rpc<Snapshot>("subscribe").then(applySnapshot).catch(() => {});
     });
     startEventPump();

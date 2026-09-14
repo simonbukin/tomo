@@ -32,6 +32,7 @@ export interface State {
   notice: { level: string; message: string; nonce: number } | null;
   paletteOpen: boolean;
   dialog: Dialog | null;
+  connectionNonce: number;
 }
 
 export type Dialog =
@@ -60,6 +61,7 @@ let state: State = {
   notice: null,
   paletteOpen: false,
   dialog: null,
+  connectionNonce: 0,
 };
 
 const listeners = new Set<() => void>();
