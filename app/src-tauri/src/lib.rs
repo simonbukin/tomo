@@ -9,6 +9,14 @@ use tokio::net::UnixStream;
 use tokio::sync::{mpsc, oneshot};
 use tomo_proto::*;
 
+static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+fn mark(what: &str) {
+    if std::env::var_os("TOMO_TIMING").is_some() {
+        eprintln!("[tomo-app] {what} at {} ms", STARTED.get_or_init(std::time::Instant::now).elapsed().as_millis());
+    }
+}
+
 pub struct Link {
     tx: Mutex<Option<mpsc::UnboundedSender<String>>>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, RpcError>>>>>,
@@ -77,6 +85,7 @@ async fn connect_once(app: &AppHandle, link: &Link) -> Option<()> {
             }
         }
     });
+    mark("daemon connected");
     let _ = app.emit("daemon-state", json!({ "connected": true }));
     let mut lines = BufReader::with_capacity(1024 * 1024, rd).lines();
     while let Ok(Some(line)) = lines.next_line().await {
@@ -113,19 +122,23 @@ async fn connect_loop(app: AppHandle) {
         match connect_once(&app, &link).await {
             Some(()) => attempts = 0,
             None => {
-                if attempts == 0 || attempts % 20 == 0 {
+                if attempts == 0 || attempts % 80 == 0 {
                     start_daemon();
                 }
                 attempts += 1;
             }
         }
-        tokio::time::sleep(std::time::Duration::from_millis(if attempts == 0 { 300 } else { 250 })).await;
+        let wait = if attempts == 0 { 300 } else if attempts < 80 { 25 } else { 250 };
+        tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
     }
 }
 
 #[tauri::command]
 async fn rpc(link: State<'_, Arc<Link>>, method: String, params: Option<Value>) -> Result<Value, RpcError> {
     let id = link.next_id.fetch_add(1, Ordering::Relaxed);
+    if id == 1 {
+        mark(&format!("first rpc ({method})"));
+    }
     let mut req = json!({ "id": id, "method": method });
     if let Some(p) = params {
         req["params"] = p;
@@ -155,6 +168,8 @@ fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    STARTED.get_or_init(std::time::Instant::now);
+    mark("process start");
     let link = Arc::new(Link { tx: Mutex::new(None), pending: Arc::new(Mutex::new(HashMap::new())), next_id: AtomicU64::new(1) });
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -162,6 +177,7 @@ pub fn run() {
         .manage(link)
         .invoke_handler(tauri::generate_handler![rpc, daemon_connected])
         .setup(|app| {
+            mark("tauri setup");
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(connect_loop(handle));
             Ok(())
