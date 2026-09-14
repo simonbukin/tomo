@@ -130,7 +130,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
           {pane && !pane.live && <span className="pane-note">exited {pane.exit_code ?? ""}</span>}
         </span>
         <span className="chip right" title={pane?.cwd}>
-          {shortPath(pane?.cwd ?? "")}
+          <span>{shortPath(pane?.cwd ?? "")}</span>
           <button className="pane-close" title="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></button>
         </span>
       </div>
