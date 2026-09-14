@@ -2197,7 +2197,6 @@ impl Daemon {
                 inner.hook_queue.push(hook);
                 ok(item)
             }
-            Call::UsageGet { .. } | Call::BrowserOpen { .. } | Call::BrowserNavigate { .. } | Call::AnnotationsSend { .. } => Err(err(ErrorCode::Unsupported, "not implemented yet")),
             Call::BrowserOpen { worktree_id, url, tab_id } => {
                 let mut inner = self.lock();
                 let cwd = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
