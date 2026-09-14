@@ -10,11 +10,12 @@ import { closePane, focusPane, runAction } from "./actions";
 import { findAction } from "./keys";
 import { getState, useStore } from "./store";
 import { registerTerminal } from "./terminals";
-import { KIND_LABEL, STATE_GLYPH, type Id } from "./types";
+import { X } from "lucide-react";
+import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
-const DARK = { background: "#0f1115", foreground: "#d6d8de", cursor: "#d6d8de", selectionBackground: "#2c3446" };
-const LIGHT = { background: "#ffffff", foreground: "#1d1f24", cursor: "#1d1f24", selectionBackground: "#c9d4ea" };
+const DARK = { background: "#0c0c10", foreground: "#e2e2e8", cursor: "#e2e2e8", selectionBackground: "#2a2347" };
+const LIGHT = { background: "#ffffff", foreground: "#17171c", cursor: "#17171c", selectionBackground: "#ebe6fb" };
 
 function isDark(theme: string): boolean {
   if (theme === "dark") return true;
@@ -115,18 +116,23 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   }, [active]);
 
   const agent = pane?.agent && pane.agent.state !== "exited" ? pane.agent : null;
-  const title = pane?.user_title ?? (agent ? KIND_LABEL[agent.kind] : oscTitle ?? pane?.title ?? "");
+  const title = pane?.user_title ?? (agent ? agent.kind : (oscTitle ?? pane?.title ?? ""));
   const originNote = pane?.origin === "resumed" ? "resumed" : pane?.origin === "restored" ? "restored" : null;
+  const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   return (
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
-      <div className="pane-header" onMouseDown={() => focusPane(paneId)}>
-        {agent && <span className={`dot dot-${agent.state}`} title={`${KIND_LABEL[agent.kind]} ${agent.state}`}>{STATE_GLYPH[agent.state]}</span>}
-        <span className="pane-title">{title}</span>
-        {agent && <span className="pane-sub">{agent.state}</span>}
-        {originNote && <span className="pane-sub" title="This pane was rebuilt after a daemon restart">{originNote}</span>}
-        {pane && !pane.live && <span className="pane-sub">exited {pane.exit_code ?? ""}</span>}
-        <span className="pane-cwd" title={pane?.cwd}>{shortPath(pane?.cwd ?? "")}</span>
-        <button className="pane-close" title="Close pane" onClick={() => closePane(paneId)}>×</button>
+      <div className="pane-legend" onMouseDown={() => focusPane(paneId)}>
+        <span className="chip">
+          <span className={`state ${stateClass}`} />
+          <strong>{title}</strong>
+          {agent && <span className="agent-state">{agent.state}</span>}
+          {originNote && <span className="pane-note" title="This pane was rebuilt after a daemon restart">{originNote}</span>}
+          {pane && !pane.live && <span className="pane-note">exited {pane.exit_code ?? ""}</span>}
+        </span>
+        <span className="chip right" title={pane?.cwd}>
+          {shortPath(pane?.cwd ?? "")}
+          <button className="pane-close" title="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></button>
+        </span>
       </div>
       <div className="pane-body" ref={hostRef} />
     </div>

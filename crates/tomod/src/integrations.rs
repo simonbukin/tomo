@@ -22,9 +22,12 @@ fn merge_hooks(existing: &mut Value, additions: &Value, marker: &str) -> bool {
         if !list.is_array() {
             *list = Value::Array(vec![]);
         }
-        let already = list.as_array().unwrap().iter().any(|e| e.to_string().contains(marker));
-        if !already {
-            list.as_array_mut().unwrap().extend(entries.as_array().cloned().unwrap_or_default());
+        let arr = list.as_array_mut().unwrap();
+        let wanted = entries.as_array().cloned().unwrap_or_default();
+        let current: Vec<Value> = arr.iter().filter(|e| e.to_string().contains(marker)).cloned().collect();
+        if current != wanted {
+            arr.retain(|e| !e.to_string().contains(marker));
+            arr.extend(wanted);
             changed = true;
         }
     }
@@ -70,5 +73,9 @@ mod tests {
         assert_eq!(existing["theme"], "dark");
         assert!(!merge_hooks(&mut existing, &additions, "hook codex"));
         assert_eq!(existing["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        let moved = agents::codex_hooks_entries(Path::new("/opt/tomo/bin/tomo"));
+        assert!(merge_hooks(&mut existing, &moved, "hook codex"));
+        assert_eq!(existing["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        assert!(existing["hooks"]["Stop"].to_string().contains("/opt/tomo/bin/tomo"));
     }
 }

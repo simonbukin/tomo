@@ -477,6 +477,15 @@ impl Daemon {
         ]
     }
 
+    /// Variables that mark a process as nested inside another agent or Tomo pane.
+    /// A shell started by Tomo must not inherit them from however tomod was launched.
+    fn inherited_env_to_remove() -> Vec<String> {
+        std::env::vars()
+            .map(|(k, _)| k)
+            .filter(|k| k == "CLAUDECODE" || k.starts_with("CLAUDE_CODE_") || k.starts_with("TOMO_") || k.starts_with("ORCA_") || k == "CODEX_THREAD_ID")
+            .collect()
+    }
+
     fn start_pty(self: &Arc<Self>, inner: &mut Inner, pane_id: &str, command: Option<&[String]>) -> Result<()> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
         let row = pane.row.clone();
@@ -487,6 +496,7 @@ impl Daemon {
             _ => (shell, vec!["-l".to_string()]),
         };
         let env = self.pane_env(inner, pane_id, &row.tab_id, &row.worktree_id);
+        let env_remove = Self::inherited_env_to_remove();
         let out_daemon = Arc::downgrade(self);
         let out_pane = pane_id.to_string();
         let sink: crate::pty::OutputSink = Arc::new(move |bytes: &[u8]| {
@@ -502,7 +512,7 @@ impl Daemon {
             }
         });
         let session = PtySession::spawn(
-            Spawn { program: &program, args: &args, cwd: &cwd, env: &env, cols: row.cols.max(2), rows: row.rows.max(2) },
+            Spawn { program: &program, args: &args, cwd: &cwd, env: &env, env_remove: &env_remove, cols: row.cols.max(2), rows: row.rows.max(2) },
             sink,
             on_exit,
         )?;
@@ -1177,7 +1187,7 @@ impl Daemon {
             }
             Call::PaneAttach { pane_id } => {
                 let mut inner = self.lock();
-                let snapshot = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot();
+                let snapshot = crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
                 let view = Self::pane_view(&inner, &pane_id);
                 if let Some(c) = inner.clients.get_mut(&client_id) {
                     c.attached.insert(pane_id.clone());

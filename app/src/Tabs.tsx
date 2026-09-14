@@ -1,3 +1,4 @@
+import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { rpc } from "./api";
 import { activateTab, closeTab, newTab } from "./actions";
@@ -14,7 +15,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
     setEditing(null);
   };
 
-  const attentionFor = (tab: Tab) => Object.values(panes).some((p) => p.tab_id === tab.id && p.agent?.state === "waiting");
+  const waiting = (tab: Tab) => Object.values(panes).some((p) => p.tab_id === tab.id && p.agent?.state === "waiting");
 
   return (
     <div className="tabbar">
@@ -28,7 +29,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
           }}
           onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
         >
-          {attentionFor(t) && <span className="dot dot-waiting">◉</span>}
+          {waiting(t) && <span className="state state-waiting" />}
           {editing?.id === t.id ? (
             <input
               autoFocus
@@ -53,11 +54,11 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
               closeTab(t.id);
             }}
           >
-            ×
+            <X className="icon" />
           </button>
         </div>
       ))}
-      <button className="tab-new" title="New tab" onClick={newTab}>+</button>
+      <button className="tab-new" title="New tab" onClick={newTab}><Plus className="icon" /></button>
     </div>
   );
 }

@@ -35,11 +35,67 @@ impl Scrollback {
     }
 }
 
+/// Removes escape sequences that ask the terminal to reply. Replaying them
+/// on attach would make the client answer into a process that never asked.
+pub fn strip_terminal_queries(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b {
+            if let Some(len) = query_len(&bytes[i..]) {
+                i += len;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+
+fn query_len(b: &[u8]) -> Option<usize> {
+    let rest = b.get(1..)?;
+    match rest.first()? {
+        b'[' => {
+            let end = rest.iter().skip(1).take(24).position(|c| (0x40..=0x7e).contains(c))? + 2;
+            let body = &rest[1..end - 1];
+            let final_byte = rest[end - 1];
+            let is_query = match final_byte {
+                b'c' => body.is_empty() || body == b"0" || body == b">" || body == b"=" || body == b">0",
+                b'n' => body == b"6" || body == b"?6" || body == b"5",
+                b'p' => body.starts_with(b"?") && body.ends_with(b"$"),
+                b'q' => body == b">",
+                b'u' => body == b"?",
+                b't' => body == b"14" || body == b"16" || body == b"18" || body == b"19",
+                _ => false,
+            };
+            is_query.then_some(end + 1)
+        }
+        b']' => {
+            let inner = &rest[1..];
+            let st = inner.iter().take(64).position(|&c| c == 0x07).map(|p| p + 1).or_else(|| inner.windows(2).take(64).position(|w| w == b"\x1b\\").map(|p| p + 2))?;
+            let body = &inner[..st];
+            let is_query = body.starts_with(b"10;?") || body.starts_with(b"11;?") || body.starts_with(b"12;?") || body.starts_with(b"4;") && body.contains(&b'?');
+            is_query.then_some(1 + 1 + st)
+        }
+        b'P' => {
+            let inner = &rest[1..];
+            if !inner.starts_with(b"+q") && !inner.starts_with(b"$q") {
+                return None;
+            }
+            let st = inner.windows(2).take(256).position(|w| w == b"\x1b\\")?;
+            Some(1 + 1 + st + 2)
+        }
+        _ => None,
+    }
+}
+
 pub struct Spawn<'a> {
     pub program: &'a str,
     pub args: &'a [String],
     pub cwd: &'a Path,
     pub env: &'a [(String, String)],
+    pub env_remove: &'a [String],
     pub cols: u16,
     pub rows: u16,
 }
@@ -62,6 +118,9 @@ impl PtySession {
         let mut cmd = CommandBuilder::new(spec.program);
         cmd.args(spec.args);
         cmd.cwd(spec.cwd);
+        for k in spec.env_remove {
+            cmd.env_remove(k);
+        }
         for (k, v) in spec.env {
             cmd.env(k, v);
         }
@@ -129,6 +188,13 @@ mod tests {
     }
 
     #[test]
+    fn strips_device_queries_but_keeps_ordinary_sequences() {
+        let input = b"a\x1b[c\x1b[>c\x1b[6n\x1b[?2026$p\x1b[31mred\x1b[0m\x1b]11;?\x07\x1b]0;title\x07\x1bP+q544e\x1b\\z";
+        let out = strip_terminal_queries(input);
+        assert_eq!(out, b"a\x1b[31mred\x1b[0m\x1b]0;title\x07z");
+    }
+
+    #[test]
     fn spawns_shell_and_reads_output() {
         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
         let (etx, erx) = std::sync::mpsc::channel::<Option<i32>>();
@@ -137,7 +203,7 @@ mod tests {
         });
         let args = vec!["-c".to_string(), "printf hello-tomo; exit 3".to_string()];
         let session = PtySession::spawn(
-            Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], cols: 80, rows: 24 },
+            Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 },
             sink,
             Box::new(move |c| {
                 let _ = etx.send(c);
