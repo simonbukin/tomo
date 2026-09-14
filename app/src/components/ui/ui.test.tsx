@@ -71,6 +71,7 @@ describe("menu", () => {
     await waitFor(() => expect(screen.getByRole("menuitem", { name: "more" })).toHaveAttribute("data-highlighted"));
     await user.keyboard("{ArrowRight}");
     const child = await screen.findByRole("menuitem", { name: "child" });
+    await waitFor(() => expect(child).toHaveAttribute("data-highlighted"));
     await user.keyboard("{Enter}");
     expect(run).toHaveBeenCalledWith("child");
     expect(child).not.toBeInTheDocument();

@@ -137,28 +137,28 @@ export function MenuItems({ items }: { items: MenuItem[] | (() => MenuItem[]) })
 
 export type MenuAnchor = { x: number; y: number } | Element;
 
-function anchorOf(anchor: MenuAnchor) {
-  if (anchor instanceof Element) return anchor;
-  const { x, y } = anchor;
-  return { getBoundingClientRect: () => new DOMRect(x, y, 0, 0) };
-}
-
 export interface AnchoredMenuProps {
   open: boolean;
   anchor: MenuAnchor;
   items: MenuItem[] | (() => MenuItem[]);
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean, reason?: string) => void;
   onOpenChangeComplete?: (open: boolean) => void;
   side?: MenuSide;
   align?: MenuAlign;
 }
 
-/** A menu opened by code at a point or next to an element, with no trigger of its own. */
+/**
+ * A menu opened by code at a point or next to an element. It still renders a zero-size
+ * trigger at the anchor: Base UI registers a root menu's floating node through its trigger,
+ * and without one every submenu counts as a sibling and closes the root when it opens.
+ */
 export function AnchoredMenu({ open, anchor, items, onOpenChange, onOpenChangeComplete, side, align }: AnchoredMenuProps) {
   const point = !(anchor instanceof Element);
+  const at = point ? anchor : { x: 0, y: 0 };
   return (
-    <Menu.Root open={open} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete}>
-      <DropdownMenuContent anchor={anchorOf(anchor)} side={side ?? (point ? "right" : "bottom")} align={align ?? "start"} sideOffset={point ? 0 : 4}>
+    <Menu.Root open={open} onOpenChange={(o, d) => onOpenChange(o, d.reason)} onOpenChangeComplete={onOpenChangeComplete}>
+      <Menu.Trigger render={<span className="menu-anchor" style={{ position: "fixed", left: at.x, top: at.y, width: 0, height: 0 }} aria-hidden tabIndex={-1} />} />
+      <DropdownMenuContent anchor={point ? undefined : anchor} side={side ?? (point ? "right" : "bottom")} align={align ?? "start"} sideOffset={point ? 0 : 4}>
         <MenuItems items={items} />
       </DropdownMenuContent>
     </Menu.Root>
