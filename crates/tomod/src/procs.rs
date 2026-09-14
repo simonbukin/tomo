@@ -30,13 +30,19 @@ impl ProcMonitor {
         ProcMonitor { sys: System::new() }
     }
 
-    pub fn refresh(&mut self) -> Vec<ProcRow> {
-        let kind = ProcessRefreshKind::nothing()
+    /// Command lines and working directories are fetched once per process;
+    /// only the pane shells (`roots`) get their cwd re-read on every poll.
+    pub fn refresh(&mut self, roots: &[u32]) -> Vec<ProcRow> {
+        let cheap = ProcessRefreshKind::nothing()
             .with_cpu()
             .with_memory()
-            .with_cwd(UpdateKind::Always)
-            .with_cmd(UpdateKind::Always);
-        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
+            .with_cwd(UpdateKind::OnlyIfNotSet)
+            .with_cmd(UpdateKind::OnlyIfNotSet);
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, cheap);
+        if !roots.is_empty() {
+            let pids: Vec<sysinfo::Pid> = roots.iter().map(|p| sysinfo::Pid::from_u32(*p)).collect();
+            self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), false, ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always));
+        }
         self.sys
             .processes()
             .values()

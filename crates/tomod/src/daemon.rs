@@ -331,11 +331,12 @@ impl Daemon {
 
     // ------------------------------------------------------------- discovery
 
-    pub async fn discover(self: &Arc<Self>) -> Result<()> {
-        let repos: Vec<Repo> = {
-            let inner = self.lock();
-            inner.store.repos()?.into_iter().map(|r| Repo { id: r.id, name: repo_name(&r.path), exists: r.path.exists(), path: r.path }).collect()
-        };
+    pub async fn discover(self: &Arc<Self>, summaries: Summaries) -> Result<()> {
+        let rows = self.lock().store.repos()?;
+        let mut repos: Vec<Repo> = Vec::with_capacity(rows.len());
+        for r in rows {
+            repos.push(repo_view(r.id, r.path).await);
+        }
         let mut found: Vec<(Repo, Vec<git::WorktreeEntry>, PathBuf)> = Vec::new();
         for repo in &repos {
             if !repo.exists {
@@ -346,7 +347,10 @@ impl Daemon {
                 (Err(e), _) | (_, Err(e)) => tracing::warn!("discover {}: {e}", repo.path.display()),
             }
         }
-        let summaries = futures_summaries(&found).await;
+        let summaries = match summaries {
+            Summaries::All => futures_summaries(&found).await,
+            Summaries::Cached => HashMap::new(),
+        };
         let mut inner = self.lock();
         let repos_changed = inner.repos.iter().map(|r| &r.path).ne(repos.iter().map(|r| &r.path));
         inner.repos = repos;
@@ -502,6 +506,7 @@ impl Daemon {
             ("TERM".into(), "xterm-256color".into()),
             ("COLORTERM".into(), "truecolor".into()),
             ("TERM_PROGRAM".into(), "tomo".into()),
+            ("PROMPT_EOL_MARK".into(), String::new()),
         ]
     }
 
@@ -1027,7 +1032,7 @@ impl Daemon {
             inner.store.meta_upsert(&row).map_err(internal)?;
             Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Info, message: format!("archived {name} ({removed} build dirs removed)") });
         }
-        self.discover().await.map_err(internal)?;
+        self.discover(Summaries::All).await.map_err(internal)?;
         let inner = self.lock();
         inner.worktrees.get(worktree_id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "archived worktree vanished")).and_then(ok)
     }
@@ -1046,7 +1051,7 @@ impl Daemon {
             let inner = self.lock();
             inner.store.meta_upsert(&MetaRow { archived_at_ms: None, archived_branch: None, ..row }).map_err(internal)?;
         }
-        self.discover().await.map_err(internal)?;
+        self.discover(Summaries::All).await.map_err(internal)?;
         let inner = self.lock();
         let id = path_id(&canonical(&path));
         inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "restored worktree not discovered")).and_then(ok)
@@ -1068,6 +1073,7 @@ impl Daemon {
                 ok(self.status(&inner))
             }
             Call::Subscribe => {
+                tracing::info!("client {client_id} subscribed");
                 let mut inner = self.lock();
                 if let Some(c) = inner.clients.get_mut(&client_id) {
                     c.subscribed = true;
@@ -1108,8 +1114,8 @@ impl Daemon {
                 let top = canonical(&top);
                 let id = path_id(&top);
                 self.lock().store.repo_add(&id, &top, now_ms()).map_err(internal)?;
-                self.discover().await.map_err(internal)?;
-                ok(Repo { id, name: repo_name(&top), exists: true, path: top })
+                self.discover(Summaries::All).await.map_err(internal)?;
+                ok(repo_view(id, top).await)
             }
             Call::RepoRemove { repo_id } => {
                 {
@@ -1123,7 +1129,7 @@ impl Daemon {
                         }
                     }
                 }
-                self.discover().await.map_err(internal)?;
+                self.discover(Summaries::All).await.map_err(internal)?;
                 Ok(Value::Null)
             }
             Call::RepoClone { url, dest } => {
@@ -1131,13 +1137,13 @@ impl Daemon {
                 git::clone(&url, &dest).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
                 let id = path_id(&canonical(&dest));
                 self.lock().store.repo_add(&id, &canonical(&dest), now_ms()).map_err(internal)?;
-                self.discover().await.map_err(internal)?;
-                ok(Repo { id, name: repo_name(&dest), exists: true, path: canonical(&dest) })
+                self.discover(Summaries::All).await.map_err(internal)?;
+                ok(repo_view(id, canonical(&dest)).await)
             }
 
             Call::WorktreeList => ok(Self::worktree_views(&self.lock())),
             Call::WorktreeRefresh => {
-                self.discover().await.map_err(internal)?;
+                self.discover(Summaries::All).await.map_err(internal)?;
                 ok(Self::worktree_views(&self.lock()))
             }
             Call::WorktreeCreate(spec) => {
@@ -1161,7 +1167,7 @@ impl Daemon {
                 git::worktree_add(&repo_path, &path, &spec.branch, spec.new_branch, spec.start_ref.as_deref())
                     .await
                     .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
-                self.discover().await.map_err(internal)?;
+                self.discover(Summaries::All).await.map_err(internal)?;
                 let id = path_id(&canonical(&path));
                 if let Some(t) = town {
                     let mut inner = self.lock();
@@ -1595,6 +1601,19 @@ impl Daemon {
             }
         }
     }
+}
+
+pub async fn repo_view(id: Id, path: PathBuf) -> Repo {
+    let exists = path.exists();
+    let remote_url = if exists { git::remote_url(&path).await } else { None };
+    let github = remote_url.as_deref().and_then(git::github_repo).map(|(owner, name)| GitHubRepo { owner, name });
+    Repo { id, name: repo_name(&path), exists, path, remote_url, github }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Summaries {
+    All,
+    Cached,
 }
 
 pub fn repo_name(path: &Path) -> String {

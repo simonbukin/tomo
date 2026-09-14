@@ -1,4 +1,4 @@
-use crate::daemon::Daemon;
+use crate::daemon::{Daemon, Summaries};
 use notify::{RecursiveMode, Watcher};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -40,8 +40,8 @@ pub async fn run(daemon: Arc<Daemon>) {
         tokio::select! {
             _ = ticker.tick() => {}
             _ = daemon.repos_changed.notified() => {}
-            _ = daemon.refresh.notified() => { debounce(&mut rx).await; let _ = daemon.discover().await; }
-            Some(()) = rx.recv() => { debounce(&mut rx).await; let _ = daemon.discover().await; }
+            _ = daemon.refresh.notified() => { debounce(&mut rx).await; let _ = daemon.discover(Summaries::All).await; }
+            Some(()) = rx.recv() => { debounce(&mut rx).await; let _ = daemon.discover(Summaries::Cached).await; }
         }
     }
 }

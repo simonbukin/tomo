@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { Check, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { setState, useStore } from "./store";
@@ -128,9 +129,6 @@ function SubMenu({ parent, items, depth }: { parent: React.RefObject<HTMLDivElem
   const r = parent.current?.getBoundingClientRect();
   const row = parent.current?.querySelector<HTMLElement>(".menu-active")?.getBoundingClientRect();
   if (!r) return null;
-  return (
-    <div className="submenu-anchor" onMouseDown={(e) => e.stopPropagation()}>
-      <MenuPanel x={r.right + 2} y={(row?.top ?? r.top) - 4} items={items} depth={depth} />
-    </div>
-  );
+  const x = r.right + 2 + 200 > window.innerWidth ? r.left - 202 : r.right + 2;
+  return createPortal(<MenuPanel x={x} y={(row?.top ?? r.top) - 4} items={items} depth={depth} />, document.body);
 }

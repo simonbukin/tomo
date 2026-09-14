@@ -1,10 +1,10 @@
 import { PanelLeft, PanelRight } from "lucide-react";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { runAction } from "./actions";
 import { ContextMenu } from "./ContextMenu";
 import { Dialogs } from "./Dialogs";
-import { Towns } from "./Towns";
+const Towns = lazy(() => import("./Towns").then((m) => ({ default: m.Towns })));
 import { Home } from "./Home";
 import { findAction } from "./keys";
 import { TabLayout } from "./Layout";
@@ -93,7 +93,7 @@ export function App() {
       {ui.leftOpen && <Sidebar />}
       <main className="center">
         {!loaded && <div className="center-empty muted">{connected ? "Loading…" : "Starting tomod…"}</div>}
-        {loaded && !showWorktree && ui.view === "towns" && <Towns />}
+        {loaded && !showWorktree && ui.view === "towns" && <Suspense fallback={<div className="center-empty muted">loading map…</div>}><Towns /></Suspense>}
         {loaded && !showWorktree && ui.view !== "towns" && <Home />}
         {loaded && showWorktree && (
           <>

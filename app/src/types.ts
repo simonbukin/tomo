@@ -13,6 +13,8 @@ export interface Repo {
   path: string;
   name: string;
   exists: boolean;
+  remote_url: string | null;
+  github: { owner: string; name: string } | null;
 }
 
 export interface GitSummary {
@@ -212,6 +214,9 @@ export interface UiState {
   rightWidth: number;
   sidebarSort: SidebarSort;
   showArchivedInSidebar: boolean;
+  collapsedRepos: string[];
+  hiddenRepos: string[];
+  showHiddenRepos: boolean;
   home: HomeOptions;
 }
 

@@ -20,7 +20,8 @@ pub fn classify_all(inner: &Inner) -> Vec<ProcessInfo> {
 
 pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner) {
     let _ = daemon;
-    inner.proc_rows = inner.procs.refresh();
+    let roots: Vec<u32> = inner.panes.values().filter(|p| p.exit_code.is_none()).filter_map(|p| p.pty.as_ref().map(|x| x.pid)).collect();
+    inner.proc_rows = inner.procs.refresh(&roots);
     inner.proc_rows_at_ms = now_ms();
     let by_pid: HashMap<u32, usize> = inner.proc_rows.iter().enumerate().map(|(i, r)| (r.pid, i)).collect();
     let index = procs::children_index(&inner.proc_rows);

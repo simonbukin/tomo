@@ -1,6 +1,6 @@
-import { archiveWorktree, closeOtherTabs, closePane, closeTab, copyText, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, setMetadata, spawnAgent, splitPaneById } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, setMetadata, setRepoHidden, spawnAgent, splitPaneById } from "./actions";
 import type { MenuItem } from "./ContextMenu";
-import { getState, setState } from "./store";
+import { clearSelection, getState, setState } from "./store";
 import type { Id, Repo, Tab, Worktree } from "./types";
 
 export function worktreeMenu(w: Worktree): MenuItem[] {
@@ -31,13 +31,34 @@ export function worktreeMenu(w: Worktree): MenuItem[] {
 }
 
 export function repoMenu(r: Repo): MenuItem[] {
+  const hidden = getState().ui.hiddenRepos.includes(r.id);
   return [
     { label: "new worktree…", run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }) },
     { separator: true },
     { label: "reveal in finder", run: () => revealRepo(r) },
     { label: "copy path", run: () => copyText(r.path) },
     { separator: true },
+    hidden ? { label: "unhide repo", run: () => setRepoHidden(r.id, false) } : { label: "hide repo", run: () => setRepoHidden(r.id, true) },
     { label: "remove repo", danger: true, run: () => removeRepo(r.id) },
+  ];
+}
+
+export function bulkMenu(ids: Id[]): MenuItem[] {
+  const ws = ids.map((id) => getState().worktrees.find((w) => w.id === id)).filter((w): w is Worktree => !!w);
+  const anyArchived = ws.some((w) => !!w.archived_at_ms);
+  const priority = (p: number | null): MenuItem => ({ label: p ? `p${p}` : "unset", run: () => bulkMetadata(ids, { priority: p }) });
+  return [
+    { label: `${ids.length} worktrees`, disabled: true },
+    { separator: true },
+    { label: "priority", submenu: [priority(1), priority(2), priority(3), priority(4), { separator: true }, priority(null)] },
+    { label: "set project…", run: () => bulkPrompt("project", ids) },
+    { label: "set tags…", run: () => bulkPrompt("tags", ids) },
+    { label: "add tag…", run: () => bulkAddTag(ids) },
+    { separator: true },
+    { label: "archive…", danger: true, run: () => bulkArchive(ids) },
+    ...(anyArchived ? [{ label: "restore", run: () => bulkRestore(ids) } as MenuItem] : []),
+    { separator: true },
+    { label: "clear selection", run: clearSelection },
   ];
 }
 
