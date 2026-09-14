@@ -47,6 +47,7 @@ pub struct PaneState {
     pub exit_code: Option<i32>,
     pub process_title: Option<String>,
     pub pending_line: Option<String>,
+    pub last_output_ms: u64,
     pub scrollback: Scrollback,
 }
 
@@ -74,6 +75,7 @@ pub struct Daemon {
     pub inner: Mutex<Inner>,
     pub stop: tokio::sync::Notify,
     pub refresh: tokio::sync::Notify,
+    pub repos_changed: tokio::sync::Notify,
 }
 
 pub fn err(code: ErrorCode, msg: impl Into<String>) -> RpcError {
@@ -142,6 +144,7 @@ impl Daemon {
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
+            repos_changed: tokio::sync::Notify::new(),
             paths,
         });
         daemon.write_integration_files()?;
@@ -339,7 +342,11 @@ impl Daemon {
         }
         let summaries = futures_summaries(&found).await;
         let mut inner = self.lock();
+        let repos_changed = inner.repos.iter().map(|r| &r.path).ne(repos.iter().map(|r| &r.path));
         inner.repos = repos;
+        if repos_changed {
+            self.repos_changed.notify_one();
+        }
         let meta_rows = inner.store.meta_all()?;
         let mut next: HashMap<Id, WorktreeState> = HashMap::new();
         for (repo, entries, common) in &found {
@@ -519,15 +526,18 @@ impl Daemon {
         let pane = inner.panes.get_mut(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
         pane.pty = Some(Arc::new(session));
         pane.exit_code = None;
+        if pane.pending_line.is_some() {
+            self.type_pending_when_quiet(pane_id.to_string());
+        }
         Ok(())
     }
 
     fn on_output(&self, pane_id: &str, bytes: &[u8]) {
-        let pending = {
+        {
             let mut inner = self.lock();
             let Some(pane) = inner.panes.get_mut(pane_id) else { return };
             pane.scrollback.push(bytes);
-            let pending = pane.pending_line.take().map(|line| (line, pane.pty.clone()));
+            pane.last_output_ms = now_ms();
             let encoded = B64.encode(bytes);
             let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id: pane_id.to_string(), data_base64: encoded } };
             if let Ok(text) = serde_json::to_string(&frame) {
@@ -535,12 +545,33 @@ impl Daemon {
                     let _ = client.tx.send(text.clone());
                 }
             }
-            pending
-        };
-        if let Some((line, Some(pty))) = pending {
-            std::thread::sleep(std::time::Duration::from_millis(200));
-            let _ = pty.write(format!("{line}\n").as_bytes());
         }
+    }
+
+    /// Types the queued command once the shell has produced output and then gone quiet,
+    /// so the line lands after the prompt instead of inside shell start-up output.
+    fn type_pending_when_quiet(self: &Arc<Self>, pane_id: String) {
+        let daemon = self.clone();
+        tokio::spawn(async move {
+            let started = now_ms();
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                let ready = {
+                    let mut inner = daemon.lock();
+                    let Some(pane) = inner.panes.get_mut(&pane_id) else { return };
+                    if pane.pending_line.is_none() || pane.pty.is_none() {
+                        return;
+                    }
+                    let quiet = pane.last_output_ms > 0 && now_ms().saturating_sub(pane.last_output_ms) >= 300;
+                    let timeout = now_ms().saturating_sub(started) > 5000;
+                    (quiet || timeout).then(|| (pane.pending_line.take().unwrap(), pane.pty.clone().unwrap()))
+                };
+                if let Some((line, pty)) = ready {
+                    let _ = pty.write(format!("{line}\n").as_bytes());
+                    return;
+                }
+            }
+        });
     }
 
     fn on_exit(&self, pane_id: &str, code: Option<i32>) {
@@ -657,7 +688,7 @@ impl Daemon {
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin, exit_code: None, process_title: None, pending_line, scrollback: Scrollback::default() },
+            PaneState { row, pty: None, origin, exit_code: None, process_title: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default() },
         );
         if let Some(kind) = agent_kind {
             let presence = AgentPresence {
@@ -721,8 +752,9 @@ impl Daemon {
         title: Option<String>,
         agent: Option<(AgentKind, Option<String>, String)>,
     ) -> Result<(Id, Id), RpcError> {
+        let crowded = |inner: &Inner, t: &str| inner.tabs.get(t).map_or(false, |tab| layout::pane_ids(&tab.layout).len() >= 2);
         let tab_id = match tab_id.map(str::to_string).or_else(|| split_from.and_then(|p| inner.panes.get(p)).map(|p| p.row.tab_id.clone())).or_else(|| Self::active_tab(inner, worktree_id)) {
-            Some(t) if inner.tabs.contains_key(&t) => t,
+            Some(t) if inner.tabs.contains_key(&t) && !(tab_id.is_none() && split_from.is_none() && crowded(inner, &t)) => t,
             _ => Self::create_tab(inner, worktree_id, None).id,
         };
         let (kind, session_ref, pending) = match agent {
@@ -757,7 +789,8 @@ impl Daemon {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
-            let (origin, pending) = match (row.agent_kind, row.session_ref.as_deref()) {
+            let resume_ref = row.session_ref.clone().or_else(|| (row.agent_kind == Some(AgentKind::Codex)).then(|| "--last".to_string()));
+            let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
                 (Some(kind), Some(session)) => {
                     let cmd = inner.config.agents.get(kind.label().to_lowercase().as_str()).cloned().unwrap_or(AgentCommand { command: kind.label().to_lowercase(), args: vec![] });
                     let plan = agents::spawn_plan(kind, &cmd, Some(session), &self.claude_settings_path(), &self.pi_extension_path(), &[]);
@@ -785,7 +818,7 @@ impl Daemon {
             }
             inner.panes.insert(
                 row.id.clone(),
-                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, pending_line: pending, scrollback },
+                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, pending_line: pending, last_output_ms: 0, scrollback },
             );
             if let Err(e) = self.start_pty(&mut inner, &row.id, None) {
                 tracing::warn!("restore pane {}: {e}", row.id);

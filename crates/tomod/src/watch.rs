@@ -39,6 +39,7 @@ pub async fn run(daemon: Arc<Daemon>) {
         }
         tokio::select! {
             _ = ticker.tick() => {}
+            _ = daemon.repos_changed.notified() => {}
             _ = daemon.refresh.notified() => { debounce(&mut rx).await; let _ = daemon.discover().await; }
             Some(()) = rx.recv() => { debounce(&mut rx).await; let _ = daemon.discover().await; }
         }
