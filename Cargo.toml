@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/tomo-proto", "crates/tomod", "crates/tomo-cli", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+tomo-proto = { path = "crates/tomo-proto" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
+dirs = "6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+base64 = "0.22"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = true
