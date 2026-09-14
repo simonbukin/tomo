@@ -57,10 +57,20 @@ filter on an event other than `worktree.state_changed`.
 | `attention.created`       | An attention item was added (`tomo notify` or a waiting agent)   | `worktree`, `attention`, `pane`?  |
 | `action.started`          | `tomo action run`, restart, or a GUI button started an action    | `worktree`, `action`, `pane`?     |
 | `action.exited`           | A pane-mode action exited or was stopped                         | `worktree`, `action`, `pane`      |
+| `action.crashed`          | A pane-mode action exited non-zero and Tomo did not stop it; after `action.exited` | `worktree`, `action`, `pane`, `attention` |
+| `runtime.endpoint_discovered` | An owned process started to listen on a TCP port             | `worktree`, `pane`, `action`?     |
+| `runtime.endpoint_removed`| A listening port went away and did not return within 5 s        | `worktree`, `pane`, `action`?     |
+| `checkpoint.created`      | `tomo checkpoint` asked for a review or a decision               | `worktree`, `attention`, `pane`?, `agent`? |
+| `checkpoint.resolved`     | `tomo checkpoint resolve` closed a checkpoint or crash item      | `worktree`, `attention`, `pane`?  |
 
 `action.started` carries `pane` only for a pane-mode action. An external
 action is not tracked, so it never fires `action.exited`. See
-[actions.md](actions.md).
+[actions.md](actions.md). The `attention` field on `action.crashed` and
+`checkpoint.*` is the full `AttentionItem` with its `kind` (`waiting`,
+`checkpoint`, `crash`), `url`, `agent_kind`, and `resolved_at_ms`. The
+runtime events carry `action` when an Action started the pane; a restart
+that brings the same port back within 5 seconds fires nothing. See
+[runtime.md](runtime.md) and [activity.md](activity.md).
 
 Process start and exit are not events. They would fire on every poll and
 make Tomo slower. Read `tomo ps` from a hook when you need process state.

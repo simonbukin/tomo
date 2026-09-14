@@ -181,9 +181,64 @@ pub fn attention(items: &[AttentionItem], json: bool) {
         return emit_json(&items);
     }
     for i in items {
-        let seen = if i.viewed_at_ms.is_some() { "seen" } else { "NEW " };
-        println!("{}  {seen}  {:?}  wt {}  pane {}  {}", i.id, i.level, i.worktree_id, i.pane_id.as_deref().unwrap_or("-"), i.message);
+        let seen = if i.resolved_at_ms.is_some() { "done" } else if i.viewed_at_ms.is_some() { "seen" } else { "NEW " };
+        let kind = format!("{:?}", i.kind).to_lowercase();
+        let url = i.url.as_deref().map(|u| format!("  {u}")).unwrap_or_default();
+        println!("{}  {seen}  {:<10} {:?}  wt {}  pane {}  {}{url}", i.id, kind, i.level, i.worktree_id, i.pane_id.as_deref().unwrap_or("-"), i.message);
     }
+}
+
+pub fn attention_item(item: &AttentionItem, json: bool) {
+    if json {
+        return emit_json(item);
+    }
+    attention(std::slice::from_ref(item), false);
+}
+
+pub fn runtime(list: &[RuntimeEndpoint], json: bool) {
+    if json {
+        return emit_json(&list);
+    }
+    if list.is_empty() {
+        println!("no listening ports in Tomo panes");
+    }
+    for e in list {
+        let protocol = format!("{:?}", e.protocol).to_lowercase();
+        println!("{:<6} {:<5} {:<7} {:<16} {:<14} {}", e.port, protocol, e.pid, truncate(&e.process, 16), e.action_id.as_deref().unwrap_or("-"), e.pane_id.as_deref().unwrap_or("-"));
+    }
+}
+
+pub fn activity(list: &[ActivityEvent], json: bool) {
+    if json {
+        return emit_json(&list);
+    }
+    if list.is_empty() {
+        println!("no activity");
+    }
+    let offset = local_offset_s();
+    for e in list {
+        let detail = e.detail.as_deref().map(|d| format!(" · {d}")).unwrap_or_default();
+        println!("{}  {}{detail}", clock(e.occurred_at_ms, offset), e.title);
+    }
+}
+
+fn local_offset_s() -> i64 {
+    let out = std::process::Command::new("date").arg("+%z").output().ok();
+    let text = out.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    let (sign, digits) = match text.split_at_checked(1) {
+        Some(("-", d)) => (-1, d),
+        Some((_, d)) => (1, d),
+        None => return 0,
+    };
+    let hours: i64 = digits.get(..2).and_then(|h| h.parse().ok()).unwrap_or(0);
+    let minutes: i64 = digits.get(2..4).and_then(|m| m.parse().ok()).unwrap_or(0);
+    sign * (hours * 3600 + minutes * 60)
+}
+
+fn clock(at_ms: u64, offset_s: i64) -> String {
+    let local = (at_ms / 1000) as i64 + offset_s;
+    let of_day = local.rem_euclid(86_400);
+    format!("{:02}:{:02}", of_day / 3600, (of_day % 3600) / 60)
 }
 
 pub fn pr(r: &PrStatusResult, json: bool) {
