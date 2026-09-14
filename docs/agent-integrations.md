@@ -10,6 +10,9 @@ Tomo adds no UI inside any agent. Every integration is a thin reporter that
 talks to `tomod` through the public path: the `tomo hook` command or the
 daemon socket.
 
+Provider allowance windows (the 5-hour and weekly limits) are a separate
+concern. See [usage.md](usage.md).
+
 ## How a pane identifies itself
 
 Every shell Tomo starts carries these variables:

@@ -77,6 +77,7 @@ pub struct Inner {
     pub actions: HashMap<Id, ActionSet>,
     pub discovered_once: bool,
     pub last_full_poll_ms: u64,
+    pub usage: Vec<UsageSnapshot>,
 }
 
 pub struct Daemon {
@@ -161,6 +162,7 @@ impl Daemon {
                 actions: HashMap::new(),
                 discovered_once: false,
                 last_full_poll_ms: 0,
+                usage: Vec::new(),
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
@@ -1349,7 +1351,7 @@ impl Daemon {
                     resources: inner.resources.clone(),
                     actions: inner.actions.values().cloned().collect(),
                     endpoints: Vec::new(),
-                    usage: Vec::new(),
+                    usage: inner.usage.clone(),
                     ui_state,
                 })
             }
@@ -1940,7 +1942,13 @@ impl Daemon {
                 let list = tokio::task::spawn_blocking(move || sessions::list(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 ok(list)
             }
-            Call::RuntimeList { .. } | Call::ActivityList(_) | Call::CheckpointCreate(_) | Call::CheckpointResolve { .. } | Call::UsageGet { .. } | Call::BrowserOpen { .. } | Call::BrowserNavigate { .. } | Call::AnnotationsSend { .. } => {
+            Call::UsageGet { refresh } => {
+                if refresh || self.lock().usage.is_empty() {
+                    crate::usage::refresh(self).await;
+                }
+                ok(self.lock().usage.clone())
+            }
+            Call::RuntimeList { .. } | Call::ActivityList(_) | Call::CheckpointCreate(_) | Call::CheckpointResolve { .. } | Call::BrowserOpen { .. } | Call::BrowserNavigate { .. } | Call::AnnotationsSend { .. } => {
                 Err(err(ErrorCode::Unsupported, "not implemented yet"))
             }
             Call::TownList => {

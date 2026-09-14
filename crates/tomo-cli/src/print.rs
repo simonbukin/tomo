@@ -337,3 +337,41 @@ fn age(at_ms: u64) -> String {
         s => format!("{}d ago", s / 86_400),
     }
 }
+
+fn resets_in(at_ms: u64) -> String {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let secs = at_ms.saturating_sub(now) / 1000;
+    let (d, h, m) = (secs / 86_400, secs % 86_400 / 3600, secs % 3600 / 60);
+    match (d, h, m) {
+        (0, 0, 0) => "resets now".to_string(),
+        (0, 0, m) => format!("resets in {m}m"),
+        (0, h, 0) => format!("resets in {h}h"),
+        (0, h, m) => format!("resets in {h}h {m}m"),
+        (d, 0, _) => format!("resets in {d}d"),
+        (d, h, _) => format!("resets in {d}d {h}h"),
+    }
+}
+
+pub fn usage(list: &[UsageSnapshot], json: bool) {
+    if json {
+        return emit_json(&list);
+    }
+    if list.is_empty() {
+        println!("no usage data yet");
+    }
+    for s in list {
+        let provider = s.provider.label().to_lowercase();
+        if !s.available {
+            println!("{provider:<8} unavailable · {}", s.reason.as_deref().unwrap_or("no reason given"));
+            continue;
+        }
+        let width = s.buckets.iter().map(|b| b.label.len()).max().unwrap_or(0);
+        for (i, b) in s.buckets.iter().enumerate() {
+            let name = if i == 0 { provider.as_str() } else { "" };
+            let percent = b.fraction_used.map(|f| format!("{:>3}%", (f * 100.0).round() as u64)).unwrap_or_else(|| "  ? ".to_string());
+            let reset = b.resets_at_ms.map(resets_in).unwrap_or_default();
+            let detail = b.detail.as_deref().map(|d| format!("  {d}")).unwrap_or_default();
+            println!("{name:<8} {:<width$}   {percent}   {reset}{detail}", b.label);
+        }
+    }
+}
