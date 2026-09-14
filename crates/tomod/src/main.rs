@@ -55,12 +55,18 @@ async fn main() -> Result<()> {
 
     let daemon = daemon::Daemon::new(paths)?;
     daemon.restore()?;
-    if let Err(e) = daemon.discover().await {
-        tracing::warn!("initial discovery: {e}");
-    }
     tracing::info!("tomod {} listening on {}", daemon::VERSION, daemon.paths.socket.display());
 
     tokio::spawn(server::serve(daemon.clone(), listener));
+    {
+        let d = daemon.clone();
+        tokio::spawn(async move {
+            if let Err(e) = d.discover(daemon::Summaries::Cached).await {
+                tracing::warn!("initial discovery: {e}");
+            }
+            let _ = d.discover(daemon::Summaries::All).await;
+        });
+    }
     tokio::spawn(monitor::run(daemon.clone()));
     tokio::spawn(watch::run(daemon.clone()));
 

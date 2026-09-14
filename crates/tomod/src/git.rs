@@ -122,6 +122,9 @@ pub fn parse_numstat(text: &str) -> (u32, u32) {
 pub async fn summary(worktree: &Path) -> Result<GitSummary> {
     let status = git(worktree, &["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]).await?;
     let mut s = parse_status(&status);
+    if s.files_changed == 0 {
+        return Ok(s);
+    }
     if let Ok(numstat) = git(worktree, &["diff", "HEAD", "--numstat"]).await {
         let (ins, del) = parse_numstat(&numstat);
         s.insertions = ins;
@@ -146,6 +149,24 @@ pub async fn worktree_add(repo: &Path, path: &Path, branch: &str, new_branch: bo
 
 pub async fn worktree_remove(repo: &Path, path: &Path) -> Result<()> {
     git(repo, &["worktree", "remove", "--force", &path.to_string_lossy()]).await.map(|_| ())
+}
+
+pub async fn remote_url(repo: &Path) -> Option<String> {
+    git(repo, &["remote", "get-url", "origin"]).await.ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// Parses `owner/name` from the common GitHub remote forms.
+pub fn github_repo(url: &str) -> Option<(String, String)> {
+    let rest = url
+        .strip_prefix("git@github.com:")
+        .or_else(|| url.strip_prefix("https://github.com/"))
+        .or_else(|| url.strip_prefix("http://github.com/"))
+        .or_else(|| url.strip_prefix("ssh://git@github.com/"))?;
+    let rest = rest.trim_end_matches('/').trim_end_matches(".git");
+    let mut parts = rest.splitn(2, '/');
+    let owner = parts.next()?.to_string();
+    let name = parts.next()?.to_string();
+    (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some((owner, name))
 }
 
 pub async fn clone(url: &str, dest: &Path) -> Result<()> {
@@ -183,6 +204,13 @@ mod tests {
         assert!(s.dirty);
         let d = parse_status("# branch.oid abc\n# branch.head (detached)\n");
         assert!(d.detached && !d.dirty);
+    }
+
+    #[test]
+    fn parses_github_remotes() {
+        assert_eq!(github_repo("git@github.com:acme/holly.git"), Some(("acme".into(), "holly".into())));
+        assert_eq!(github_repo("https://github.com/acme/holly"), Some(("acme".into(), "holly".into())));
+        assert_eq!(github_repo("https://gitlab.com/acme/holly"), None);
     }
 
     #[test]

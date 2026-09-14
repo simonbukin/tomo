@@ -89,11 +89,15 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
     const unsub = onPaneOutput(paneId, (bytes) => term.write(bytes));
     let raf = 0;
+    let settle = 0;
     const refit = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit();
-      });
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        raf = requestAnimationFrame(() => {
+          if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit();
+        });
+      }, 90);
     };
     const observer = new ResizeObserver(refit);
     observer.observe(host);
@@ -106,6 +110,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       host.removeEventListener("mousedown", onFocus);
       observer.disconnect();
       cancelAnimationFrame(raf);
+      window.clearTimeout(settle);
       unsub();
       unregister();
       rpc("pane_detach", { pane_id: paneId }).catch(() => {});
@@ -123,6 +128,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const originNote = pane?.origin === "resumed" ? "resumed" : pane?.origin === "restored" ? "restored" : null;
   const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   return (
+    <div className="pane-wrap">
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
       <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
         <span className="chip">
@@ -138,6 +144,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
       </div>
       <div className="pane-body" ref={hostRef} />
+    </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { rpc, RpcFailure } from "./api";
-import { activeTab, agentsOf, getState, notify, paneIds, setState, setUi, unviewedAttention } from "./store";
+import { activeTab, agentsOf, clearSelection, getState, notify, paneIds, setState, setUi, unviewedAttention } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
-import type { AgentKind, Id, SplitDirection, Tab, Worktree } from "./types";
+import type { AgentKind, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
@@ -10,6 +10,7 @@ export interface Action {
   label: string;
   run: () => void | Promise<void>;
   whenWorktree?: boolean;
+  when?: () => boolean;
 }
 
 export async function openWorktree(worktreeId: Id): Promise<void> {
@@ -217,6 +218,107 @@ export function restoreWorktree(worktreeId: Id): void {
     .catch((e) => notify("error", (e as Error).message));
 }
 
+export async function bulkMetadata(ids: Id[], patch: Record<string, unknown>): Promise<void> {
+  for (const id of ids) await setMetadata(id, patch);
+  notify("info", `Updated ${ids.length} worktrees`);
+}
+
+export function bulkAddTag(ids: Id[]): void {
+  setState({
+    dialog: {
+      kind: "prompt",
+      title: `Add tag to ${ids.length} worktrees`,
+      initial: "",
+      placeholder: "tag",
+      onSubmit: async (value) => {
+        const tag = value.trim().replace(/^#/, "");
+        if (!tag) return;
+        for (const id of ids) {
+          const w = byId(id);
+          if (w && !w.metadata.tags.includes(tag)) await setMetadata(id, { tags: [...w.metadata.tags, tag] });
+        }
+        notify("info", `Tagged ${ids.length} worktrees`);
+      },
+    },
+  });
+}
+
+export function bulkPrompt(field: "project" | "tags", ids: Id[]): void {
+  const title = field === "project" ? `Project for ${ids.length} worktrees` : `Tags for ${ids.length} worktrees (replaces)`;
+  setState({
+    dialog: {
+      kind: "prompt",
+      title,
+      initial: "",
+      onSubmit: (value) => {
+        const trimmed = value.trim();
+        const patch = field === "tags" ? { tags: trimmed ? trimmed.split(",").map((t) => t.trim()).filter(Boolean) : [] } : { project: trimmed || null };
+        bulkMetadata(ids, patch);
+      },
+    },
+  });
+}
+
+export function bulkArchive(ids: Id[]): void {
+  const targets = ids.map(byId).filter((w): w is Worktree => !!w && !w.is_main && !w.archived_at_ms && w.exists);
+  const skipped = ids.length - targets.length;
+  if (!targets.length) {
+    notify("info", "Nothing to archive in the selection");
+    return;
+  }
+  setState({
+    dialog: {
+      kind: "confirm",
+      title: `Archive ${targets.length} worktrees?`,
+      body: `${targets.map((w) => w.name).join(", ")}. Terminals close, owned processes die, the archive hook runs, build directories are deleted, and git removes each worktree. Branches are kept.${skipped ? ` ${skipped} skipped (main or already archived).` : ""}`,
+      confirmLabel: "Archive all",
+      onConfirm: async () => {
+        if (targets.some((w) => w.id === getState().ui.activeWorktreeId)) setUi({ view: "home" });
+        let ok = 0;
+        for (const w of targets) {
+          try {
+            await rpc("worktree_archive", { worktree_id: w.id });
+            ok += 1;
+          } catch (e) {
+            notify("error", `${w.name}: ${(e as Error).message}`);
+          }
+        }
+        clearSelection();
+        notify("info", `Archived ${ok} of ${targets.length}${skipped ? `, skipped ${skipped}` : ""}`);
+      },
+    },
+  });
+}
+
+export async function bulkRestore(ids: Id[]): Promise<void> {
+  const targets = ids.map(byId).filter((w): w is Worktree => !!w && !!w.archived_at_ms);
+  let ok = 0;
+  for (const w of targets) {
+    try {
+      await rpc("worktree_restore", { worktree_id: w.id });
+      ok += 1;
+    } catch (e) {
+      notify("error", `${w.name}: ${(e as Error).message}`);
+    }
+  }
+  clearSelection();
+  notify("info", `Restored ${ok} of ${targets.length}`);
+}
+
+export function toggleRepoCollapsed(repoId: Id): void {
+  const list = getState().ui.collapsedRepos;
+  setUi({ collapsedRepos: list.includes(repoId) ? list.filter((r) => r !== repoId) : [...list, repoId] });
+}
+
+export function setAllReposCollapsed(collapsed: boolean): void {
+  setUi({ collapsedRepos: collapsed ? getState().repos.map((r) => r.id) : [] });
+}
+
+export function setRepoHidden(repoId: Id, hidden: boolean): void {
+  const list = getState().ui.hiddenRepos.filter((r) => r !== repoId);
+  setUi({ hiddenRepos: hidden ? [...list, repoId] : list });
+}
+
 export function removeRepo(repoId: Id): void {
   const repo = getState().repos.find((r) => r.id === repoId);
   if (!repo) return;
@@ -351,6 +453,20 @@ export const actions: Action[] = [
   { id: "copy_path", label: "Copy worktree path", run: () => navigator.clipboard.writeText(currentWorktree()?.path ?? "").then(() => notify("info", "Path copied")), whenWorktree: true },
   { id: "clear_attention", label: "Clear all attention items", run: () => rpc("attention_clear").then(() => undefined) },
   { id: "archive_worktree", label: "Archive worktree…", run: () => archiveWorktree(currentWorktree()!.id), whenWorktree: true },
+  { id: "restore_worktree", label: "Restore worktree", run: () => restoreWorktree(currentWorktree()!.id), whenWorktree: true, when: () => !!currentWorktree()?.archived_at_ms },
+  { id: "close_tab", label: "Close tab", run: () => { const t = activeTab(getState(), getState().ui.activeWorktreeId); if (t) closeTab(t.id); }, whenWorktree: true },
+  { id: "kill_pane_tree", label: "Kill process tree in pane", run: () => { const p = focusedPaneId(); if (p) killPaneTree(p); }, whenWorktree: true },
+  { id: "refresh_git", label: "Refresh git status", run: () => rpc("git_summary", { worktree_id: currentWorktree()!.id }).then(() => undefined), whenWorktree: true },
+  { id: "new_worktree_here", label: "New worktree in this repo…", run: () => setState({ dialog: { kind: "create-worktree", repoId: currentWorktree()!.repo_id } }), whenWorktree: true },
+  { id: "hide_repo", label: "Hide this repo from the sidebar", run: () => setRepoHidden(currentWorktree()!.repo_id, true), whenWorktree: true, when: () => !getState().ui.hiddenRepos.includes(currentWorktree()?.repo_id ?? "") },
+  { id: "unhide_repo", label: "Unhide this repo", run: () => setRepoHidden(currentWorktree()!.repo_id, false), whenWorktree: true, when: () => getState().ui.hiddenRepos.includes(currentWorktree()?.repo_id ?? "") },
+  { id: "toggle_board", label: "Home: toggle board / list", run: () => setUi({ home: { ...getState().ui.home, view: getState().ui.home.view === "board" ? "list" : "board" }, view: "home" }) },
+  { id: "show_archived", label: "Show archived worktrees", run: () => setUi({ showArchivedInSidebar: true, home: { ...getState().ui.home, showArchived: true } }) },
+  { id: "hide_archived", label: "Hide archived worktrees", run: () => setUi({ showArchivedInSidebar: false, home: { ...getState().ui.home, showArchived: false } }) },
+  { id: "collapse_repos", label: "Collapse all repos", run: () => setAllReposCollapsed(true) },
+  { id: "expand_repos", label: "Expand all repos", run: () => setAllReposCollapsed(false) },
+  { id: "clear_selection", label: "Clear selection", run: clearSelection, when: () => getState().selection.size > 0 },
+  ...(["name", "recent", "created", "attention", "priority"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
 ];
 
 export function runAction(id: string): void {
@@ -360,6 +476,7 @@ export function runAction(id: string): void {
     notify("info", "Open a worktree first");
     return;
   }
+  if (a.when && !a.when()) return;
   Promise.resolve(a.run()).catch((e) => notify("error", (e as Error).message));
 }
 

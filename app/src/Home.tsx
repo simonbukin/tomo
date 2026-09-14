@@ -4,7 +4,8 @@ import { openWorktree } from "./actions";
 import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
 import { filterWorktrees, groupWorktrees, needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
 import { worktreeMenu } from "./menus";
-import { agentsOf, formatBytes, repoName, setState, setUi, useStore } from "./store";
+import { agentsOf, formatBytes, repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
 
@@ -15,7 +16,9 @@ export function Home() {
   const o = s.ui.home;
   const set = (patch: Partial<HomeOptions>) => setUi({ home: { ...o, ...patch } });
   const ctx: QueryContext = useMemo(() => ({ repos: s.repos, agents: Object.values(s.agents), attention: s.attention }), [s.repos, s.agents, s.attention]);
-  const visible = sortWorktrees(filterWorktrees(s.worktrees, o, ctx), o.sort, ctx);
+  const repos = visibleRepos(s);
+  const visible = sortWorktrees(filterWorktrees(s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)), o, ctx), o.sort, ctx);
+  const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
   const filterBtn = useRef<HTMLButtonElement>(null);
   const displayBtn = useRef<HTMLButtonElement>(null);
@@ -87,7 +90,7 @@ export function Home() {
         <div className="board">
           {groups.map((g) => (
             <section key={g.key || "all"} className="board-col">
-              <div className="section-label">{g.key || "all"}<span className="right">{g.items.length}</span></div>
+              <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key || "all"}<span className="right">{g.items.length}</span></div>
               <div className="board-cards">{g.items.map((w) => <Card key={w.id} w={w} />)}</div>
             </section>
           ))}
@@ -95,7 +98,7 @@ export function Home() {
       ) : (
         groups.map((g) => (
           <section key={g.key || "all"} className="home-group">
-            {g.key && <div className="section-label">{g.key}<span className="right">{g.items.length}</span></div>}
+            {g.key && <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key}<span className="right">{g.items.length}</span></div>}
             <div className="cards">{g.items.map((w) => <Card key={w.id} w={w} />)}</div>
           </section>
         ))
