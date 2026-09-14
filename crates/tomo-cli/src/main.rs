@@ -67,6 +67,11 @@ enum Cmd {
     Kill { pid: u32 },
     #[command(about = "Show the GitHub pull request for a worktree's branch (needs gh)")]
     Pr { worktree: Option<String> },
+    #[command(about = "Show provider allowance windows for Claude, Codex, and Pi")]
+    Usage {
+        #[arg(long, help = "Fetch fresh data instead of the daemon's last poll")]
+        refresh: bool,
+    },
     #[command(subcommand, about = "Configuration")]
     Config(ConfigCmd),
     #[command(subcommand, about = "Workflow hooks")]
@@ -679,6 +684,10 @@ async fn run() -> Result<()> {
             let id = resolve_worktree_id(&c, worktree).await?;
             let r: PrStatusResult = c.call(Call::PrStatus { worktree_id: id }).await?;
             print::pr(&r, json);
+        }
+        Cmd::Usage { refresh } => {
+            let list: Vec<UsageSnapshot> = c.call(Call::UsageGet { refresh }).await?;
+            print::usage(&list, json);
         }
         Cmd::Kill { pid } => {
             let _: Value = c.call(Call::ProcessKillTree { pid }).await?;
