@@ -135,14 +135,14 @@ export function Towns() {
             {ALL.map((t) => {
               if (unlockBySlug.has(t.slug)) return null;
               const [x, y] = project(t.lon, t.lat);
-              return <circle key={t.slug} cx={x} cy={y} r={r(1.8)} className={`town-dot rarity-${t.rarity}`} onMouseEnter={(e) => show(t, e)} onMouseLeave={scheduleHide} />;
+              return <g key={t.slug} onMouseEnter={(e) => show(t, e)} onMouseLeave={scheduleHide}><circle cx={x} cy={y} r={r(7)} className="town-hit" /><circle cx={x} cy={y} r={r(3)} className={`town-dot rarity-${t.rarity}`} /></g>;
             })}
             {unlocked.map(({ town }) => {
               const [x, y] = project(town.lon, town.lat);
               return (
                 <g key={town.slug} className={`town-unlocked rarity-${town.rarity}`} onMouseEnter={(e) => show(town, e)} onMouseLeave={scheduleHide}>
-                  <circle cx={x} cy={y} r={r(9)} className="town-ring" />
-                  <circle cx={x} cy={y} r={r(4.5)} className="town-core" />
+                  <circle cx={x} cy={y} r={r(11)} className="town-ring" />
+                  <circle cx={x} cy={y} r={r(6)} className="town-core" />
                 </g>
               );
             })}
@@ -206,7 +206,7 @@ function TownCard({ hover, style, onEnter, onLeave, worktreeName, openWorktree }
           {worktreeName && <> · <button className="link" onClick={openWorktree}>{worktreeName}</button></>}
         </div>
       )}
-      <button className="link" onClick={() => openUrl(t.wiki).catch(() => {})}><ExternalLink className="icon" /> wikipedia</button>
+      <button className="link" onClick={() => openUrl(t.wiki).catch(() => {})}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
     </div>
   );
 }

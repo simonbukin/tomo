@@ -5,7 +5,7 @@ use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::towns;
+use crate::features::{actions, towns};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -73,6 +73,7 @@ pub struct Inner {
     pub archiving: HashSet<Id>,
     pub hook_queue: Vec<HookEvent>,
     pub town_by_worktree: HashMap<Id, String>,
+    pub actions: HashMap<Id, ActionSet>,
     pub discovered_once: bool,
     pub last_full_poll_ms: u64,
 }
@@ -86,6 +87,7 @@ pub struct Daemon {
     pub stop: tokio::sync::Notify,
     pub refresh: tokio::sync::Notify,
     pub repos_changed: tokio::sync::Notify,
+    pub rt: tokio::runtime::Handle,
 }
 
 pub fn err(code: ErrorCode, msg: impl Into<String>) -> RpcError {
@@ -155,12 +157,14 @@ impl Daemon {
                 archiving: HashSet::new(),
                 hook_queue: Vec::new(),
                 town_by_worktree: HashMap::new(),
+                actions: HashMap::new(),
                 discovered_once: false,
                 last_full_poll_ms: 0,
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
             repos_changed: tokio::sync::Notify::new(),
+            rt: tokio::runtime::Handle::current(),
             paths,
         });
         daemon.write_integration_files()?;
@@ -313,6 +317,7 @@ impl Daemon {
             exit_code: p.exit_code,
             agent,
             created_at_ms: p.row.created_at_ms,
+            action_id: p.row.action_id.clone(),
         })
     }
 
@@ -465,8 +470,133 @@ impl Daemon {
         let worktrees = Self::worktree_views(&inner);
         Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
         drop(inner);
+        self.reload_actions();
         self.flush_hooks();
         Ok(())
+    }
+
+    /// Re-reads every worktree's `.tomo.toml`. A malformed file never blocks
+    /// the worktree: it yields an empty set plus one notice.
+    pub fn reload_actions(self: &Arc<Self>) {
+        let targets: Vec<(Id, PathBuf)> = self.lock().worktrees.values().filter(|w| w.exists).map(|w| (w.id.clone(), w.path.clone())).collect();
+        let loaded: Vec<ActionSet> = targets.into_iter().map(|(id, path)| {
+            let (actions, error) = actions::load(&path);
+            ActionSet { worktree_id: id, actions, error }
+        }).collect();
+        let mut inner = self.lock();
+        let live: HashSet<&Id> = loaded.iter().map(|s| &s.worktree_id).collect();
+        inner.actions.retain(|id, _| live.contains(id));
+        for set in loaded {
+            let previous = inner.actions.get(&set.worktree_id);
+            let changed = previous.map_or(true, |p| p.actions != set.actions || p.error != set.error);
+            if !changed {
+                continue;
+            }
+            let new_error = set.error.clone().filter(|e| previous.and_then(|p| p.error.as_ref()) != Some(e));
+            if let Some(e) = new_error {
+                let name = inner.worktrees.get(&set.worktree_id).map(|w| Self::worktree_view(&inner, w).name).unwrap_or_default();
+                Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{name}: {e}") });
+            }
+            inner.actions.insert(set.worktree_id.clone(), set.clone());
+            Self::emit(&mut inner, Event::ActionsChanged { set });
+        }
+    }
+
+    fn action_def(inner: &Inner, worktree_id: &str, action_id: &str) -> Result<ActionDef, RpcError> {
+        let set = inner.actions.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found or has no .tomo.toml"))?;
+        set.actions.iter().find(|a| a.id == action_id).cloned().ok_or_else(|| {
+            let known: Vec<&str> = set.actions.iter().map(|a| a.id.as_str()).collect();
+            err(ErrorCode::NotFound, format!("unknown action {action_id:?}; known actions: {}", known.join(", ")))
+        })
+    }
+
+    fn running_action_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id> {
+        inner.panes.values().find(|p| p.row.worktree_id == worktree_id && p.row.action_id.as_deref() == Some(action_id) && p.pty.is_some() && p.exit_code.is_none()).map(|p| p.row.id.clone())
+    }
+
+    fn queue_action_event(inner: &mut Inner, event: &str, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>) {
+        let mut ev = events::envelope(inner, event, Some(worktree_id));
+        ev.action = Some(HookAction { id: action.id.clone(), label: action.label.clone() });
+        ev.pane = pane_id.and_then(|p| inner.panes.get(p)).map(|p| HookPane { id: p.row.id.clone(), tab_id: p.row.tab_id.clone(), cwd: p.row.cwd.clone() });
+        inner.hook_queue.push(ev);
+    }
+
+    fn focus_pane(inner: &mut Inner, pane_id: &str) {
+        let Some((tab_id, worktree_id)) = inner.panes.get(pane_id).map(|p| (p.row.tab_id.clone(), p.row.worktree_id.clone())) else { return };
+        let changed: Vec<TabRow> = inner
+            .tabs
+            .values_mut()
+            .filter(|t| t.worktree_id == worktree_id)
+            .filter_map(|t| {
+                let active = t.id == tab_id;
+                let next_pane = if active { Some(pane_id.to_string()) } else { t.active_pane_id.clone() };
+                if t.is_active == active && t.active_pane_id == next_pane {
+                    return None;
+                }
+                t.is_active = active;
+                t.active_pane_id = next_pane;
+                Some(t.clone())
+            })
+            .collect();
+        for t in &changed {
+            let _ = inner.store.tab_upsert(t);
+        }
+        if !changed.is_empty() {
+            Self::emit_tabs(inner, &worktree_id);
+        }
+        Self::emit(inner, Event::FocusRequest { worktree_id, tab_id, pane_id: pane_id.to_string() });
+    }
+
+    fn run_action(self: &Arc<Self>, worktree_id: &str, action_id: &str) -> Result<ActionRunResult, RpcError> {
+        let mut inner = self.lock();
+        let action = Self::action_def(&inner, worktree_id, action_id)?;
+        let w = inner.worktrees.get(worktree_id).filter(|w| w.exists).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.clone();
+        match action.mode {
+            ActionMode::External => {
+                let mut cmd = std::process::Command::new("sh");
+                cmd.arg("-c").arg(&action.command).current_dir(&w.path);
+                cmd.env("TOMO_WORKTREE_ID", worktree_id).env("TOMO_WORKTREE_PATH", &w.path).env("TOMO_SOCKET", &self.paths.socket).env("TOMO_BIN", &self.tomo_bin);
+                cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+                cmd.spawn().map_err(|e| err(ErrorCode::Internal, format!("{}: {e}", action.command)))?;
+                Self::queue_action_event(&mut inner, "action.started", worktree_id, &action, None);
+                Ok(ActionRunResult { action, pane: None, reused: false })
+            }
+            ActionMode::Pane => {
+                if let Some(pane_id) = Self::running_action_pane(&inner, worktree_id, action_id) {
+                    Self::focus_pane(&mut inner, &pane_id);
+                    let pane = Self::pane_view(&inner, &pane_id);
+                    return Ok(ActionRunResult { action, pane, reused: true });
+                }
+                let argv = [inner.config.shell.clone(), "-lc".into(), action.command.clone()];
+                let (_, pane_id) = self.spawn_in_worktree(&mut inner, worktree_id, w.path.clone(), None, None, SplitDirection::Horizontal, Some(&argv), Some(action.label.clone()), None)?;
+                if let Some(pane) = inner.panes.get_mut(&pane_id) {
+                    pane.row.action_id = Some(action.id.clone());
+                    let row = pane.row.clone();
+                    let _ = inner.store.pane_upsert(&row);
+                }
+                Self::focus_pane(&mut inner, &pane_id);
+                Self::emit_pane(&mut inner, &pane_id);
+                Self::queue_action_event(&mut inner, "action.started", worktree_id, &action, Some(&pane_id));
+                let pane = Self::pane_view(&inner, &pane_id);
+                Ok(ActionRunResult { action, pane, reused: false })
+            }
+        }
+    }
+
+    fn stop_action(self: &Arc<Self>, worktree_id: &str, action_id: &str) -> Result<bool, RpcError> {
+        let mut inner = self.lock();
+        let action = Self::action_def(&inner, worktree_id, action_id)?;
+        let Some(pane_id) = Self::running_action_pane(&inner, worktree_id, action_id) else { return Ok(false) };
+        Self::queue_action_event(&mut inner, "action.exited", worktree_id, &action, Some(&pane_id));
+        if let Some(pid) = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
+            for child in procs::descendants(&inner.proc_rows, pid) {
+                procs::kill_tree(&inner.proc_rows, child);
+            }
+        }
+        self.persist_scrollback(&inner, &pane_id);
+        Self::remove_pane(&mut inner, &pane_id);
+        Self::emit_tabs(&mut inner, worktree_id);
+        Ok(true)
     }
 
     /// Dispatches hook events queued while the state lock was held.
@@ -573,6 +703,7 @@ impl Daemon {
         let exit_pane = pane_id.to_string();
         let on_exit: crate::pty::ExitSink = Box::new(move |code| {
             if let Some(d) = exit_daemon.upgrade() {
+                let _runtime = d.rt.enter();
                 d.on_exit(&exit_pane, code);
             }
         });
@@ -637,7 +768,12 @@ impl Daemon {
         let Some(pane) = inner.panes.get_mut(pane_id) else { return };
         pane.exit_code = Some(code.unwrap_or(-1));
         let worktree_id = pane.row.worktree_id.clone();
+        let action_id = pane.row.action_id.clone();
         Self::emit(&mut inner, Event::PaneExited { pane_id: pane_id.to_string(), exit_code: code });
+        if let Some(aid) = action_id {
+            let action = Self::action_def(&inner, &worktree_id, &aid).unwrap_or_else(|_| ActionDef { id: aid.clone(), label: aid.clone(), command: String::new(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None });
+            Self::queue_action_event(&mut inner, "action.exited", &worktree_id, &action, Some(pane_id));
+        }
         if let Some(agent) = inner.agents.get_mut(pane_id) {
             agent.state = AgentState::Exited;
             agent.authority = Authority::Lifecycle;
@@ -747,6 +883,7 @@ impl Daemon {
             agent_kind,
             session_ref: session_ref.clone(),
             created_at_ms: now_ms(),
+            action_id: None,
         };
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
@@ -1025,11 +1162,32 @@ impl Daemon {
         Self::emit_tabs(inner, worktree_id);
     }
 
-    fn remove_cleanup_dirs(path: &Path, names: &[String]) -> usize {
-        names.iter().map(|n| path.join(n)).filter(|p| p.is_dir()).filter(|p| std::fs::remove_dir_all(p).is_ok()).count()
+    fn remove_cleanup_dirs(path: &Path, names: &[String]) -> Vec<String> {
+        names.iter().filter(|n| path.join(n).is_dir()).filter(|n| std::fs::remove_dir_all(path.join(n)).is_ok()).cloned().collect()
     }
 
-    async fn archive_worktree(self: &Arc<Self>, worktree_id: &str) -> Result<Value, RpcError> {
+    /// Makes every non-ignored change recoverable from the branch before the tree goes away.
+    async fn archive_checkpoint(path: &Path, mode: CheckpointMode) -> Result<Option<String>, RpcError> {
+        if mode == CheckpointMode::Discard {
+            return Ok(None);
+        }
+        let s = git::summary(path).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
+        if s.detached {
+            return Err(err(ErrorCode::Conflict, "worktree is on a detached HEAD; check out a branch first, or archive with --discard"));
+        }
+        if s.conflicts > 0 {
+            return Err(err(ErrorCode::Conflict, format!("worktree has {} unresolved conflicts; resolve them first, or archive with --discard", s.conflicts)));
+        }
+        if !s.dirty {
+            return Ok(None);
+        }
+        if mode == CheckpointMode::RequireClean {
+            return Err(err(ErrorCode::Conflict, "worktree has uncommitted changes; commit them, archive without --no-checkpoint, or use --discard"));
+        }
+        git::checkpoint(path, "tomo: archive checkpoint").await.map_err(|e| err(ErrorCode::Git, format!("checkpoint commit failed: {e}")))
+    }
+
+    async fn archive_worktree(self: &Arc<Self>, worktree_id: &str, checkpoint: CheckpointMode) -> Result<Value, RpcError> {
         let (path, repo_path, branch, name, event) = {
             let mut inner = self.lock();
             let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.clone();
@@ -1049,19 +1207,18 @@ impl Daemon {
             let event = events::envelope(&inner, "worktree.before_archive", Some(worktree_id));
             (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), Self::worktree_view(&inner, &w).name, event)
         };
-        let result = self.archive_steps(worktree_id, &path, &repo_path, &branch, &name, event).await;
+        let result = self.archive_steps(worktree_id, &path, &repo_path, &branch, &name, event, checkpoint).await;
         let mut inner = self.lock();
         inner.archiving.remove(worktree_id);
         match result {
-            Ok(()) => {
-                let view = inner.worktrees.get(worktree_id).map(|w| Self::worktree_view(&inner, w));
+            Ok(result) => {
                 let ev = events::envelope(&inner, "worktree.archived", Some(worktree_id));
                 inner.hook_queue.push(ev);
                 let worktrees = Self::worktree_views(&inner);
                 Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
                 drop(inner);
                 self.flush_hooks();
-                view.ok_or_else(|| err(ErrorCode::Internal, "archived worktree vanished")).and_then(ok)
+                ok(result)
             }
             Err(e) => {
                 let worktrees = Self::worktree_views(&inner);
@@ -1071,17 +1228,18 @@ impl Daemon {
         }
     }
 
-    async fn archive_steps(self: &Arc<Self>, worktree_id: &str, path: &Path, repo_path: &Path, branch: &str, name: &str, event: HookEvent) -> Result<(), RpcError> {
+    async fn archive_steps(self: &Arc<Self>, worktree_id: &str, path: &Path, repo_path: &Path, branch: &str, name: &str, event: HookEvent, checkpoint: CheckpointMode) -> Result<ArchiveResult, RpcError> {
         if let Err(run) = self.gate(event).await {
             return Err(err(ErrorCode::Aborted, format!("before_archive hook refused ({}): {}", run.command, run.output_tail.lines().last().unwrap_or(""))));
         }
+        let checkpoint_commit = Self::archive_checkpoint(path, checkpoint).await?;
         {
             let mut inner = self.lock();
             Self::close_worktree_panes(&mut inner, worktree_id);
         }
         let cleanup = self.lock().config.archive_cleanup.clone();
         let dir = path.to_path_buf();
-        let removed = tokio::task::spawn_blocking(move || Self::remove_cleanup_dirs(&dir, &cleanup)).await.unwrap_or(0);
+        let removed = tokio::task::spawn_blocking(move || Self::remove_cleanup_dirs(&dir, &cleanup)).await.unwrap_or_default();
         git::worktree_remove(repo_path, path).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
         {
             let mut inner = self.lock();
@@ -1090,10 +1248,14 @@ impl Daemon {
             row.archived_at_ms = Some(now_ms());
             row.archived_branch = (!branch.is_empty()).then(|| branch.to_string());
             inner.store.meta_upsert(&row).map_err(internal)?;
-            Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Info, message: format!("archived {name} ({removed} build dirs removed)") });
+            let what = match &checkpoint_commit {
+                Some(c) => format!("checkpoint {}", &c[..c.len().min(7)]),
+                None => "clean".to_string(),
+            };
+            Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Info, message: format!("archived {name} ({what}, {} build dirs removed)", removed.len()) });
         }
         self.discover(Summaries::Cached).await.map_err(internal)?;
-        Ok(())
+        Ok(ArchiveResult { worktree_id: worktree_id.to_string(), branch: (!branch.is_empty()).then(|| branch.to_string()), checkpoint_commit, cleanup_removed: removed })
     }
 
     async fn restore_worktree(self: &Arc<Self>, worktree_id: &str) -> Result<Value, RpcError> {
@@ -1177,6 +1339,7 @@ impl Daemon {
                     agents: inner.agents.values().cloned().collect(),
                     attention,
                     resources: inner.resources.clone(),
+                    actions: inner.actions.values().cloned().collect(),
                     ui_state,
                 })
             }
@@ -1325,7 +1488,23 @@ impl Daemon {
                 inner.hook_queue.push(ev);
                 inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
             }
-            Call::WorktreeArchive { worktree_id } => self.archive_worktree(&worktree_id).await,
+            Call::WorktreeArchive { worktree_id, checkpoint } => self.archive_worktree(&worktree_id, checkpoint).await,
+            Call::ActionList { worktree_id } => {
+                let inner = self.lock();
+                if !inner.worktrees.contains_key(&worktree_id) {
+                    return Err(err(ErrorCode::NotFound, "worktree not found"));
+                }
+                ok(inner.actions.get(&worktree_id).cloned().unwrap_or(ActionSet { worktree_id, actions: vec![], error: None }))
+            }
+            Call::ActionRun { worktree_id, action_id } => self.run_action(&worktree_id, &action_id).and_then(ok),
+            Call::ActionStop { worktree_id, action_id } => {
+                self.stop_action(&worktree_id, &action_id)?;
+                Ok(Value::Null)
+            }
+            Call::ActionRestart { worktree_id, action_id } => {
+                self.stop_action(&worktree_id, &action_id)?;
+                self.run_action(&worktree_id, &action_id).and_then(ok)
+            }
             Call::WorktreeRestore { worktree_id } => self.restore_worktree(&worktree_id).await,
             Call::WorktreeOpen { worktree_id } => {
                 let needs_pane = {
@@ -1366,7 +1545,6 @@ impl Daemon {
                 next.display_name = next.display_name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
                 next.project = next.project.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
                 next.tags = next.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect();
-                next.priority = next.priority.map(|p| p.clamp(1, 4));
                 next.state = next.state.map(|st| st.trim().to_string()).filter(|st| !st.is_empty());
                 if let Some(st) = &next.state {
                     if !inner.config.states.iter().any(|d| &d.id == st) {

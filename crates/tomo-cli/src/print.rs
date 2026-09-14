@@ -60,7 +60,7 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
     }
     for w in ws {
         let repo = repos.iter().find(|r| r.id == w.repo_id).map(|r| r.name.as_str()).unwrap_or("?");
-        let prio = w.metadata.priority.map(|p| format!(" P{p}")).unwrap_or_default();
+        let prio = w.metadata.state.as_deref().map(|s| format!(" [{s}]")).unwrap_or_default();
         let tags = if w.metadata.tags.is_empty() { String::new() } else { format!(" #{}", w.metadata.tags.join(" #")) };
         let branch = if w.detached { "detached".to_string() } else { w.branch.clone().unwrap_or_default() };
         let dirty = w.git.as_ref().map_or("", |g| if g.dirty { " *" } else { "" });
@@ -81,7 +81,7 @@ pub fn metadata(m: &WorktreeMetadata, json: bool) {
     }
     println!("display_name {}", m.display_name.as_deref().unwrap_or("-"));
     println!("project      {}", m.project.as_deref().unwrap_or("-"));
-    println!("priority     {}", m.priority.map(|p| format!("P{p}")).unwrap_or_else(|| "-".into()));
+    println!("state        {}", m.state.as_deref().unwrap_or("-"));
     println!("tags         {}", if m.tags.is_empty() { "-".to_string() } else { m.tags.join(", ") });
 }
 
@@ -260,5 +260,56 @@ pub fn states(states: &[StateDef], json: bool) {
     }
     for s in states {
         println!("{:<3} {:<16} {}", s.order, s.id, s.label);
+    }
+}
+
+pub fn archive_result(r: &ArchiveResult, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    println!("archived {}", r.worktree_id);
+    match &r.checkpoint_commit {
+        Some(c) => println!("checkpoint {} tomo: archive checkpoint", &c[..c.len().min(7)]),
+        None => println!("checkpoint not needed (clean)"),
+    }
+    if !r.cleanup_removed.is_empty() {
+        println!("removed {}", r.cleanup_removed.join(", "));
+    }
+    if let Some(b) = &r.branch {
+        println!("branch kept: {b}");
+    }
+}
+
+pub fn actions(set: &ActionSet, json: bool) {
+    if json {
+        return emit_json(&set.actions);
+    }
+    for a in &set.actions {
+        let mode = match a.mode {
+            ActionMode::Pane => "pane",
+            ActionMode::External => "external",
+        };
+        let show = match a.show {
+            ActionShow::Topbar => "topbar",
+            ActionShow::Menu => "menu",
+        };
+        println!("{:<14} {:<18} {:<9} {:<7} {}", a.id, a.label, mode, show, a.command);
+    }
+    if let Some(e) = &set.error {
+        println!("warning: {e}");
+    }
+    if set.actions.is_empty() && set.error.is_none() {
+        println!("no actions; add [[actions]] to .tomo.toml in the worktree");
+    }
+}
+
+pub fn action_run(r: &ActionRunResult, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    match (&r.pane, r.reused) {
+        (Some(p), true) => println!("{} already running in pane {}", r.action.label, p.id),
+        (Some(p), false) => println!("{} started in pane {}", r.action.label, p.id),
+        (None, _) => println!("{} launched", r.action.label),
     }
 }

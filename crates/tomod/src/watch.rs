@@ -5,20 +5,31 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-fn interesting(event: &notify::Event) -> bool {
-    event.paths.iter().any(|p| {
-        let s = p.to_string_lossy();
-        !s.contains("/objects/") && !s.ends_with(".lock") && !s.contains("/logs/")
-    })
+#[derive(Clone, Copy, PartialEq)]
+enum Change {
+    Git,
+    Actions,
+}
+
+fn classify(event: &notify::Event) -> Option<Change> {
+    if event.paths.iter().any(|p| p.file_name().map_or(false, |n| n == crate::features::actions::FILE_NAME)) {
+        return Some(Change::Actions);
+    }
+    event
+        .paths
+        .iter()
+        .any(|p| {
+            let s = p.to_string_lossy();
+            s.contains("/.git/") && !s.contains("/objects/") && !s.ends_with(".lock") && !s.contains("/logs/")
+        })
+        .then_some(Change::Git)
 }
 
 pub async fn run(daemon: Arc<Daemon>) {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Change>();
     let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if let Ok(ev) = res {
-            if interesting(&ev) {
-                let _ = tx.send(());
-            }
+        if let Some(change) = res.ok().as_ref().and_then(classify) {
+            let _ = tx.send(change);
         }
     }) {
         Ok(w) => w,
@@ -30,10 +41,15 @@ pub async fn run(daemon: Arc<Daemon>) {
     let mut watched: HashSet<PathBuf> = HashSet::new();
     let mut ticker = tokio::time::interval(Duration::from_secs(30));
     loop {
-        let repo_dirs: Vec<PathBuf> = daemon.lock().repos.iter().filter(|r| r.exists).map(|r| r.path.join(".git")).collect();
-        let fresh: Vec<PathBuf> = repo_dirs.into_iter().filter(|d| d.is_dir() && !watched.contains(d)).collect();
-        for dir in fresh {
-            if watcher.watch(&dir, RecursiveMode::Recursive).is_ok() {
+        let (repo_dirs, worktree_dirs): (Vec<PathBuf>, Vec<PathBuf>) = {
+            let inner = daemon.lock();
+            (
+                inner.repos.iter().filter(|r| r.exists).map(|r| r.path.join(".git")).collect(),
+                inner.worktrees.values().filter(|w| w.exists).map(|w| w.path.clone()).collect(),
+            )
+        };
+        for (dir, mode) in repo_dirs.into_iter().map(|d| (d, RecursiveMode::Recursive)).chain(worktree_dirs.into_iter().map(|d| (d, RecursiveMode::NonRecursive))) {
+            if dir.is_dir() && !watched.contains(&dir) && watcher.watch(&dir, mode).is_ok() {
                 watched.insert(dir);
             }
         }
@@ -41,12 +57,20 @@ pub async fn run(daemon: Arc<Daemon>) {
             _ = ticker.tick() => {}
             _ = daemon.repos_changed.notified() => {}
             _ = daemon.refresh.notified() => { debounce(&mut rx).await; let _ = daemon.discover(Summaries::All).await; }
-            Some(()) = rx.recv() => { debounce(&mut rx).await; let _ = daemon.discover(Summaries::Cached).await; }
+            Some(change) = rx.recv() => {
+                let git = debounce(&mut rx).await || change == Change::Git;
+                if git { let _ = daemon.discover(Summaries::Cached).await; } else { daemon.reload_actions(); }
+            }
         }
     }
 }
 
-async fn debounce(rx: &mut tokio::sync::mpsc::UnboundedReceiver<()>) {
+/// Drains the burst; returns true when any git change was in it.
+async fn debounce(rx: &mut tokio::sync::mpsc::UnboundedReceiver<Change>) -> bool {
     tokio::time::sleep(Duration::from_millis(400)).await;
-    while rx.try_recv().is_ok() {}
+    let mut git = false;
+    while let Ok(c) = rx.try_recv() {
+        git |= c == Change::Git;
+    }
+    git
 }
