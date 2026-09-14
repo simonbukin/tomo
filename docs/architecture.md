@@ -200,6 +200,11 @@ Measured with `scripts/perf.sh` on an Apple Silicon Mac, release build,
 | process poll (`ps`, fresh)             | ~10 ms   |
 | daemon idle CPU with a GUI attached    | ~0.3 %   |
 | daemon resident memory                 | ~13 MB   |
+| app: window created (Tauri setup)      | ~240 ms after process start |
+| app: first request to the daemon       | ~430 ms after process start (warm) |
+| app main bundle                        | ~295 KB JS; terminal and map chunks load on demand |
+
+Run the app binary with `TOMO_TIMING=1` to print these marks on stderr.
 
 Design choices behind these numbers:
 
