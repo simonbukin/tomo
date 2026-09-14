@@ -54,8 +54,16 @@ impl Client {
         let stream = UnixStream::connect(socket_path()).await?;
         let (rd, wr) = stream.into_split();
         let client = Client { writer: Mutex::new(wr), reader: Mutex::new(BufReader::new(rd).lines()), next_id: AtomicU64::new(1) };
-        let _: Hello = client.call(Call::Hello { protocol: PROTOCOL_VERSION, client: format!("tomo-cli/{}", env!("CARGO_PKG_VERSION")) }).await?;
-        Ok(client)
+        match client.call::<Hello>(Call::Hello { protocol: PROTOCOL_VERSION, client: format!("tomo-cli/{}", env!("CARGO_PKG_VERSION")) }).await {
+            Ok(_) => Ok(client),
+            Err(e) if e.to_string().contains("unsupported") => {
+                eprintln!("tomo: stopping a daemon from an older Tomo version");
+                let _: Result<serde_json::Value> = client.call(Call::DaemonStop).await;
+                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                bail!("daemon protocol mismatch")
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn connect_or_start() -> Result<Self> {
