@@ -1,0 +1,35 @@
+/* Terminal workspace: splits, panes, legends. The terminal stays dominant; chrome stays thin. */
+
+.layout-root { flex: 1; min-height: 0; display: flex; padding: var(--sp-1) var(--sp-2) var(--sp-2); background: var(--bg); }
+.split { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.split-horizontal { flex-direction: row; }
+.split-vertical { flex-direction: column; }
+.split-child { display: flex; min-width: 0; min-height: 0; flex-grow: 0; flex-shrink: 1; overflow: hidden; }
+.split-child > * { flex: 1; min-width: 0; min-height: 0; }
+.splitter { flex: none; background: transparent; position: relative; }
+.splitter::after { content: ""; position: absolute; background: var(--line-strong); opacity: 0; border-radius: 2px; transition: opacity var(--dur-fast) ease-out; }
+.splitter:hover::after, body.resizing-h .splitter-horizontal::after, body.resizing-v .splitter-vertical::after { opacity: 1; background: var(--accent); }
+.splitter-horizontal { width: var(--sp-2); cursor: col-resize; }
+.splitter-horizontal::after { top: 12px; bottom: 4px; left: 3px; width: 2px; }
+.splitter-vertical { height: var(--sp-2); cursor: row-resize; }
+.splitter-vertical::after { left: 4px; right: 4px; top: 3px; height: 2px; }
+
+.pane-wrap { flex: 1; display: flex; min-width: 0; min-height: 0; padding-top: 9px; }
+.pane { container-type: inline-size; position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--term-bg); transition: border-color var(--dur-fast) ease-out; }
+.pane-active { border-color: var(--accent); }
+.pane-dead .pane-body { opacity: 0.55; }
+.pane-legend { position: absolute; top: -9px; left: 10px; right: 10px; display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-0); line-height: 16px; pointer-events: none; font-family: var(--mono); }
+.pane-legend > * { pointer-events: auto; }
+.pane-legend .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--term-bg); padding: 0 6px; color: var(--fg-1); max-width: 60%; border: none; border-radius: 0; font-size: inherit; }
+.pane-active .pane-legend .chip { color: var(--accent); }
+.pane-legend .chip strong { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pane-legend .chip .agent-state { color: var(--fg-2); }
+.pane-legend .chip.right { margin-left: auto; color: var(--fg-3); max-width: 40%; }
+.pane-legend .chip.right .btn-icon { width: 16px; height: 16px; padding: 1px; opacity: 0; }
+.pane:hover .pane-legend .chip.right .btn-icon, .pane-legend .chip.right .btn-icon:focus-visible { opacity: 1; }
+@container (max-width: 320px) { .pane-legend .chip.right span, .pane-legend .chip .agent-state, .pane-legend .chip .pane-note { display: none; } .pane-legend .chip { max-width: 80%; } }
+.pane-note { color: var(--fg-3); }
+.pane-zoomed { color: var(--accent); }
+.pane-body { flex: 1; min-height: 0; padding: var(--sp-3) var(--sp-1) var(--sp-1) var(--sp-3); user-select: text; overflow: hidden; border-radius: var(--radius); }
+.pane-body .xterm { height: 100%; }
+.pane-body .xterm-viewport { overflow-y: auto; }

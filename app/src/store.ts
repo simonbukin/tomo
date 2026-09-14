@@ -22,7 +22,7 @@ import type {
   Worktree,
   WorktreeResources,
 } from "./types";
-import type { MenuItem } from "./ContextMenu";
+import type { MenuAnchor, MenuItem } from "./components/ui";
 import type { QueryContext } from "./homeQuery";
 
 export interface State {
@@ -43,7 +43,7 @@ export interface State {
   paletteOpen: boolean;
   dialog: Dialog | null;
   connectionNonce: number;
-  menu: { x: number; y: number; items: MenuItem[] } | null;
+  menu: { anchor: MenuAnchor; items: MenuItem[]; nonce: number } | null;
   unlocks: TownUnlock[];
   selection: Set<Id>;
   selectionAnchor: Id | null;
@@ -55,7 +55,7 @@ export interface State {
 export type Dialog =
   | { kind: "add-repo" }
   | { kind: "create-worktree"; repoId?: Id }
-  | { kind: "confirm"; title: string; body: string; confirmLabel: string; check?: string; onConfirm: (checked: boolean) => void }
+  | { kind: "confirm"; title: string; body: string; confirmLabel: string; destructive?: boolean; check?: string; onConfirm: (checked: boolean) => void }
   | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void }
   | { kind: "integrations" }
   | { kind: "config-check" }

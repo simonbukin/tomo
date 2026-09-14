@@ -1,12 +1,12 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, Minus, Plus, RotateCcw } from "lucide-react";
+import { IconButton } from "./components/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openWorktree } from "./actions";
 import outline from "./data/japan-outline.json";
 import towns from "./data/japan-towns.json";
 import { useStore } from "./store";
 import type { Rarity, Town, TownUnlock } from "./types";
-import "./towns.css";
 
 const ALL = towns as Town[];
 const RINGS = outline as [number, number][][];
@@ -149,9 +149,9 @@ export function Towns() {
           </g>
         </svg>
         <div className="map-controls">
-          <button className="ghost" title="Zoom in" onClick={() => zoomCenter(1.5)}><Plus className="icon" /></button>
-          <button className="ghost" title="Zoom out" onClick={() => zoomCenter(1 / 1.5)}><Minus className="icon" /></button>
-          <button className="ghost" title="Reset view" onClick={() => setView(HOME)}><RotateCcw className="icon" /></button>
+          <IconButton label="Zoom in" tooltipSide="left" onClick={() => zoomCenter(1.5)}><Plus className="icon" /></IconButton>
+          <IconButton label="Zoom out" tooltipSide="left" onClick={() => zoomCenter(1 / 1.5)}><Minus className="icon" /></IconButton>
+          <IconButton label="Reset view" tooltipSide="left" onClick={() => setView(HOME)}><RotateCcw className="icon" /></IconButton>
         </div>
         {hover && <TownCard hover={hover} style={cardStyle(hover)} onEnter={keep} onLeave={scheduleHide} worktreeName={worktrees.find((w) => w.id === hover.unlock?.worktree_id)?.name} openWorktree={() => hover.unlock && openWorktree(hover.unlock.worktree_id)} />}
       </div>

@@ -1,0 +1,46 @@
+/* Home: dense list rows and a state board. Not project-management software. */
+
+.home { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); }
+.home-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.home-search { flex: 1; min-width: 240px; display: flex; align-items: center; gap: var(--sp-2); background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0 var(--sp-2); }
+.home-search .icon { color: var(--fg-3); }
+.home-search input { flex: 1; border: none; background: none; padding: 3px 0; }
+.home-search input:focus-visible { outline: none; }
+.home-search:focus-within { border-color: var(--accent); }
+.home-empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: 80px 0; color: var(--fg-2); }
+.home-group { margin-bottom: var(--sp-4); }
+
+.chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: var(--fs-1); color: var(--fg-1); background: var(--bg-1); }
+.chip .btn-icon { width: 18px; height: 18px; padding: 2px; }
+.chip .btn-icon .icon { width: 11px; height: 11px; }
+
+/* ---- list rows */
+.wt-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.wt-list-row { display: grid; grid-template-columns: 14px minmax(140px, 1.4fr) minmax(90px, 0.8fr) minmax(80px, 0.7fr) minmax(120px, 1.6fr) minmax(90px, 1fr) 190px; align-items: center; column-gap: var(--sp-3); height: 30px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line); font-size: var(--fs-1); color: var(--fg-1); transition: background-color var(--dur-fast) ease-out; }
+.wt-list-row:hover { background: var(--bg-1); }
+.wt-list-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-list-row .name { color: var(--fg); font-weight: 500; font-size: var(--fs-2); }
+.wt-list-row .branch { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
+.wt-list-row .agents { display: inline-flex; gap: var(--sp-3); }
+.wt-list-row .runtime { display: inline-flex; gap: var(--sp-3); color: var(--fg-2); font-variant-numeric: tabular-nums; justify-content: flex-end; }
+.wt-list-row.row-attention .name { color: var(--waiting); }
+.wt-list-row.row-missing, .wt-list-row.row-archived { opacity: 0.55; }
+.wt-list-row.row-archiving { opacity: 0.7; }
+
+/* ---- board */
+.board { display: flex; gap: var(--sp-3); align-items: flex-start; overflow-x: auto; padding-bottom: var(--sp-3); }
+.board-col { flex: 0 0 260px; display: flex; flex-direction: column; border-radius: var(--radius); }
+.board-col-over { outline: 1px dashed var(--accent); outline-offset: 4px; }
+.board-cards { display: flex; flex-direction: column; gap: var(--sp-2); min-height: 40px; }
+.card { position: relative; display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-2) var(--sp-3); background: var(--bg); transition: background-color var(--dur-fast) ease-out, border-color var(--dur-fast) ease-out; }
+.card:hover { border-color: var(--line-strong); background: var(--bg-1); }
+.card-attention { border-color: var(--waiting); }
+.card-missing, .card-archived { opacity: 0.55; }
+.card-archiving { opacity: 0.7; cursor: default; }
+.card-title { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); font-weight: 500; font-size: var(--fs-2); line-height: 1.5; }
+.card-title .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.card-sub { padding-left: 22px; color: var(--fg-2); font-size: var(--fs-0); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-sub.tags { font-family: var(--font-ui); font-size: var(--fs-1); }
+.card-agents { padding-left: 22px; display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); margin-top: 3px; }
+.card-foot { padding-left: 22px; display: flex; align-items: center; gap: var(--sp-3); margin-top: 3px; font-size: var(--fs-0); color: var(--fg-2); min-height: 16px; font-variant-numeric: tabular-nums; }
+.card-foot .right { margin-left: auto; display: inline-flex; gap: var(--sp-3); }

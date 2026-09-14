@@ -1,7 +1,8 @@
 import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc } from "./api";
-import { openMenu } from "./ContextMenu";
+import { openMenu } from "./MenuHost";
+import { Select } from "./components/ui";
 import { fileMenu } from "./menus";
 import { ResizeHandle } from "./Sidebar";
 import { setMetadata } from "./actions";
@@ -41,11 +42,13 @@ function MetadataSection({ w }: { w: Worktree }) {
       <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label><input value={project} onChange={(e) => setProject(e.target.value)} onBlur={() => commit({ project: project.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>state</label>
-        <select value={m.state ?? ""} onChange={(e) => commit({ state: e.target.value || null })}>
-          <option value="">no state</option>
-          {states.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          {m.state && !states.some((s) => s.id === m.state) && <option value={m.state}>{m.state}</option>}
-        </select>
+        <Select
+          aria-label="Workflow state"
+          size="sm"
+          value={m.state ?? ""}
+          onValueChange={(v) => commit({ state: v || null })}
+          options={[{ value: "", label: "no state" }, ...states.map((s) => ({ value: s.id, label: s.label })), ...(m.state && !states.some((s) => s.id === m.state) ? [{ value: m.state, label: m.state }] : [])]}
+        />
       </div>
       <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
     </section>
@@ -62,14 +65,14 @@ function GitSection({ w }: { w: Worktree }) {
   return (
     <section className="side-section">
       <div className="section-label">git <button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></div>
-      <div className="kv"><label>branch</label><span>{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
+      <div className="kv"><label>branch</label><span className="mono">{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
       {g ? (
         <>
           <div className="kv"><label>state</label><span>{g.dirty ? "dirty" : "clean"}</span></div>
           {g.files_changed > 0 && <div className="kv"><label>changed</label><span>{g.files_changed} file{g.files_changed === 1 ? "" : "s"}{g.untracked ? `, ${g.untracked} untracked` : ""}</span></div>}
           {!g.files_changed && g.untracked > 0 && <div className="kv"><label>untracked</label><span>{g.untracked}</span></div>}
           {(g.insertions > 0 || g.deletions > 0) && <div className="kv"><label>diff</label><span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span></div>}
-          {g.upstream && <div className="kv"><label>upstream</label><span>{g.upstream}{g.ahead || g.behind ? ` (↑${g.ahead ?? 0} ↓${g.behind ?? 0})` : ""}</span></div>}
+          {g.upstream && <div className="kv"><label>upstream</label><span className="mono">{g.upstream}{g.ahead || g.behind ? ` (↑${g.ahead ?? 0} ↓${g.behind ?? 0})` : ""}</span></div>}
         </>
       ) : (
         <div className="muted">{w.exists ? "no status yet" : "worktree directory is missing"}</div>

@@ -1,8 +1,9 @@
 import { ListFilter, Search, SlidersHorizontal, X } from "lucide-react";
 import { Wordmark } from "./Brand";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { openWorktree, setMetadata } from "./actions";
-import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
+import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
 import { worktreeMenu } from "./menus";
 import { agentsOf, formatBytes, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
@@ -30,8 +31,6 @@ export function Home() {
     const w = s.worktrees.find((x) => x.id === id);
     if (w && w.metadata.state !== stateIdOf(key)) setMetadata(id, { state: stateIdOf(key) });
   };
-  const filterBtn = useRef<HTMLButtonElement>(null);
-  const displayBtn = useRef<HTMLButtonElement>(null);
 
   const addFilter = (f: Filter) => set({ filters: o.filters.some((x) => x.kind === f.kind && x.value === f.value) ? o.filters : [...o.filters, f] });
   const removeFilter = (f: Filter) => set({ filters: o.filters.filter((x) => !(x.kind === f.kind && x.value === f.value)) });
@@ -77,12 +76,18 @@ export function Home() {
           <Search className="icon" />
           <input placeholder="search worktrees, branches, projects, tags" value={o.query} onChange={(e) => set({ query: e.target.value })} autoFocus />
         </label>
-        <button ref={filterBtn} className="ghost" onClick={() => openMenuAt(filterBtn.current!, filterMenu())}><ListFilter className="icon" /> filter</button>
-        <button ref={displayBtn} className="ghost" onClick={() => openMenuAt(displayBtn.current!, displayMenu())}><SlidersHorizontal className="icon" /> display</button>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="ghost"><ListFilter className="icon" /> filter</DropdownMenuTrigger>
+          <DropdownMenuContent><MenuItems items={filterMenu} /></DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="ghost"><SlidersHorizontal className="icon" /> display</DropdownMenuTrigger>
+          <DropdownMenuContent><MenuItems items={displayMenu} /></DropdownMenuContent>
+        </DropdownMenu>
         {o.filters.map((f) => (
           <span key={`${f.kind}:${f.value}`} className="chip rise">
             {label(f)}
-            <button className="chip-x" onClick={() => removeFilter(f)}><X className="icon" /></button>
+            <IconButton label="Remove filter" onClick={() => removeFilter(f)}><X className="icon" /></IconButton>
           </span>
         ))}
         {(o.query || o.filters.length > 0) && <button className="link" onClick={() => set({ query: "", filters: [] })}>clear</button>}
@@ -115,10 +120,51 @@ export function Home() {
         groups.map((g) => (
           <section key={g.key || "all"} className="home-group">
             {g.key && <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key}<span className="right">{g.items.length}</span></div>}
-            <div className="cards">{g.items.map((w) => <Card key={w.id} w={w} />)}</div>
+            <div className="wt-list">{g.items.map((w) => <Row key={w.id} w={w} />)}</div>
           </section>
         ))
       )}
+    </div>
+  );
+}
+
+function Row({ w }: { w: Worktree }) {
+  const agents = useStore((s) => agentsOf(s, w.id));
+  const res = useStore((s) => s.resources[w.id]);
+  const repo = useStore((s) => repoName(s, w.repo_id));
+  const attention = useStore((s) => needsAttention(w, queryContext(s)));
+  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
+  const g = w.git;
+  const archived = !!w.archived_at_ms;
+  const busy = w.archiving;
+  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
+  const summary = summarizeState(agents, attention);
+  return (
+    <div
+      className={`wt-list-row${attention ? " row-attention" : ""}${w.exists || archived ? "" : " row-missing"}${archived ? " row-archived" : ""}${busy ? " row-archiving" : ""}`}
+      onClick={() => !archived && !busy && openWorktree(w.id)}
+      onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
+      title={w.path}
+    >
+      <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
+      <span className="name">{w.name}</span>
+      <span className="muted">{w.metadata.project ?? repo}</span>
+      <span className="muted">{busy ? "archiving…" : archived ? "archived" : (state ?? "")}</span>
+      <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
+      <span className="agents">
+        {agents.map((a) => (
+          <span key={a.pane_id} className={`agent-line is-${a.state}`}>
+            <span className={`state state-${a.state}`} />
+            <span className="agent-kind">{a.kind}</span>
+          </span>
+        ))}
+        {w.metadata.tags.length > 0 && <span className="tag">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
+      </span>
+      <span className="runtime">
+        {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
+        {w.pane_count > 0 && <span>{w.pane_count} pane{w.pane_count === 1 ? "" : "s"}</span>}
+        {res && res.rss_bytes > 64 * 1024 * 1024 && <span>{formatBytes(res.rss_bytes)}</span>}
+      </span>
     </div>
   );
 }
@@ -152,7 +198,7 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
         </span>
       </div>
       <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>
-      {w.metadata.tags.length > 0 && <div className="card-sub">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</div>}
+      {w.metadata.tags.length > 0 && <div className="card-sub tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</div>}
       {agents.length > 0 && (
         <div className="card-agents">
           {agents.map((a) => (

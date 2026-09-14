@@ -1,9 +1,9 @@
 import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, Map, Plus, RotateCw } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
-import "./sidebar.css";
 import { Mark } from "./Brand";
-import { openMenu, openMenuAt, type MenuItem } from "./ContextMenu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
+import { openMenu } from "./MenuHost";
 import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { agentsOf, clearSelection, formatBytes, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
@@ -29,7 +29,6 @@ export function Sidebar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const sortBtn = useRef<HTMLButtonElement>(null);
   const sortMenu = (): MenuItem[] => [
     ...SORTS.map((s) => ({ label: s, checked: ui.sidebarSort === s, run: () => setUi({ sidebarSort: s }) })),
     { separator: true },
@@ -42,11 +41,14 @@ export function Sidebar() {
       <div className="sidebar-top">
         <Mark size={14} />
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
-        <button className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} title="Japan map" onClick={() => setUi({ view: "towns" })}><Map className="icon" /></button>
+        <IconButton label="Japan map" className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "towns" })}><Map className="icon" /></IconButton>
         <span className="spacer" />
-        <button ref={sortBtn} className="ghost" title={`sort: ${ui.sidebarSort}`} onClick={() => openMenuAt(sortBtn.current!, sortMenu())}><ArrowDownUp className="icon" /></button>
-        <button className="ghost" title="Add repository" onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></button>
-        <button className="ghost" title="Refresh repositories and worktrees" onClick={() => runAction("refresh")}><RotateCw className="icon" /></button>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
+          <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
+        </DropdownMenu>
+        <IconButton label="Add repository" onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
+        <IconButton label="Refresh repositories and worktrees" onClick={() => runAction("refresh")}><RotateCw className="icon" /></IconButton>
       </div>
       <div className="sidebar-scroll">
         {selectionSize > 0 && (
@@ -115,7 +117,7 @@ function RepoGroup({ repo, items, active }: { repo: Repo; items: Worktree[]; act
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
         {collapsed && attention && <span className="state state-waiting" />}
-        {repo.id && <button className="ghost" title="New worktree" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></button>}
+        {repo.id && <IconButton label="New worktree" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
       </div>
       {!collapsed && items.map((w) => (
         <WorktreeRow key={w.id} w={w} active={w.id === active} siblings={items} />
@@ -170,7 +172,6 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   const summary = archived ? "none" : summarizeState(agents, attention);
-  const menuBtn = useRef<HTMLButtonElement>(null);
   return (
     <div
       className={`wt-row${active ? " wt-active" : ""}${w.exists || archived ? "" : " wt-missing"}${archived ? " wt-archived" : ""}${busy ? " wt-archiving" : ""}${selected ? " wt-selected" : ""}`}
@@ -179,15 +180,17 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
         const sel = getState().selection;
         openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
       }}
-      title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}
     >
       <span className={`state state-${busy ? "archiving" : summary}${selected ? " state-selected" : ""}`} />
       <span className="wt-name">{w.name}</span>
       <span className="wt-meta">
         {hot && <span className="hot">{formatBytes(res.rss_bytes)}</span>}
-        <button ref={menuBtn} className="ghost wt-more" title="More" onClick={(e) => { e.stopPropagation(); openMenuAt(menuBtn.current!, worktreeMenu(w)); }}><Ellipsis className="icon" /></button>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
+          <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
+        </DropdownMenu>
       </span>
-      <span className="wt-branch">
+      <span className="wt-branch" title={w.path}>
         {busy ? <span className="wt-state">archiving… · </span> : archived ? "archived · " : state ? <span className="wt-state">{state} · </span> : null}{branch}
         {w.git?.dirty ? " *" : ""}
         {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}

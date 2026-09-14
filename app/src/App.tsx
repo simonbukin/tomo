@@ -2,25 +2,46 @@ import { PanelLeft, PanelRight } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { runAction } from "./actions";
-import { ContextMenu } from "./ContextMenu";
+import { Button, IconButton, TooltipProvider } from "./components/ui";
 import { Dialogs } from "./Dialogs";
-const Towns = lazy(() => import("./Towns").then((m) => ({ default: m.Towns })));
 import { Home } from "./Home";
 import { findAction } from "./keys";
 import { TabLayout } from "./Layout";
+import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
 import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./Sidebar";
-import { activeTab, applyFrame, applySnapshot, getState, keyBindings, setState, setUi, unviewedAttention, useStore } from "./store";
+import { activeTab, applyFrame, applySnapshot, getState, keyBindings, repoName, setState, setUi, unviewedAttention, useStore } from "./store";
 import { TabBar } from "./Tabs";
 import { focusTerminal } from "./terminals";
 import type { Snapshot } from "./types";
+import { WorktreeHeader } from "./WorktreeHeader";
+
+const Towns = lazy(() => import("./Towns").then((m) => ({ default: m.Towns })));
+const tortureRoute = import.meta.env.DEV && window.location.hash === "#ui-torture";
+const UiTorture = tortureRoute ? lazy(() => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture }))) : () => null;
 
 export function App() {
+  return (
+    <TooltipProvider>
+      {tortureRoute ? (
+        <Suspense fallback={null}>
+          <UiTorture />
+        </Suspense>
+      ) : (
+        <Shell />
+      )}
+      <MenuHost />
+    </TooltipProvider>
+  );
+}
+
+function Shell() {
   const connected = useStore((s) => s.connected);
   const loaded = useStore((s) => s.loaded);
   const ui = useStore((s) => s.ui);
   const worktree = useStore((s) => s.worktrees.find((w) => w.id === s.ui.activeWorktreeId) ?? null);
+  const repo = useStore((s) => (worktree ? repoName(s, worktree.repo_id) : ""));
   const tab = useStore((s) => activeTab(s, s.ui.view === "worktree" ? s.ui.activeWorktreeId : null));
   const focusRequest = useStore((s) => s.focusRequest);
   const notice = useStore((s) => s.notice);
@@ -80,23 +101,39 @@ export function App() {
     <div className={`app${ui.leftOpen ? "" : " no-left"}${ui.rightOpen && showWorktree ? "" : " no-right"}`} style={{ ["--left-w" as string]: `${ui.leftWidth}px`, ["--right-w" as string]: `${ui.rightWidth}px` }}>
       <div className="titlebar" data-tauri-drag-region>
         <span className="titlebar-text" data-tauri-drag-region>
-          <span>{showWorktree ? worktree.name : ui.view === "towns" ? "japan" : "home"}</span>
-          {showWorktree && <span className="faint">{worktree.branch ?? ""}{worktree.git?.dirty ? " *" : ""}</span>}
+          {showWorktree ? repo : ui.view === "towns" ? "japan" : "home"}
         </span>
         <span className="spacer" data-tauri-drag-region />
-        {attention > 0 && <button className="attention-btn" onClick={() => runAction("next_attention")} title="Jump to next attention item"><span className="state state-waiting" /> {attention} waiting</button>}
+        {attention > 0 && (
+          <Button className="attention-btn" size="sm" onClick={() => runAction("next_attention")}>
+            <span className="state state-waiting" /> {attention} waiting
+          </Button>
+        )}
         {!connected && <span className="conn-bad">daemon offline</span>}
-        <button className="ghost" title="Command palette" onClick={() => runAction("palette")}><span className="kbd">⌘K</span></button>
-        <button className="ghost" title="Toggle left sidebar" onClick={() => setUi({ leftOpen: !ui.leftOpen })}><PanelLeft className="icon" /></button>
-        {showWorktree && <button className="ghost" title="Toggle right sidebar" onClick={() => setUi({ rightOpen: !ui.rightOpen })}><PanelRight className="icon" /></button>}
+        <IconButton label="Command palette (⌘K)" onClick={() => runAction("palette")}>
+          <span className="kbd">⌘K</span>
+        </IconButton>
+        <IconButton label={ui.leftOpen ? "Hide sidebar" : "Show sidebar"} onClick={() => setUi({ leftOpen: !ui.leftOpen })}>
+          <PanelLeft className="icon" />
+        </IconButton>
+        {showWorktree && (
+          <IconButton label={ui.rightOpen ? "Hide inspector" : "Show inspector"} onClick={() => setUi({ rightOpen: !ui.rightOpen })}>
+            <PanelRight className="icon" />
+          </IconButton>
+        )}
       </div>
       {ui.leftOpen && <Sidebar />}
       <main className="center">
         {!loaded && <div className="center-empty muted">{connected ? "Loading…" : "Starting tomod…"}</div>}
-        {loaded && !showWorktree && ui.view === "towns" && <Suspense fallback={<div className="center-empty muted">loading map…</div>}><Towns /></Suspense>}
+        {loaded && !showWorktree && ui.view === "towns" && (
+          <Suspense fallback={<div className="center-empty muted">loading map…</div>}>
+            <Towns />
+          </Suspense>
+        )}
         {loaded && !showWorktree && ui.view !== "towns" && <Home />}
         {loaded && showWorktree && (
           <>
+            <WorktreeHeader worktree={worktree} />
             <TabBar worktreeId={worktree.id} />
             {tab ? <TabLayout key={tab.id} tab={tab} /> : <div className="center-empty muted">Opening…</div>}
           </>
@@ -105,8 +142,11 @@ export function App() {
       {ui.rightOpen && showWorktree && <RightSidebar worktree={worktree} />}
       <Palette />
       <Dialogs />
-      <ContextMenu />
-      {notice && <div key={notice.nonce} className={`toast toast-${notice.level}`}>{notice.message}</div>}
+      {notice && (
+        <div key={notice.nonce} className={`toast toast-${notice.level}`} role="status">
+          {notice.message}
+        </div>
+      )}
     </div>
   );
 }

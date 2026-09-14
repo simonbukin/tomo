@@ -120,6 +120,15 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
 - One runnable check per non-trivial piece of logic. No test frameworks
   beyond `cargo test` and vitest.
 
+## UI primitives
+
+Before you implement any menu, dialog, popover, tooltip, select, button, or
+command surface, look in `app/src/components/ui/`. Do not hand-roll a
+generic interaction primitive. The primitives wrap Base UI and own focus,
+keyboard navigation, ARIA roles, portals, collision positioning, outside
+click, and Escape. Tomo owns the look through CSS classes and tokens in
+`app/src/styles/`. See `docs/ui.md` for the rules and the torture page.
+
 ## Where things are decided
 
 | Question                              | Place                                   |

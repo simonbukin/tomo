@@ -1,55 +1,51 @@
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import { openWorktree } from "./actions";
-import { notify, setState, useStore } from "./store";
+import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle } from "./components/ui";
+import { notify, setState, useStore, type Dialog as DialogSpec } from "./store";
 import type { ConfigIssue, HookRun, IntegrationStatus, Repo, Town, Worktree } from "./types";
 
+/** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
   const dialog = useStore((s) => s.dialog);
-  if (!dialog) return null;
+  const last = useRef<DialogSpec | null>(null);
+  if (dialog) last.current = dialog;
+  const shown = dialog ?? last.current;
+  if (!shown) return null;
   const close = () => setState({ dialog: null });
+  const onOpenChange = (open: boolean) => !open && close();
+  if (shown.kind === "confirm") {
+    return <ConfirmDialog key={shown.title} open={!!dialog} onOpenChange={onOpenChange} title={shown.title} description={shown.body} confirmLabel={shown.confirmLabel} destructive={shown.destructive} check={shown.check} onConfirm={shown.onConfirm} />;
+  }
   return (
-    <div className="overlay" onMouseDown={close}>
-      <div className="dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && close()}>
-        {dialog.kind === "add-repo" && <AddRepo close={close} />}
-        {dialog.kind === "create-worktree" && <CreateWorktree close={close} repoId={dialog.repoId} />}
-        {dialog.kind === "confirm" && <Confirm close={close} title={dialog.title} body={dialog.body} confirmLabel={dialog.confirmLabel} check={dialog.check} onConfirm={dialog.onConfirm} />}
-        {dialog.kind === "prompt" && <Prompt close={close} title={dialog.title} initial={dialog.initial} placeholder={dialog.placeholder} onSubmit={dialog.onSubmit} />}
-        {dialog.kind === "integrations" && <IntegrationsDialog close={close} />}
-        {dialog.kind === "config-check" && <ConfigCheckDialog close={close} />}
-        {dialog.kind === "hook-log" && <HookLogDialog close={close} />}
-      </div>
-    </div>
-  );
-}
-
-function Confirm({ close, title, body, confirmLabel, check, onConfirm }: { close: () => void; title: string; body: string; confirmLabel: string; check?: string; onConfirm: (checked: boolean) => void }) {
-  const [checked, setChecked] = useState(false);
-  return (
-    <>
-      <h2>{title}</h2>
-      <p>{body}</p>
-      {check && <label className="check"><input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /> {check}</label>}
-      <div className="dialog-actions">
-        <button onClick={close}>Cancel</button>
-        <button className="primary" autoFocus onClick={() => { close(); onConfirm(checked); }}>{confirmLabel}</button>
-      </div>
-    </>
+    <Dialog open={!!dialog} onOpenChange={onOpenChange}>
+      <DialogContent>
+        {shown.kind === "add-repo" && <AddRepo close={close} />}
+        {shown.kind === "create-worktree" && <CreateWorktree close={close} repoId={shown.repoId} />}
+        {shown.kind === "prompt" && <Prompt close={close} title={shown.title} initial={shown.initial} placeholder={shown.placeholder} onSubmit={shown.onSubmit} />}
+        {shown.kind === "integrations" && <IntegrationsDialog close={close} />}
+        {shown.kind === "config-check" && <ConfigCheckDialog close={close} />}
+        {shown.kind === "hook-log" && <HookLogDialog close={close} />}
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function Prompt({ close, title, initial, placeholder, onSubmit }: { close: () => void; title: string; initial: string; placeholder?: string; onSubmit: (v: string) => void }) {
   const [value, setValue] = useState(initial);
-  const submit = () => { close(); onSubmit(value); };
+  const submit = () => {
+    close();
+    onSubmit(value);
+  };
   return (
     <>
-      <h2>{title}</h2>
-      <input autoFocus value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-      <div className="dialog-actions">
-        <button onClick={close}>Cancel</button>
-        <button className="primary" onClick={submit}>Save</button>
-      </div>
+      <DialogTitle>{title}</DialogTitle>
+      <input value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+      <DialogActions>
+        <Button onClick={close}>Cancel</Button>
+        <Button variant="default" onClick={submit}>Save</Button>
+      </DialogActions>
     </>
   );
 }
@@ -77,19 +73,21 @@ function AddRepo({ close }: { close: () => void }) {
   };
   return (
     <>
-      <h2>Add repository</h2>
+      <DialogTitle>Add repository</DialogTitle>
       <label>Existing repository path</label>
       <div className="row">
-        <input autoFocus value={path} placeholder="/path/to/repo" onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-        <button onClick={browse}>Browse…</button>
+        <input className="mono" value={path} placeholder="/path/to/repo" onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <Button onClick={browse}>Browse…</Button>
       </div>
       <label>Or clone</label>
-      <input value={url} placeholder="git@github.com:org/repo.git" onChange={(e) => setUrl(e.target.value)} />
-      <input value={dest} placeholder="/destination/path" onChange={(e) => setDest(e.target.value)} />
-      <div className="dialog-actions">
-        <button onClick={close}>Cancel</button>
-        <button className="primary" disabled={busy || (!path.trim() && !(url.trim() && dest.trim()))} onClick={add}>{busy ? "Working…" : "Add"}</button>
-      </div>
+      <input className="mono" value={url} placeholder="git@github.com:org/repo.git" onChange={(e) => setUrl(e.target.value)} />
+      <input className="mono" value={dest} placeholder="/destination/path" onChange={(e) => setDest(e.target.value)} />
+      <DialogActions>
+        <Button onClick={close}>Cancel</Button>
+        <Button variant="default" disabled={busy || (!path.trim() && !(url.trim() && dest.trim()))} onClick={add}>
+          {busy ? "Working…" : "Add"}
+        </Button>
+      </DialogActions>
     </>
   );
 }
@@ -105,8 +103,12 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   const [busy, setBusy] = useState(false);
   const [town, setTown] = useState<Town | null>(null);
   const reroll = () => rpc<Town>("town_pick").then(setTown).catch(() => setTown(null));
-  useEffect(() => { reroll(); }, []);
-  useEffect(() => { if (!repo && repos[0]) setRepo(repos[0].id); }, [repos, repo]);
+  useEffect(() => {
+    reroll();
+  }, []);
+  useEffect(() => {
+    if (!repo && repos[0]) setRepo(repos[0].id);
+  }, [repos, repo]);
   const r = repos.find((x) => x.id === repo);
   const parent = r ? (config?.worktree_parent_dir ?? r.path.replace(/\/[^/]+$/, "")) : "";
   const defaultPath = r ? `${parent}/${town?.slug ?? "<town>"}` : "";
@@ -114,7 +116,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
     if (!repo || !branch.trim()) return;
     setBusy(true);
     try {
-      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, town_slug: path.trim() ? null : town?.slug ?? null });
+      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, town_slug: path.trim() ? null : (town?.slug ?? null) });
       close();
       openWorktree(w.id);
     } catch (e) {
@@ -125,38 +127,61 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   };
   return (
     <>
-      <h2>New worktree</h2>
+      <DialogTitle>New worktree</DialogTitle>
       <label>Repository</label>
       <select value={repo} onChange={(e) => setRepo(e.target.value)}>
-        {repos.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        {repos.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+          </option>
+        ))}
       </select>
       <label>Branch</label>
-      <input autoFocus value={branch} placeholder="feature/thing" onChange={(e) => setBranch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
-      <label className="check"><input type="checkbox" checked={isNew} onChange={(e) => setIsNew(e.target.checked)} /> create this branch</label>
-      {isNew && (<><label>Start from (optional ref)</label><input value={from} placeholder="main" onChange={(e) => setFrom(e.target.value)} /></>)}
+      <input className="mono" value={branch} placeholder="feature/thing" onChange={(e) => setBranch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+      <label className="check">
+        <input type="checkbox" checked={isNew} onChange={(e) => setIsNew(e.target.checked)} /> create this branch
+      </label>
+      {isNew && (
+        <>
+          <label>Start from (optional ref)</label>
+          <input className="mono" value={from} placeholder="main" onChange={(e) => setFrom(e.target.value)} />
+        </>
+      )}
       <label>Location</label>
-      <input value={path} placeholder={defaultPath} onChange={(e) => setPath(e.target.value)} />
+      <input className="mono" value={path} placeholder={defaultPath} onChange={(e) => setPath(e.target.value)} />
       {!path.trim() && town && (
         <div className="town-suggest rise">
           <span className={`rarity-dot rarity-${town.rarity}`} />
           <span>{town.name}</span>
           <span className="muted">{town.ja}</span>
-          <span className="faint">{town.pref} · {town.rarity}</span>
-          <button className="link" onClick={reroll}>reroll</button>
+          <span className="faint">
+            {town.pref} · {town.rarity}
+          </span>
+          <Button variant="link" onClick={reroll}>reroll</Button>
         </div>
       )}
-      <div className="dialog-actions">
-        <button onClick={close}>Cancel</button>
-        <button className="primary" disabled={busy || !repo || !branch.trim()} onClick={create}>{busy ? "Creating…" : "Create"}</button>
-      </div>
+      <DialogActions>
+        <Button onClick={close}>Cancel</Button>
+        <Button variant="default" disabled={busy || !repo || !branch.trim()} onClick={create}>
+          {busy ? "Creating…" : "Create"}
+        </Button>
+      </DialogActions>
     </>
   );
 }
 
 function useRpcList<T>(method: string, params?: Record<string, unknown>): { items: T[] | null; reload: () => void } {
   const [items, setItems] = useState<T[] | null>(null);
-  const reload = () => rpc<T[]>(method, params).then(setItems).catch((e) => { notify("error", (e as Error).message); setItems([]); });
-  useEffect(() => { reload(); }, [method]);
+  const reload = () =>
+    rpc<T[]>(method, params)
+      .then(setItems)
+      .catch((e) => {
+        notify("error", (e as Error).message);
+        setItems([]);
+      });
+  useEffect(() => {
+    reload();
+  }, [method]);
   return { items, reload };
 }
 
@@ -177,21 +202,28 @@ function IntegrationsDialog({ close }: { close: () => void }) {
   };
   return (
     <>
-      <h2>integration status</h2>
+      <DialogTitle>integration status</DialogTitle>
       <div className="dialog-list">
         {items === null && <div className="faint">checking…</div>}
         {items?.map((i) => (
           <div key={i.kind} className="dialog-row" title={i.binary ?? "binary not found"}>
             <span className={`state state-${i.level}`} />
             <span className="name">{i.kind}</span>
-            <span className="detail">{i.level.replace("_", " ")}{i.reason ? ` · ${i.reason}` : ""}{i.lifecycle ? "" : " · no lifecycle"}{i.resume ? "" : " · no resume"}</span>
+            <span className="detail">
+              {i.level.replace("_", " ")}
+              {i.reason ? ` · ${i.reason}` : ""}
+              {i.lifecycle ? "" : " · no lifecycle"}
+              {i.resume ? "" : " · no resume"}
+            </span>
           </div>
         ))}
       </div>
-      <div className="dialog-actions">
-        <button onClick={close}>Close</button>
-        <button className="primary" disabled={busy} onClick={install}>{busy ? "Installing…" : "install hooks"}</button>
-      </div>
+      <DialogActions>
+        <Button onClick={close}>Close</Button>
+        <Button variant="default" disabled={busy} onClick={install}>
+          {busy ? "Installing…" : "install hooks"}
+        </Button>
+      </DialogActions>
     </>
   );
 }
@@ -200,19 +232,23 @@ function ConfigCheckDialog({ close }: { close: () => void }) {
   const { items } = useRpcList<ConfigIssue>("config_check");
   return (
     <>
-      <h2>config check</h2>
+      <DialogTitle>config check</DialogTitle>
       <div className="dialog-list">
         {items === null && <div className="faint">checking…</div>}
         {items?.length === 0 && <div className="muted">no issues</div>}
         {items?.map((i, n) => (
           <div key={`${i.key}-${n}`} className="dialog-row">
             <span className={`state state-${i.level}`} />
-            <span className="name">{i.key}</span>
-            <span className="detail" title={i.message}>{i.message}</span>
+            <span className="name mono">{i.key}</span>
+            <span className="detail" title={i.message}>
+              {i.message}
+            </span>
           </div>
         ))}
       </div>
-      <div className="dialog-actions"><button onClick={close}>Close</button></div>
+      <DialogActions>
+        <Button onClick={close}>Close</Button>
+      </DialogActions>
     </>
   );
 }
@@ -222,20 +258,24 @@ function HookLogDialog({ close }: { close: () => void }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
     <>
-      <h2>hook log</h2>
+      <DialogTitle>hook log</DialogTitle>
       <div className="dialog-list">
         {items === null && <div className="faint">loading…</div>}
         {items?.length === 0 && <div className="muted">no hook runs yet</div>}
         {items?.map((r, n) => (
           <div key={`${r.started_at_ms}-${n}`} className="dialog-row hook-row" onClick={() => setOpen(open === n ? null : n)}>
             <span className={`state state-${r.ok ? "ok" : "fail"}`} />
-            <span className="name">{r.event}</span>
-            <span className="detail" title={r.command}>{r.command} · {r.duration_ms} ms{r.exit_code != null && !r.ok ? ` · exit ${r.exit_code}` : ""}</span>
+            <span className="name mono">{r.event}</span>
+            <span className="detail mono" title={r.command}>
+              {r.command} · {r.duration_ms} ms{r.exit_code != null && !r.ok ? ` · exit ${r.exit_code}` : ""}
+            </span>
             {open === n && <pre className="hook-out">{r.output_tail.trim() || "(no output)"}</pre>}
           </div>
         ))}
       </div>
-      <div className="dialog-actions"><button onClick={close}>Close</button></div>
+      <DialogActions>
+        <Button onClick={close}>Close</Button>
+      </DialogActions>
     </>
   );
 }
