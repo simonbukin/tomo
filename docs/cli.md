@@ -266,6 +266,17 @@ state, draft flag, review decision, check counts, and URL. Needs the `gh`
 CLI logged in. The daemon caches the answer for one minute per worktree
 and the right panel shows the same data.
 
+### usage
+
+```bash
+tomo usage [--refresh]
+```
+
+Shows each provider's allowance windows: label, percent used, and the time
+until the reset. `--refresh` fetches now instead of using the daemon's last
+poll. A provider without a reliable source prints `unavailable` and the
+reason. See [usage.md](usage.md) for the sources and the mock file.
+
 ### kill
 
 ```bash
