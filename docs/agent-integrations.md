@@ -182,7 +182,7 @@ started without hooks.
 ## Attention
 
 A transition into `waiting` creates an attention item for the pane and
-worktree. Leaving `waiting` marks it viewed. `tomo notify "text"` creates an
+worktree. Leaving `waiting` resolves it. `tomo notify "text"` creates an
 item by hand; it infers the pane from `TOMO_PANE_ID` and the worktree from
 the pane.
 

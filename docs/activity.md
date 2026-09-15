@@ -63,6 +63,21 @@ is null, and for a `waiting` item `viewed_at_ms` is also null. A checkpoint
 or crash stays in the list until someone resolves it. A waiting agent
 leaves the list when its pane is focused or the agent moves on.
 
+## Waiting items resolve themselves
+
+A `waiting` item stays open only while its agent waits. When the agent
+leaves `waiting` for any other state, the daemon resolves every open
+`waiting` item of that pane. This applies to a hook, a report, the process
+monitor, a process exit, and a pane close. The daemon sets `resolved_at_ms`,
+sets `viewed_at_ms` if it is null, and emits `attention_resolved` for each
+item. A daemon restart also resolves the `waiting` items of the agent panes
+that it restores, because the old prompt is gone. Checkpoint and crash items
+never resolve automatically.
+
+Focusing a pane marks its unviewed items viewed and emits `attention_viewed`
+for each one. `attention_view` emits `attention_viewed` only when the item
+was not viewed before.
+
 ## Retention
 
 The daemon keeps the newest 10 000 events in the `activity` table and

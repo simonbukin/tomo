@@ -8,6 +8,7 @@ mod git;
 mod github;
 mod integrations;
 mod layout;
+mod login_env;
 mod monitor;
 mod procs;
 mod pty;
@@ -36,13 +37,17 @@ fn try_lock(file: &std::fs::File) -> bool {
     unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) == 0 }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with_writer(std::io::stderr)
         .init();
     let args = Args::parse();
+    login_env::apply();
+    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(run(args))
+}
+
+async fn run(args: Args) -> Result<()> {
     let data_dir = args.data_dir.unwrap_or_else(config::default_data_dir);
     std::fs::create_dir_all(&data_dir).with_context(|| format!("create {}", data_dir.display()))?;
     let mut paths = config::Paths::new(data_dir);
