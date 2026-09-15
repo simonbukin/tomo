@@ -18,7 +18,7 @@
 .bottom-left .icon { width: 13px; height: 13px; }
 
 .bottom-middle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content) minmax(0, 1fr); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); min-width: 0; }
-.bottom-usage { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; overflow: hidden; }
+.bottom-items { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; overflow: hidden; }
 .bottom-status { display: flex; justify-content: center; min-width: 0; overflow: hidden; white-space: nowrap; }
 .bottom-metrics { display: flex; justify-content: flex-end; min-width: 0; overflow: hidden; }
 .bottom-right { display: flex; align-items: center; justify-content: flex-end; padding: 0 var(--sp-2); border-left: 1px solid var(--line); }

@@ -82,7 +82,6 @@ pub struct Inner {
     pub hook_queue: Vec<HookEvent>,
     pub discovered_once: bool,
     pub last_full_poll_ms: u64,
-    pub usage: Vec<UsageSnapshot>,
     pub endpoints: Vec<RuntimeEndpoint>,
     pub endpoint_gone_ms: HashMap<Id, u64>,
     pub endpoints_at_ms: u64,
@@ -104,8 +103,6 @@ pub struct Seams {
     pub worktree_files: Vec<WorktreeFile>,
     /// Runs under the state lock when a pane process exits, after `pane_exited` goes out and before Core updates the agent or removes a pane that exited with 0.
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
-    /// Fills the addon fields of the `subscribe` snapshot, under the same state lock as the Core fields.
-    pub snapshot: Vec<fn(&mut Snapshot)>,
 }
 
 #[derive(Clone, Copy)]
@@ -221,7 +218,6 @@ impl Daemon {
                 hook_queue: Vec::new(),
                 discovered_once: false,
                 last_full_poll_ms: 0,
-                usage: Vec::new(),
                 endpoints: Vec::new(),
                 endpoint_gone_ms: HashMap::new(),
                 endpoints_at_ms: 0,
@@ -1432,6 +1428,30 @@ impl Daemon {
 
     // ------------------------------------------------------------ dispatch
 
+    /// Marks the client subscribed and builds the Core part of the snapshot. `dispatch.rs` adds the addon fields.
+    pub fn subscribe(&self, client_id: u64) -> Result<CoreSnapshot, RpcError> {
+        tracing::info!("client {client_id} subscribed");
+        let mut inner = self.lock();
+        if let Some(c) = inner.clients.get_mut(&client_id) {
+            c.subscribed = true;
+        }
+        let attention = inner.store.attention_list().map_err(internal)?;
+        let ui_state = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
+        Ok(CoreSnapshot {
+            status: self.status(&inner),
+            config: inner.config.clone(),
+            repos: Self::repo_views(&inner),
+            worktrees: Self::worktree_views(&inner),
+            tabs: Self::all_tabs(&inner),
+            panes: Self::pane_views(&inner, None),
+            agents: inner.agents.values().cloned().collect(),
+            attention,
+            resources: inner.resources.clone(),
+            endpoints: inner.endpoints.clone(),
+            ui_state,
+        })
+    }
+
     pub async fn handle(self: &Arc<Self>, client_id: u64, call: Call) -> Result<Value, RpcError> {
         let result = self.handle_inner(client_id, call).await;
         self.flush_hooks();
@@ -1451,34 +1471,7 @@ impl Daemon {
                 let inner = self.lock();
                 ok(self.status(&inner))
             }
-            Call::Subscribe => {
-                tracing::info!("client {client_id} subscribed");
-                let mut inner = self.lock();
-                if let Some(c) = inner.clients.get_mut(&client_id) {
-                    c.subscribed = true;
-                }
-                let attention = inner.store.attention_list().map_err(internal)?;
-                let ui_state = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
-                let mut snapshot = Snapshot {
-                    status: self.status(&inner),
-                    config: inner.config.clone(),
-                    repos: Self::repo_views(&inner),
-                    worktrees: Self::worktree_views(&inner),
-                    tabs: Self::all_tabs(&inner),
-                    panes: Self::pane_views(&inner, None),
-                    agents: inner.agents.values().cloned().collect(),
-                    attention,
-                    resources: inner.resources.clone(),
-                    actions: Vec::new(),
-                    endpoints: inner.endpoints.clone(),
-                    usage: inner.usage.clone(),
-                    ui_state,
-                };
-                for seam in &self.seams.snapshot {
-                    seam(&mut snapshot);
-                }
-                ok(snapshot)
-            }
+            Call::Subscribe => ok(self.subscribe(client_id)?),
             Call::ConfigGet => {
                 let cfg = config::load(&self.paths.config).map_err(internal)?;
                 self.lock().config = cfg.clone();
@@ -2111,12 +2104,6 @@ impl Daemon {
                 ok(inner.diagnostics.iter().rev().take(limit.map_or(DIAGNOSTICS_KEPT, |n| n as usize)).cloned().collect::<Vec<_>>())
             }
             Call::SystemStats => ok(crate::system::fresh(self).await),
-            Call::UsageGet { refresh } => {
-                if refresh || self.lock().usage.is_empty() {
-                    crate::usage::refresh(self).await;
-                }
-                ok(self.lock().usage.clone())
-            }
             Call::RuntimeList { worktree_id } => {
                 let stale = now_ms().saturating_sub(self.lock().endpoints_at_ms) > 1500;
                 if stale {
@@ -2368,11 +2355,11 @@ mod tests {
 
     #[test]
     fn problem_change_records_only_appear_change_and_clear() {
-        assert_eq!(problem_change("usage", None, None), None);
-        assert_eq!(problem_change("usage", Some("no token"), Some("no token")), None);
-        assert_eq!(problem_change("usage", None, Some("no token")), Some((DiagnosticLevel::Warning, "usage: no token".into())));
-        assert_eq!(problem_change("usage", Some("no token"), Some("timeout")), Some((DiagnosticLevel::Warning, "usage: timeout".into())));
-        assert_eq!(problem_change("usage", Some("timeout"), None), Some((DiagnosticLevel::Info, "usage: ok again".into())));
+        assert_eq!(problem_change("port scan", None, None), None);
+        assert_eq!(problem_change("port scan", Some("no token"), Some("no token")), None);
+        assert_eq!(problem_change("port scan", None, Some("no token")), Some((DiagnosticLevel::Warning, "port scan: no token".into())));
+        assert_eq!(problem_change("port scan", Some("no token"), Some("timeout")), Some((DiagnosticLevel::Warning, "port scan: timeout".into())));
+        assert_eq!(problem_change("port scan", Some("timeout"), None), Some((DiagnosticLevel::Info, "port scan: ok again".into())));
     }
 
     #[test]

@@ -22,12 +22,14 @@ pub mod addons {
     pub mod github;
     pub mod runtime;
     pub mod towns;
+    pub mod usage;
 }
 pub use addons::actions::*;
 pub use addons::agentation::*;
 pub use addons::github::*;
 pub use addons::runtime::*;
 pub use addons::towns::*;
+pub use addons::usage::*;
 
 pub const PROTOCOL_VERSION: u32 = 3;
 
@@ -975,29 +977,6 @@ pub struct RuntimeEndpoint {
     pub discovered_at_ms: u64,
 }
 
-// ---- usage: provider-level allowance, never per worktree
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct UsageBucket {
-    pub label: String,
-    pub fraction_used: Option<f64>,
-    pub resets_at_ms: Option<u64>,
-    pub detail: Option<String>,
-    /// The model this bucket limits, such as `fable`. None for the whole plan.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub scope: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct UsageSnapshot {
-    pub provider: AgentKind,
-    pub available: bool,
-    pub reason: Option<String>,
-    pub buckets: Vec<UsageBucket>,
-    pub fetched_at_ms: u64,
-}
-
 // ---- evidence bundles: structured context sent to an existing agent session
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1063,9 +1042,9 @@ pub struct SpawnResult {
     pub agent: Option<AgentPresence>,
 }
 
-/// What `subscribe` returns: everything a client needs to render.
+/// The Core part of the `subscribe` snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct Snapshot {
+pub struct CoreSnapshot {
     pub status: Status,
     pub config: Config,
     pub repos: Vec<Repo>,
@@ -1076,13 +1055,20 @@ pub struct Snapshot {
     pub attention: Vec<AttentionItem>,
     pub resources: Vec<WorktreeResources>,
     #[serde(default)]
-    pub actions: Vec<ActionSet>,
-    #[serde(default)]
     pub endpoints: Vec<RuntimeEndpoint>,
-    #[serde(default)]
-    pub usage: Vec<UsageSnapshot>,
     #[ts(type = "unknown")]
     pub ui_state: Value,
+}
+
+/// What `subscribe` returns: everything a client needs to render. Core builds `core`, and `tomod` `dispatch.rs` adds the addon fields. On the wire every field is top level.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Snapshot {
+    #[serde(flatten)]
+    pub core: CoreSnapshot,
+    #[serde(default)]
+    pub usage: Vec<UsageSnapshot>,
+    #[serde(default)]
+    pub actions: Vec<ActionSet>,
 }
 
 pub fn now_ms() -> u64 {

@@ -247,19 +247,27 @@ Actions, hooks, and adapters inherit the new `PATH`.
 ## Addons
 
 An addon is an optional opinion in its own source folder. Core never
-imports it. Towns is the first addon:
+imports it. Two addons exist:
 
-- `crates/tomo-proto/src/addons/towns.rs`: wire types
-- `crates/tomod/src/addons/towns/`: calls, the `towns` table, the seams
-- `app/src/addons/towns/`: the map view, the ceremony, the create field
+- Towns
+  - `crates/tomo-proto/src/addons/towns.rs`: wire types
+  - `crates/tomod/src/addons/towns/`: calls, the `towns` table, the seams
+  - `app/src/addons/towns/`: the map view, the ceremony, the create field
+- Usage
+  - `crates/tomo-proto/src/addons/usage.rs`: wire types
+  - `crates/tomod/src/addons/usage/`: provider adapters, the last result, the poll, `usage_get`
+  - `app/src/addons/usage/`: the bottom-strip meters and the diagnostics section
 
 Composition roots name the addons: `crates/tomod/src/main.rs`,
 `crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`
 in `tomo-proto`, and `app/src/addons/index.ts`. Core calls an addon only
 through `Seams`, a struct of plain function lists that `main.rs` builds one
-time. The server sends every call to `dispatch::handle`, which answers the
-addon calls and gives the other calls to `Daemon::handle`. See
-[addons.md](addons.md) and [features/towns.md](features/towns.md).
+time. `addons::start` starts the background tasks of addons. The server
+sends every call to `dispatch::handle`, which answers the addon calls and
+gives the other calls to `Daemon::handle`. For `subscribe`, `dispatch.rs`
+puts the `CoreSnapshot` from `Daemon::subscribe` into `Snapshot` and adds
+the addon fields. See [addons.md](addons.md),
+[features/towns.md](features/towns.md), and [usage.md](usage.md).
 
 ## Generated bindings
 

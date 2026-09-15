@@ -23,7 +23,6 @@ import type { Diagnostic, DiagnosticLevel,
   SystemStats,
   Tab,
   UiState,
-  UsageSnapshot,
   Worktree,
   WorktreeResources,
 } from "./types";
@@ -44,7 +43,6 @@ export interface State {
   resources: Record<Id, WorktreeResources>;
   endpoints: Record<Id, RuntimeEndpoint[]>;
   activity: ActivityEvent[];
-  usage: UsageSnapshot[];
   ui: UiState;
   focusRequest: { worktree_id: Id; tab_id: Id; pane_id: Id; nonce: number } | null;
   /** One short confirmation in the bottom strip. A new one replaces it. */
@@ -99,7 +97,6 @@ let state: State = {
   resources: {},
   endpoints: {},
   activity: [],
-  usage: [],
   ui: defaultUi,
   focusRequest: null,
   statusMessage: null,
@@ -198,7 +195,6 @@ export function applySnapshot(snap: Snapshot): void {
     attention: snap.attention,
     resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
     endpoints: groupEndpoints(snap.endpoints ?? []),
-    usage: snap.usage ?? [],
     daemonStatus: snap.status,
     ui,
   });
@@ -320,9 +316,6 @@ export function applyFrame(frame: Frame): void {
     }
     case "activity_added":
       setState((s) => ({ activity: mergeActivity(s.activity, [(d as { event: ActivityEvent }).event]) }));
-      break;
-    case "usage_changed":
-      setState({ usage: (d as { snapshots: UsageSnapshot[] }).snapshots });
       break;
     case "attention_viewed": {
       const { id } = d as { id: Id };
