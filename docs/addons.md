@@ -5,7 +5,8 @@ Read this before you add a feature or move one. It takes a few minutes.
 Status: milestone 1 (Towns), milestone 2 (GitHub), milestone 3 (Actions),
 milestone 5 (Usage), and the Activity kind seam are done. Milestone 6 decided
 that Browser stays a built-in pane kind; see "Milestone 6 result: Browser".
-Towns is the first
+Each daemon owns its addon state in `addons::State`; see "Addon state" and
+"Addon state result". Towns is the first
 addon and the reference for every later extraction. GitHub added the first
 GUI slots that core components render. Usage added a background task, a
 snapshot field, and two GUI slots. Actions added the Core pane source, two
@@ -463,7 +464,7 @@ and Runtime would add a fourth static.
 | Option | Result |
 |---|---|
 | (a) One opaque slot in Core `Inner` (`Box<dyn Any + Send>`), filled by the composition root, with `addons::state` and `addons::state_mut` | **Chosen.** Core gets one field and one `Daemon::new` parameter, and names no addon. The state is under the Core lock, so one lock order stays. The downcast is in one place and has one concrete type. Deleting an addon deletes its field line. |
-| (b) A generic parameter, `Daemon<S>` and `Inner<S>` | Rejected. 92 lines in the Core files of `tomod` name `Daemon` or `Inner` (`daemon.rs` 74, `store.rs`, `runtime.rs`, `reopen.rs`, `moves.rs`, `events.rs`, `monitor.rs`, `settings.rs`, `system.rs`, `server.rs`, `watch.rs`, and others). Each `Seams` function pointer, `WorktreeFile::reload`, and each task entry would get `<S>`. A type alias would make Core name `addons::State`. |
+| (b) A generic parameter, `Daemon<S>` and `Inner<S>` | Rejected. 93 lines in 13 Core files of `tomod` name `Arc<Daemon>`, `&Daemon`, or `Inner` (`daemon.rs` 50, `runtime.rs` 7, `moves.rs` 6, `features/reopen.rs` 6, `monitor.rs` 5, `settings.rs` 4, `activity.rs`, `events.rs`, `system.rs`, `server.rs`, `features/browser.rs`, `watch.rs`, `integrations.rs`). Each `Seams` function pointer, `WorktreeFile::reload`, and each task entry would get `<S>`. A type alias would make Core name `addons::State`. |
 | (c) A per-daemon handle outside `Inner`, passed from `main.rs` through `server.rs` to `dispatch::handle` | Rejected. Core `server.rs` would carry an addon type or a generic, and the seams that get only `&mut Inner` (`pane_exited`) could not reach the handle. It also keeps a second lock. |
 | (c) One field for each addon in `Inner` | Rejected. Core would name each addon. |
 | (c) Keep the statics, keyed by the daemon session id | Rejected. It is still process state and a second lock, and it is a registry. |
@@ -1934,6 +1935,102 @@ Hit for the extraction path: "addon framework code exceeds feature
 simplification" and "generic JSON or strings replace typed APIs". So the
 direct implementation stays. Not hit for the isolation: no new seam, slot,
 or type; `daemon.rs` lost 66 lines and `actions.ts` 44.
+
+## Addon state result
+
+### What moved
+
+| From | To |
+|---|---|
+| `static LAST: Mutex<Vec<UsageSnapshot>>` in `addons/usage/mod.rs` | `addons::State.usage` (`usage::Last`) |
+| `static CACHE: Mutex<BTreeMap<Id, PrStatusResult>>` in `addons/github/mod.rs` | `addons::State.github` (`github::Cache`) |
+| `static SETS: Mutex<BTreeMap<Id, ActionSet>>` in `addons/actions/mod.rs` | `addons::State.actions` (`actions::Sets`) |
+| the write-back part of `usage::refresh` and `github::pr_status` | `usage::remember(&mut Inner, ..)` and `github::remember(&mut Inner, ..)` |
+| `actions_characterization` (three scenarios in one test) | three independent tests in `addons/actions/tests.rs` |
+
+Signatures that changed: `Daemon::new` gets `addons: Box<dyn Any + Send>`;
+`usage::snapshots`, `actions::snapshot`, and `github::known_pr` get `&Inner`;
+the `pr` function of `towns::history` is `fn(&Inner, &str, &[ActivityEvent])`.
+
+### Seam
+
+One opaque slot, `Inner.addons`, and the accessors `addons::state` and
+`addons::state_mut`. See "Decision: the shape of addon state" for the
+comparison. Core names no addon: the dependency checks stay green.
+
+### Wire and schema changes
+
+None. Method names, event names, JSON fields, the `subscribe` snapshot, and
+SQLite do not change. The behavior of the three addons does not change; the
+lock order is simpler (one lock instead of Core plus three).
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Inner.addons` and the `Daemon::new` parameter | the slot; Core does not know its type |
+| `usage::remember` and `github::remember` are `pub` | the two-daemon test in the composition root calls them |
+| `town_pr` gets `&Inner` | Towns calls it with the Core lock held, and GitHub reads its cache from `Inner` |
+
+### Tests
+
+| Suite | Before (`39f2448`) | The change (`4ddec2b`) | Merged with master `07581d0` |
+|---|---|---|---|
+| `cargo test --workspace` (run twice each) | 134 (tomod 125) | 138 (tomod 129, tomo-proto 7, tomo_app_lib 2), both runs | 148 passed and 1 ignored (tomod 139), both runs |
+| `npx tsc --noEmit` | pass | pass | pass |
+| vitest | 33 files, 241 tests | 33 files, 241 tests | 34 files, 252 tests |
+| `npx vite build` | main JS 721.44 kB | 721.44 kB | 721.35 kB |
+| torture harness | 318 checks in 17 scripts, 1 known | 318 checks in 17 scripts, 1 known | 387 checks in 18 scripts, 9 known (8 in `providers.sh`, 1 in `github.sh`) |
+
+New: `two_daemons_in_one_process_keep_their_own_addon_state` (red on the
+statics in commit `982b412`) and `addon_modules_keep_no_mutable_static`
+(red on a planted static). The Actions test is three tests again. No test
+was removed.
+
+### Performance
+
+Measured on 2026-09-15 with `addons-bench.py` on commit `81c9d21` (the
+change merged with the provider fixtures, before the Browser merge), release
+build, data dir `/tmp/tomo-addons-state-bench`. `TOMO_USAGE_MOCK` pointed at
+a file with a far `fetched_at_ms`, as in milestones 3 and 5. The owner used
+the machine.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 3 | Addon state |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.76 ms | 8.02 ms |
+| of which `subscribe` | 0.51 ms | 0.39 ms | 0.48 ms |
+| of which `pane_attach` | 7.14 ms | 7.40 ms | 7.53 ms |
+| Worktree switch | 0.14 ms | 0.08 ms | 0.10 ms |
+| Worktree switch with attach | 9.26 ms | 7.53 ms | 7.71 ms |
+| Refresh | 164.31 ms | 128.08 ms | 141.31 ms (trials 228.51, 141.31, 134.02) |
+| Process poll, fresh | 23.41 ms | 19.00 ms | 17.20 ms |
+| Process poll, cached | 0.63 ms | 0.55 ms | 0.48 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 3 | Addon state (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.12 % | **0.12 %** (0.12, 0.12, 0.13) |
+| Idle CPU, one subscriber | 1.05 % | 1.00 % | **0.77 %** (0.98, 0.77, 0.77) |
+| RSS at window end, no subscriber | 14.6 MB | 11.9 MB | **14.7 MB** (14.7, 14.7, 14.8) |
+| RSS at window end, subscribed | 14.6 MB | 13.3 MB | **14.3 MB** (15.2, 14.3, 12.0) |
+
+Gate: pass. No round trip is more than 1 ms and 20 % slower than the
+baseline: reattach is 0.36 ms slower, and `pane_attach`, which the change
+does not touch, is 0.39 ms slower. The `subscribe` arm now reads the addon
+fields under the Core lock instead of two addon locks. Idle CPU and RSS are
+below the limits. Not measured: GUI cold launch and GUI RSS (no GUI
+allowed). Not run: `scripts/perf.sh` and the soak.
+
+### Stop conditions
+
+None was hit. Near: the slot is a `dyn Any` with a downcast. It is one
+concrete type in one place, not a lookup by key, so it is not a service
+locator (see the decision). The framework code is 20 lines (`State`, two
+accessors, one field, one parameter); it removed three statics, three lock
+helpers, three lock-order comments, and the merged Actions test.
 
 ## Candidates
 
