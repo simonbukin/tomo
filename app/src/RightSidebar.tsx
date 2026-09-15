@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from
 import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { openMenu } from "./MenuHost";
-import { Select } from "./components/ui";
+import { Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";
 import { ResizeHandle } from "./Sidebar";
 import { setMetadata, spawnAgent } from "./actions";
@@ -110,7 +110,7 @@ function PrSection({ w }: { w: Worktree }) {
       ) : status ? (
         <div className="muted">no pull request for {w.branch ?? "this branch"}</div>
       ) : (
-        <div className="faint">checking…</div>
+        <SkeletonRows count={2} className="compact" label="checking pull request" />
       )}
     </section>
   );
@@ -176,7 +176,7 @@ function SessionsSection({ w }: { w: Worktree }) {
   return (
     <section className="side-section">
       <div className="section-label">sessions{items && items.length > 0 && <span className="right">{items.length}</span>}</div>
-      {items === null && <div className="faint">looking…</div>}
+      {items === null && w.exists && <SkeletonRows count={2} className="compact" label="looking for sessions" />}
       {items?.length === 0 && <div className="muted">no agent sessions rooted here</div>}
       {resumable.map((s) => (
         <div key={`${s.kind}-${s.id}`} className="session-row" title={`${s.path}\n${s.turns} turns`}>

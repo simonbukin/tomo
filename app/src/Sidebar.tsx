@@ -5,6 +5,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { byManualOrder } from "./order";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RowError } from "./RowError";
 import { Signals } from "./Signals";
 import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
@@ -239,6 +240,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false }: { w:
         {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
       </span>
       <span className="wt-meta">
+        <RowError worktreeId={w.id} />
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>

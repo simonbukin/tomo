@@ -36,3 +36,37 @@
 .towns-note { margin-top: var(--sp-3); }
 .town-suggest { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); font-size: var(--fs-1); }
 .town-suggest .link, .town-suggest .btn-link { margin-left: auto; }
+
+/* ---- selection and history detail */
+.town-unlocked { cursor: pointer; }
+.town-selected .town-ring { opacity: 0.5; stroke: currentColor; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.town-row { cursor: default; margin: 0 calc(var(--sp-2) * -1); padding-left: var(--sp-2); padding-right: var(--sp-2); border-radius: var(--radius-sm); }
+.town-row:hover { background: var(--bg-1); }
+.town-row-selected, .town-row-selected:hover { background: var(--accent-soft); }
+.town-detail { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-2) 0 var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg-1); font-size: var(--fs-1); }
+.town-detail-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); }
+.town-detail-head strong { font-weight: 600; }
+.town-detail-close { margin-left: auto; }
+.town-facts { margin: var(--sp-1) 0; }
+.town-facts .kv { grid-template-columns: 88px minmax(0, 1fr); }
+.town-detail > .link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
+
+/* ---- unlock ceremony: small corner reveal for common towns, a card for rare and better */
+@keyframes reveal-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes reveal-ring { from { transform: scale(0.4); opacity: 0.7; } to { transform: scale(2.4); opacity: 0; } }
+.town-reveal { position: fixed; z-index: var(--z-float); background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); font-size: var(--fs-1); color: var(--fg-1); animation: reveal-in var(--dur-reveal) var(--ease-out) both; }
+.town-reveal-small { right: var(--sp-4); bottom: var(--sp-4); display: flex; align-items: center; gap: var(--sp-2); max-width: min(420px, calc(100vw - 32px)); padding: var(--sp-2) var(--sp-3); cursor: default; }
+.town-reveal-small strong { font-weight: 500; color: var(--fg); }
+.town-reveal-large { top: 16vh; left: 50%; translate: -50% 0; width: 280px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--sp-4) var(--sp-4) var(--sp-3); text-align: center; animation-duration: calc(var(--dur-reveal) * 1.6); }
+.town-reveal-mark { position: relative; display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: var(--sp-1); }
+.town-reveal-mark .rarity-dot { width: 12px; height: 12px; }
+.town-reveal-ring { position: absolute; inset: 9px; border-radius: 50%; border: 1.5px solid currentColor; animation: reveal-ring 520ms var(--ease-out) 60ms both; }
+.town-reveal-special .town-reveal-ring { animation-iteration-count: 2; }
+.town-reveal-special { border-color: color-mix(in srgb, var(--waiting) 55%, var(--line-strong)); }
+.town-reveal-ja { font-size: 26px; font-weight: 600; line-height: 1.25; color: var(--fg); }
+.town-reveal-name { color: var(--fg-1); }
+.town-reveal-rarity { margin-top: var(--sp-1); font-size: var(--fs-0); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.town-reveal-actions { display: flex; gap: var(--sp-3); margin-top: var(--sp-2); }
+.town-reveal[data-motion="reduced"], .town-reveal[data-motion="reduced"] .town-reveal-ring { animation: none; }
+.town-reveal[data-motion="reduced"] .town-reveal-ring { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .town-reveal, .town-reveal-ring { animation: none; } .town-reveal-ring { opacity: 0; } }

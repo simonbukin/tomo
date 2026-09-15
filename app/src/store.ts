@@ -58,7 +58,11 @@ export interface State {
   prs: Record<Id, PrStatusResult>;
   zoomed: Record<Id, Id>;
   healthChecked: boolean;
+  townReveal: { unlock: TownUnlock; nonce: number } | null;
+  rowErrors: Record<Id, RowError>;
 }
+
+export type RowError = { op: string; message: string };
 
 export type Dialog =
   | { kind: "add-repo" }
@@ -102,6 +106,8 @@ let state: State = {
   prs: {},
   zoomed: {},
   healthChecked: false,
+  townReveal: null,
+  rowErrors: {},
 };
 
 const listeners = new Set<() => void>();
@@ -373,11 +379,7 @@ export function applyFrame(frame: Frame): void {
     }
     case "town_unlocked": {
       const { unlock } = d as { unlock: TownUnlock };
-      setState((s) => ({ unlocks: [...s.unlocks.filter((u) => u.slug !== unlock.slug), unlock] }));
-      import("./data/japan-towns.json").then((m) => {
-        const town = (m.default as { slug: string; name: string; rarity: string }[]).find((t) => t.slug === unlock.slug);
-        if (town) notify("info", `unlocked ${town.name} (${town.rarity})`);
-      });
+      setState((s) => ({ unlocks: [...s.unlocks.filter((u) => u.slug !== unlock.slug), unlock], townReveal: { unlock, nonce: (s.townReveal?.nonce ?? 0) + 1 } }));
       break;
     }
   }
@@ -433,6 +435,14 @@ export function agentsOf(s: State, worktreeId: Id): AgentPresence[] {
 
 export function repoName(s: State, repoId: Id): string {
   return s.repos.find((r) => r.id === repoId)?.name ?? "?";
+}
+
+/** Shows a failure on the worktree's own row. `null` clears it. */
+export function setRowError(worktreeId: Id, error: RowError | null): void {
+  setState((s) => {
+    const { [worktreeId]: _, ...rest } = s.rowErrors;
+    return { rowErrors: error ? { ...rest, [worktreeId]: error } : rest };
+  });
 }
 
 export function notify(level: string, message: string): void {

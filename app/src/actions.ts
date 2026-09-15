@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
-import { activeTab, agentsOf, clearSelection, getState, needsMe, notify, paneIds, setState, setUi } from "./store";
+import { activeTab, agentsOf, clearSelection, getState, needsMe, notify, paneIds, setRowError, setState, setUi } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
 
@@ -252,6 +252,13 @@ const ARCHIVE_BODY = "tomo commits a checkpoint of uncommitted changes to the br
 const DISCARD_LABEL = "discard uncommitted changes";
 const checkpointMode = (discard: boolean): CheckpointMode => (discard ? "discard" : "checkpoint");
 
+const failOn = (worktreeId: Id, op: string) => (e: unknown) => {
+  const message = (e as Error).message;
+  setRowError(worktreeId, { op, message });
+  notify("error", `${op} failed: ${message}`);
+};
+const clearRowError = (worktreeId: Id) => () => setRowError(worktreeId, null);
+
 export function archiveWorktree(worktreeId: Id): void {
   const w = byId(worktreeId);
   if (!w) return;
@@ -264,22 +271,22 @@ export function archiveWorktree(worktreeId: Id): void {
       check: DISCARD_LABEL,
       onConfirm: (discard) => {
         if (getState().ui.activeWorktreeId === worktreeId) setUi({ view: "home" });
-        rpc("worktree_archive", { worktree_id: worktreeId, checkpoint: checkpointMode(discard) }).catch((e) => notify("error", (e as Error).message));
+        rpc("worktree_archive", { worktree_id: worktreeId, checkpoint: checkpointMode(discard) }).then(clearRowError(worktreeId), failOn(worktreeId, "archive"));
       },
     },
   });
 }
 
 export function runWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc<ActionRunResult>("action_run", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
+  rpc<ActionRunResult>("action_run", { worktree_id: worktreeId, action_id: actionId }).then(clearRowError(worktreeId), failOn(worktreeId, actionId));
 }
 
 export function stopWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc("action_stop", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
+  rpc("action_stop", { worktree_id: worktreeId, action_id: actionId }).then(clearRowError(worktreeId), failOn(worktreeId, `stop ${actionId}`));
 }
 
 export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).catch((e) => notify("error", (e as Error).message));
+  rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).then(clearRowError(worktreeId), failOn(worktreeId, `restart ${actionId}`));
 }
 
 /** Opens a runtime endpoint in the worktree's browser surface, or externally when no worktree is known. */
@@ -302,8 +309,10 @@ export function refreshUsage(): void {
 
 export function restoreWorktree(worktreeId: Id): void {
   rpc<Worktree>("worktree_restore", { worktree_id: worktreeId })
-    .then((w) => openWorktree(w.id))
-    .catch((e) => notify("error", (e as Error).message));
+    .then((w) => {
+      setRowError(worktreeId, null);
+      openWorktree(w.id);
+    }, failOn(worktreeId, "restore"));
 }
 
 export async function bulkMetadata(ids: Id[], patch: Record<string, unknown>): Promise<void> {
@@ -393,7 +402,7 @@ export function bulkArchive(ids: Id[]): void {
       onConfirm: async (discard) => {
         if (targets.some((w) => w.id === getState().ui.activeWorktreeId)) setUi({ view: "home" });
         const results = await Promise.allSettled(targets.map((w) => rpc("worktree_archive", { worktree_id: w.id, checkpoint: checkpointMode(discard) })));
-        results.forEach((r, i) => r.status === "rejected" && notify("error", `${targets[i].name}: ${(r.reason as Error).message}`));
+        results.forEach((r, i) => setRowError(targets[i].id, r.status === "rejected" ? { op: "archive", message: (r.reason as Error).message } : null));
         const ok = results.filter((r) => r.status === "fulfilled").length;
         clearSelection();
         notify("info", `Archived ${ok} of ${targets.length}${skipped ? `, skipped ${skipped}` : ""}`);
@@ -405,7 +414,7 @@ export function bulkArchive(ids: Id[]): void {
 export async function bulkRestore(ids: Id[]): Promise<void> {
   const targets = ids.map(byId).filter((w): w is Worktree => !!w && !!w.archived_at_ms);
   const results = await Promise.allSettled(targets.map((w) => rpc("worktree_restore", { worktree_id: w.id })));
-  results.forEach((r, i) => r.status === "rejected" && notify("error", `${targets[i].name}: ${(r.reason as Error).message}`));
+  results.forEach((r, i) => setRowError(targets[i].id, r.status === "rejected" ? { op: "restore", message: (r.reason as Error).message } : null));
   const ok = results.filter((r) => r.status === "fulfilled").length;
   clearSelection();
   notify("info", `Restored ${ok} of ${targets.length}`);

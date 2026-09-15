@@ -121,3 +121,22 @@
 :root[data-theme="dark"][data-accent="sakura"] { --accent: #f07aa9; }
 :root[data-theme="dark"][data-accent="sumi"] { --accent: #c9c9d4; }
 :root[data-theme="dark"][data-accent="sora"], :root[data-theme="dark"][data-accent="sakura"], :root[data-theme="dark"][data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
+
+/* ==== motion and interaction tokens (QOL delight). No colors here: theme tokens stay above. ====
+   --dur-fast (80ms) and --dur (140ms) above stay the base. These add curves and named moments. */
+:root {
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-hover: 100ms;
+  --dur-press: 80ms;
+  --dur-open: 140ms;
+  --dur-close: 100ms;
+  --dur-reveal: 150ms;
+  --press-scale: 0.97;
+  --hit-min: 24px;
+  --focus-ring-width: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-hover: 0ms; --dur-press: 0ms; --dur-open: 0ms; --dur-close: 0ms; --dur-reveal: 0ms; --press-scale: 1; }
+}
+/* ==== end motion and interaction tokens ==== */

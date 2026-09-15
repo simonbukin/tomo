@@ -76,7 +76,50 @@ landmass outline comes from `app/src/data/japan-outline.json`. Wheel zooms,
 drag pans, double-click resets. Hovering a dot shows the town, prefecture,
 rarity, population, a Wikipedia link, and for unlocked towns the worktree
 and unlock date. The collection list on the right shows counts per rarity
-and every unlocked town in unlock order.
+and every unlocked town in unlock order. With no unlocks, the list shows
+`0 / 1681 municipalities unlocked.` and a `New worktree` button.
+
+## Unlock ceremony
+
+The `town_unlocked` event starts a short reveal (`app/src/TownReveal.tsx`).
+The reveal never takes focus. `ceremonyTier` in `app/src/townCeremony.ts`
+maps the rarity to a tier:
+
+| Rarity | Tier | Reveal | Sound |
+|--------|------|--------|-------|
+| common, uncommon | small | one line in the bottom-right corner, about 2.6 s | none |
+| rare, epic | strong | a card with the Japanese name, the rarity, and `unlocked 38 / 1681`, about 3.8 s | `rare` chime |
+| legendary | special | the same card with a double ring, about 5.2 s | `legendary` chime |
+
+The chime plays only when `[notifications] sounds` is on (off by default).
+Under `prefers-reduced-motion` the reveal shows with no animation. Escape
+or `dismiss` closes it. `view on map` opens the map with the town selected.
+There is no reroll.
+
+## History
+
+Select an unlocked town on the map or in the list to see its history. The
+detail comes from the `town_history` call:
+
+```json
+{ "method": "town_history", "params": { "slug": "aogashima" } }
+```
+
+It returns the unlock row, the repo name, the worktree name, the branch,
+the status (`active`, `archived`, `missing`, or `gone`), the final commit,
+the archive date, and the pull request. Every value is a fact from Tomo's
+own records:
+
+- An active or missing worktree shows its head commit as `head`.
+- An archived worktree shows the archive checkpoint commit. A clean archive
+  has no checkpoint, so it shows the head at archive time. The `archived`
+  activity event records both in its payload.
+- The pull request is the cached one, or the last `pr_merged` event.
+- A locked or unknown slug returns `not_found`.
+
+The detail keeps the last result on screen while it refreshes, and shows
+an inline error when the call fails. `scripts/torture/towns.sh` checks the
+history before archive, after archive, and after a daemon restart.
 
 ## Code boundary
 
@@ -88,7 +131,7 @@ app/src/data/                        town and outline data
 ```
 
 The generic runtime touches towns in three places only: worktree creation
-(pick and unlock), the `town_list` and `town_pick` calls, and the
+(pick and unlock), the `town_list`, `town_pick`, and `town_history` calls, and the
 `town_slug` view field. If Tomo later grows an extension host, Towns is the
 first candidate to move out: it needs custom data, two commands, a creation
 hook, and one view, which is exactly the surface an extension API must

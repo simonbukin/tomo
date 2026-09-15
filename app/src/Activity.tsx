@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, payloadString, percentOf, resetsIn, timeLabel, shortUsageLabel, sparkCells, usageTone } from "./activityModel";
 import { focusPane, openEndpoint, openWorktree, refreshUsage, resolveCheckpoint, restartWorktreeAction, restoreWorktree } from "./actions";
 import { rpc } from "./api";
-import { Button, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
+import { Button, Popover, PopoverContent, PopoverTitle, PopoverTrigger, SkeletonRows, Tooltip } from "./components/ui";
+import { activityEmptyText, type ActivityFilter as Filter } from "./emptyStates";
 import { ProcessIcon } from "./ProcessIcon";
+import { EmptyState } from "./states";
 import { endpointsOf, setState, useStore, type State } from "./store";
 import { KIND_LABEL, type ActivityEvent, type UsageBucket, type UsageSnapshot } from "./types";
 
-type Filter = "all" | "needs_me" | "worktree";
 const PAGE = 200;
 
 function load(beforeMs: number | null): Promise<ActivityEvent[]> {
@@ -22,8 +23,10 @@ export function Activity() {
   const openIds = useStore((s) => s.attention.filter((a) => needsMeItem(a, Object.values(s.agents))).map((a) => a.id));
   const [filter, setFilter] = useState<Filter>("all");
   const [more, setMore] = useState(true);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     load(null).then((list) => {
+      setLoading(false);
       setMore(list.length >= PAGE);
       setState((s) => ({ activity: mergeActivity(s.activity, list) }));
     });
@@ -50,7 +53,7 @@ export function Activity() {
         <span className="spacer" />
         <UsageStrip />
       </div>
-      {shown.length === 0 && <div className="activity-empty muted">nothing yet</div>}
+      {shown.length === 0 && (loading ? <SkeletonRows count={6} label="loading activity" /> : <EmptyState title={activityEmptyText(filter)} />)}
       {groupByDay(shown).map((g) => (
         <section key={g.label} className="activity-day">
           <div className="section-label">{g.label}</div>
