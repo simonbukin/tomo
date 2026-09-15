@@ -107,6 +107,19 @@ describe("Agentation in a browser pane", () => {
     expect(count()).toBeNull();
   });
 
+  it("asks the host for annotate only on a toggle, never on mount", async () => {
+    const user = setupUser();
+    render(<BrowserPane paneId="b1" active />);
+    await flush();
+    expect(calls("browser_set_annotate")).toEqual([]);
+    await user.click(screen.getByRole("button", { name: "Annotate" }));
+    await user.click(screen.getByRole("button", { name: "Stop annotating" }));
+    expect(calls("browser_set_annotate")).toEqual([
+      { paneId: "b1", enabled: true },
+      { paneId: "b1", enabled: false },
+    ]);
+  });
+
   it("turns annotate on and off, and closes the webview on unmount", async () => {
     const user = setupUser();
     const { unmount } = render(<BrowserPane paneId="b1" active />);
