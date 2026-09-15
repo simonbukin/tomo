@@ -1,55 +1,11 @@
-import { sparkCells } from "../activityModel";
 import type { DaemonHealth } from "../store";
-import { KIND_LABEL, type Diagnostic, type HookRun, type IntegrationStatus, type SystemStats, type UsageBucket, type UsageSnapshot } from "../types";
+import type { Diagnostic, HookRun, IntegrationStatus, SystemStats } from "../types";
 
 export type Tone = "quiet" | "warning" | "danger";
 
 export const toneOf = (value: number, warn: number, danger: number): Tone => (value >= danger ? "danger" : value >= warn ? "warning" : "quiet");
 
 export const worstTone = (tones: Tone[]): Tone => (tones.includes("danger") ? "danger" : tones.includes("warning") ? "warning" : "quiet");
-
-export const USAGE_WARN = 0.8;
-export const USAGE_DANGER = 0.95;
-
-/** Pi runs on the Claude allowance, so it has no usage of its own. */
-export const stripUsage = (usage: UsageSnapshot[]): UsageSnapshot[] => usage.filter((u) => u.provider !== "pi");
-
-export interface UsageRow {
-  key: string;
-  name: string;
-  snapshot: UsageSnapshot;
-}
-
-const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** One row for the whole plan and one per model scope, for example Claude, Fable, Codex, Sol. */
-export function usageRows(usage: UsageSnapshot[]): UsageRow[] {
-  return stripUsage(usage).flatMap((u) => {
-    const scopes = [...new Set(u.buckets.flatMap((b) => (b.scope ? [b.scope] : [])))];
-    const plan = u.buckets.filter((b) => !b.scope);
-    const planRow: UsageRow[] = plan.length || !scopes.length ? [{ key: u.provider, name: KIND_LABEL[u.provider], snapshot: { ...u, buckets: plan } }] : [];
-    return [...planRow, ...scopes.map((scope) => ({ key: `${u.provider}:${scope}`, name: titleCase(scope), snapshot: { ...u, buckets: u.buckets.filter((b) => b.scope === scope) } }))];
-  });
-}
-
-const knownBuckets = (u: UsageSnapshot): (UsageBucket & { fraction_used: number })[] => (u.available ? u.buckets.filter((b): b is UsageBucket & { fraction_used: number } => b.fraction_used != null) : []);
-
-/** The most used bucket of a provider, whatever the adapter calls it. Null when no bucket has a value. */
-export function headlineBucket(u: UsageSnapshot): (UsageBucket & { fraction_used: number }) | null {
-  return knownBuckets(u).reduce<(UsageBucket & { fraction_used: number }) | null>((top, b) => (!top || b.fraction_used > top.fraction_used ? b : top), null);
-}
-
-export const bucketTone = (b: UsageBucket): Tone => (b.fraction_used == null ? "quiet" : toneOf(b.fraction_used, USAGE_WARN, USAGE_DANGER));
-
-export const usageTone = (u: UsageSnapshot): Tone => worstTone(knownBuckets(u).map(bucketTone));
-
-export const percentText = (fraction: number | null): string => (fraction == null ? "—" : `${Math.round(Math.min(1, Math.max(0, fraction)) * 100)}%`);
-
-/** `━━━━━━──` for a used fraction; an unknown value draws only the empty track. */
-export function microBar(fraction: number | null, width = 8): { on: string; off: string } {
-  const { filled, empty } = sparkCells(fraction, width);
-  return { on: "━".repeat(filled), off: "─".repeat(empty) };
-}
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -145,5 +101,3 @@ export const integrationTone = (i: IntegrationStatus): Tone => (i.level === "ful
 export const integrationText = (i: IntegrationStatus): string => `${INTEGRATION_WORD[i.level]}${i.reason ? ` · ${i.reason}` : ""}`;
 
 export const hookFailures = (runs: HookRun[]): HookRun[] => runs.filter((r) => !r.ok);
-
-export const usageIssues = (usage: UsageSnapshot[]): UsageSnapshot[] => stripUsage(usage).filter((u) => !u.available);

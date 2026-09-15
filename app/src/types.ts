@@ -62,8 +62,6 @@ export type {
   SystemStats,
   Tab,
   ThemeConfig,
-  UsageBucket,
-  UsageSnapshot,
   Worktree,
   WorktreeCreate,
   WorktreeMetadata,

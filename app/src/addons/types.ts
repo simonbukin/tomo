@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { Action } from "../actions";
-import type { Frame } from "../types";
+import type { Frame, Snapshot } from "../types";
 
 /** A center view next to Home and Activity. Its id is also the id of the command that opens it. */
 export interface GlobalView {
@@ -32,8 +32,12 @@ export interface Addon {
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
   /** Mounted once for the whole session. It must start no work until it has something to show. */
   mount?: ComponentType;
-  /** Called after each `subscribe` snapshot. */
-  onSnapshot?: () => void;
+  /** An item in the middle of the bottom strip, before the status slot. It renders from its own state and starts no work. */
+  bottomItem?: ComponentType;
+  /** A section after the core sections of the diagnostics report. It renders nothing when it has nothing to report. */
+  diagnosticsSection?: ComponentType;
+  /** Called with each `subscribe` snapshot. */
+  onSnapshot?: (snapshot: Snapshot) => void;
   /** Receives every daemon event frame except pane output. */
   onFrame?: (frame: Frame) => void;
 }

@@ -1,12 +1,13 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
 import { timeLabel } from "../activityModel";
+import { builtins } from "../addons";
 import { rpc } from "../api";
 import { openDiagnostics } from "../commands/diagnostics";
 import { Button, DialogActions, DialogTitle, PopoverClose, SkeletonRows } from "../components/ui";
 import { useStore } from "../store";
 import { KIND_LABEL, type ConfigIssue, type Diagnostic, type HookRun, type IntegrationStatus } from "../types";
-import { CONNECTION_LABEL, countOf, formatUptime, HEALTH, hookFailures, integrationText, integrationTone, mergeDiagnostics, usageIssues, type Tone } from "./bottomModel";
+import { CONNECTION_LABEL, countOf, formatUptime, HEALTH, hookFailures, integrationText, integrationTone, mergeDiagnostics, type Tone } from "./bottomModel";
 import { HoverPopover } from "./HoverPopover";
 
 const TONE_DOT: Record<Tone, string> = { quiet: "state state-ok", warning: "state state-warning", danger: "state state-error" };
@@ -89,12 +90,11 @@ function useDaemonList<T>(method: string, params: unknown, nonce: number): Loade
 
 const listOf = <T,>(loaded: Loaded<T>): T[] => (Array.isArray(loaded) ? loaded : []);
 
-/** Daemon connection, integrations, recent system events, config issues, hook failures, and usage adapter issues. Never work events. */
+/** Daemon connection, integrations, recent system events, config issues, hook failures, and the addon sections. Never work events. */
 export function DiagnosticsReport({ eventLimit, compact = false }: { eventLimit: number; compact?: boolean }) {
   const health = useStore((s) => s.daemonHealth);
   const nonce = useStore((s) => s.connectionNonce);
   const local = useStore((s) => s.diagnostics);
-  const usage = useStore((s) => usageIssues(s.usage));
   const fetched = useDaemonList<Diagnostic>("diagnostics_list", { limit: 200 }, nonce);
   const integrations = useDaemonList<IntegrationStatus>("integrations_status", undefined, nonce);
   const config = useDaemonList<ConfigIssue>("config_check", undefined, nonce);
@@ -156,15 +156,7 @@ export function DiagnosticsReport({ eventLimit, compact = false }: { eventLimit:
         </div>
       ))}
 
-      {usage.length > 0 && <div className="bottom-pop-label">Usage</div>}
-      {usage.map((u) => (
-        <div key={u.provider} className="diag-row">
-          <span className={TONE_DOT.warning} />
-          <span className="diag-message">
-            {KIND_LABEL[u.provider]} usage unavailable{u.reason ? ` · ${u.reason}` : ""}
-          </span>
-        </div>
-      ))}
+      {builtins.map(({ id, diagnosticsSection: Section }) => Section && <Section key={id} />)}
 
       {compact && (
         <div className="diag-actions">
