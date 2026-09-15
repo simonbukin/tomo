@@ -6,7 +6,7 @@ import { openEndpoint } from "./actions";
 import { encodeBase64, rpc } from "./api";
 import { containsPoint, cssPoint, dropText } from "./fileDrop";
 import { findLinks, resolvePath, type TermLink } from "./links";
-import { getState, notify } from "./store";
+import { failToast, getState } from "./store";
 import { focusTerminal } from "./terminals";
 import type { Id } from "./types";
 
@@ -16,7 +16,7 @@ async function openLink(link: TermLink, paneId: Id): Promise<void> {
   if (link.kind === "url") return openEndpoint(link.url, pane.worktree_id);
   const home = link.path.startsWith("~/") ? await homeDir().catch(() => null) : null;
   const path = resolvePath(link.path, pane.cwd, home);
-  if (path) await rpc("open_location", { path, line: link.line, col: link.col }).catch((e) => notify("error", (e as Error).message));
+  if (path) await rpc("open_location", { path, line: link.line, col: link.col }).catch(failToast("Could not open the file"));
 }
 
 /** Cmd-click opens a URL in the worktree browser and a `path:line` in the editor. A plain click does nothing. */

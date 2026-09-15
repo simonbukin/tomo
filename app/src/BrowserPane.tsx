@@ -3,12 +3,12 @@ import { listen } from "@tauri-apps/api/event";
 import { ArrowLeft, ArrowRight, Copy, ExternalLink, Globe, MessageSquarePlus, RotateCw, SendHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
-import { browserCommand, closePane, copyText, focusPane, openExternalUrl } from "./actions";
+import { browserCommand, browserHostFailed, closePane, copyText, focusPane, openExternalUrl } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { browserMenu, isLastPane } from "./menus";
 import { useShortcuts } from "./shortcuts";
-import { agentsOf, notify, useStore } from "./store";
+import { agentsOf, failToast, showStatus, useStore } from "./store";
 import { KIND_LABEL, type EvidenceBundle, type Id } from "./types";
 
 type BrowserState = { pane_id: Id; url?: string; title?: string; loading?: boolean };
@@ -69,7 +69,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     const b = boundsOf(host);
     if (sameBounds(lastBounds.current, b)) return;
     lastBounds.current = b;
-    invoke("browser_set_bounds", { paneId, ...b }).catch(() => {});
+    invoke("browser_set_bounds", { paneId, ...b }).catch(browserHostFailed("browser_set_bounds"));
   };
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     if (!host) return;
     const initial = boundsOf(host);
     lastBounds.current = initial;
-    invoke("browser_create", { paneId, url: urlRef.current, ...initial }).catch((e) => notify("error", String(e)));
+    invoke("browser_create", { paneId, url: urlRef.current, ...initial }).catch(browserHostFailed("browser_create", "Browser failed to open"));
     const observer = new ResizeObserver(pushBounds);
     observer.observe(host);
     window.addEventListener("resize", pushBounds);
@@ -103,7 +103,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
       window.removeEventListener("resize", pushBounds);
       offState.then((off) => off());
       offFeedback.then((off) => off());
-      invoke("browser_close", { paneId }).catch(() => {});
+      invoke("browser_close", { paneId }).catch(browserHostFailed("browser_close"));
     };
   }, [paneId]);
 
@@ -113,25 +113,25 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
 
   const sendOpen = menuOpen && feedback.count > 0;
   useEffect(() => {
-    invoke("browser_set_visible", { paneId, visible: !(covered || sendOpen) }).catch(() => {});
+    invoke("browser_set_visible", { paneId, visible: !(covered || sendOpen) }).catch(browserHostFailed("browser_set_visible"));
   }, [paneId, covered, sendOpen]);
 
   useEffect(() => {
     if (pane?.url && pane.url !== urlRef.current) {
       setUrl(pane.url);
-      invoke("browser_navigate", { paneId, url: pane.url }).catch(() => {});
+      invoke("browser_navigate", { paneId, url: pane.url }).catch(browserHostFailed("browser_navigate"));
     }
   }, [pane?.url]);
 
   useEffect(() => {
-    invoke("browser_set_annotate", { paneId, enabled: annotate }).catch(() => {});
+    invoke("browser_set_annotate", { paneId, enabled: annotate }).catch(browserHostFailed("browser_set_annotate"));
   }, [paneId, annotate]);
 
   const navigate = (text: string) => {
     const next = normalizeUrl(text);
     setDraft(null);
     setUrl(next);
-    invoke("browser_navigate", { paneId, url: next }).catch((e) => notify("error", String(e)));
+    invoke("browser_navigate", { paneId, url: next }).catch(browserHostFailed("browser_navigate", "Navigation failed"));
     rpc("browser_navigate", { pane_id: paneId, url: next }).catch(() => {});
   };
 
@@ -142,10 +142,10 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     try {
       await rpc("annotations_send", { pane_id: agentPaneId, bundle });
       setFeedback(NO_FEEDBACK);
-      invoke("browser_clear_annotations", { paneId }).catch(() => {});
-      notify("info", `Sent ${notes(count)} to ${label}`);
+      invoke("browser_clear_annotations", { paneId }).catch(browserHostFailed("browser_clear_annotations"));
+      showStatus(`Sent ${notes(count)} to ${label}`);
     } catch (e) {
-      notify("error", (e as Error).message);
+      failToast("Send failed")(e);
     }
   };
 

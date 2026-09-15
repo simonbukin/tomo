@@ -2,11 +2,11 @@ import { focusedPaneId, type Action } from "../actions";
 import { rpc } from "../api";
 import type { DropPlace } from "../generated";
 import { reorderTabs } from "../layoutModel";
-import { activeTab, getState, notify, paneIds, setState } from "../store";
+import { activeTab, failToast, getState, paneIds, setState } from "../store";
 import { neighbor } from "../terminals";
 import type { Id, Tab } from "../types";
 
-const fail = (e: unknown) => notify("error", (e as Error).message);
+const fail = (e: unknown) => failToast("Move failed")(e);
 
 /** Reorders at once, then the daemon's `tabs_changed` snapshot wins. A failed call puts the old order back. */
 export function moveTab(tabId: Id, position: number): void {

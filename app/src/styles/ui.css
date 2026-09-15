@@ -101,12 +101,6 @@ button.link:hover, .btn-link:hover { color: var(--accent); background: none; }
 .separator-horizontal { height: 1px; width: 100%; }
 .separator-vertical { width: 1px; align-self: stretch; }
 
-/* ---- toast */
-@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.toast { position: fixed; bottom: var(--sp-4); left: 50%; transform: translateX(-50%); background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--sp-2) var(--sp-4); z-index: 100; font-size: var(--fs-1); max-width: 70vw; box-shadow: var(--shadow-pop); animation: toast-in var(--dur) ease-out both; }
-.toast-error { border-color: var(--hot); color: var(--hot); }
-.toast-warning { border-color: var(--waiting); color: var(--waiting); }
-
 /* ---- settings */
 .dialog.settings-dialog { top: 8vh; max-height: 84vh; }
 .settings-file { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
