@@ -7,7 +7,7 @@ const DURATION = 180;
  * they are now (FLIP). Children need a `data-flip` key. New children fade in.
  * Uses the Web Animations API; respects reduced motion.
  */
-export function useFlip(ref: React.RefObject<HTMLElement | null>, deps: unknown[]): void {
+export function useFlip(ref: React.RefObject<HTMLElement | null>, deps: unknown[], animate = true): void {
   const last = useRef<Map<string, DOMRect>>(new Map());
   useLayoutEffect(() => {
     const root = ref.current;
@@ -19,7 +19,7 @@ export function useFlip(ref: React.RefObject<HTMLElement | null>, deps: unknown[
       const key = el.dataset.flip!;
       const rect = el.getBoundingClientRect();
       next.set(key, rect);
-      if (reduce) continue;
+      if (reduce || !animate) continue;
       const prev = last.current.get(key);
       if (!prev) {
         if (last.current.size) el.animate([{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], { duration: DURATION, easing: "ease-out" });
