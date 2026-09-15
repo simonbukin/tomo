@@ -1,3 +1,4 @@
+import type { Appearance } from "./appearance";
 export type {
   ActionDef,
   ActionRunResult,
@@ -90,7 +91,7 @@ export interface ProcessInfo {
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
-export type SidebarSort = "name" | "recent" | "created" | "attention" | "state";
+export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" | "manual";
 
 export interface UiState {
   view: "home" | "worktree" | "towns" | "activity";
@@ -105,6 +106,10 @@ export interface UiState {
   hiddenRepos: string[];
   showHiddenRepos: boolean;
   home: HomeOptions;
+  /** Worktree ids per repo id, in the order the user dragged them. Used when `sidebarSort` is manual. */
+  manualOrder: Record<string, Id[]>;
+  repoOrder: Id[];
+  appearance: Appearance;
 }
 
 export type FilterKind = "state" | "repo" | "project" | "tag" | "agent" | "archived" | "attention";

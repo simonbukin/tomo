@@ -105,3 +105,19 @@
   --backdrop: rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }
+
+/* ---- accent presets; murasaki is the default above. Soft tints follow the ground. */
+:root[data-accent="sora"] { --accent: #2f7df6; }
+:root[data-accent="sakura"] { --accent: #d8467f; }
+:root[data-accent="sumi"] { --accent: #3f3f48; }
+:root[data-accent="sora"], :root[data-accent="sakura"], :root[data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="sora"] { --accent: #6aa8ff; }
+  :root:not([data-theme="light"])[data-accent="sakura"] { --accent: #f07aa9; }
+  :root:not([data-theme="light"])[data-accent="sumi"] { --accent: #c9c9d4; }
+  :root:not([data-theme="light"])[data-accent="sora"], :root:not([data-theme="light"])[data-accent="sakura"], :root:not([data-theme="light"])[data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
+}
+:root[data-theme="dark"][data-accent="sora"] { --accent: #6aa8ff; }
+:root[data-theme="dark"][data-accent="sakura"] { --accent: #f07aa9; }
+:root[data-theme="dark"][data-accent="sumi"] { --accent: #c9c9d4; }
+:root[data-theme="dark"][data-accent="sora"], :root[data-theme="dark"][data-accent="sakura"], :root[data-theme="dark"][data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg)); }

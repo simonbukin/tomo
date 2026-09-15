@@ -1,3 +1,4 @@
+import { stepZoom, type Appearance, type ThemeChoice } from "./appearance";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
@@ -520,6 +521,11 @@ export const actions: Action[] = [
   { id: "towns", label: "Open Japan map", run: () => setUi({ view: "towns" }) },
   { id: "activity", label: "Activity", run: () => setUi({ view: "activity" }) },
   { id: "palette", label: "Command palette", run: () => setState((s) => ({ paletteOpen: !s.paletteOpen })) },
+  { id: "appearance", label: "Appearance…", run: () => setState({ dialog: { kind: "appearance" } }) },
+  { id: "zoom_in", label: "Zoom in", run: () => applyZoom("in") },
+  { id: "zoom_out", label: "Zoom out", run: () => applyZoom("out") },
+  { id: "zoom_reset", label: "Reset zoom", run: () => applyZoom("reset") },
+  ...(["system", "light", "dark"] as ThemeChoice[]).map((theme) => ({ id: `theme_${theme}`, label: `Theme: ${theme}`, run: () => setAppearance({ theme }) })),
   { id: "next_attention", label: "Jump to next attention item", run: nextAttention },
   { id: "prev_worktree", label: "Previous worktree", run: () => cycleWorktree(-1) },
   { id: "next_worktree", label: "Next worktree", run: () => cycleWorktree(1) },
@@ -567,8 +573,16 @@ export const actions: Action[] = [
   { id: "collapse_repos", label: "Collapse all repos", run: () => setAllReposCollapsed(true) },
   { id: "expand_repos", label: "Expand all repos", run: () => setAllReposCollapsed(false) },
   { id: "clear_selection", label: "Clear selection", run: clearSelection, when: () => getState().selection.size > 0 },
-  ...(["name", "recent", "created", "attention", "state"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
+  ...(["name", "recent", "created", "attention", "state", "manual"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
 ];
+
+export function setAppearance(patch: Partial<Appearance>): void {
+  setUi({ appearance: { ...getState().ui.appearance, ...patch } });
+}
+
+export function applyZoom(dir: "in" | "out" | "reset"): void {
+  setAppearance({ zoom: stepZoom(getState().ui.appearance.zoom, dir) });
+}
 
 export function stateActions(): Action[] {
   const current = currentWorktree();

@@ -35,3 +35,16 @@
 .wt-more { visibility: hidden; }
 .wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }
 .tag { color: var(--fg-3); font-size: var(--fs-0); }
+
+/* ---- main worktree and manual order */
+.wt-main-star { width: 10px; height: 10px; flex: none; color: var(--fg-2); fill: currentColor; margin-left: 5px; vertical-align: -1px; }
+.wt-active .wt-main-star { color: var(--accent); }
+.wt-name-line { display: inline-flex; align-items: center; min-width: 0; }
+.wt-name-line .wt-name { min-width: 0; }
+.wt-row.is-dragging, .repo-head.is-dragging { opacity: 0.4; }
+.wt-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.wt-row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.repo-head.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.repo-head.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+body.row-dragging, body.row-dragging * { cursor: grabbing !important; user-select: none !important; }
+.signal-waiting-note { color: var(--waiting); font-size: var(--fs-0); }

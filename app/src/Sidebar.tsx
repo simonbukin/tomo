@@ -1,4 +1,6 @@
-import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Map, Plus, RotateCw } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Map, Plus, RotateCw, Star } from "lucide-react";
+import { byManualOrder, moveId, type DropPlace } from "./order";
+import { startRowDrag } from "./useRowDrag";
 import { useEffect, useMemo, useRef } from "react";
 import { Signals } from "./Signals";
 import { useFlip } from "./useFlip";
@@ -9,9 +11,9 @@ import { openMenu } from "./MenuHost";
 import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { agentsOf, clearSelection, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
-import type { AgentPresence, AgentState, Repo, SidebarSort, Worktree } from "./types";
+import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
 
-const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state"];
+const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
 
 export function Sidebar() {
   const repos = useStore(visibleRepos);
@@ -24,7 +26,9 @@ export function Sidebar() {
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
   const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
   const shown = worktrees.filter((w) => ui.showArchivedInSidebar || !w.archived_at_ms);
-  const grouped = repos.map((r) => ({ repo: r, items: sortWorktrees(shown.filter((w) => w.repo_id === r.id), ui.sidebarSort, ctx) })).filter((g) => g.items.length || !g.repo.exists);
+  const manual = ui.sidebarSort === "manual";
+  const orderedRepos = manual ? byManualOrder(repos, ui.repoOrder, (r) => r.id) : repos;
+  const grouped = orderedRepos.map((r) => ({ repo: r, items: sortWorktrees(shown.filter((w) => w.repo_id === r.id), ui.sidebarSort, ctx, ui.manualOrder[r.id] ?? []) })).filter((g) => g.items.length || !g.repo.exists);
   const orphans = sortWorktrees(shown.filter((w) => !repos.some((r) => r.id === w.repo_id)), ui.sidebarSort, ctx);
   const listRef = useRef<HTMLDivElement>(null);
   const order = [...grouped.flatMap((g) => g.items), ...orphans].map((w) => w.id).join(",");
@@ -34,8 +38,13 @@ export function Sidebar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  const currentOrder = (): Record<string, Id[]> => (manual ? ui.manualOrder : Object.fromEntries(grouped.map((g) => [g.repo.id, g.items.map((w) => w.id)])));
+  const currentRepoOrder = () => grouped.map((g) => g.repo.id);
+  const dropWorktree = (repoId: Id, ids: Id[], id: Id, target: Id, place: DropPlace) =>
+    setUi({ sidebarSort: "manual", manualOrder: { ...currentOrder(), [repoId]: moveId(ids, id, target, place) }, repoOrder: currentRepoOrder() });
+  const dropRepo = (id: Id, target: Id, place: DropPlace) => setUi({ sidebarSort: "manual", manualOrder: currentOrder(), repoOrder: moveId(currentRepoOrder(), id, target, place) });
   const sortMenu = (): MenuItem[] => [
-    ...SORTS.map((s) => ({ label: s, checked: ui.sidebarSort === s, run: () => setUi({ sidebarSort: s }) })),
+    ...SORTS.map((s) => ({ label: s === "manual" ? "manual (drag rows)" : s, checked: ui.sidebarSort === s, run: () => setUi({ sidebarSort: s }) })),
     { separator: true },
     { label: "show archived", checked: ui.showArchivedInSidebar, run: () => setUi({ showArchivedInSidebar: !ui.showArchivedInSidebar }) },
     { label: "show hidden repos", checked: ui.showHiddenRepos, run: () => setUi({ showHiddenRepos: !ui.showHiddenRepos }) },
@@ -64,7 +73,7 @@ export function Sidebar() {
           </div>
         )}
         {grouped.map(({ repo, items }) => (
-          <RepoGroup key={repo.id} repo={repo} items={items} active={active} />
+          <RepoGroup key={repo.id} repo={repo} items={items} active={active} onDropRepo={dropRepo} onDropWorktree={(id, target, place) => dropWorktree(repo.id, items.map((w) => w.id), id, target, place)} />
         ))}
         {orphans.length > 0 && <RepoGroup repo={{ id: "", name: "other", path: "", exists: true, remote_url: null, github: null }} items={orphans} active={active} />}
         {repos.length === 0 && (
@@ -108,14 +117,22 @@ function currentWidth(side: "left" | "right"): number {
   return el?.getBoundingClientRect().width ?? 240;
 }
 
-function RepoGroup({ repo, items, active }: { repo: Repo; items: Worktree[]; active: string | null }) {
+type DropHandler = (id: Id, target: Id, place: DropPlace) => void;
+
+function RepoGroup({ repo, items, active, onDropRepo, onDropWorktree }: { repo: Repo; items: Worktree[]; active: string | null; onDropRepo?: DropHandler; onDropWorktree?: DropHandler }) {
   const collapsed = useStore((s) => s.ui.collapsedRepos.includes(repo.id));
   const hidden = useStore((s) => s.ui.hiddenRepos.includes(repo.id));
   const attention = useStore((s) => items.some((w) => needsAttention(w, queryContext(s))));
   const toggle = () => repo.id && toggleRepoCollapsed(repo.id);
   return (
     <div className="repo-group">
-      <div className="section-label repo-head" onContextMenu={(e) => repo.id && openMenu(e, repoMenu(repo))}>
+      <div
+        className="section-label repo-head"
+        data-drag-group={repo.id && onDropRepo ? "repos" : undefined}
+        data-drag-id={repo.id}
+        onMouseDown={(e) => repo.id && onDropRepo && startRowDrag(e, { id: repo.id, group: "repos", onDrop: (target, place) => onDropRepo(repo.id, target, place) })}
+        onContextMenu={(e) => repo.id && openMenu(e, repoMenu(repo))}
+      >
         <span className="repo-toggle" onClick={toggle}>{collapsed ? <ChevronRight className="icon chevron" /> : <ChevronDown className="icon chevron" />}</span>
         <RepoAvatar repo={repo} />
         <span className="repo-name" onClick={toggle}>{repo.name}</span>
@@ -126,7 +143,7 @@ function RepoGroup({ repo, items, active }: { repo: Repo; items: Worktree[]; act
         {repo.id && <IconButton label="New worktree" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
       </div>
       {!collapsed && items.map((w) => (
-        <WorktreeRow key={w.id} w={w} active={w.id === active} siblings={items} />
+        <WorktreeRow key={w.id} w={w} active={w.id === active} siblings={items} onDrop={onDropWorktree} />
       ))}
     </div>
   );
@@ -166,7 +183,7 @@ export function summarizeState(agents: AgentPresence[], attention: boolean): Age
   return "none";
 }
 
-export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active: boolean; siblings?: Worktree[] }) {
+export function WorktreeRow({ w, active, siblings = [], onDrop }: { w: Worktree; active: boolean; siblings?: Worktree[]; onDrop?: DropHandler }) {
   const selected = useStore((s) => s.selection.has(w.id));
   const agents = useStore((s) => agentsOf(s, w.id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
@@ -178,6 +195,9 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
   return (
     <div
       data-flip={w.id}
+      data-drag-group={onDrop && !w.is_main && !w.archived_at_ms ? `wt:${w.repo_id}` : undefined}
+      data-drag-id={w.id}
+      onMouseDown={(e) => onDrop && !w.is_main && !w.archived_at_ms && startRowDrag(e, { id: w.id, group: `wt:${w.repo_id}`, onDrop: (target, place) => onDrop(w.id, target, place) })}
       className={`wt-row${active ? " wt-active" : ""}${w.exists || archived ? "" : " wt-missing"}${archived ? " wt-archived" : ""}${busy ? " wt-archiving" : ""}${selected ? " wt-selected" : ""}`}
       onClick={(e) => { if (!selectRow(e, w, siblings) && !archived && !busy) openWorktree(w.id); }}
       onContextMenu={(e) => {
@@ -186,7 +206,10 @@ export function WorktreeRow({ w, active, siblings = [] }: { w: Worktree; active:
       }}
     >
       <span className={`state state-${busy ? "archiving" : summary}${selected ? " state-selected" : ""}`} />
-      <span className="wt-name">{w.name}</span>
+      <span className="wt-name-line">
+        <span className="wt-name">{w.name}</span>
+        {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
+      </span>
       <span className="wt-meta">
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>

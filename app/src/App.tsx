@@ -1,7 +1,9 @@
-import { PanelLeft, PanelRight } from "lucide-react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { PanelLeft, PanelRight, SunMoon } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
-import { runAction } from "./actions";
+import { applyZoom, runAction } from "./actions";
+import { effectiveTheme, zoomKey } from "./appearance";
 import { Button, IconButton, TooltipProvider } from "./components/ui";
 import { Activity } from "./Activity";
 import { Dialogs } from "./Dialogs";
@@ -72,6 +74,12 @@ function Shell() {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest(".xterm")) return;
+      const zoom = zoomKey(e);
+      if (zoom) {
+        e.preventDefault();
+        applyZoom(zoom);
+        return;
+      }
       const action = findAction(e, keyBindings(getState()));
       if (!action) return;
       const typing = target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA");
@@ -93,9 +101,18 @@ function Shell() {
     return () => window.clearTimeout(t);
   }, [notice?.nonce]);
 
+  const appearance = ui.appearance;
   useEffect(() => {
-    document.documentElement.dataset.theme = config?.theme ?? "system";
-  }, [config?.theme]);
+    const root = document.documentElement;
+    root.dataset.theme = effectiveTheme(appearance.theme, config?.theme);
+    root.dataset.accent = appearance.accent;
+  }, [appearance.theme, appearance.accent, config?.theme]);
+
+  useEffect(() => {
+    try {
+      getCurrentWebview().setZoom(appearance.zoom).catch(() => {});
+    } catch {}
+  }, [appearance.zoom]);
 
   const showWorktree = ui.view === "worktree" && worktree;
   return (
@@ -111,6 +128,14 @@ function Shell() {
           </Button>
         )}
         {!connected && <span className="conn-bad">daemon offline</span>}
+        {appearance.zoom !== 1 && (
+          <Button variant="ghost" size="sm" className="zoom-chip" onClick={() => applyZoom("reset")}>
+            {Math.round(appearance.zoom * 100)}%
+          </Button>
+        )}
+        <IconButton label="Appearance" onClick={() => setState({ dialog: { kind: "appearance" } })}>
+          <SunMoon className="icon" />
+        </IconButton>
         <IconButton label="Command palette (⌘K)" onClick={() => runAction("palette")}>
           <span className="kbd">⌘K</span>
         </IconButton>

@@ -1,3 +1,4 @@
+import { byManualOrder, mainFirst } from "./order";
 import { needsMeItem } from "./activityModel";
 import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, StateDef, Worktree } from "./types";
 
@@ -34,7 +35,7 @@ export function agentsOf(agents: AgentPresence[], worktreeId: string): AgentPres
 }
 
 export function needsAttention(w: Worktree, ctx: QueryContext): boolean {
-  return agentsOf(ctx.agents, w.id).some((a) => a.state === "waiting") || ctx.attention.some((a) => a.worktree_id === w.id && needsMeItem(a));
+  return agentsOf(ctx.agents, w.id).some((a) => a.state === "waiting") || ctx.attention.some((a) => a.worktree_id === w.id && needsMeItem(a, ctx.agents));
 }
 
 function agentStateOf(w: Worktree, ctx: QueryContext): string {
@@ -84,10 +85,11 @@ export function filterWorktrees(list: Worktree[], o: HomeOptions, ctx: QueryCont
   });
 }
 
-export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | SidebarSort, ctx: QueryContext): Worktree[] {
+export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | SidebarSort, ctx: QueryContext, manual: string[] = []): Worktree[] {
+  if (sort === "manual") return mainFirst(byManualOrder(list, manual, (w) => w.id));
   const rank = (w: Worktree) => (needsAttention(w, ctx) ? 0 : agentStateOf(w, ctx) === "working" ? 1 : 2);
   const recent = (w: Worktree) => w.last_active_ms ?? 0;
-  return [...list].sort((a, b) => {
+  return mainFirst([...list].sort((a, b) => {
     switch (sort) {
       case "name":
         return a.name.localeCompare(b.name);
@@ -100,7 +102,7 @@ export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | Side
       case "state":
         return stateRank(ctx.states, a.metadata.state) - stateRank(ctx.states, b.metadata.state) || recent(b) - recent(a) || a.name.localeCompare(b.name);
     }
-  });
+  }));
 }
 
 export function groupKey(w: Worktree, group: HomeOptions["group"], ctx: QueryContext): string {

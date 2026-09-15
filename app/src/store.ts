@@ -1,5 +1,6 @@
 import { useRef, useSyncExternalStore } from "react";
 import { rpc } from "./api";
+import { defaultAppearance, sanitizeAppearance } from "./appearance";
 import { mergeActivity, needsMeItems, truncate } from "./activityModel";
 import type {
   ActionSet,
@@ -66,11 +67,12 @@ export type Dialog =
   | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void }
   | { kind: "integrations" }
   | { kind: "config-check" }
-  | { kind: "hook-log" };
+  | { kind: "hook-log" }
+  | { kind: "appearance" };
 
 export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
-const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome };
+const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance };
 
 let state: State = {
   connected: false,
@@ -166,13 +168,21 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
 
 const oneOf = <T extends string>(allowed: readonly T[], value: unknown, fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
+function stringLists(value: unknown): Record<string, Id[]> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, (v as unknown[]).filter((x): x is string => typeof x === "string")]));
+}
+
 export function applySnapshot(snap: Snapshot): void {
   const saved = (snap.ui_state ?? {}) as Partial<UiState>;
   const savedHome = (saved.home ?? {}) as Partial<HomeOptions>;
   const ui: UiState = {
     ...defaultUi,
     ...saved,
-    sidebarSort: oneOf(["name", "recent", "created", "attention", "state"], saved.sidebarSort, defaultUi.sidebarSort),
+    sidebarSort: oneOf(["name", "recent", "created", "attention", "state", "manual"], saved.sidebarSort, defaultUi.sidebarSort),
+    manualOrder: stringLists(saved.manualOrder),
+    repoOrder: Array.isArray(saved.repoOrder) ? saved.repoOrder.filter((x): x is string => typeof x === "string") : [],
+    appearance: sanitizeAppearance(saved.appearance),
     collapsedRepos: Array.isArray(saved.collapsedRepos) ? saved.collapsedRepos : [],
     hiddenRepos: Array.isArray(saved.hiddenRepos) ? saved.hiddenRepos : [],
     home: {
@@ -400,7 +410,7 @@ export function keyBindings(s: State): Record<string, string> {
 }
 
 export function needsMe(s: State): AttentionItem[] {
-  return needsMeItems(s.attention);
+  return needsMeItems(s.attention, Object.values(s.agents));
 }
 
 export const unviewedAttention = needsMe;

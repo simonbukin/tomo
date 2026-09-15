@@ -94,3 +94,4 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 .pane-active .pane-legend .proc-icon { color: inherit; }
 .tab .proc-icon { color: var(--fg-3); }
 .tab-active .proc-icon { color: var(--fg-1); }
+.zoom-chip { font-family: var(--mono); color: var(--fg-2); }
