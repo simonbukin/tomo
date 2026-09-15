@@ -20,7 +20,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
-    const ADDON_NOUNS: [&str; 3] = ["addons::", "mod addons", "town"];
+    const ADDON_NOUNS: [&str; 12] = ["addons::", "mod addons", "town", "github", "pullrequest", "prstatus", "pr_status", "prchanged", "pr_changed", "review_decision", "checks_failed", "mergeable"];
 
     fn rust_files(dir: &Path) -> Vec<PathBuf> {
         std::fs::read_dir(dir)
