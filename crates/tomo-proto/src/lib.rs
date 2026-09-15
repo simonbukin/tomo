@@ -15,8 +15,10 @@ use ts_rs::TS;
 
 pub mod addons {
     pub mod towns;
+    pub mod usage;
 }
 pub use addons::towns::*;
+pub use addons::usage::*;
 
 pub const PROTOCOL_VERSION: u32 = 3;
 
@@ -1036,29 +1038,6 @@ pub struct ActivityQuery {
     /// Only events whose attention item is still unresolved.
     #[serde(default)]
     pub needs_me: bool,
-}
-
-// ---- usage: provider-level allowance, never per worktree
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct UsageBucket {
-    pub label: String,
-    pub fraction_used: Option<f64>,
-    pub resets_at_ms: Option<u64>,
-    pub detail: Option<String>,
-    /// The model this bucket limits, such as `fable`. None for the whole plan.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub scope: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct UsageSnapshot {
-    pub provider: AgentKind,
-    pub available: bool,
-    pub reason: Option<String>,
-    pub buckets: Vec<UsageBucket>,
-    pub fetched_at_ms: u64,
 }
 
 // ---- evidence bundles: structured context sent to an existing agent session
