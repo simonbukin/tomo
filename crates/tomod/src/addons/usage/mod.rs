@@ -1,7 +1,7 @@
 //! Provider usage: reads the allowance of each provider, keeps the last result, and warns when a bucket crosses a threshold.
 //! It owns no table and no Core state. See docs/usage.md.
 
-use crate::daemon::{ok, Daemon};
+use crate::daemon::{ok, Daemon, Inner};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
@@ -332,17 +332,21 @@ pub fn snapshots() -> Vec<UsageSnapshot> {
 
 async fn refresh(daemon: &Arc<Daemon>) {
     let fresh = tokio::task::spawn_blocking(fetch_all).await.unwrap_or_default();
-    let mut inner = daemon.lock();
+    remember(&mut daemon.lock(), fresh);
+}
+
+/// Keeps a new result under the Core lock. It records the diagnostics and emits `usage_changed` and the threshold notices.
+pub fn remember(inner: &mut Inner, fresh: Vec<UsageSnapshot>) {
     let before = std::mem::replace(&mut *last(), fresh.clone());
     for s in &fresh {
         let problem = (!s.available).then(|| s.reason.clone().unwrap_or_else(|| "unavailable".to_string()));
-        Daemon::diagnostic_on_change(&mut inner, "usage", &format!("{} usage", s.provider.label().to_lowercase()), problem);
+        Daemon::diagnostic_on_change(inner, "usage", &format!("{} usage", s.provider.label().to_lowercase()), problem);
     }
     if !same(&before, &fresh) {
-        Daemon::emit(&mut inner, Event::UsageChanged { snapshots: fresh.clone() });
+        Daemon::emit(inner, Event::UsageChanged { snapshots: fresh.clone() });
     }
     for message in crossings(&before, &fresh) {
-        Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message });
+        Daemon::emit(inner, Event::Notice { level: NoticeLevel::Warning, message });
     }
 }
 

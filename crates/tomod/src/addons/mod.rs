@@ -31,7 +31,9 @@ pub fn start(daemon: &Arc<Daemon>) {
 
 #[cfg(test)]
 mod tests {
+    use crate::daemon::Daemon;
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
@@ -95,6 +97,44 @@ mod tests {
             })
             .collect();
         assert!(hits.is_empty(), "core activity code names an addon kind:\n{}", hits.join("\n"));
+    }
+
+    async fn subscribe(daemon: &Arc<Daemon>) -> tomo_proto::Snapshot {
+        serde_json::from_value(crate::dispatch::handle(daemon, 0, tomo_proto::Call::Subscribe).await.unwrap()).unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn two_daemons_in_one_process_keep_their_own_addon_state() {
+        use tomo_proto::*;
+        let dir = PathBuf::from(format!("/tmp/tomo-addons-state-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let git = |args: &[&str]| assert!(std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(&repo).output().unwrap().status.success());
+        git(&["init", "-q"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+        std::fs::write(repo.join(".tomo.toml"), "[[actions]]\nid = \"serve\"\ncommand = \"true\"\n").unwrap();
+        let [a, b] = ["a", "b"].map(|name| {
+            let daemon = Daemon::new(crate::config::Paths::new(dir.join(name)), super::seams()).unwrap();
+            super::migrate(&daemon.lock().store).unwrap();
+            daemon
+        });
+
+        crate::dispatch::handle(&a, 0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let worktree_id = a.lock().worktrees.keys().next().unwrap().clone();
+        let usage = UsageSnapshot { provider: AgentKind::Claude, available: true, reason: None, buckets: vec![], fetched_at_ms: now_ms() };
+        super::usage::remember(&mut a.lock(), vec![usage]);
+        let pr = PullRequest { number: 7, title: "t".into(), url: "u".into(), state: "open".into(), draft: false, review_decision: None, mergeable: None, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: now_ms() };
+        super::github::remember(&mut a.lock(), worktree_id.clone(), PrStatusResult { available: true, reason: None, pr: Some(pr) });
+
+        let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);
+        assert_eq!(seen_by_b.usage.len(), 0, "usage leaked into the second daemon");
+        assert_eq!(seen_by_b.actions.len(), 0, "action sets leaked into the second daemon");
+        assert!(super::github::known_pr(&worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
+        assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len()), (1, 1));
+        a.shutdown();
+        b.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
