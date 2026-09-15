@@ -247,19 +247,25 @@ Actions, hooks, and adapters inherit the new `PATH`.
 ## Addons
 
 An addon is an optional opinion in its own source folder. Core never
-imports it. Towns is the first addon:
+imports it. Towns and GitHub are addons:
 
-- `crates/tomo-proto/src/addons/towns.rs`: wire types
+- `crates/tomo-proto/src/addons/<name>.rs`: wire types
 - `crates/tomod/src/addons/towns/`: calls, the `towns` table, the seams
+- `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` call, the pull request cache
 - `app/src/addons/towns/`: the map view, the ceremony, the create field
+- `app/src/addons/github/`: the pull request inspector section, the NOW signal, the repo avatar
 
 Composition roots name the addons: `crates/tomod/src/main.rs`,
 `crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`
 in `tomo-proto`, and `app/src/addons/index.ts`. Core calls an addon only
 through `Seams`, a struct of plain function lists that `main.rs` builds one
 time. The server sends every call to `dispatch::handle`, which answers the
-addon calls and gives the other calls to `Daemon::handle`. See
-[addons.md](addons.md) and [features/towns.md](features/towns.md).
+addon calls and gives the other calls to `Daemon::handle`. The GUI renders
+addon parts only through the slots of the `Addon` type in
+`app/src/addons/types.ts`. Core keeps the Git facts that GitHub reads:
+`Repo.remote_url` and `Worktree.branch`. See [addons.md](addons.md),
+[features/towns.md](features/towns.md), and
+[features/github.md](features/github.md).
 
 ## Generated bindings
 

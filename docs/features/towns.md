@@ -114,7 +114,8 @@ own records:
 - An archived worktree shows the archive checkpoint commit. A clean archive
   has no checkpoint, so it shows the head at archive time. The `archived`
   activity event records both in its payload.
-- The pull request is the cached one, or the last `pr_merged` event.
+- The pull request comes from the GitHub addon: the cached one, or the last
+  `pr_merged` event. Without the GitHub addon, it is `null`.
 - A locked or unknown slug returns `not_found`.
 
 The detail keeps the last result on screen while it refreshes, and shows
@@ -141,10 +142,13 @@ Towns joins Core at these points only:
 - `worktree_created` seam: writes the unlock, sets the display name, and
   emits `TownUnlocked`. It runs under the state lock inside the create call.
 - `worktree_rebound` seam: moves the unlock when a worktree gets a new id.
-- `dispatch.rs`: the `town_list`, `town_pick`, and `town_history` calls.
+- `dispatch.rs`: the `town_list`, `town_pick`, and `town_history` calls, and
+  `town_pr`, the pull request lookup that `town_history` gets.
 - registration lines: the `Call` and `Event` variants in `tomo-proto`, the
   `builtins` entry, the CSS import in `app/src/styles/index.css`, the
   `tomo towns` CLI block, and `towns` in `scripts/torture/run-all.sh`.
 
-`town_history` reads Core data: activity rows, repos, worktrees, and the
-cached pull request.
+`town_history` reads Core data: activity rows, repos, and worktrees. It
+gets the pull request from a plain function, `fn(&str, &[ActivityEvent]) ->
+Option<TownPr>`, that `dispatch.rs` supplies. Towns does not import GitHub.
+Without GitHub, `dispatch.rs` passes `|_, _| None`.

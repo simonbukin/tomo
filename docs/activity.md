@@ -28,7 +28,7 @@ that link is what `--needs-me` uses.
 | `action_completed`    | actions    | A pane-mode Action exited with code 0                       |                     |
 | `action_crashed`      | actions    | A pane-mode Action exited with another code, unrequested    | the crash item      |
 | `endpoint_discovered` | runtime    | An owned process listens on a port; once per worktree and port per 60 s | |
-| `pr_merged`           | github     | `tomo pr` saw the pull request state become merged          |                     |
+| `pr_merged`           | github     | `pr_status` (the inspector or `tomo pr`) saw the pull request become merged | |
 | `annotations_sent`    | agentation | `annotations_send` pasted browser notes into a live agent pane |                  |
 
 Every event has `id`, `kind`, `occurred_at_ms`, `worktree_id`, `pane_id`,
