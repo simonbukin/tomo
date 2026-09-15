@@ -61,7 +61,6 @@ pub struct PaneRow {
     pub agent_kind: Option<AgentKind>,
     pub session_ref: Option<String>,
     pub created_at_ms: u64,
-    pub action_id: Option<String>,
     pub kind: PaneKind,
     pub url: Option<String>,
 }
@@ -139,7 +138,7 @@ const META_COLUMNS: [(&str, &str); 4] = [
     ("state", "TEXT"),
 ];
 
-const PANE_COLUMNS: [(&str, &str); 3] = [("action_id", "TEXT"), ("kind", "TEXT"), ("url", "TEXT")];
+const PANE_COLUMNS: [(&str, &str); 2] = [("kind", "TEXT"), ("url", "TEXT")];
 
 const ATTENTION_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("agent_kind", "TEXT"), ("resolved_at_ms", "INTEGER")];
 
@@ -356,7 +355,7 @@ impl Store {
 
     pub fn panes(&self) -> Result<Vec<PaneRow>> {
         let mut st = self.conn.prepare(
-            "SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, action_id, kind, url FROM panes",
+            "SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url FROM panes",
         )?;
         let rows = st.query_map([], |r| {
             Ok(PaneRow {
@@ -370,9 +369,8 @@ impl Store {
                 agent_kind: r.get::<_, Option<String>>(7)?.and_then(|s| s.parse().ok()),
                 session_ref: r.get(8)?,
                 created_at_ms: r.get::<_, i64>(9)? as u64,
-                action_id: r.get(10)?,
-                kind: parse_pane_kind(r.get(11)?),
-                url: r.get(12)?,
+                kind: parse_pane_kind(r.get(10)?),
+                url: r.get(11)?,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -380,11 +378,11 @@ impl Store {
 
     pub fn pane_upsert(&self, p: &PaneRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO panes (id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, action_id, kind, url)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            "INSERT INTO panes (id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
              ON CONFLICT(id) DO UPDATE SET tab_id=excluded.tab_id, worktree_id=excluded.worktree_id, user_title=excluded.user_title,
                cwd=excluded.cwd, cols=excluded.cols, rows=excluded.rows, agent_kind=excluded.agent_kind,
-               session_ref=excluded.session_ref, action_id=excluded.action_id, kind=excluded.kind, url=excluded.url",
+               session_ref=excluded.session_ref, kind=excluded.kind, url=excluded.url",
             params![
                 p.id,
                 p.tab_id,
@@ -396,7 +394,6 @@ impl Store {
                 p.agent_kind.map(agent_kind_str),
                 p.session_ref,
                 p.created_at_ms as i64,
-                p.action_id,
                 pane_kind_str(p.kind),
                 p.url
             ],
@@ -772,7 +769,7 @@ mod tests {
     #[test]
     fn browser_pane_keeps_kind_and_url() {
         let s = Store::open_in_memory().unwrap();
-        let row = PaneRow { id: "p1".into(), tab_id: "t".into(), worktree_id: "w".into(), user_title: None, cwd: PathBuf::from("/tmp"), cols: 1, rows: 1, agent_kind: None, session_ref: None, created_at_ms: 1, action_id: None, kind: PaneKind::Browser, url: Some("http://localhost:1420/".into()) };
+        let row = PaneRow { id: "p1".into(), tab_id: "t".into(), worktree_id: "w".into(), user_title: None, cwd: PathBuf::from("/tmp"), cols: 1, rows: 1, agent_kind: None, session_ref: None, created_at_ms: 1, kind: PaneKind::Browser, url: Some("http://localhost:1420/".into()) };
         s.pane_upsert(&row).unwrap();
         let back = s.panes().unwrap();
         assert_eq!((back[0].kind, back[0].url.as_deref()), (PaneKind::Browser, Some("http://localhost:1420/")));

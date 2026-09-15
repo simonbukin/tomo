@@ -147,6 +147,7 @@ async fn actions_list_run_reuse_stop_restart_and_exit_outcomes() {
     let first = f.run("serve").await.unwrap();
     let pane = first.pane.clone().unwrap();
     assert_eq!((pane.action_id.as_deref(), pane.user_title.as_deref(), first.reused), (Some("serve"), Some("Serve"), false));
+    assert_eq!(pane.source, Some(PaneSource { kind: "action".into(), id: "serve".into(), label: "Serve".into() }));
     let again = f.run("serve").await.unwrap();
     assert_eq!((again.pane.unwrap().id, again.reused), (pane.id.clone(), true), "a second run reuses the live pane");
 
@@ -219,7 +220,7 @@ async fn a_restored_action_pane_is_a_shell_that_does_not_rerun() {
     daemon.restore().unwrap();
     call(&daemon, Call::WorktreeRefresh).await.unwrap();
     let restored = Daemon::pane_view(&daemon.lock(), &pane.id).expect("restored pane");
-    assert_eq!((restored.origin, restored.action_id.as_deref(), restored.user_title.as_deref()), (PaneOrigin::Restored, None, Some("Serve")));
+    assert_eq!((restored.origin, restored.action_id.as_deref(), restored.source, restored.user_title.as_deref()), (PaneOrigin::Restored, None, None, Some("Serve")));
     let rerun: ActionRunResult = serde_json::from_value(call(&daemon, Call::ActionRun { worktree_id: f.worktree_id.clone(), action_id: "serve".into() }).await.unwrap()).unwrap();
     assert!(!rerun.reused && rerun.pane.unwrap().id != pane.id, "the restored shell is not the running action");
     let stored = daemon.lock().store.panes().unwrap();

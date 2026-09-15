@@ -57,6 +57,8 @@ pub struct PaneState {
     pub scrollback: Scrollback,
     /// Set when Tomo itself ends the pane's process, so the exit is a stop and not a crash.
     pub stop_intent: bool,
+    /// Set by the code that spawned the pane. Memory only: a restore starts without it.
+    pub source: Option<PaneSource>,
 }
 
 const DIAGNOSTICS_KEPT: usize = 200;
@@ -389,7 +391,8 @@ impl Daemon {
             exit_code: p.exit_code,
             agent,
             created_at_ms: p.row.created_at_ms,
-            action_id: p.row.action_id.clone(),
+            action_id: PaneSource::action_id(p.source.as_ref()),
+            source: p.source.clone(),
             process_cmd: p.process_cmd.clone(),
             kind: p.row.kind,
             url: p.row.url.clone(),
@@ -583,7 +586,7 @@ impl Daemon {
     }
 
     fn running_action_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id> {
-        inner.panes.values().find(|p| p.row.worktree_id == worktree_id && p.row.action_id.as_deref() == Some(action_id) && p.pty.is_some() && p.exit_code.is_none()).map(|p| p.row.id.clone())
+        inner.panes.values().find(|p| p.row.worktree_id == worktree_id && PaneSource::action_id(p.source.as_ref()).as_deref() == Some(action_id) && p.pty.is_some() && p.exit_code.is_none()).map(|p| p.row.id.clone())
     }
 
     pub fn hook_pane(inner: &Inner, pane_id: &str) -> Option<HookPane> {
@@ -664,9 +667,7 @@ impl Daemon {
                 let argv = [inner.config.shell.clone(), "-lc".into(), action.command.clone()];
                 let (_, pane_id) = self.spawn_in_worktree(&mut inner, worktree_id, w.path.clone(), None, None, SplitDirection::Horizontal, Some(&argv), Some(action.label.clone()), None)?;
                 if let Some(pane) = inner.panes.get_mut(&pane_id) {
-                    pane.row.action_id = Some(action.id.clone());
-                    let row = pane.row.clone();
-                    let _ = inner.store.pane_upsert(&row);
+                    pane.source = Some(PaneSource { kind: ACTION_SOURCE_KIND.into(), id: action.id.clone(), label: action.label.clone() });
                 }
                 Self::focus_pane(&mut inner, &pane_id);
                 Self::emit_pane(&mut inner, &pane_id);
@@ -879,7 +880,7 @@ impl Daemon {
         let Some(pane) = inner.panes.get_mut(pane_id) else { return };
         pane.exit_code = Some(code.unwrap_or(-1));
         let worktree_id = pane.row.worktree_id.clone();
-        let action_id = pane.row.action_id.clone();
+        let action_id = PaneSource::action_id(pane.source.as_ref());
         let stop_intent = pane.stop_intent;
         Self::emit(&mut inner, Event::PaneExited { pane_id: pane_id.to_string(), exit_code: code });
         if let Some(aid) = action_id {
@@ -1007,14 +1008,13 @@ impl Daemon {
             agent_kind,
             session_ref: session_ref.clone(),
             created_at_ms: now_ms(),
-            action_id: None,
             kind: PaneKind::Terminal,
             url: None,
         };
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default(), stop_intent: false },
+            PaneState { row, pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default(), stop_intent: false, source: None },
         );
         if let Some(kind) = agent_kind {
             let presence = AgentPresence {
@@ -1056,7 +1056,6 @@ impl Daemon {
             agent_kind: None,
             session_ref: None,
             created_at_ms: now_ms(),
-            action_id: None,
             kind: PaneKind::Browser,
             url: Some(url),
         };
@@ -1064,7 +1063,7 @@ impl Daemon {
         let hook_pane = HookPane { id: row.id.clone(), tab_id: row.tab_id.clone(), cwd: row.cwd.clone() };
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin: PaneOrigin::Live, exit_code: None, process_title: None, process_cmd: None, stop_intent: false, pending_line: None, last_output_ms: 0, scrollback: Scrollback::default() },
+            PaneState { row, pty: None, origin: PaneOrigin::Live, exit_code: None, process_title: None, process_cmd: None, stop_intent: false, pending_line: None, last_output_ms: 0, scrollback: Scrollback::default(), source: None },
         );
         let mut ev = events::envelope(inner, "pane.created", Some(worktree_id));
         ev.pane = Some(hook_pane);
@@ -1156,13 +1155,10 @@ impl Daemon {
         for t in &tabs {
             inner.tabs.insert(t.id.clone(), t.clone());
         }
-        for mut row in panes {
+        for row in panes {
             if !referenced.contains(&row.id) {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
-            }
-            if row.action_id.take().is_some() {
-                let _ = inner.store.pane_upsert(&row);
             }
             let resume_ref = row.session_ref.clone().or_else(|| (row.agent_kind == Some(AgentKind::Codex)).then(|| "--last".to_string()));
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
@@ -1194,7 +1190,7 @@ impl Daemon {
             }
             inner.panes.insert(
                 row.id.clone(),
-                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line: pending, last_output_ms: 0, scrollback, stop_intent: false },
+                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line: pending, last_output_ms: 0, scrollback, stop_intent: false, source: None },
             );
             if let Err(e) = self.start_pty(&mut inner, &row.id, None) {
                 tracing::warn!("restore pane {}: {e}", row.id);

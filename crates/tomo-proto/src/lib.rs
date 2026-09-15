@@ -768,8 +768,11 @@ pub struct Pane {
     pub exit_code: Option<i32>,
     pub agent: Option<AgentPresence>,
     pub created_at_ms: u64,
+    /// `source.id` when `source.kind` is `action`. Clients from before the Actions addon read it; see [`PaneSource::action_id`].
     #[serde(default)]
     pub action_id: Option<String>,
+    #[serde(default)]
+    pub source: Option<PaneSource>,
     /// Command line of the newest child of the pane's shell, for icons and titles.
     #[serde(default)]
     pub process_cmd: Option<String>,
@@ -786,6 +789,28 @@ pub enum PaneKind {
     #[default]
     Terminal,
     Browser,
+}
+
+/// What started a pane, as the spawner names it. Core keeps it in memory only and never reads `kind`,
+/// so a restored or reopened pane has no source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PaneSource {
+    /// The owner, for example `action`.
+    pub kind: String,
+    /// The owner's id for the thing that runs, for example the Action id.
+    pub id: String,
+    /// A name for people: titles, endpoint labels, toasts.
+    pub label: String,
+}
+
+/// The `PaneSource.kind` of a pane that an Action started.
+pub const ACTION_SOURCE_KIND: &str = "action";
+
+impl PaneSource {
+    /// The value of the older `action_id` wire fields, which installed clients still read.
+    pub fn action_id(source: Option<&PaneSource>) -> Option<String> {
+        source.filter(|s| s.kind == ACTION_SOURCE_KIND).map(|s| s.id.clone())
+    }
 }
 
 /// One agent conversation stored by the agent itself, rooted at a worktree.

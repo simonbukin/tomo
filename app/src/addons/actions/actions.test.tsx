@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MenuEntry, MenuItem } from "../../components/ui";
-import type { ActionSet, AttentionItem, Frame, Pane, Snapshot, Tab, Worktree } from "../../generated";
+import type { ActionSet, AttentionItem, Pane, Snapshot, Tab, Worktree } from "../../generated";
+import type { Frame } from "../../types";
 
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ isFocused: async () => true }) }));
 vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
