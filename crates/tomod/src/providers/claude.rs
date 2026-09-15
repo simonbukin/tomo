@@ -1,14 +1,20 @@
-use super::{str_field, HookOutcome, Provider};
+use super::{str_field, HookOutcome, Program, Provider};
 use crate::agents::shell_quote;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tomo_proto::AgentState;
+use tomo_proto::{AgentKind, AgentState};
 
 pub static PROVIDER: Provider = Provider {
+    kind: AgentKind::Claude,
     flags,
     resume_without_session: None,
     hook_outcome,
+    detects,
 };
+
+fn detects(p: &Program) -> bool {
+    p.name == "claude" || p.argv0 == "claude"
+}
 
 const SETTINGS_FILE: &str = "claude-hooks.json";
 

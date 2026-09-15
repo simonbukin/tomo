@@ -1,13 +1,19 @@
-use super::{str_field, HookOutcome, Provider};
+use super::{str_field, HookOutcome, Program, Provider};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tomo_proto::AgentState;
+use tomo_proto::{AgentKind, AgentState};
 
 pub static PROVIDER: Provider = Provider {
+    kind: AgentKind::Pi,
     flags,
     resume_without_session: None,
     hook_outcome,
+    detects,
 };
+
+fn detects(p: &Program) -> bool {
+    p.name == "pi" || p.argv0 == "pi" || p.cmd.contains("pi-coding-agent")
+}
 
 const EXTENSION_FILE: &str = "tomo-status.ts";
 

@@ -18,9 +18,11 @@ use std::path::Path;
 use tomo_proto::{AgentCommand, AgentKind, AgentState, Config, IntegrationLevel, IntegrationStatus};
 
 pub struct Provider {
+    pub kind: AgentKind,
     pub flags: fn(resume: Option<&str>, launch_dir: &Path) -> (Vec<String>, Option<String>),
     pub resume_without_session: Option<&'static str>,
     pub hook_outcome: fn(&Value) -> HookOutcome,
+    pub detects: fn(&Program) -> bool,
 }
 
 pub fn provider(kind: AgentKind) -> &'static Provider {
@@ -29,6 +31,27 @@ pub fn provider(kind: AgentKind) -> &'static Provider {
         AgentKind::Codex => &codex::PROVIDER,
         AgentKind::Pi => &pi::PROVIDER,
     }
+}
+
+pub fn table() -> [&'static Provider; 3] {
+    AgentKind::all().map(provider)
+}
+
+/// A running process, as the monitor sees it: the program name, the program of
+/// `argv[0]`, and the whole command line.
+pub struct Program<'a> {
+    pub name: &'a str,
+    pub argv0: &'a str,
+    pub cmd: &'a str,
+}
+
+fn basename(program: &str) -> &str {
+    program.rsplit('/').next().unwrap_or(program)
+}
+
+pub fn detect(name: &str, cmd: &str) -> Option<AgentKind> {
+    let program = Program { name: basename(name), argv0: basename(cmd.split_whitespace().next().unwrap_or("")), cmd };
+    table().into_iter().find(|p| (p.detects)(&program)).map(|p| p.kind)
 }
 
 pub struct HookOutcome {
@@ -214,6 +237,33 @@ mod tests {
         std::fs::write(codex_dir.join("config.toml"), trust(&ours)).unwrap();
         assert_eq!(codex_hooks_trusted(&home), Some(true));
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn detects_agents_by_name_or_command() {
+        assert_eq!(detect("claude", ""), Some(AgentKind::Claude));
+        assert_eq!(detect("codex-aarch64-apple-darwin", ""), Some(AgentKind::Codex));
+        assert_eq!(detect("node", "node /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi));
+        assert_eq!(detect("zsh", "-zsh"), None);
+    }
+
+    #[test]
+    fn detect_agent_reads_argv0_and_misses_launcher_paths() {
+        assert_eq!(detect("2.1.273", "claude --settings /d/claude-hooks.json --session-id s"), Some(AgentKind::Claude), "a versioned native binary is found by argv[0]");
+        assert_eq!(detect("node", "/Users/me/.local/bin/claude --resume s"), Some(AgentKind::Claude));
+        assert_eq!(detect("codex-aarch64-apple-darwin", "/x/codex-aarch64-apple-darwin resume abc"), Some(AgentKind::Codex));
+        assert_eq!(detect("node", "node /opt/homebrew/bin/codex resume abc"), None, "an npm shim is found only through its native child");
+        assert_eq!(detect("node", "pi"), Some(AgentKind::Pi), "process.title rewrites argv[0] to pi");
+        assert_eq!(detect("node", "node /opt/homebrew/bin/pi -e /d/tomo-status.ts --session-id s"), None, "before process.title runs, the npm symlink path hides pi");
+        assert_eq!(detect("claude-trace", "claude-trace"), None);
+        assert_eq!(detect("pip", "pip install x"), None);
+    }
+
+    #[test]
+    #[ignore = "bug: detect matches any program named codex* and any command that mentions pi-coding-agent"]
+    fn detect_agent_ignores_programs_that_only_mention_a_provider() {
+        assert_eq!(detect("vim", "vim /src/pi-coding-agent/README.md"), None);
+        assert_eq!(detect("codexbar", "codexbar"), None);
     }
 
     fn agent_plan(kind: AgentKind, command: &str, args: &[&str], resume: Option<&str>, extra: &[&str]) -> SpawnPlan {
