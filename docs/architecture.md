@@ -14,7 +14,9 @@ tomo (CLI)        ──┘                                            │
 
 `tomod` is the only part that holds live state. The GUI and the CLI are
 clients. They use the same daemon operations. Nothing important is
-implemented only in the GUI.
+implemented only in the GUI. `scripts/torture/client.sh` proves this with a
+headless client. [client-independence.md](client-independence.md) lists the
+display logic that stays in the GUI.
 
 The Tauri process does not talk to the daemon in JavaScript. A small Rust
 bridge (`app/src-tauri/src/lib.rs`) holds one socket connection, forwards
