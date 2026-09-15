@@ -1546,8 +1546,8 @@ impl Daemon {
 
     // ------------------------------------------------------------ dispatch
 
-    /// Marks the client subscribed and builds the snapshot with empty addon fields. `dispatch.rs` fills them.
-    pub fn subscribe(&self, client_id: u64) -> Result<Snapshot, RpcError> {
+    /// Marks the client subscribed and builds the Core part of the snapshot. `dispatch.rs` adds the addon fields.
+    pub fn subscribe(&self, client_id: u64) -> Result<CoreSnapshot, RpcError> {
         tracing::info!("client {client_id} subscribed");
         let mut inner = self.lock();
         if let Some(c) = inner.clients.get_mut(&client_id) {
@@ -1555,7 +1555,7 @@ impl Daemon {
         }
         let attention = inner.store.attention_list().map_err(internal)?;
         let ui_state = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
-        Ok(Snapshot {
+        Ok(CoreSnapshot {
             status: self.status(&inner),
             config: inner.config.clone(),
             repos: Self::repo_views(&inner),
@@ -1567,7 +1567,6 @@ impl Daemon {
             resources: inner.resources.clone(),
             actions: inner.actions.values().cloned().collect(),
             endpoints: inner.endpoints.clone(),
-            addons: AddonSnapshot::default(),
             ui_state,
         })
     }
