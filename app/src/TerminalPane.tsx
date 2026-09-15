@@ -7,7 +7,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
 import { applyZoom, closePane, focusPane, runAction } from "./actions";
-import { effectiveTheme, zoomKey } from "./appearance";
+import { effectiveTheme, keyOverride, zoomKey } from "./appearance";
 import { findAction } from "./keys";
 import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
@@ -72,11 +72,10 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         applyZoom(zoom);
         return false;
       }
-      // xterm.js sends a bare CR for Shift+Enter, the same as Enter. ESC CR is what Claude Code,
-      // Codex, and Pi read as "insert a newline", and what zsh inserts as a literal newline.
-      if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const override = keyOverride(e);
+      if (override !== null) {
         e.preventDefault();
-        rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64("\x1b\r") }).catch(() => {});
+        rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(override) }).catch(() => {});
         return false;
       }
       const action = findAction(e, keyBindings(getState()));

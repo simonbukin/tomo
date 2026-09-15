@@ -56,3 +56,13 @@ export function effectiveTheme(choice: ThemeChoice, configTheme: string | undefi
   if (choice !== "system") return choice;
   return configTheme === "light" || configTheme === "dark" ? configTheme : "system";
 }
+
+/**
+ * Bytes to send instead of what xterm.js would send, or null to let xterm handle the key.
+ * xterm.js sends a bare CR for Shift+Enter, the same as Enter. ESC CR is what Claude Code,
+ * Codex, and Pi read as "insert a newline", and what zsh inserts as a literal newline.
+ */
+export function keyOverride(e: Pick<KeyboardEvent, "key" | "shiftKey" | "metaKey" | "ctrlKey" | "altKey">): string | null {
+  if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) return "\x1b\r";
+  return null;
+}
