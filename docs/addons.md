@@ -2323,6 +2323,192 @@ the slot type and helper (about 10 lines), the covering record in
 `BrowserPane` (7 lines), two hook lists and two call sites (4 lines), and
 `paste_to_agent` (8 lines that moved out of the arm).
 
+## Milestone 4 result: Runtime
+
+### What moved
+
+| From | To |
+|---|---|
+| `crates/tomod/src/runtime.rs` | `crates/tomod/src/addons/runtime/mod.rs` (`git mv`, so the history stays), with the pure rules in `model.rs` and the characterization test in `tests.rs` |
+| `RuntimeProtocol`, `RuntimeEndpoint` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/runtime.rs`, next to `RuntimeActivity` (the generated names do not change) |
+| `Inner.endpoints`, `Inner.endpoint_gone_ms`, `Inner.endpoints_at_ms` | `addons::State.runtime` (`runtime::Endpoints`) |
+| `Daemon::scan_endpoints`, called by `monitor::poll_and_scan` | `runtime::scan`, the one entry in the `process_polled` seam |
+| the `RuntimeList` arm in `Daemon::handle` | `runtime::list`, called from `dispatch.rs` |
+| `Call::RuntimeList` in the `is_slow` list of `server.rs` | `dispatch::is_slow` |
+| `endpoints` in `CoreSnapshot` | `Snapshot.endpoints`, filled from `runtime::snapshot(&inner)` in `dispatch.rs` |
+| `ENDPOINT_REPEAT_MS` (already in `runtime.rs`) and the `RuntimeActivity::EndpointDiscovered` call site | the addon |
+| `State.endpoints`, `groupEndpoints`, the `endpoints_changed` case, and `endpointsOf` in `store.ts` | `app/src/addons/runtime/state.ts`, through `onSnapshot` and `onFrame` |
+| `endpointUrl`, `httpEndpoints`, `endpointLabel`, and the `runtime` signal of `nowSignals` in `activityModel.ts` | `app/src/addons/runtime/model.ts` |
+| `RuntimePopover` in `WorktreeHeader.tsx`, `RuntimePreview` in `HoverPreviews.tsx`, `RuntimeHover` and the runtime case in `Signals.tsx` | `app/src/addons/runtime/Views.tsx` |
+| `endpointMenu` and the loose endpoints of `overflowMenu` in `menus.ts`, `endpointEntries` in `Palette.tsx` | `app/src/addons/runtime/commands.ts` |
+| the "Open App" fallback of `CheckpointBanner` and of `appUrl` in `activityKinds.ts` | the `appUrl` slot |
+| `liveEndpointFor`, the endpoint parts of `runningActionItems`, and `endpointItems` in the Actions addon | the `sourceMark` and `sourceMenu` slots, which Runtime fills |
+| the runtime cases of `menus.test.ts` and `activity.test.ts` | `app/src/addons/runtime/runtime.test.tsx` and `app/src/addons/composition.test.tsx` |
+
+### Seams
+
+| Seam | Why it is the narrowest option |
+|---|---|
+| `process_polled: Vec<fn(&Arc<Daemon>)>` | The scan needs the fresh process table and must keep `lsof` outside the lock. Core calls it at the exact point where `scan_endpoints` ran before, so the cadence and the lock behavior do not change. See the seam table above. |
+| `dispatch::is_slow` | `server.rs` is Core and must not name `Call::RuntimeList`. The composition root already answered that question for `PrStatus`. |
+| GUI `sourceMark` and `sourceMenu` | Both are keyed by the Core `PaneSource`, so Actions draws its button and its menu without naming Runtime, and Runtime fills them without naming Actions. `sourceMenu` returns `first` and `last`, because the endpoint items sat in two places in that menu: open at the top, copy after a separator at the end. |
+| GUI `paneSource.stop` | The slot already carried `restart` for the crash toast. The endpoint menu needs the same owner lookup for its stop item, so one field is added instead of a second slot. |
+| GUI `appUrl` | One question, "what URL shows this worktree", asked by the checkpoint banner and by two Activity rows. Without Runtime it returns nothing and the link disappears. |
+| GUI `signalLine` | The NOW signal keeps its arrow icon and its hover preview. `AddonSignal` stays plain data, because `activityModel.ts` is one of the pure client model modules that must not import React (see [client-independence.md](client-independence.md)). |
+
+### Decisions
+
+- **`RuntimeEndpoint.source` is new on the wire.** The GUI must match an endpoint to a pane source without reading Action state. The field is the Core `PaneSource` that the pane had when the endpoint was found, so `action_id` stays exactly `PaneSource::action_id(source)`. `docs/addons.md` foresaw this field in "The pane source". A client that is newer than its daemon sees no `source`, so it draws no endpoint arrow and lists an Action endpoint as loose; `install.sh` stops the running daemon, so the two update together.
+- **Core keeps `openEndpoint`.** Milestone 6 decided that opening a URL is a Core client capability. Runtime calls it with a lazy import, as Actions does.
+- **The client state is a declared key, not a private store.** `State.endpoints` is declared by `app/src/addons/runtime/state.ts` through module augmentation, as GitHub declares `prs`. The header popover, the NOW signal, and the checkpoint banner are selectors that core components run through `useStore`, and a private store would not make them render again. See "Client state decision".
+- **`RuntimeProtocol::Https` is still never produced.** The probe reports `http` or `tcp`. This milestone did not change it.
+
+### Wire and schema changes
+
+- New: `RuntimeEndpoint.source` (`PaneSource | null`, `#[serde(default)]`).
+- `endpoints` moved from `CoreSnapshot` to `Snapshot`, so it is now the last key of the `subscribe` JSON. The field name and its content do not change, and the clients do not depend on key order.
+- Unchanged: `runtime_list`, `endpoints_changed`, the `runtime.endpoint_discovered` and `runtime.endpoint_removed` hook events with their `action` field, `RuntimeEndpoint.action_id` and `label`, the `endpoint_discovered` activity kind and payload, and the `tomo runtime` text and `--json` output.
+- SQLite: no change. Runtime has no table.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Call::RuntimeList`, `Event::EndpointsChanged`, `Snapshot.endpoints`, the two `runtime.endpoint_*` names in `HOOK_EVENTS`, and the re-export in `lib.rs` | composition root |
+| `tomo runtime` in `crates/tomo-cli` and `print::runtime` | the layout rule keeps one clap tree; they are listed deletion lines |
+| `RuntimeEndpoint.action_id` and `HookEvent.action` | compatibility with installed clients; both derive from the Core `PaneSource` |
+| `.signal-runtime` in `styles/base.css` and `.runtime-row`, `.runtime-label` in `styles/layout.css` | they share rule lists with core classes; a move could change the cascade, and dead selectors do no harm |
+| `.action-live` for the endpoint arrow | the class styles the mark inside the Action button; the rule stays with the button |
+| the `runtime` diagnostic source string | Core `diagnostic_on_change` takes it as data |
+
+### Small user-visible changes
+
+- "open" and "copy" in the endpoint menu, the palette endpoint entry, and the loose endpoint items load `actions.ts` lazily, one microtask later, as the Actions submenu already did after milestone 3.
+- Nothing else is intended. The popover, the menu, the palette entries, the NOW signal, and the banner render the same DOM; the render tests pin each of them.
+
+### Runtime deletion test (milestone 4)
+
+Done with a script of exact replacements on a throwaway branch from the merge
+commit `a4055be`, then deleted. The script stops when an edit does not match.
+The removal changed 27 files: 1223 lines deleted, 11 added, which includes the
+regenerated bindings and two deleted test files. Outside the three deleted
+folders and the regenerated `app/src/generated/RuntimeEndpoint.ts`,
+`RuntimeProtocol.ts`, `RuntimeActivity.ts`, `Event.ts`, `Snapshot.ts`, and
+`index.ts`, these are the only lines that changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod runtime;` and the `runtime` field of `State`; `process_polled: vec![]`; remove the endpoint lines of the two-daemon test |
+| `crates/tomod/src/dispatch.rs` | drop `runtime` from the `use` line; `is_slow` becomes `matches!(call, Call::PrStatus { .. })`; remove `endpoints: runtime::snapshot(&inner)` and the `Call::RuntimeList` arm |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod runtime;`, `pub use addons::runtime::*;`, `Call::RuntimeList`, `Event::EndpointsChanged`, the two `runtime.endpoint_*` names in `HOOK_EVENTS`, the two lines of `Snapshot.endpoints`, the `RuntimeEndpoint` and `RuntimeActivity` `export_all` lines, and the `RuntimeActivity` entry with `"endpoint_discovered"` in the kind string test |
+| `crates/tomo-cli/src/main.rs` | remove `Cmd::Runtime` and its handler (9 lines) |
+| `crates/tomo-cli/src/print.rs` | remove `print::runtime` (12 lines) |
+| `app/src/addons/index.ts` | remove the `runtime` import; `builtins` becomes `[towns, github, usage, actions, agentation]` |
+| `app/src/addons/activity.ts` | remove the `runtimeActivity` import and its entry |
+| `scripts/torture/run-all.sh` | remove `runtime` from the list |
+| `app/src/addons/composition.test.tsx`, `app/src/Activity.test.tsx` | deleted; see below |
+
+No Core file changed: not `daemon.rs`, `monitor.rs`, `server.rs`, `procs.rs`,
+`store.ts`, `WorktreeHeader.tsx`, `menus.ts`, `Palette.tsx`, `Signals.tsx`,
+or `activityKinds.ts`. `PaneSource`, `Pane.action_id`, and the
+`process_polled` seam stay, because they are Core.
+
+Result with Runtime removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` | pass: 149 tests and 1 ignored (tomod 137, tomo-proto 7, tomo_app_lib 5) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 35 files, 256 tests pass |
+| `npx vite build` | pass; main JS 718.11 kB |
+| `terminal.sh` | 17 passed, 0 failed |
+| `actions.sh` | 25 passed, 0 failed |
+| `continuity.sh` | 19 passed, 0 failed |
+| `provenance.sh` | 12 passed, 0 failed |
+
+The two deleted test files exercise Runtime on purpose. `composition.test.tsx`
+is the Actions and Runtime test, and a cross-addon test is a composition root
+file. `Activity.test.tsx` seeds `State.endpoints` and asserts the "Open App"
+link of the `endpoint_discovered` and `checkpoint_created` rows, so it does
+not type-check without the addon. `actions.sh` has no endpoint check, so it
+passes unchanged.
+
+The removed build has two compiler warnings and no errors:
+`procs::program_name` is not used, and the `exe` field of a process row is
+never read. Runtime was their only reader. They are expected.
+
+### Tests
+
+| Suite | Before milestone 4 (master `b5e291c`) | Milestone 4, merged with Agentation (`a4055be`) |
+|---|---|---|
+| `cargo test --workspace` | 148 and 1 ignored (tomod 139, tomo-proto 7, tomo_app_lib 2) | 153 and 1 ignored (tomod 141, tomo-proto 7, tomo_app_lib 5) |
+| vitest | 34 files, 252 tests | 38 files, 272 tests |
+| torture harness | `runtime.sh` 28, `actions.sh` 25, `activity.sh` 25, `provenance.sh` 12 | the same counts, all pass |
+
+The characterization tests came first (commit `9911170`) and passed on the
+code before the move:
+
+- `addons/runtime/tests.rs` runs a real daemon with a PTY pane that serves a fixed port. It checks the label, the `action_id`, and the `source` from the pane source, the `id`, the host, the pane, the HTTP probe, the `endpoints` field of the `subscribe` snapshot, the `endpoints_changed` frames that a subscribed client receives, the activity row with its payload, the `runtime.endpoint_discovered` hook with its `action` and `pane`, the 5 s grace before a removal, the `runtime.endpoint_removed` hook, and a second discovery on the same port that fires the hook again but records no second activity row.
+- `app/src/addons/runtime/runtime.test.tsx` renders the header popover from a snapshot and an `endpoints_changed` frame, the endpoint rows and their menu (including the disabled open of a TCP endpoint), the NOW signal before the memory warning with its arrow, the palette entries, the loose endpoints of the overflow menu, and the checkpoint banner and Activity links.
+- `app/src/addons/composition.test.tsx` checks the two addons together: the arrow inside the Serve button, the open and copy items of the running Action submenu, restart and stop in the menu of an Action endpoint, and the palette order.
+
+Also new: the two TypeScript boundary tests, the runtime nouns in
+`OWNED_NOUNS`, and the endpoint assertions of
+`two_daemons_in_one_process_keep_their_own_addon_state`. Moved: the runtime
+menu test from `menus.test.ts` and the runtime signal case from
+`activity.test.ts`, which is now an addon-signal ordering case. No test was
+removed without a replacement.
+
+### Performance
+
+Measured on 2026-09-15 with the commands in
+[addons-baseline.md](addons-baseline.md), release build, data dir
+`/tmp/tomo-addons-runtime-bench`, on the tree merged with Agentation
+(`a4055be`). As in milestones 3, 5, and 6, `TOMO_USAGE_MOCK` pointed at a
+file with a far `fetched_at_ms`, so no window called the network or the
+keychain. The owner used the machine during the runs.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 3 | Milestone 4 |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.76 ms | 7.61 ms |
+| of which `subscribe` | 0.51 ms | 0.39 ms | 0.49 ms |
+| of which `pane_attach` | 7.14 ms | 7.40 ms | 7.11 ms |
+| Worktree switch | 0.14 ms | 0.08 ms | 0.12 ms |
+| Worktree switch with attach | 9.26 ms | 7.53 ms | 7.67 ms |
+| Refresh | 164.31 ms | 128.08 ms | 149.13 ms |
+| Process poll, fresh | 23.41 ms | 19.00 ms | 20.57 ms |
+| Process poll, cached | 0.63 ms | 0.55 ms | 0.59 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 3 | Milestone 4 (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.12 % | **0.10 %** (0.08, 0.10, 0.10) |
+| Idle CPU, one subscriber | 1.05 % | 1.00 % | **0.87 %** (0.87, 0.78, 0.90) |
+| RSS at window end, no subscriber | 14.6 MB | 11.9 MB | **11.7 MB** (14.9, 8.4, 11.7) |
+| RSS at window end, subscribed | 14.6 MB | 13.3 MB | **13.8 MB** (13.5, 13.8, 14.6) |
+
+The two numbers that matter most here are the process poll and the idle CPU,
+because the scan moved from a direct call to a seam. Both are at or below the
+baseline: the seam is one `Vec` walk of one function pointer per tick, and the
+`lsof` rule ("no candidate pids means no `lsof`") did not change.
+
+Gate: pass. No round trip is slower than the baseline. Idle CPU is 0.10 %
+without and 0.87 % with a subscriber, below the 0.3 % and 1.5 % limits. Idle
+RSS is below 18 MB. The main JS chunk is 722.71 kB, below the 800 KB budget.
+Not measured: GUI cold launch and GUI RSS (no GUI allowed). Not run:
+`scripts/perf.sh`, the soak, and the full `run-all.sh`.
+
+### Stop conditions
+
+None was hit. Near:
+
+- Four new GUI slots (`sourceMark`, `sourceMenu`, `appUrl`, `signalLine`) plus `paneSource.stop`. Each is one optional field with one render site, and they let the runtime code leave eight core client files (`store.ts`, `activityModel.ts`, `activityKinds.ts`, `WorktreeHeader.tsx`, `menus.ts`, `Palette.tsx`, `Signals.tsx`, `HoverPreviews.tsx`). The `sourceMenu` return of `first` and `last` is the one shape that is not obvious; it exists because the endpoint items sat at two places in the same menu before the split.
+- `RuntimeEndpoint.source` adds a field to the wire for a client join. The alternative, reading the pane source from the client store, loses the endpoints of a pane that has already gone during the 5 s grace.
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
