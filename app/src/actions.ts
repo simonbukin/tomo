@@ -1,3 +1,4 @@
+import { moduleCommands } from "./commands";
 import { stepZoom, type Appearance, type ThemeChoice } from "./appearance";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -9,12 +10,16 @@ import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, Split
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
+export type CommandGroup = "Navigation" | "Worktrees" | "Tabs" | "Panes" | "Agents" | "Browser" | "General";
+
 export interface Action {
   id: string;
   label: string;
   run: () => void | Promise<void>;
   whenWorktree?: boolean;
   when?: () => boolean;
+  /** Section in the keyboard shortcut reference and the palette. */
+  group?: CommandGroup;
 }
 
 export async function openWorktree(worktreeId: Id): Promise<void> {
@@ -594,7 +599,7 @@ export function stateActions(): Action[] {
 }
 
 export function allActions(): Action[] {
-  return [...actions, ...stateActions()];
+  return [...actions, ...stateActions(), ...moduleCommands()];
 }
 
 export function runAction(id: string): void {

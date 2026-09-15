@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
-use tomo_proto::{AgentCommand, Config, ConfigIssue, HookDef, HookMode, IssueLevel, StateDef, HOOK_EVENTS};
+use tomo_proto::{NotificationSettings, AgentCommand, Config, ConfigIssue, HookDef, HookMode, IssueLevel, StateDef, HOOK_EVENTS};
 
 pub struct Paths {
     pub data_dir: PathBuf,
@@ -69,6 +69,14 @@ struct FileConfig {
     states: Vec<StateFile>,
     #[serde(default)]
     hooks: Vec<HookFile>,
+    #[serde(default)]
+    notifications: NotificationsFile,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct NotificationsFile {
+    desktop: Option<bool>,
+    sounds: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -276,6 +284,10 @@ fn merge(file: FileConfig) -> Config {
         archive_cleanup: file.archive.cleanup.unwrap_or_else(default_archive_cleanup),
         states,
         hooks,
+        notifications: NotificationSettings {
+            desktop: file.notifications.desktop.unwrap_or(true),
+            sounds: file.notifications.sounds.unwrap_or(false),
+        },
     }
 }
 

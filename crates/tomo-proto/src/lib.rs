@@ -82,6 +82,10 @@ pub enum Call {
     TabCreate { worktree_id: Id, title: Option<String> },
     TabClose { tab_id: Id, force: bool },
     TabRename { tab_id: Id, title: String },
+    /// Moves a tab to `position` among its worktree's tabs (0-based); the others shift.
+    TabMove { tab_id: Id, position: u32 },
+    /// Moves a pane next to `target_pane_id` (`place` picks the side, `center` swaps), or into tab `tab_id`.
+    PaneMove { pane_id: Id, #[serde(default)] target_pane_id: Option<Id>, #[serde(default)] tab_id: Option<Id>, place: DropPlace },
     TabActivate { tab_id: Id },
     LayoutResize { tab_id: Id, split_id: Id, ratio: f64 },
     LayoutEqualize { tab_id: Id },
@@ -486,6 +490,33 @@ pub struct Config {
     pub states: Vec<StateDef>,
     #[serde(default)]
     pub hooks: Vec<HookDef>,
+    #[serde(default)]
+    pub notifications: NotificationSettings,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct NotificationSettings {
+    /// Desktop notifications while Tomo is not focused.
+    pub desktop: bool,
+    /// Sounds for rare moments only: a human checkpoint and a rare town unlock.
+    pub sounds: bool,
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        NotificationSettings { desktop: true, sounds: false }
+    }
+}
+
+/// Where a dragged pane lands relative to a target pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum DropPlace {
+    Center,
+    Left,
+    Right,
+    Top,
+    Bottom,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1124,6 +1155,8 @@ mod bindings {
         Hello::export_all(&cfg).unwrap();
         ArchiveResult::export_all(&cfg).unwrap();
         AgentSession::export_all(&cfg).unwrap();
+        DropPlace::export_all(&cfg).unwrap();
+        NotificationSettings::export_all(&cfg).unwrap();
         ActivityEvent::export_all(&cfg).unwrap();
         ActivityQuery::export_all(&cfg).unwrap();
         CheckpointSpec::export_all(&cfg).unwrap();
