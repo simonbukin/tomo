@@ -432,6 +432,13 @@ pub struct HookEvent {
     pub action: Option<HookAction>,
 }
 
+/// The `action` field of a hook event: the Action that started the pane. The Action and runtime events fill it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookAction {
+    pub id: String,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct HookWorktree {
     pub id: Id,
