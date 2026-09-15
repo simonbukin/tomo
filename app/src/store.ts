@@ -3,7 +3,7 @@ import { rpc } from "./api";
 import { mergeActivity, needsMeItems } from "./activityModel";
 import { announceAttention } from "./attention";
 import { defaultUi, sanitizeUi } from "./uiState";
-import type {
+import type { Diagnostic, DiagnosticLevel,
   ActionSet,
   ActivityEvent,
   AgentPresence,
@@ -48,7 +48,13 @@ export interface State {
   usage: UsageSnapshot[];
   ui: UiState;
   focusRequest: { worktree_id: Id; tab_id: Id; pane_id: Id; nonce: number } | null;
-  notice: { level: string; message: string; nonce: number } | null;
+  /** One short confirmation in the bottom strip. A new one replaces it. */
+  statusMessage: { text: string; nonce: number } | null;
+  toasts: Toast[];
+  toastSeq: number;
+  /** Client-side and daemon diagnostics, oldest first. */
+  diagnostics: Diagnostic[];
+  daemonHealth: DaemonHealth;
   paletteOpen: boolean;
   shortcutsOpen: boolean;
   dialog: Dialog | null;
@@ -95,7 +101,11 @@ let state: State = {
   usage: [],
   ui: defaultUi,
   focusRequest: null,
-  notice: null,
+  statusMessage: null,
+  toasts: [],
+  toastSeq: 0,
+  diagnostics: [],
+  daemonHealth: "reconnecting",
   paletteOpen: false,
   shortcutsOpen: false,
   dialog: null,
@@ -346,8 +356,13 @@ export function applyFrame(frame: Frame): void {
       break;
     }
     case "notice": {
-      const n = d as { level: string; message: string };
-      setState((s) => ({ notice: { ...n, nonce: (s.notice?.nonce ?? 0) + 1 } }));
+      const n = d as { level: ToastLevel; message: string };
+      toast({ level: n.level, title: n.message });
+      break;
+    }
+    case "diagnostic": {
+      const { diagnostic } = d as { diagnostic: Diagnostic };
+      setState((s) => ({ diagnostics: [...s.diagnostics, diagnostic].slice(-DIAGNOSTICS_KEPT) }));
       break;
     }
     case "pr_changed": {
@@ -423,8 +438,54 @@ export function setRowError(worktreeId: Id, error: RowError | null): void {
   });
 }
 
+export type ToastLevel = "info" | "warning" | "error";
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+export interface Toast {
+  id: number;
+  level: ToastLevel;
+  title: string;
+  detail?: string;
+  actions?: ToastAction[];
+  /** A toast with the same key replaces the older one instead of stacking. */
+  key?: string;
+  createdAt: number;
+}
+
+export type DaemonHealth = "healthy" | "reconnecting" | "disconnected";
+
+const DIAGNOSTICS_KEPT = 200;
+
+/** A small confirmation of something the user just did. Never for failures or warnings. */
+export function showStatus(text: string): void {
+  setState((s) => ({ statusMessage: { text, nonce: (s.statusMessage?.nonce ?? 0) + 1 } }));
+}
+
+/** An exceptional event worth noticing now. Dismissing it never resolves the underlying issue. */
+export function toast(t: Omit<Toast, "id" | "createdAt">): void {
+  setState((s) => {
+    const id = s.toastSeq + 1;
+    const kept = t.key ? s.toasts.filter((x) => x.key !== t.key) : s.toasts;
+    return { toastSeq: id, toasts: [...kept, { ...t, id, createdAt: Date.now() }] };
+  });
+}
+
+export function dismissToast(id: number): void {
+  setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+}
+
+/** Something Tomo itself did or noticed on the client side, such as a reconnect. */
+export function recordDiagnostic(level: DiagnosticLevel, source: string, message: string): void {
+  setState((s) => ({ diagnostics: [...s.diagnostics, { at_ms: Date.now(), level, source, message }].slice(-DIAGNOSTICS_KEPT) }));
+}
+
+/** Deprecated: use `showStatus`, `toast`, or `recordDiagnostic`. Stays until every caller moves. */
 export function notify(level: string, message: string): void {
-  setState((s) => ({ notice: { level, message, nonce: (s.notice?.nonce ?? 0) + 1 } }));
+  toast({ level: level === "error" ? "error" : level === "warn" || level === "warning" ? "warning" : "info", title: message });
 }
 
 export function formatBytes(b: number): string {

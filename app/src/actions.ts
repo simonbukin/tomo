@@ -1,3 +1,4 @@
+import { cycleSidebar } from "./shell/sidebarMode";
 import { moduleCommands } from "./commands";
 import { stepZoom, type Appearance } from "./appearance";
 import { invoke } from "@tauri-apps/api/core";
@@ -549,8 +550,8 @@ export const actions: Action[] = [
   { id: "focus_right", label: "Focus pane right", run: () => focusDirection("right"), whenWorktree: true },
   { id: "focus_up", label: "Focus pane up", run: () => focusDirection("up"), whenWorktree: true },
   { id: "focus_down", label: "Focus pane down", run: () => focusDirection("down"), whenWorktree: true },
-  { id: "toggle_left_sidebar", label: "Toggle left sidebar", run: () => setUi({ leftOpen: !getState().ui.leftOpen }) },
-  { id: "toggle_right_sidebar", label: "Toggle right sidebar", run: () => setUi({ rightOpen: !getState().ui.rightOpen }) },
+  { id: "toggle_left_sidebar", label: "Toggle left sidebar", run: () => setUi({ leftMode: cycleSidebar(getState().ui.leftMode) }) },
+  { id: "toggle_right_sidebar", label: "Toggle right sidebar", run: () => setUi({ rightMode: cycleSidebar(getState().ui.rightMode) }) },
   { id: "spawn_claude", label: "Start Claude here", run: () => spawnAgent("claude"), whenWorktree: true },
   { id: "spawn_codex", label: "Start Codex here", run: () => spawnAgent("codex"), whenWorktree: true },
   { id: "spawn_pi", label: "Start Pi here", run: () => spawnAgent("pi"), whenWorktree: true },

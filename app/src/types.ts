@@ -22,6 +22,8 @@ export type {
   CheckpointMode,
   Config,
   ConfigIssue,
+  Diagnostic,
+  DiagnosticLevel,
   ErrorCode,
   EvidenceBundle,
   FsEntry,
@@ -97,11 +99,15 @@ export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" | "manual";
 
+export type SidebarMode = "open" | "minimal" | "closed";
+
 export interface UiState {
   view: "home" | "worktree" | "towns" | "activity";
   activeWorktreeId: Id | null;
-  leftOpen: boolean;
-  rightOpen: boolean;
+  /** `open` shows the full sidebar at its width, `minimal` a narrow rail, `closed` nothing. */
+  leftMode: SidebarMode;
+  rightMode: SidebarMode;
+  /** Open widths. Minimal and closed keep them for the next open. */
   leftWidth: number;
   rightWidth: number;
   sidebarSort: SidebarSort;

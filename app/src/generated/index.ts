@@ -26,6 +26,8 @@ export * from "./CheckpointMode";
 export * from "./CheckpointSpec";
 export * from "./Config";
 export * from "./ConfigIssue";
+export * from "./Diagnostic";
+export * from "./DiagnosticLevel";
 export * from "./DropPlace";
 export * from "./ErrorCode";
 export * from "./Event";
