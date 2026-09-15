@@ -484,6 +484,50 @@ expected.
 `--town` stays on `tomo worktree create` after the removal, because it only
 sets the generic `name_hint`.
 
+### Usage deletion test (milestone 5)
+
+Done with a script on a throwaway branch from commit `3a8499b` (before the
+merge of the Activity kind seam), then deleted. The removal changed 19
+files: 969 lines deleted, 5 lines added. Outside the three deleted folders
+and the regenerated `app/src/generated/UsageBucket.ts`, `UsageSnapshot.ts`,
+`Snapshot.ts`, `Event.ts`, and `index.ts`, these are the only lines that
+changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod usage;` and `tokio::spawn(usage::run(daemon.clone()));` |
+| `crates/tomod/src/dispatch.rs` | `use crate::addons::{towns, usage};` becomes `use crate::addons::towns;`; remove `usage: usage::snapshots(),` and the `Call::UsageGet` arm |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod usage;`, `pub use addons::usage::*;`, `UsageGet`, `UsageChanged`, the two lines of `Snapshot.usage`, and `UsageSnapshot::export_all` |
+| `crates/tomo-cli/src/main.rs` | remove `Cmd::Usage` and its handler (9 lines) |
+| `crates/tomo-cli/src/print.rs` | remove `resets_in` and `print::usage` (37 lines) |
+| `app/src/addons/index.ts` | remove the `usage` import; `builtins` becomes `[towns]` |
+| `scripts/torture/run-all.sh` | remove `usage` from the list |
+
+No Core file changed: not `daemon.rs`, `main.rs`, `store.ts`,
+`BottomStrip.tsx`, `Diagnostics.tsx`, or a CSS file.
+
+Result with Usage removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` | pass: 106 tests (tomod 99, tomo-proto 5, tomo_app_lib 2) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 29 files, 190 tests pass |
+| `npx vite build` | pass |
+| `scripts/torture/run-all.sh` without `usage` | PASS: 283 checks in 15 scripts; `agents.sh` 18 of 18 |
+
+The removed build has one compiler warning: the `daemon` parameter of
+`addons::start` is not used. It shows a start function that no addon uses.
+It is expected.
+
+The first try failed, and the test did its job. That try flattened an
+`AddonSnapshot` struct into `Snapshot`. Without usage the struct was empty,
+and `ts-rs` stopped with `AddonSnapshot cannot be flattened`. Commit `3a8499b`
+turned the split around (`CoreSnapshot` is flattened into `Snapshot`), and
+the second try passed. The test was not done again after the merge of the
+Activity kind seam; the merge did not change a usage registration line.
+
 ## Add a UI contribution
 
 Use an existing slot. Add a new slot only when an extraction needs it. Do not
@@ -804,6 +848,146 @@ Gate: pass. No round trip is more than 1 ms and 20 % slower than the
 baseline. Idle CPU and RSS are below the limits. The main JS chunk is
 719.39 kB, below the 800 KB budget. Not measured: GUI cold launch and GUI
 RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
+
+## Milestone 5 result: Usage
+
+### What moved
+
+| From | To |
+|---|---|
+| `crates/tomod/src/usage.rs` | `crates/tomod/src/addons/usage/mod.rs` (`git mv`, so the history stays) |
+| `UsageBucket`, `UsageSnapshot` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/usage.rs` |
+| `Inner.usage` | the addon's `static Mutex` (see "Addon state") |
+| the `UsageGet` arm in `Daemon::handle` | `usage::get`, called from `dispatch.rs` |
+| `usage: inner.usage.clone()` in the `Subscribe` arm | `Daemon::subscribe` returns `CoreSnapshot`; `dispatch.rs` adds `usage::snapshots()` |
+| `tokio::spawn(usage::run(..))` in `main.rs` | `addons::start` |
+| `UsageStrip`, `UsageMeter`, `UsageBuckets`, `MicroBar` in `shell/BottomStrip.tsx` | `app/src/addons/usage/UsageStrip.tsx`, through `bottomItem` |
+| the Usage section in `shell/Diagnostics.tsx` | `UsageDiagnostics`, through `diagnosticsSection` |
+| `usageRows`, `stripUsage`, `headlineBucket`, `bucketTone`, `usageTone`, `usageIssues`, `percentText`, `microBar`, `USAGE_WARN`, `USAGE_DANGER` in `shell/bottomModel.ts` | `app/src/addons/usage/model.ts` |
+| `State.usage`, the `usage_changed` case, `usage` in `applySnapshot`, `refreshUsage` in `actions.ts` | `app/src/addons/usage/state.ts`, `index.ts`, `UsageStrip.tsx` |
+| the usage tests in `shell/bottomModel.test.ts` and `shell/BottomStrip.test.tsx` | `app/src/addons/usage/usage.test.tsx` |
+
+Removed as dead code: `usageSummary` and `percentOf` in `activityModel.ts`.
+
+### Seams
+
+| Seam | Why it is the narrowest option |
+|---|---|
+| `addons::start(&Arc<Daemon>)` | One call in `main.rs`, after the Core tasks. A field in `Seams` would be a list that Core stores but never calls. |
+| `Daemon::subscribe -> CoreSnapshot`, and `Snapshot { core, usage }` in `lib.rs` | Installed clients need one typed JSON object. The composition root builds it, so Core names no addon field. The flattened part is the Core part, because `ts-rs` cannot flatten an empty addon struct. |
+| `bottomItem?: ComponentType` | One component for each addon, keyed by the addon id, at the place where `UsageStrip` was. Usage draws all its meters in one component, so a list of items is not necessary. |
+| `diagnosticsSection?: ComponentType` | The same shape, at the place of the old Usage section. |
+| `onSnapshot(snapshot)` | The existing slot now gets the snapshot, so Usage reads `snapshot.usage`. A `usage_get` call there would start a fetch at each connect, because `usage_get` fetches when the result is empty. |
+
+The poll uses the daemon lock, `Daemon::emit`, and
+`Daemon::diagnostic_on_change`, like Towns uses `Inner`. No Core function was
+added for Usage.
+
+### Wire and schema changes
+
+- Method names, event names, and JSON field names do not change. The
+  `tomo usage` text and `--json` output do not change; `usage.sh` checks both.
+- The `subscribe` JSON has the same fields. `usage` is now the last key
+  (before, `ui_state` came after it), and the generated `Snapshot.ts` lists
+  `usage` first. The clients do not depend on key order.
+- Rust: `Snapshot` has `core: CoreSnapshot` and `usage`. Only `tomod` builds it.
+- SQLite: no change. Usage has no table.
+- CSS: `.bottom-usage` is now `.bottom-items`, with the same rules.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Call::UsageGet`, `Event::UsageChanged`, `Snapshot.usage`, and the re-export in `lib.rs` | composition root |
+| `Cmd::Usage` in `crates/tomo-cli/src/main.rs` and `print::usage` | the layout rule keeps one clap tree |
+| the `tomo usage` help text names Pi, which is never fetched | user-visible text; not changed in a refactor |
+| `.usage-*` and `.micro-bar` rules in `styles/bottom.css` | the cascade order must not change; `.tone-*` is shared with the metrics |
+| the addon imports `sparkCells`, `resetsIn` (`activityModel.ts`), `toneOf`, `worstTone` (`shell/bottomModel.ts`), `HoverPopover`, and `KIND_LABEL` | an addon may import Core client code |
+| `UsageSnapshot.provider: AgentKind`, `AgentKind::label()` | a provider id is Core identity (milestone 9) |
+| `fetch_all` names Claude and Codex | inside the addon; milestone 9 decides about provider modules |
+| the thresholds exist in Rust (`THRESHOLDS`) and TypeScript (`USAGE_WARN`, `USAGE_DANGER`) | two languages; [usage.md](usage.md) says to keep them equal |
+| `Daemon::handle` answers `subscribe` with only `CoreSnapshot` | Core stays complete without the dispatcher; no caller uses that path |
+| the process-wide `static` result | see "Addon state" |
+
+### Small user-visible changes
+
+None expected. The bottom strip has the same DOM, except that the container
+class is `.bottom-items`. Nobody looked at the GUI (no GUI allowed); the
+render tests cover the meters, the scope rows, the dash, the popover
+buckets, the refresh link, and the diagnostics section.
+
+### Tests
+
+| Suite | Milestone 1 | Milestone 5, before the merge | Milestone 5, merged with the Activity kind seam |
+|---|---|---|---|
+| `cargo test --workspace` | 121 | 122 (tomod 115) | 130 (tomod 121, tomo-proto 7, tomo_app_lib 2) |
+| vitest | 29 files, 197 tests | 30 files, 202 tests | 31 files, 218 tests |
+| torture harness | 283 checks | 298 checks | 298 checks |
+
+New: `scripts/torture/usage.sh` (15 checks, written and green before the
+move), `polls_only_with_a_subscriber_and_a_stale_result`,
+`an_addon_does_not_name_another_addon`, the TypeScript test "an addon
+imports no other addon folder", and render tests for the scope rows, the
+dash, `usage_changed` and the snapshot, the popover and the refresh link,
+and the diagnostics section. Removed: the test of the dead `usageSummary`.
+
+### Performance
+
+Measured on 2026-09-15 with the commands in
+[addons-baseline.md](addons-baseline.md), release build, data dirs
+`/tmp/tomo-addons-usage-*`. The owner used the machine during the runs.
+Another agent built in parallel during some of them.
+
+One difference from the baseline: the bench daemon ran with
+`TOMO_USAGE_MOCK` pointing at a file with a far `fetched_at_ms`, so that it
+did not read the keychain or call the network. The subscribed windows
+therefore had no usage fetch. In the baseline, one real fetch (`security`,
+`curl`, `codex app-server`) could fall in the first subscribed window.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 5, before the merge | Milestone 5, merged |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.83 ms | 7.81 ms |
+| of which `subscribe` | 0.51 ms | 0.41 ms | 0.41 ms |
+| of which `pane_attach` | 7.14 ms | 7.42 ms | 7.41 ms |
+| Worktree switch | 0.14 ms | 0.10 ms | 0.10 ms |
+| Worktree switch with attach | 9.26 ms | 7.87 ms | 7.61 ms |
+| Refresh | 164.31 ms | 133.87 ms | 124.40 ms |
+| Process poll, fresh | 23.41 ms | 20.79 ms | 12.30 ms |
+| Process poll, cached | 0.63 ms | 0.53 ms | 0.39 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Before the merge (runs) | Merged (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.12 % (0.12, 0.13, 0.12) | **0.13 %** (0.12, 0.13, 0.13) |
+| Idle CPU, one subscriber | 1.05 % | not measured | **0.77 %** (0.78, 0.77, 0.68) |
+| RSS at window end, no subscriber | 14.6 MB | 14.6 MB (14.6, 14.6, 14.6) | **14.5 MB** (14.5, 14.5, 14.5) |
+| RSS at window end, subscribed | 14.6 MB | not measured | **14.7 MB** (14.7, 15.1, 13.2) |
+
+The merge came in between the two sets, so the subscribed windows ran only
+on the merged tree.
+
+`scripts/perf.sh` (merged tree, 3 runs, median):
+
+| Step | Baseline file | Milestone 1 | Milestone 5 (runs) |
+|---|---|---|---|
+| socket ready | 8.1 ms | 106.4 ms | 99.1 ms (120.9, 99.1, 9.4) |
+| hello (error reply) | 41.7 ms | 46.6 ms | 34.0 ms |
+| subscribe | 1.4 ms | 1.8 ms | 0.7 ms |
+| worktrees visible after launch | 224.8 ms | 321.3 ms | 214.4 ms |
+| summaries done after launch | 437.9 ms | 546.5 ms | 382.9 ms |
+| `worktree_refresh` | 175.7 ms | 206.3 ms | 155.1 ms |
+| `ps` fresh | 8.7 ms | 10.7 ms | 7.4 ms |
+| `ps` cached | 0.3 ms | 0.3 ms | 0.3 ms |
+| `worktree_list` | 0.2 ms | 0.2 ms | 0.2 ms |
+| idle CPU, 20 s subscribed | 0.5 % | 0.5 % | 0.4 % |
+| RSS | 16 MB | 15 MB | 17 MB |
+
+`socket ready` has the same spread as in milestone 1: the third run was
+9.4 ms. Milestone 1 found that the base commit gives the same slow first
+runs on this machine.
 
 ## Candidates
 
