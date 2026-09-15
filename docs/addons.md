@@ -2246,7 +2246,40 @@ installed app after a merge:
 
 ### Performance
 
-PERFORMANCE_PLACEHOLDER
+Measured on 2026-09-15 with `addons-bench.py`, release build, data dir
+`/tmp/tomo-addons-agentation-bench`, on the tree merged with master
+`6f80ace`. As in milestones 3, 5, and 6, `TOMO_USAGE_MOCK` pointed at a file
+with a far `fetched_at_ms`, so no window called the network. The owner used
+the machine. The change moves code and adds no work to a daemon path.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 6 | Milestone 7 |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.51 ms | 7.21 ms |
+| of which `subscribe` | 0.51 ms | 0.37 ms | 0.44 ms |
+| of which `pane_attach` | 7.14 ms | 7.16 ms | 6.80 ms |
+| Worktree switch | 0.14 ms | 0.10 ms | 0.10 ms |
+| Worktree switch with attach | 9.26 ms | 8.20 ms | 7.11 ms |
+| Refresh | 164.31 ms | 172.83 ms | 125.04 ms |
+| Process poll, fresh | 23.41 ms | 10.39 ms | 19.11 ms |
+| Process poll, cached | 0.63 ms | 0.39 ms | 0.61 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 6 | Milestone 7 (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.13 % | **0.15 %** (0.15, 0.15, 0.13) |
+| Idle CPU, one subscriber | 1.05 % | 0.78 % | **0.82 %** (0.82, 0.60, 0.98) |
+| RSS at window end, no subscriber | 14.6 MB | 14.8 MB | **14.8 MB** (14.8, 15.0, 6.9) |
+| RSS at window end, subscribed | 14.6 MB | 14.8 MB | **13.8 MB** (13.4, 13.8, 13.8) |
+
+Gate: pass. No round trip is slower than the baseline by more than 1 ms and
+20 %. Idle CPU without a subscriber is 0.15 %, below the limit of 0.3 %; with
+a subscriber it is 0.82 %, below 1.5 %. RSS stays below 18 MB. The GUI does
+one thing less on each pane mount (no `browser_set_annotate` call and no
+622 kB evaluation), which no headless number shows. Not measured: GUI cold
+launch and GUI RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
 
 ### Stop conditions
 
