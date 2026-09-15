@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, nowSignals, resetsIn, sparkCells, truncate, usageSummary, type SignalInput } from "./activityModel";
+import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, nowSignals, resetsIn, sparkCells, truncate, type SignalInput } from "./activityModel";
 import type { ActivityEvent, AgentPresence, AttentionItem, RuntimeEndpoint } from "./types";
 
 const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", worktree_id: "w", pane_id: null, level: "attention", message: "m", created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null, ...extra });
@@ -97,9 +97,6 @@ describe("text helpers", () => {
     expect(sparkCells(1.2)).toEqual({ filled: 10, empty: 0 });
     expect(sparkCells(null)).toEqual({ filled: 0, empty: 10 });
     expect(sparkCells(0.04)).toEqual({ filled: 0, empty: 10 });
-  });
-  it("summarizes usage buckets", () => {
-    expect(usageSummary({ provider: "claude", available: true, reason: null, fetched_at_ms: 0, buckets: [{ label: "5h", fraction_used: 0.48, resets_at_ms: null, detail: null }, { label: "wk", fraction_used: 0.83, resets_at_ms: null, detail: null }] })).toBe("claude 48% 5h · 83% wk");
   });
   it("formats reset times", () => {
     expect(resetsIn(2 * 3_600_000, 0)).toBe("resets in 2h");
