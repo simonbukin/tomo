@@ -932,7 +932,7 @@ pub enum AttentionKind {
     Waiting,
     /// An agent asked a human to review or decide. Created by `tomo checkpoint`.
     Checkpoint,
-    /// An Action process exited unexpectedly.
+    /// A process that a pane source started exited, and Tomo did not stop it. The owner of the source raises it; today only Actions do.
     Crash,
 }
 
