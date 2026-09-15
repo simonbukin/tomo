@@ -1,5 +1,6 @@
 import { endpointUrl, httpEndpoints } from "./activityModel";
-import { archiveWorktree, browserCommand, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, focusPane, killPaneTree, newTabIn, newTerminalIn, openBrowser, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, focusPane, killPaneTree, newTabIn, newTerminalIn, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
+import { browserCommand, openBrowser } from "./browser/browser";
 import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
 import type { MenuItem } from "./components/ui";

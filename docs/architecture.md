@@ -207,6 +207,13 @@ into plain text, types it into an agent pane inside a bracketed paste,
 records an `annotations_sent` activity event, and runs the
 `annotation.sent` hooks. See [browser.md](browser.md).
 
+The browser code has three homes: `crates/tomod/src/features/browser.rs`
+(`browser_open`, `browser_navigate`, `create_browser_pane`),
+`app/src/browser/` (the pane view, the open-url calls, the CSS), and
+`app/src-tauri/src/browser.rs` (the child webviews). Browser stays a
+built-in pane kind and not an addon; see "Milestone 6 result: Browser" in
+[addons.md](addons.md).
+
 Why the daemon owns the pane but not the page: the layout, the restore
 path, and the CLI must see one kind of thing. The page itself is display
 state; a restart reloads the url and loses nothing that Tomo promised to
