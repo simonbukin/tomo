@@ -1,7 +1,26 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { Action } from "../actions";
-import type { Frame } from "../types";
+import type { Status } from "../glyphs";
+import type { State } from "../store";
+import type { ActivityEvent, Frame } from "../types";
+
+/** A button on an Activity row. `label` reads the store and returns null to hide the button. `run` happens on click. */
+export interface ActivityRowAction {
+  label: (e: ActivityEvent, s: State) => string | null;
+  run: (e: ActivityEvent) => void;
+}
+
+/** How the Activity view shows one kind. The row adds the agent, the worktree, the payload `url`, and Resolve by itself. */
+export interface ActivityKindView {
+  status?: Status;
+  /** The actor when the event has no agent. */
+  who?: (e: ActivityEvent, s: State) => string;
+  /** The "Open App" link when the payload has no `url`. */
+  url?: (e: ActivityEvent, s: State) => string | null;
+  /** Buttons between "Open App" and "Resolve", in this order. */
+  actions?: readonly ActivityRowAction[];
+}
 
 /** A center view next to Home and Activity. Its id is also the id of the command that opens it. */
 export interface GlobalView {
@@ -35,5 +54,4 @@ export interface Addon {
   /** Called after each `subscribe` snapshot. */
   onSnapshot?: () => void;
   /** Receives every daemon event frame except pane output. */
-  onFrame?: (frame: Frame) => void;
-}
+  onFrame?: (frame: Frame) => void;}
