@@ -9,7 +9,7 @@ pub static PROVIDER: Provider = Provider {
     resume_without_session: None,
     hook_outcome,
     detects,
-    nested_env: &[],
+    nested_env: &["PI_CODING_AGENT"],
 };
 
 fn detects(p: &Program) -> bool {

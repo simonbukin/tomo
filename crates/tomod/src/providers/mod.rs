@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn nested_agent_markers_name_the_parent_agent() {
-        for key in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID"] {
+        for key in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "PI_CODING_AGENT"] {
             assert!(marks_nested_agent(key), "{key}");
         }
         for key in ["PATH", "TOMO_PANE_ID", "CLAUDE", "PI_HOME", "EDITOR"] {
