@@ -51,14 +51,29 @@ started as `<shell> -lc "<command>"`. The pane exits when the command exits.
 Exit code 0 removes the pane. A non-zero exit keeps the pane and shows the
 exit code, so you can read the output.
 
-The pane carries `action_id`. A second run of the same action, while its
-pane is still live, starts nothing. Tomo focuses the live pane and reports
+The pane carries a source, `{ "kind": "action", "id": <id>, "label": <label> }`
+in `Pane.source`. The older field `Pane.action_id` repeats the id for
+clients that read it. A second run of the same action, while its pane is
+still live, starts nothing. Tomo focuses the live pane and reports
 `reused`. This makes a topbar button a "show me the dev server" button on
 the second click.
 
 **Stop** kills every process in the pane and closes the pane. **Restart**
 is a stop followed by a run. A stop of an action that does not run is not
 an error.
+
+A non-zero exit that Tomo did not cause is a crash. The pane stays open,
+Tomo adds an attention item of kind `crash`, and the toast offers Logs and
+Restart. See [activity.md](activity.md#crash-or-stop).
+
+`pane close`, `tab close`, and an archive also end an Action pane. They
+record no `action_stopped` and run no `action.exited` hook, because the pane
+is gone before its process exits. This is the intended behavior. Use
+`tomo action stop` when the stop must show in Activity and hooks.
+
+The source is in memory only. After a daemon restart the pane comes back
+as a plain shell without a source, and the command does not run again. A
+reopened tab does the same.
 
 ## External mode
 
@@ -95,6 +110,20 @@ problem is reported once as a warning notice in the GUI and as a
 `warning:` line in `tomo action list`. A file that is not valid TOML
 yields no actions and the parse error. A bad file never blocks the
 worktree.
+
+## Where the code lives
+
+Actions are an addon. See [addons.md](addons.md).
+
+- `crates/tomo-proto/src/addons/actions.rs`: `ActionDef`, `ActionSet`, `ActionRunResult`, `ActionActivity`
+- `crates/tomod/src/addons/actions/`: the `.tomo.toml` parser (`model.rs`), the four calls, the reload, and the exit outcomes
+- `app/src/addons/actions/`: the topbar buttons, the menu items, the palette entries, the shortcuts, the crash restart, and the Activity rows
+- `tomo action` in `crates/tomo-cli/src/main.rs`
+
+The addon joins Core at two seams. `worktree_files` reloads `.tomo.toml`
+after each discovery and when the watcher sees the file change.
+`pane_exited` records the outcome of an Action pane under the same lock as
+the exit.
 
 ## Trust
 

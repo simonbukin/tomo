@@ -2,11 +2,12 @@
 
 Read this before you add a feature or move one. It takes a few minutes.
 
-Status: milestone 1 (Towns), the Activity kind seam, and milestone 5
-(Usage) are done. Towns is the first addon and the reference for every
-later extraction. Usage is the second addon; it added a background task, a
-snapshot field, and two GUI slots. The procedures below are the ones that
-Towns and Usage proved. For the kind seam, see "Activity kind seam result".
+Status: milestone 1 (Towns), the Activity kind seam, milestone 5 (Usage),
+and milestone 3 (Actions) are done. Towns is the first addon and the
+reference for every later extraction. Usage added a background task, a
+snapshot field, and two GUI slots. Actions added the Core pane source, two
+daemon seams, and six GUI slots. The procedures below are the ones that
+these addons proved. For the kind seam, see "Activity kind seam result".
 
 Related files:
 
@@ -14,6 +15,7 @@ Related files:
 - [addons-baseline.md](addons-baseline.md) has the performance numbers and the test counts before the refactor.
 - [features/towns.md](features/towns.md) describes the Towns addon.
 - [usage.md](usage.md) describes the Usage addon.
+- [actions.md](actions.md) describes the Actions addon.
 
 ## The three layers
 
@@ -65,7 +67,8 @@ source code with a clean dependency boundary.
 |---|---|
 | towns | **done** (milestone 1) |
 | usage | **done** (milestone 5) |
-| github, actions, runtime, agentation | addon, not moved yet |
+| actions | **done** (milestone 3) |
+| github, runtime, agentation | addon, not moved yet |
 | browser | study (milestone 6) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
@@ -136,11 +139,18 @@ dynamic loading, no service locator, and no dependency injection container.
 
 ```rust
 // crates/tomod/src/addons/mod.rs
+pub mod actions;
 pub mod towns;
 pub mod usage;
 
 pub fn seams() -> Seams {
-    Seams { worktree_namer: Some(towns::name_worktree), worktree_created: vec![towns::unlock], worktree_rebound: vec![towns::rebind] }
+    Seams {
+        worktree_namer: Some(towns::name_worktree),
+        worktree_created: vec![towns::unlock],
+        worktree_rebound: vec![towns::rebind],
+        worktree_files: vec![actions::FILE],
+        pane_exited: vec![actions::exited],
+    }
 }
 
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
@@ -162,7 +172,12 @@ match call {
     Call::Subscribe => ok(Snapshot {
         core: daemon.subscribe(client_id)?,
         usage: usage::snapshots(),
+        actions: actions::snapshot(),
     }),
+    Call::ActionList { worktree_id } => actions::list(daemon, worktree_id),
+    Call::ActionRun { worktree_id, action_id } => actions::run(daemon, &worktree_id, &action_id),
+    Call::ActionStop { worktree_id, action_id } => actions::stop(daemon, &worktree_id, &action_id),
+    Call::ActionRestart { worktree_id, action_id } => actions::restart(daemon, &worktree_id, &action_id),
     Call::TownList => towns::list(daemon),
     Call::TownPick => towns::pick(daemon),
     Call::TownHistory { slug } => towns::history(daemon, &slug),
@@ -198,9 +213,13 @@ pub struct Seams {
     pub worktree_namer: Option<fn(&Store, &WorktreeCreate) -> Result<Option<String>, RpcError>>,
     pub worktree_created: Vec<fn(&mut Inner, &CreatedWorktree) -> Result<(), RpcError>>,
     pub worktree_rebound: Vec<fn(&Store, &str, &str) -> anyhow::Result<()>>,
+    pub worktree_files: Vec<WorktreeFile>,
+    pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
 }
 
 pub struct CreatedWorktree { pub id: Id, pub repo_id: Id, pub name: Option<String> }
+pub struct WorktreeFile { pub name: &'static str, pub reload: fn(&Arc<Daemon>) }
+pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<PaneSource>, pub exit_code: Option<i32>, pub stop_intent: bool }
 ```
 
 | Seam | Where Core calls it | Why it is the narrowest option |
@@ -208,6 +227,13 @@ pub struct CreatedWorktree { pub id: Id, pub repo_id: Id, pub name: Option<Strin
 | `worktree_namer` | `worktree_create`, before `git worktree add`, only when the client gave no `path` | The directory name must exist before Git runs, so a later hook is too late. It gets only the store and the request. It is an `Option`, not a list, because one directory has one name. An error refuses the create (`conflict` when every town is unlocked, `bad_request` for a taken or unknown town). |
 | `worktree_created` | `worktree_create`, after discovery, under the same state lock that queues the `worktree.created` hook | The unlock and the display name must be written exactly once, in the create call, before the reply. An event would let the reply go out before the unlock. It needs `&mut Inner` to set the display name and to emit `TownUnlocked`. |
 | `worktree_rebound` | `Daemon::rebind`, which `discover` (a move on disk) and `restore_worktree` (a restore at a new path) call | A new worktree id must move every row that keys on the old id. It gets only the store and the two ids. An error is logged; it does not stop the Core rebind. |
+| `worktree_files` | `discover`, after it releases the state lock and before it flushes the hooks; and `watch.rs`, when a watched worktree root reports a change to that file name | Actions must read `.tomo.toml` at the same two moments as before the split. One list gives both the file name and the reload, so the watcher and discovery cannot disagree. The watcher copies the names at start and runs each reload one time for a burst of changes. `reload` gets the daemon, because it reads files with no lock held and then takes the lock. |
+| `pane_exited` | `on_exit`, under the state lock, after the `pane_exited` event and before Core updates the agent and removes a pane that exited with 0 | The outcome (`action_completed`, `action_stopped`, or a crash with its attention item and hook) must go into the same lock as the exit, while the pane still exists for the `pane` field of the hook. An event would come after an exit-0 pane is gone. It gets only the facts of the exit: pane, worktree, source, exit code, and stop intent. |
+
+Actions also calls Core functions: `spawn_in_worktree`, `pane_view`,
+`emit_pane`, `emit_tabs`, `hook_pane`, `record`, the crate-wide
+`focus_pane` and `push_attention`, and the new `Daemon::stop_pane`, which
+ends a pane as a stop (stop intent, process tree kill, scrollback, removal).
 
 Without a namer, a worktree created without a `path` gets the branch name as
 its directory (`feat/x` becomes `feat-x`). That fallback exists so that Tomo
@@ -224,11 +250,11 @@ split.
 
 ```ts
 // app/src/addons/index.ts
-export const builtins: readonly Addon[] = [towns, usage];
+export const builtins: readonly Addon[] = [towns, usage, actions];
 ```
 
-The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns
-and Usage need:
+The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns,
+Usage, and Actions need:
 
 | Slot | Who renders it | First user |
 |---|---|---|
@@ -238,13 +264,33 @@ and Usage need:
 | `mount` | `App.tsx`, once for the session (the unlock ceremony) | towns |
 | `bottomItem` | `shell/BottomStrip.tsx`, inside `.bottom-items` at the start of the middle section, before the status slot | usage |
 | `diagnosticsSection` | `DiagnosticsReport` in `shell/Diagnostics.tsx`, after the core sections and before the compact actions | usage |
-| `onSnapshot(snapshot)` | `applySnapshot` in `store.ts`, with each `subscribe` snapshot | towns, usage |
-| `onFrame` | `applyFrame` in `store.ts`, for each daemon event | towns, usage |
+| `topbar.buttons`, `topbar.marks` | `HeaderControls` in `WorktreeHeader.tsx`: `buttons` before the editor button, `marks` after it and before the runtime and overflow buttons | actions |
+| `worktreeMenu(w, s)` | `overflowMenu` in `menus.ts`, first, with a separator after a list that is not empty | actions |
+| `endpointMenu(worktreeId, e, s)` | `endpointMenu` in `menus.ts`, after "focus logs" | actions |
+| `paletteEntries(s, w, context)` | `Palette.tsx`: the context list of the worktree on screen and the worktree sub-list, before the endpoint entries | actions |
+| `shortcuts(s)` | `keyBindings` in `store.ts`, `runAction` in `actions.ts`, and `ShortcutReference.tsx` | actions |
+| `paneSource { kind, restart }` | the crash toast in `attention.ts`: Restart calls the addon that owns the `kind` of the pane source | actions |
+| `onSnapshot(snapshot)` | `applySnapshot` in `store.ts`, with each `subscribe` snapshot | towns, usage, actions |
+| `onFrame` | `applyFrame` in `store.ts`, for each daemon event | towns, usage, actions |
 
 The order of `builtins` is the render order of every slot. Each item gets
 the addon `id` as its React key. An addon keeps its own state in its own
 module (Towns: `app/src/addons/towns/state.ts`, Usage:
-`app/src/addons/usage/state.ts`), not in the core `State`.
+`app/src/addons/usage/state.ts`, Actions: `app/src/addons/actions/state.ts`),
+not in the core `State`.
+
+**The editor button contract.** The editor button is Core client, because it
+opens `editor_command`. Addon `topbar.buttons` come before it. Addon
+`topbar.marks` (Actions: the `.tomo.toml` warning) come after it. That is the
+order from before the split.
+
+**Module load.** `store.ts` and `actions.ts` both load `addons/index.ts`. A
+module that `addons/index.ts` loads must not import `actions.ts`,
+`menus.ts`, `Palette.tsx`, or `activityKinds.ts`, because that cycle can run
+`commands/panes.ts` before `store.ts` exists (see "Activity kind seam
+result"). Import `store.ts`, `api.ts`, and leaf modules, and reach
+`actions.ts` with `import()` inside a click handler. Actions does that for
+`copyText` and `openEndpoint`, as `attention.ts` does.
 
 `.bottom-items` always renders, also when it is empty, so that the status
 slot and the metrics keep their grid columns.
@@ -272,6 +318,11 @@ cadence it had in Core (see the table). The reason is in
 [usage.md](usage.md), "Polling cadence". The GUI meters start no timer and
 no request; the `refresh` link sends one `usage_get` on a click.
 
+Actions background work: none. The reload reads `.tomo.toml` in each
+worktree at each discovery and at a watcher change to that file, as before
+the split. A run starts a process only on an explicit call. The topbar sends
+`action_list` only for a worktree that has no set yet.
+
 Background work that exists today and must keep its current trigger:
 
 | Work | Trigger | Owner |
@@ -283,6 +334,7 @@ Background work that exists today and must keep its current trigger:
 | `gh pr view` | each `pr_status` call; the inspector polls every 120 s while it is open | github |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
+| `.tomo.toml` reads | each discovery, and a watcher change to the file | actions addon (`worktree_files`) |
 
 ## Addon state
 
@@ -304,6 +356,12 @@ Background work that exists today and must keep its current trigger:
   through `server.rs` makes Core carry an addon type; the `kv` table would
   write memory-only data to disk. If a process ever runs two daemons, pass a
   handle instead.
+- Actions keeps the parsed `.tomo.toml` sets in memory only, in a
+  `static Mutex` in `addons/actions/mod.rs`, for the same reasons. The sets
+  come from files, so a restart reads them again. Lock order: the Core state
+  lock first, then the sets lock; never lock Core state while you hold the
+  sets lock. A reload keeps only the worktrees of its own daemon, so the Rust
+  characterization test runs its three scenarios in one test function.
 - If a seam needs both locks, take the Core `Inner` lock first, then the
   addon lock. Never take the Core lock while you hold an addon lock.
 - Never drop or rename a table or a column that holds user data. If the
@@ -357,8 +415,14 @@ the line, and the match. `OWNED_NOUNS` lists the nouns of each finished
 addon: `town` for Towns; `mod usage`, `crate::usage`, `.usage`, `usage:`,
 `usagesnapshot`, `usagebucket`, `usage_get`, `usageget`, `usage_changed`,
 `usagechanged`, `weekly`, `5-hour`, and `allowance` for Usage. The last three
-keep window and allowance words out of the Core agent code. When a milestone
-finishes an addon, add its nouns there.
+keep window and allowance words out of the Core agent code. Actions owns
+`actiondef`, `actionset`, `actionrunresult`, `actionmode`, `actionshow`,
+`actionactivity`, `tomo.toml`, `features::actions`, `inner.actions`,
+`run_action`, `stop_action`, `reload_actions`, and `action_def`. The plain
+word `action` is not a noun of the check, because Core keeps the
+compatibility names `Pane.action_id`, `HookEvent.action`, and
+`PaneSource::action_id`. When a milestone finishes an addon, add its nouns
+there.
 
 **Rust, between addons.** `an_addon_does_not_name_another_addon` reads every
 file under `tomod/src/addons/` (without the composition root `mod.rs`) and
@@ -375,6 +439,11 @@ addon folder. A core file may import only `addons/index.ts` and
 `styles/index.css` is a listed registration line. The test "an addon
 imports no other addon folder" resolves each relative import of a file in
 `addons/<name>/`, and fails if the import lands in another addon folder.
+The test "core client files do not name an Action type, call, or event"
+fails when a file outside `addons/` names `ActionDef`, `ActionSet`,
+`ActionRunResult`, `ActionMode`, `ActionShow`, `ActionActivity`, a quoted
+`action_list`, `action_run`, `action_stop`, or `action_restart`,
+`actions_changed`, `WorktreeAction`, `runningAction`, or `activeActionSet`.
 
 **Activity kinds.** `core_activity_code_does_not_name_addon_kinds` in
 `crates/tomod/src/addons/mod.rs` reads the code before `#[cfg(test)]` in
@@ -383,14 +452,17 @@ imports no other addon folder" resolves each relative import of a file in
 kind string, or `endpoint_repeat`. The test "core activity files do not name
 an addon activity kind" in `boundary.test.ts` does the same for
 `Activity.tsx`, `activityKinds.ts`, `activityModel.ts`, and `glyphs.ts`.
-`daemon.rs` and `runtime.rs` still name addon kinds, because the Actions,
-Runtime, GitHub, and Agentation code is not extracted yet.
+`daemon.rs` still names `GitHubActivity` and `AgentationActivity`, and
+`runtime.rs` names `RuntimeActivity`, because that code is not extracted
+yet.
 
 All four checks were proven. A planted core file that named `addons::towns`
 (Rust) or imported `./addons/towns` (TypeScript) made the import checks
 fail. A planted `ActionActivity::Crashed` doc line in `tomod/src/activity.rs`
 and a planted `"pr_merged"` constant in `glyphs.ts` made the activity checks
-fail.
+fail. Milestone 3 proved the Action nouns: a planted `// ActionSet` line in
+`tomod/src/monitor.rs` and a planted `"action_run"` constant in `glyphs.ts`
+made the checks fail.
 
 **Omission check.** Milestone 1 chose a deletion test over Cargo features.
 Features would spread `#[cfg]` through Core, and the GUI and the proto crate
@@ -528,6 +600,69 @@ turned the split around (`CoreSnapshot` is flattened into `Snapshot`), and
 the second try passed. The test was not done again after the merge of the
 Activity kind seam; the merge did not change a usage registration line.
 
+### Actions deletion test (milestone 3)
+
+Done with a scratch script on a throwaway worktree from commit `d1b0879`
+(milestone 3 merged with milestone 5), then deleted. The script stops when
+an edit does not match. Outside the three deleted folders, the removal
+deleted 1283 lines and added 7. The count leaves out `docs/` and the
+regenerated `app/src/generated/Action*.ts`, `Event.ts`, `Snapshot.ts`, and
+`index.ts`. These are the only lines that changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod actions;`; `worktree_files: vec![]` and `pane_exited: vec![]` |
+| `crates/tomod/src/dispatch.rs` | `use crate::addons::{actions, towns, usage};` becomes `{towns, usage}`; remove `actions: actions::snapshot(),` and the four `Call::Action*` arms |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod actions;`, `pub use addons::actions::*;`, the four `Call::Action*` variants, `Event::ActionsChanged`, the two lines of `Snapshot.actions`, the three `action.*` names in `HOOK_EVENTS`, the `ActionActivity` and `ActionRunResult` `export_all` lines, and the four `ActionActivity` lines and strings in the kind string test |
+| `crates/tomo-cli/src/main.rs` | remove `Cmd::Action`, `enum ActionCmd`, and its four handlers |
+| `crates/tomo-cli/src/print.rs` | remove `print::actions` and `print::action_run` |
+| `app/src/addons/index.ts` | remove the `actions` import; `builtins` becomes `[towns, usage]` |
+| `app/src/addons/activity.ts` | remove the `actionsActivity` import and entry |
+| `scripts/torture/run-all.sh` | remove `actions` from the list |
+| `app/src/Activity.test.tsx` | deleted; see below |
+
+No Core file changed: not `daemon.rs`, `watch.rs`, `runtime.rs`, `store.rs`,
+`store.ts`, `WorktreeHeader.tsx`, `menus.ts`, `Palette.tsx`, or
+`attention.ts`. `Pane.source`, `Pane.action_id`, `HookEvent.action`, and
+`AttentionKind::Crash` stay, because they are Core.
+
+Result with Actions removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` | pass: 127 tests (tomod 118, tomo-proto 7, tomo_app_lib 2) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 30 files, 212 tests pass |
+| `npx vite build` | pass |
+| `terminal.sh` | 17 passed, 0 failed |
+| `agents.sh` | 18 passed, 0 failed |
+| `archive.sh` | 17 passed, 0 failed |
+| `continuity.sh` | 17 passed, 2 failed, 1 known; see below |
+
+The failures are in tests that exercise Actions on purpose:
+
+- `Activity.test.tsx` renders the row of every addon kind. It imports
+  `ActionSet` and expects the Action rows, so it does not compile without
+  Actions. The throwaway worktree deleted it. It is a cross-addon test, as a
+  composition root is a cross-addon file.
+- `continuity.sh` sections 5 and 8 run `tomo action run serve`. Without that
+  command, "action reopen" and "restore action" fail, and "action pane
+  landed outside the actions tab" becomes a known limitation. The two "does
+  not rerun" checks pass without meaning. The other checks pass: tab
+  reopen, agent resume, the closed-tab stack, `open_location`, and the
+  restart.
+
+The first vitest run had one more failure: the glyph test in
+`previews.test.ts` used `action_crashed` as its sample kind. Milestone 3
+changed the sample to the core kind `hook_failed`, and the run above
+includes that change.
+
+The removed build has two compiler warnings and no errors: the fields of
+`PaneExit` are not read, and `Daemon::focus_pane` and `Daemon::stop_pane`
+are not used. They show a seam and two Core functions that no addon uses.
+They are expected.
+
 ## Add a UI contribution
 
 Use an existing slot. Add a new slot only when an extraction needs it. Do not
@@ -535,7 +670,8 @@ add a slot "for later". Add the slot to the `Addon` type, then render it at
 one site from `builtins`.
 
 Slots that exist (see "Static composition, GUI"): `views`, `commands`,
-`worktreeNameField`, `mount`, `bottomItem`, `diagnosticsSection`,
+`worktreeNameField`, `mount`, `bottomItem`, `diagnosticsSection`, `topbar`,
+`worktreeMenu`, `endpointMenu`, `paletteEntries`, `shortcuts`, `paneSource`,
 `onSnapshot`, `onFrame`.
 
 Slots that later milestones will need (from the map):
@@ -544,7 +680,6 @@ Slots that later milestones will need (from the map):
 |---|---|---|
 | inspector section | github | `RightSidebar.tsx`, `RightRail.tsx`, `uiState.ts` |
 | worktree signal | github, runtime | `activityModel.ts` `nowSignals`, `Signals.tsx`, `LeftRail.tsx` |
-| topbar item | actions | `WorktreeHeader.tsx` `ActionBar` |
 | pane renderer | browser | `Layout.tsx`, `Tabs.tsx` |
 | browser toolbar item | agentation | `BrowserPane.tsx` |
 | activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
@@ -1013,14 +1148,100 @@ another agent built; the last samples were 40 ms and 26 ms. Measure the
 soak again at the next milestone on a quiet machine. GUI cold launch and GUI
 RSS: not measured (no GUI allowed).
 
+## Milestone 3 result: Actions
+
+### What moved
+
+| From | To |
+|---|---|
+| `crates/tomod/src/features/actions.rs` | `crates/tomod/src/addons/actions/model.rs` (`git mv`) |
+| `ActionMode`, `ActionShow`, `ActionDef`, `ActionSet`, `ActionRunResult` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/actions.rs` |
+| `Inner.actions`, `reload_actions`, `action_def`, `running_action_pane`, `queue_action_event`, `record_action`, `action_or_placeholder`, `run_action`, `stop_action`, `action_crashed`, and the four action arms in `daemon.rs` | `crates/tomod/src/addons/actions/mod.rs`, through `dispatch.rs`, `worktree_files`, and `pane_exited` |
+| the action branch in `on_exit` | `actions::exited`, the `pane_exited` seam |
+| the `.tomo.toml` check in `watch.rs` | the `worktree_files` names |
+| `actions` in the Core snapshot | `Snapshot.actions`, filled from `actions::snapshot()` in `dispatch.rs` |
+| `PaneRow.action_id` and the `panes.action_id` reads and writes | `PaneState.source`, in memory; `Pane.action_id` is derived |
+| the `RuntimeEndpoint.label` lookup in `inner.actions` | the source label |
+| `ActionBar`, `EndpointMark`, `ActionWarning` in `WorktreeHeader.tsx` | `app/src/addons/actions/Topbar.tsx`, through `topbar` |
+| `runningActionItems`, `actionItem`, and the restart and stop items of `endpointMenu` in `menus.ts` | `app/src/addons/actions/commands.ts`, through `worktreeMenu` and `endpointMenu` |
+| `actionEntries` in `Palette.tsx` | `paletteEntries` |
+| `runWorktreeAction`, `stopWorktreeAction`, `restartWorktreeAction`, and the `action:` prefix in `actions.ts`; `activeActionSet`, `runningActionIds`, `liveEndpointFor`, and the Action part of `keyBindings` in `store.ts` | `commands.ts`, through `shortcuts` |
+| `State.actions`, the `actions_changed` case, and `actions` in `applySnapshot` | `app/src/addons/actions/state.ts`, `onSnapshot`, `onFrame` |
+| the Action name and Restart of the crash toast in `attention.ts` | the pane source and the `paneSource` slot |
+| the running action tests in `menus.test.ts` | `app/src/addons/actions/actions.test.tsx` |
+
+### The pane source
+
+This is the Core provenance field that Runtime uses in milestone 4:
+
+```rust
+pub struct PaneSource { pub kind: String, pub id: String, pub label: String }
+// PaneState.source: Option<PaneSource>; Pane.source on the wire
+```
+
+- **Who sets it.** The spawner, directly after `spawn_in_worktree`. Actions sets `{ kind: "action", id, label }`.
+- **What Core does with it.** Core keeps it in memory, sends it in `Pane.source`, and gives it to `pane_exited`. Core never reads `kind`.
+- **Restore.** It is not stored, so a restored or reopened pane has no source. That is the behavior from before the split: restore removed the Action link, and reopen dropped it. So no restore seam is necessary.
+- **Why this shape is the narrowest.** Each reader needs one field. The owner needs `kind` to find its own panes (stop, restart, and crash rules) without a Core enum of addon names. The owner needs `id` as its key. A reader that is not the owner needs `label` to name the pane (endpoint labels, the crash toast, the Agentation runtime line) without an import of the owner. A generic JSON payload was rejected, because three typed strings are all that the readers need. A `PaneSourceKind` enum in Core was rejected, because Core would name every addon.
+- **Compatibility.** `Pane.action_id` stays on the wire. `pane_view` derives it with `PaneSource::action_id`, which is next to the type in `lib.rs` with the constant `ACTION_SOURCE_KIND`. Installed GUIs and CLIs still get the field. `RuntimeEndpoint.action_id` uses the same helper.
+- **How Runtime uses it.** `runtime::observe` reads `inner.panes[pane_id].source`. The `label` becomes `RuntimeEndpoint.label`. `PaneSource::action_id` fills `RuntimeEndpoint.action_id` and the `action` field of the runtime hooks. The Runtime addon must read only `PaneSource` and must not import the Actions addon. If it must show the owner of a source that is not an Action, it can add `RuntimeEndpoint.source` and keep `action_id` as a derived field.
+
+### Seams
+
+Daemon: `worktree_files` and `pane_exited` (see "Seams"). These options were rejected:
+
+- A `snapshot` seam. The first version had one. The merge of milestone 5 made `dispatch.rs` fill each addon field of `Snapshot`, so Actions uses that path, and the seam was removed.
+- A restore seam. The source is in memory only, so restore has nothing to remove.
+- The milestone 0 plan of a discovery seam plus a watcher classifier. One `worktree_files` list gives the file name and the reload to both.
+
+Core additions: `PaneSource` and `ACTION_SOURCE_KIND` in `lib.rs`, `PaneState.source`, `Daemon::stop_pane`, and crate-wide `focus_pane` and `push_attention`.
+
+GUI: `topbar` (`buttons`, `marks`), `worktreeMenu`, `endpointMenu`, `paletteEntries`, `shortcuts`, and `paneSource`. Each slot replaces one hard-coded Action site and renders at one place. Six slots are more than Towns or Usage needed, but each is one optional field and one `flatMap`. One "Action contribution" object was rejected, because it would put an Actions-shaped API into the client core.
+
+### Decisions
+
+- **`AttentionKind::Crash` is Core.** It is the attention word for "a process that a pane source started exited, and Tomo did not stop it". The owner of the source decides when to raise it. Only Actions raises it, so a shell or an agent that exits with a non-zero code raises nothing, as before. The Rust characterization test checks a shell that exits with code 1. A Core rule "every owned process that exits with a non-zero code is a crash" was rejected, because it adds crash items for ordinary shells.
+- **A closed Action pane records nothing.** `pane close`, `tab close`, and archive remove the pane before its process exits, so `on_exit` finds no pane: no `action_stopped` and no `action.exited`. This was problem 3 of milestone 0. The code does not change. A fix is not one line: three Core paths would have to record before `remove_pane`, and Core would have to know the owner of the source. `docs/actions.md` and `docs/activity.md` describe the behavior, and the Rust test pins it.
+- **The sets stay in a `static`.** See "Addon state".
+- **`HookAction` stays in Core.** The runtime hooks also fill `HookEvent.action`. The first version moved the type to the Actions proto module; the deletion test plan showed that Core `runtime.rs` would not compile without the addon, so it went back to `lib.rs`.
+- **The `panes.action_id` column.** No code reads or writes it. An old database keeps it; a new database does not get it, as with `worktree_meta.town_slug`. An older daemon on a new database adds the column again with its own migration.
+
+### Wire and schema changes
+
+- New: `Pane.source` (`PaneSource | null`) and the generated `PaneSource.ts`.
+- Unchanged: every method, event, and field name, also `Pane.action_id`, `Snapshot.actions`, `RuntimeEndpoint.action_id`, and `HookEvent.action`. `actions` is now the last key of the `subscribe` JSON; the clients do not depend on key order.
+- SQLite: no table or column is dropped. No code reads or writes `panes.action_id`.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Call::Action*`, `Event::ActionsChanged`, `Snapshot.actions`, the `action.*` names in `HOOK_EVENTS`, and the re-export in `lib.rs` | composition root |
+| `Pane.action_id`, `PaneSource::action_id`, and `ACTION_SOURCE_KIND` in `lib.rs` | compatibility with installed clients; remove them when no client reads `Pane.action_id` |
+| `HookEvent.action` and `HookAction` | the hook envelope; runtime events fill it too |
+| `AttentionKind::Crash`, and the fallback title "Action crashed" in `notifyRoute.ts` | a Core attention kind (see "Decisions"); user-visible copy |
+| `RuntimeEndpoint.action_id`, and `!e.action_id` in `overflowMenu` (the endpoints that no Action owns) | Runtime client code; milestone 4 |
+| `EvidenceBundle.action_id` and the runtime line of `AnnotationsSend` | Agentation; the line now reads the pane source |
+| `tomo action` in `crates/tomo-cli` | the layout rule keeps one clap tree |
+| `.actionbar`, `.action-btn`, `.action-live`, `.action-warn` in `styles/layout.css` | `.actionbar` and `.action-btn` also style the editor button; a move could change the cascade |
+| the addon reads the core client `State.endpoints` and `RuntimeEndpoint.action_id` | Runtime is still client core |
+| the Action sections of `continuity.sh`, `runtime.sh`, and `activity.sh`, and `Activity.test.tsx` | cross-feature tests; see "Actions deletion test" |
+
+### Small user-visible changes
+
+- The label of a running endpoint comes from the pane source, which holds the Action label at run time. Before, the label came from the current `.tomo.toml`. The two differ only when the label changes while the Action runs.
+- The Agentation runtime line names an Action only while its pane runs. The GUI always sends `action_id: null`, so no user sees this path.
+- An `endpoint_discovered` Activity row takes its name from the pane source. When the pane is gone, the row shows the payload `action_id`, not the label.
+- "open" and "copy" in the submenu of a running Action load `actions.ts` lazily, one microtask later.
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
 |---|---|---|
 | towns | **done** | none in Core; see "Coupling that stays" |
 | github | addon | `Repo.github` computed in core `repo_view`, `Inner.prs`, the `GitHubActivity::PrMerged` call site in `daemon.rs`, `TownHistory.pr` |
-| actions | addon | `Pane.action_id` and `panes.action_id`, `on_exit` action branch, `AttentionKind::Crash`, `HookEvent.action`, the `ActionActivity` call sites in `daemon.rs` |
-| runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, `RuntimeEndpoint.action_id` filled from `inner.actions`, the `RuntimeActivity` call site in `runtime.rs` |
+| actions | **done** | none in Core; see "Milestone 3 result: Actions" |
+| runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, the `RuntimeActivity` call site in `runtime.rs`; `RuntimeEndpoint.action_id` and `label` now come from the Core `PaneSource` |
 | usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | study (milestone 6) | `PaneKind`, `Pane.url`, `create_browser_pane` in `daemon.rs`, `Layout.tsx` switch |
 | agentation | addon on browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
@@ -1085,20 +1306,15 @@ Narrowest seam: none that is transactional. The work is pull-based.
 
 ### 3. Actions
 
-Risks:
+Done. See "Milestone 3 result: Actions". Changes from the plan:
 
-- The action branch is inside the core pane exit path (`on_exit` in `daemon.rs`).
-- `restore` strips `action_id`, and `reopen.rs` drops it.
-- `AttentionKind::Crash` is Action-only.
-- `keyBindings` in `store.ts` merges `action:<id>` shortcuts into Core bindings.
-- Documentation and code disagree about `action_stopped` (see "Problems found"). Characterization tests must record what the code really does.
-
-Narrowest seam:
-
-- `Pane.action_id` stays as the wire field and the column. Core treats it as an opaque provenance label that it keeps and strips on restore.
-- A pane exit seam `fn(&mut Inner, &PaneExit)` receives the label, the exit code, and `stop_intent`.
-- `reload_actions` becomes a discovery seam, `fn(&mut Inner, &[Id])`.
-- The watcher asks the seam list whether a changed file name belongs to an addon (`.tomo.toml`).
+- The provenance label is a new Core `Pane.source`, not `Pane.action_id`. `action_id` is derived from the source, and the column is no longer used.
+- The source is in memory only, so restore and reopen need no seam.
+- One `worktree_files` seam replaces the planned discovery seam and the watcher classifier.
+- The pane exit seam was built as planned.
+- `AttentionKind::Crash` stays a Core kind; Actions decides when to raise it.
+- `keyBindings` reads a `shortcuts` slot.
+- The `action_stopped` question is decided: a closed pane records nothing, as the code did.
 
 ### 4. Runtime
 
@@ -1108,7 +1324,7 @@ Risks:
 - `CheckpointBanner` and `Activity.tsx` use an endpoint for "Open App".
 - `RuntimeProtocol::Https` is never produced.
 
-Narrowest seam: a monitor tick seam `fn(&Arc<Daemon>)` after `poll_once`, called with the lock released, exactly where `scan_endpoints` runs today (`monitor.rs`). Runtime reads the Core provenance label from milestone 3, not `inner.actions`.
+Narrowest seam: a monitor tick seam `fn(&Arc<Daemon>)` after `poll_once`, called with the lock released, exactly where `scan_endpoints` runs today (`monitor.rs`). Runtime reads the Core `PaneSource` from milestone 3; `observe` no longer reads `inner.actions`. See "The pane source" in "Milestone 3 result: Actions".
 
 ### 5. Usage
 
@@ -1184,7 +1400,7 @@ Do this milestone only if milestones 1 to 9 leave an obvious library edge.
 
 1. **Fixed in milestone 1.** Restore lost the town unlock move.
 2. **Fixed in milestone 1.** A worktree move lost the `towns` and `activity` rows.
-3. **Open.** `action_stopped` on pane close. `docs/activity.md` says that pane close and archive record `action_stopped`. `remove_pane` removes the pane before `hangup`, so `on_exit` returns early, and no activity or `action.exited` hook runs. The Activity kind seam changed `docs/activity.md` to describe what the code does. The code is not changed; the Actions milestone decides.
+3. **Decided in milestone 3.** `action_stopped` on pane close. `remove_pane` removes the pane before `hangup`, so `on_exit` returns early, and no activity or `action.exited` hook runs. The code stays as it is, and the docs describe it. See "Decisions" in "Milestone 3 result: Actions".
 4. **Fixed.** Stale docs. The Activity kind seam fixed two: `docs/activity.md` lists `annotations_sent`, and `docs/architecture.md` gives the measured main bundle size. Milestone 5 fixed the other two: `docs/usage.md` describes `scope`, and `README.md` puts usage in the bottom strip.
 5. **Open.** `scripts/perf.sh` sends `hello` with `protocol: 1` and subscribes before discovery ends.
 6. **Partly fixed in milestone 5.** Dead code. `usageSummary` and `percentOf` are removed. Still open: `townBySlug` (`app/src/addons/towns/Towns.tsx`) has no importer.

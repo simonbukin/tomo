@@ -26,15 +26,16 @@ Nothing polls faster than the monitor. There is no socket watcher.
 ## Attribution
 
 Attribution goes from the pid to the pane whose PTY root is its ancestor,
-then to `Pane.action_id`. The endpoint carries:
+then to the pane source (`Pane.source`). Runtime reads only the Core
+source, not the Actions addon. The endpoint carries:
 
 | Field            | Source                                                  |
 |------------------|---------------------------------------------------------|
 | `id`             | `<pid>:<port>`                                          |
 | `worktree_id`    | The pane's worktree                                     |
 | `pane_id`        | The pane that owns the process                          |
-| `action_id`      | The pane's Action, when an Action started the pane      |
-| `label`          | The Action label, when known                            |
+| `action_id`      | The source id, when an Action started the pane          |
+| `label`          | The source label, when the pane has a source            |
 | `pid`, `process` | The listening process and its name                      |
 | `host`, `port`   | From `lsof`; `*`, `0.0.0.0`, `::`, `[::]` become `localhost` |
 | `protocol`       | `http` or `tcp`; see below                              |
