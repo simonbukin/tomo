@@ -547,14 +547,21 @@ keep window and allowance words out of the Core agent code. Actions owns
 `run_action`, `stop_action`, `reload_actions`, and `action_def`. The plain
 word `action` is not a noun of the check, because Core keeps the
 compatibility names `Pane.action_id`, `HookEvent.action`, and
-`PaneSource::action_id`. When a milestone finishes an addon, add its nouns
-there.
+`PaneSource::action_id`. Runtime owns `runtimeendpoint`, `runtimeprotocol`,
+`runtimeactivity`, `runtime_list`, `runtimelist`, `endpoints_changed`,
+`endpointschanged`, `scan_endpoints`, `endpoint_gone`, `endpoints_at`,
+`endpoint_repeat`, `inner.endpoints`, and `lsof`. The plain words `runtime`
+and `endpoint` are not nouns of the check: Core names the tokio runtime, the
+`rebind_runtime` helper, and the `runtime` diagnostic source, and
+`openEndpoint` stays a Core client function. When a milestone finishes an
+addon, add its nouns there.
 
 **Rust, between addons.** `an_addon_does_not_name_another_addon` reads every
 file under `tomod/src/addons/` (without the composition root `mod.rs`) and
 under `tomo-proto/src/addons/`. A file fails if it names a noun that another
-addon owns. The Activity kind modules of the addons that are not moved yet
-(`actions.rs`, `agentation.rs`, `runtime.rs`) must not name them either.
+addon owns. The Activity kind module of the addon that is not moved yet
+(`agentation.rs`) must not name them either. Runtime passes it: it reads the
+Core `PaneSource` and `PaneSource::action_id`, and names no Action type.
 
 **Rust, addon state.** `addon_modules_keep_no_mutable_static` in
 `crates/tomod/src/addons/mod.rs` reads every file under `tomod/src/addons/`.
@@ -584,7 +591,16 @@ The test "core client files do not name GitHub pull request nouns" fails on
 `GitHub` (case-sensitive), `PullRequest`, `PrStatusResult`,
 `review_decision`, `checks_failed`, `mergeable`, `pr_status`, `pr_changed`,
 or `prs` in a core client file. Lowercase `github` stays allowed for example
-text, such as the clone dialog placeholder.
+text, such as the clone dialog placeholder. The test "core client files do
+not name a runtime endpoint noun" fails on `RuntimeEndpoint`,
+`RuntimeProtocol`, `RuntimeActivity`, `RuntimePreview`, `endpoints_changed`,
+a quoted `runtime_list`, `endpointsOf`, `endpointUrl`, `httpEndpoints`,
+`endpointLabel`, or the word `endpoints`. The singular `endpoint` stays
+allowed, because `openEndpoint` in `actions.ts` is the one Core client
+entry point that opens a URL. The test "the Runtime and the Actions addon do
+not name each other" reads the files of those two folders and fails when a
+Runtime file names an Action type, call, or event, or when an Actions file
+names a runtime endpoint noun.
 
 **Activity kinds.** `core_activity_code_does_not_name_addon_kinds` in
 `crates/tomod/src/addons/mod.rs` reads the code before `#[cfg(test)]` in
@@ -593,9 +609,8 @@ text, such as the clone dialog placeholder.
 kind string, or `endpoint_repeat`. The test "core activity files do not name
 an addon activity kind" in `boundary.test.ts` does the same for
 `Activity.tsx`, `activityKinds.ts`, `activityModel.ts`, and `glyphs.ts`.
-`daemon.rs` still names `AgentationActivity`, and `runtime.rs` names
-`RuntimeActivity`, because the Runtime and Agentation code is not extracted
-yet.
+`daemon.rs` still names `AgentationActivity`, because the Agentation code is
+not extracted yet.
 
 All four checks were proven. A planted core file that named `addons::towns`
 (Rust) or imported `./addons/towns` (TypeScript) made the import checks
@@ -605,7 +620,11 @@ fail. The GitHub noun checks were proven the same way: a planted
 `// PullRequest review_decision` line in `procs.rs` and a planted
 `"pr_status"` constant in `glyphs.ts` made each check fail. Milestone 3 proved the Action nouns: a planted `// ActionSet`
 line in `tomod/src/monitor.rs` and a planted `"action_run"` constant in
-`glyphs.ts` made the checks fail.
+`glyphs.ts` made the checks fail. Milestone 4 proved the runtime nouns the
+same way: a planted `// RuntimeEndpoint scan_endpoints lsof` line in
+`procs.rs`, a planted `// endpointsOf RuntimeEndpoint` line in `glyphs.ts`,
+and a planted `// ActionSet runningAction` line in
+`addons/runtime/model.ts` made the three checks fail.
 
 **Omission check.** Milestone 1 chose a deletion test over Cargo features.
 Features would spread `#[cfg]` through Core, and the GUI and the proto crate
