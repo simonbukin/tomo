@@ -1,6 +1,7 @@
-import { History, House, Map } from "lucide-react";
+import { History, House } from "lucide-react";
 import { Fragment } from "react";
 import type { Signal } from "../activityModel";
+import { addonViews } from "../addons";
 import { needsMeItem } from "../activityModel";
 import { openWorktree } from "../actions";
 import { IconButton, Tooltip } from "../components/ui";
@@ -55,9 +56,11 @@ export function LeftRail() {
         <History className="icon" />
         {count > 0 && <span className="rail-count" aria-hidden>{count}</span>}
       </IconButton>
-      <IconButton label="Japan map" shortcut={shortcut("towns")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("towns")} onClick={() => setUi({ view: "towns" })}>
-        <Map className="icon" />
-      </IconButton>
+      {addonViews().map((v) => (
+        <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current(v.id)} onClick={() => setUi({ view: v.id })}>
+          <v.icon className="icon" />
+        </IconButton>
+      ))}
       <div className="rail-sep" />
       <div className="rail-scroll">
         {worktrees.map((w, i) => (

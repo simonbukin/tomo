@@ -3,6 +3,7 @@ import { rpc } from "./api";
 import { mergeActivity, needsMeItems } from "./activityModel";
 import { announceAttention } from "./attention";
 import { attentionToastKey } from "./notifyRoute";
+import { addonViews, builtins } from "./addons";
 import { defaultUi, sanitizeUi } from "./uiState";
 import type { Diagnostic, DiagnosticLevel,
   ActionSet,
@@ -22,7 +23,6 @@ import type { Diagnostic, DiagnosticLevel,
   Status,
   SystemStats,
   Tab,
-  TownUnlock,
   UiState,
   UsageSnapshot,
   Worktree,
@@ -65,13 +65,11 @@ export interface State {
   dialog: Dialog | null;
   connectionNonce: number;
   menu: { anchor: MenuAnchor; items: MenuItem[]; nonce: number } | null;
-  unlocks: TownUnlock[];
   selection: Set<Id>;
   selectionAnchor: Id | null;
   prs: Record<Id, PrStatusResult>;
   zoomed: Record<Id, Id>;
   healthChecked: boolean;
-  townReveal: { unlock: TownUnlock; nonce: number } | null;
   rowErrors: Record<Id, RowError>;
 }
 
@@ -119,13 +117,11 @@ let state: State = {
   dialog: null,
   connectionNonce: 0,
   menu: null,
-  unlocks: [],
   selection: new Set(),
   selectionAnchor: null,
   prs: {},
   zoomed: {},
   healthChecked: false,
-  townReveal: null,
   rowErrors: {},
 };
 
@@ -192,8 +188,8 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
 }
 
 export function applySnapshot(snap: Snapshot): void {
-  const ui = sanitizeUi(snap.ui_state, snap.worktrees.map((w) => w.id));
-  rpc<{ unlocks: TownUnlock[] }>("town_list").then((r) => setState({ unlocks: r.unlocks ?? [] })).catch(() => {});
+  const ui = sanitizeUi(snap.ui_state, snap.worktrees.map((w) => w.id), addonViews().map((v) => v.id));
+  builtins.forEach((a) => a.onSnapshot?.());
   setState({
     loaded: true,
     config: snap.config,
@@ -234,6 +230,7 @@ export function setZoom(tabId: Id, paneId: Id | null): void {
 }
 
 export function applyFrame(frame: Frame): void {
+  builtins.forEach((a) => a.onFrame?.(frame));
   const d = frame.data as never;
   switch (frame.event) {
     case "repos_changed":
@@ -372,11 +369,6 @@ export function applyFrame(frame: Frame): void {
     case "pr_changed": {
       const { worktree_id, pr } = d as { worktree_id: Id; pr: PullRequest | null };
       setState((s) => ({ prs: { ...s.prs, [worktree_id]: { available: true, reason: null, pr } } }));
-      break;
-    }
-    case "town_unlocked": {
-      const { unlock } = d as { unlock: TownUnlock };
-      setState((s) => ({ unlocks: [...s.unlocks.filter((u) => u.slug !== unlock.slug), unlock], townReveal: { unlock, nonce: (s.townReveal?.nonce ?? 0) + 1 } }));
       break;
     }
   }

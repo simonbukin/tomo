@@ -1,5 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { lazy, Suspense, useEffect } from "react";
+import { addonViews, builtins } from "./addons";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { applyZoom, runAction } from "./actions";
 import { zoomKey } from "./appearance";
@@ -30,11 +31,9 @@ import { RightRail } from "./shell/RightRail";
 import { shellLayout } from "./shell/sidebarMode";
 import { ToastDock } from "./shell/ToastDock";
 import { TopStrip } from "./shell/TopStrip";
-import { MapLoading, ShellLoading } from "./states";
-import { TownReveal } from "./TownReveal";
+import { ShellLoading } from "./states";
 import { useWindowChrome, useWindowWidth } from "./windowChrome";
 
-const Towns = lazy(() => import("./Towns").then((m) => ({ default: m.Towns })));
 const tortureRoute = import.meta.env.DEV && window.location.hash === "#ui-torture";
 const UiTorture = tortureRoute ? lazy(() => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture }))) : () => null;
 
@@ -124,6 +123,7 @@ function Shell() {
   }, [appearance.zoom]);
 
   const showWorktree = ui.view === "worktree" && worktree;
+  const addonView = addonViews().find((v) => v.id === ui.view);
   const layout = shellLayout(ui, windowWidth, !!showWorktree);
   return (
     <div className="app" style={{ ["--left-col" as string]: `${layout.leftCol}px`, ["--right-col" as string]: `${layout.rightCol}px` }}>
@@ -132,13 +132,13 @@ function Shell() {
       {layout.left === "minimal" && <LeftRail />}
       <main className="center">
         {!loaded && <ShellLoading connected={connected} />}
-        {loaded && !showWorktree && ui.view === "towns" && (
-          <Suspense fallback={<MapLoading />}>
-            <Towns />
+        {loaded && !showWorktree && addonView && (
+          <Suspense fallback={<addonView.fallback />}>
+            <addonView.component />
           </Suspense>
         )}
         {loaded && !showWorktree && ui.view === "activity" && <Activity />}
-        {loaded && !showWorktree && ui.view !== "towns" && ui.view !== "activity" && <Home />}
+        {loaded && !showWorktree && !addonView && ui.view !== "activity" && <Home />}
         {loaded && showWorktree && (
           <LayoutDnd>
             <CheckpointBanner worktree={worktree} />
@@ -154,7 +154,7 @@ function Shell() {
       <Palette />
       <ShortcutReference />
       <Dialogs />
-      <TownReveal />
+      {builtins.map((a) => a.mount && <a.mount key={a.id} />)}
       <BottomStrip left={layout.left} />
       <ToastDock />
     </div>

@@ -18,7 +18,3 @@ const ACTIVITY_EMPTY: Record<ActivityFilter, string> = {
 export function activityEmptyText(filter: ActivityFilter): string {
   return ACTIVITY_EMPTY[filter];
 }
-
-export function townsProgress(have: number, total: number): string {
-  return `${have} / ${total} municipalities unlocked.`;
-}

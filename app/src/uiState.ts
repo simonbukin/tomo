@@ -10,7 +10,7 @@ export const SIDEBAR_MAX_WIDTH = 480;
 
 const MODES: readonly SidebarMode[] = ["open", "minimal", "closed"];
 export const RIGHT_SECTIONS: readonly RightSection[] = ["worktree", "git", "pr", "processes", "sessions", "files"];
-const VIEWS: readonly UiState["view"][] = ["home", "worktree", "towns", "activity"];
+const CORE_VIEWS: readonly string[] = ["home", "worktree", "activity"];
 const SORTS: readonly SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
 const FILTER_KINDS: readonly FilterKind[] = ["state", "repo", "project", "tag", "agent", "archived", "attention"];
 
@@ -45,10 +45,10 @@ function sanitizeHome(v: unknown): HomeOptions {
  * UI state read back from the daemon with every known field checked. Unknown keys pass through untouched.
  * A missing active worktree keeps its id: a snapshot taken before discovery finishes must not erase it.
  */
-export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[]): UiState {
+export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonViewIds: readonly string[] = []): UiState {
   const { leftOpen, rightOpen, ...s } = record(saved);
   const activeWorktreeId = typeof s.activeWorktreeId === "string" ? s.activeWorktreeId : null;
-  const view = oneOf(VIEWS, s.view, defaultUi.view);
+  const view = oneOf([...CORE_VIEWS, ...addonViewIds], s.view, defaultUi.view);
   return {
     ...defaultUi,
     ...(s as Partial<UiState>),

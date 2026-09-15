@@ -1,3 +1,4 @@
+import { builtins } from "./addons";
 import { moduleCommands } from "./commands";
 import { stepZoom, type Appearance } from "./appearance";
 import { invoke } from "@tauri-apps/api/core";
@@ -543,7 +544,6 @@ export function openExternal(target: "finder" | "editor", relPath = ""): void {
 
 export const actions: Action[] = [
   { id: "home", label: "Go to Home", run: () => setUi({ view: "home" }) },
-  { id: "towns", label: "Open Japan map", run: () => setUi({ view: "towns" }) },
   { id: "activity", label: "Activity", run: () => setUi({ view: "activity" }) },
   { id: "palette", label: "Command palette", run: () => setState((s) => ({ paletteOpen: !s.paletteOpen })) },
   { id: "zoom_in", label: "Zoom in", run: () => applyZoom("in") },
@@ -618,7 +618,6 @@ export function stateActions(): Action[] {
 
 const COMMAND_GROUPS: Record<string, CommandGroup> = {
   home: "Navigation",
-  towns: "Navigation",
   activity: "Navigation",
   prev_worktree: "Navigation",
   next_worktree: "Navigation",
@@ -682,7 +681,7 @@ const COMMAND_GROUPS: Record<string, CommandGroup> = {
 };
 
 export function allActions(): Action[] {
-  return [...actions, ...stateActions(), ...moduleCommands()].map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
+  return [...actions, ...builtins.flatMap((a) => a.commands ?? []), ...stateActions(), ...moduleCommands()].map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
 }
 
 export function runAction(id: string): void {

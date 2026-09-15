@@ -1,5 +1,6 @@
-import type { Chime } from "./sounds";
-import type { Rarity } from "./types";
+import type { Chime } from "../../sounds";
+
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 export type CeremonyTier = "small" | "strong" | "special";
 
@@ -29,4 +30,8 @@ export function prefersReducedMotion(win: Pick<Window, "matchMedia"> | undefined
 
 export function unlockedLine(have: number, total: number): string {
   return `${have} / ${total}`;
+}
+
+export function townsProgress(have: number, total: number): string {
+  return `${have} / ${total} municipalities unlocked.`;
 }

@@ -1,15 +1,16 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, Minus, Plus, RotateCcw, X } from "lucide-react";
-import { Button, IconButton, SkeletonRows } from "./components/ui";
+import { Button, IconButton, SkeletonRows } from "../../components/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { openWorktree } from "./actions";
-import { rpc } from "./api";
+import { openWorktree } from "../../actions";
+import { rpc } from "../../api";
 import outline from "./data/japan-outline.json";
 import towns from "./data/japan-towns.json";
-import { townsProgress } from "./emptyStates";
-import { EmptyState, InlineError } from "./states";
-import { getState, setState, useStore } from "./store";
-import type { Rarity, Town, TownHistory, TownUnlock } from "./types";
+import { townsProgress, type Rarity } from "./model";
+import { EmptyState, InlineError } from "../../states";
+import { setState, useStore } from "../../store";
+import { getTownState, useTownState } from "./state";
+import type { Town, TownHistory, TownUnlock } from "../../generated";
 
 const ALL = towns as Town[];
 const RINGS = outline as [number, number][][];
@@ -49,11 +50,11 @@ const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { year: "
 type Hover = { town: Town; unlock: TownUnlock | null; x: number; y: number };
 
 export function Towns() {
-  const unlocks = useStore((s) => s.unlocks);
+  const unlocks = useTownState((s) => s.unlocks);
   const worktrees = useStore((s) => s.worktrees);
   const [hover, setHover] = useState<Hover | null>(null);
   const [view, setView] = useState<View>(HOME);
-  const [selected, setSelected] = useState<string | null>(() => getState().townReveal?.unlock.slug ?? null);
+  const [selected, setSelected] = useState<string | null>(() => getTownState().reveal?.unlock.slug ?? null);
   const svgRef = useRef<SVGSVGElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | undefined>(undefined);
@@ -215,7 +216,7 @@ export function Towns() {
 
 /** The factual history of one unlocked town. It keeps the last good result on screen while it refreshes. */
 function TownDetail({ town, onClose }: { town: Town; onClose: () => void }) {
-  const worktreeId = useStore((s) => s.unlocks.find((u) => u.slug === town.slug)?.worktree_id ?? null);
+  const worktreeId = useTownState((s) => s.unlocks.find((u) => u.slug === town.slug)?.worktree_id ?? null);
   const worktreeKey = useStore((s) => {
     const w = s.worktrees.find((x) => x.id === worktreeId);
     return w ? `${w.archived_at_ms ?? ""}:${w.exists}:${w.head}:${w.branch ?? ""}` : "gone";

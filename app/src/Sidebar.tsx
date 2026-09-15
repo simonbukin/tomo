@@ -1,8 +1,9 @@
-import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Map, Plus, RotateCw, Star } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Plus, RotateCw, Star } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { addonViews } from "./addons";
 import { byManualOrder } from "./order";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
@@ -80,7 +81,9 @@ export function Sidebar() {
       <div className="sidebar-top">
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
         <IconButton label={needCount ? `Activity, ${needCount} need you` : "Activity"} shortcut={shortcut("activity")} className={`side-btn side-activity${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" />{needCount > 0 && <span className="rail-count" aria-hidden>{needCount}</span>}</IconButton>
-        <IconButton label="Japan map" shortcut={shortcut("towns")} className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "towns" })}><Map className="icon" /></IconButton>
+        {addonViews().map((v) => (
+          <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} className={`side-btn${ui.view === v.id ? " side-btn-active" : ""}`} onClick={() => setUi({ view: v.id })}><v.icon className="icon" /></IconButton>
+        ))}
         <span className="spacer" />
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
