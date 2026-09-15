@@ -15,6 +15,7 @@ pub static PROVIDER: Provider = Provider {
     install,
     installed,
     gap: super::no_gap,
+    sessions: super::no_sessions,
 };
 
 fn detects(p: &Program) -> bool {
