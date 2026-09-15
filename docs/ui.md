@@ -28,8 +28,11 @@ A worktree row or card shows signals, not a status dump. `signalsFor` in
 `app/src/Signals.tsx` calls `nowSignals` in `app/src/activityModel.ts` and
 keeps at most three, in this order:
 
-1. needs attention: a waiting agent (`◉ Claude needs input`) or an open
-   checkpoint (`◉ review requested`)
+1. needs attention: an open checkpoint (`◉ review requested`), then a
+   waiting agent. A waiting agent is its own agent line in amber
+   (`● Claude needs input`), never a second item. A waiting attention item
+   counts only while its agent still waits; the daemon resolves it when the
+   agent moves on
 2. crash: an unresolved `crash` attention item (`× Sampler crashed`)
 3. active agents (`● Claude`, with the process icon)
 4. the primary HTTP runtime (`App ↗ :3000`)
@@ -64,6 +67,29 @@ no toast.
 popover with one bar per bucket and a `refresh` link. Over 80 % uses
 `--waiting`, over 95 % uses `--hot`. The strip lives in the Activity
 header only.
+
+## Sidebar order, appearance, and terminal keys
+
+- The main worktree of a repo shows a star and always sorts first, in
+  every sort mode.
+- Drag a worktree row or a repo header to reorder it. The first drop
+  switches the sidebar to `manual` sort and keeps the order that was on
+  screen for everything else. The order lives in UI state
+  (`manualOrder`, `repoOrder`). Dragging is pointer-driven in
+  `useRowDrag.ts`: HTML5 drag and drop is unreliable in the Tauri
+  webview.
+- Cmd or Ctrl with `+`, `-`, and `0` zooms the whole window through the
+  webview zoom. A chip in the title bar shows a zoom other than 100 % and
+  resets it on click.
+- The appearance dialog (title bar button, or `Appearance…` in the
+  palette) sets the theme, the accent (`murasaki`, `sora`, `sakura`,
+  `sumi`), the zoom, and the terminal font size. These live in UI state,
+  not in `config.toml`. An explicit theme wins over the config theme.
+- Shift+Enter in a terminal sends ESC CR instead of a bare CR, so Claude
+  Code, Codex, and Pi insert a newline. The mapping is `keyOverride` in
+  `appearance.ts`, with a unit test.
+- The usage strip draws one `[█████░░░░░]` spark per bucket. Pi has no
+  row: it runs on the Claude allowance.
 
 ## Primitives
 
