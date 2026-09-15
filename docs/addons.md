@@ -63,7 +63,9 @@ client for the same daemon operations. The GUI client owns these parts:
 - drag and drop, hover, popovers
 
 The client renders addon contributions. The client never becomes the only
-implementation of daemon behavior.
+implementation of daemon behavior. [client-independence.md](client-independence.md)
+shows a headless client that uses only the socket. It also lists the
+parts that only the GUI implements, and what a second client must write again.
 
 ### Addon
 
