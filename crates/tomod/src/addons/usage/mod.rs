@@ -1,11 +1,12 @@
 //! Provider usage: reads the allowance of each provider, keeps the last result, and warns when a bucket crosses a threshold.
 //! It owns no table and no Core state. See docs/usage.md.
 
-use crate::daemon::{ok, Daemon};
+use crate::addons;
+use crate::daemon::{ok, Daemon, Inner};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tomo_proto::*;
 
@@ -15,13 +16,8 @@ const POLL_INTERVAL_MS: u64 = 5 * 60 * 1000;
 const POLL_TICK: Duration = Duration::from_secs(20);
 pub const THRESHOLDS: [f64; 2] = [0.80, 0.95];
 
-// ponytail: one result per process, because tomod.lock allows one daemon per data dir. Pass a handle if a process ever runs two daemons.
-// Lock order: take this after the Core lock, never before it.
-static LAST: Mutex<Vec<UsageSnapshot>> = Mutex::new(Vec::new());
-
-fn last() -> MutexGuard<'static, Vec<UsageSnapshot>> {
-    LAST.lock().unwrap_or_else(|p| p.into_inner())
-}
+/// The last result of each provider, in `addons::State`. Memory only: a restart starts empty.
+pub type Last = Vec<UsageSnapshot>;
 
 fn unavailable(provider: AgentKind, reason: impl Into<String>, now: u64) -> UsageSnapshot {
     UsageSnapshot { provider, available: false, reason: Some(reason.into()), buckets: Vec::new(), fetched_at_ms: now }
@@ -326,41 +322,48 @@ fn due(subscribed: bool, newest_fetch_ms: u64, now: u64) -> bool {
 }
 
 /// The last result, for the `subscribe` snapshot.
-pub fn snapshots() -> Vec<UsageSnapshot> {
-    last().clone()
+pub fn snapshots(inner: &Inner) -> Vec<UsageSnapshot> {
+    addons::state(inner).usage.clone()
 }
 
 async fn refresh(daemon: &Arc<Daemon>) {
     let fresh = tokio::task::spawn_blocking(fetch_all).await.unwrap_or_default();
-    let mut inner = daemon.lock();
-    let before = std::mem::replace(&mut *last(), fresh.clone());
+    remember(&mut daemon.lock(), fresh);
+}
+
+/// Keeps a new result under the Core lock. It records the diagnostics and emits `usage_changed` and the threshold notices.
+pub fn remember(inner: &mut Inner, fresh: Vec<UsageSnapshot>) {
+    let before = std::mem::replace(&mut addons::state_mut(inner).usage, fresh.clone());
     for s in &fresh {
         let problem = (!s.available).then(|| s.reason.clone().unwrap_or_else(|| "unavailable".to_string()));
-        Daemon::diagnostic_on_change(&mut inner, "usage", &format!("{} usage", s.provider.label().to_lowercase()), problem);
+        Daemon::diagnostic_on_change(inner, "usage", &format!("{} usage", s.provider.label().to_lowercase()), problem);
     }
     if !same(&before, &fresh) {
-        Daemon::emit(&mut inner, Event::UsageChanged { snapshots: fresh.clone() });
+        Daemon::emit(inner, Event::UsageChanged { snapshots: fresh.clone() });
     }
     for message in crossings(&before, &fresh) {
-        Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message });
+        Daemon::emit(inner, Event::Notice { level: NoticeLevel::Warning, message });
     }
 }
 
 /// `usage_get`: fetches at once when `force` is set or when there is no result yet.
 pub async fn get(daemon: &Arc<Daemon>, force: bool) -> Result<Value, RpcError> {
-    let empty = last().is_empty();
+    let empty = addons::state(&daemon.lock()).usage.is_empty();
     if force || empty {
         refresh(daemon).await;
     }
-    ok(snapshots())
+    let list = snapshots(&daemon.lock());
+    ok(list)
 }
 
 /// The background poll. It fetches only while a client is subscribed and the last result is older than five minutes.
 pub async fn run(daemon: Arc<Daemon>) {
     loop {
         tokio::time::sleep(POLL_TICK).await;
-        let subscribed = daemon.lock().clients.values().any(|c| c.subscribed);
-        let newest = newest_fetch_ms(&last());
+        let (subscribed, newest) = {
+            let inner = daemon.lock();
+            (inner.clients.values().any(|c| c.subscribed), newest_fetch_ms(&addons::state(&inner).usage))
+        };
         if due(subscribed, newest, now_ms()) {
             refresh(&daemon).await;
         }

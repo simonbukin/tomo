@@ -88,6 +88,8 @@ pub struct Inner {
     pub diagnostics: std::collections::VecDeque<Diagnostic>,
     /// The current problem per `source:subject`, so a repeated poll records a diagnostic only on a change.
     pub problems: HashMap<String, String>,
+    /// The in-memory state of the addons of this daemon, under the same lock as Core state. Core never looks inside; the composition root fills it.
+    pub addons: Box<dyn std::any::Any + Send>,
 }
 
 /// Plain function lists that addons join at fixed points of Core operations. The composition root builds it once at startup.
@@ -190,7 +192,7 @@ pub fn ok<T: serde::Serialize>(v: T) -> Result<Value, RpcError> {
 }
 
 impl Daemon {
-    pub fn new(paths: Paths, seams: Seams) -> Result<Arc<Self>> {
+    pub fn new(paths: Paths, seams: Seams, addons: Box<dyn std::any::Any + Send>) -> Result<Arc<Self>> {
         paths.ensure()?;
         let store = Store::open(&paths.db)?;
         let config = config::load(&paths.config)?;
@@ -222,6 +224,7 @@ impl Daemon {
                 closed_tabs: Vec::new(),
                 diagnostics: std::collections::VecDeque::new(),
                 problems: HashMap::new(),
+                addons,
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
