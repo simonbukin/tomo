@@ -15,7 +15,7 @@ pub mod pi;
 use anyhow::{Context, Result};
 use serde_json::{Map, Value};
 use std::path::Path;
-use tomo_proto::{AgentCommand, AgentKind, AgentState, Config, IntegrationLevel, IntegrationStatus};
+use tomo_proto::{AgentCommand, AgentKind, AgentState, Config, IntegrationLevel, IntegrationStatus, Integrations};
 
 pub struct Provider {
     pub kind: AgentKind,
@@ -24,6 +24,24 @@ pub struct Provider {
     pub hook_outcome: fn(&Value) -> HookOutcome,
     pub detects: fn(&Program) -> bool,
     pub nested_env: &'static [&'static str],
+    pub write_launch_file: fn(launch_dir: &Path, tomo_bin: &Path) -> Result<()>,
+    pub install: fn(home: &Path, tomo_bin: &Path) -> Result<()>,
+    pub installed: fn(home: &Path) -> bool,
+    pub gap: fn(home: &Path) -> Option<Gap>,
+}
+
+/// What an installed provider still needs before Tomo sees its lifecycle events.
+pub struct Gap {
+    pub level: IntegrationLevel,
+    pub reason: &'static str,
+}
+
+pub fn no_gap(_home: &Path) -> Option<Gap> {
+    None
+}
+
+pub fn no_launch_file(_launch_dir: &Path, _tomo_bin: &Path) -> Result<()> {
+    Ok(())
 }
 
 pub fn provider(kind: AgentKind) -> &'static Provider {
@@ -140,37 +158,24 @@ fn merge_into_file(path: &Path, additions: &Value, marker: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn install(tomo_bin: &Path, pi_source: &str) -> Result<()> {
-    let home = dirs::home_dir().context("no home dir")?;
-    let claude = claude::hooks_settings(tomo_bin);
-    merge_into_file(&home.join(".claude/settings.json"), &claude["hooks"], "hook claude")?;
-    let codex = codex::hooks_entries(tomo_bin);
-    merge_into_file(&home.join(".codex/hooks.json"), &codex, "hook codex")?;
-    let ext_dir = home.join(".pi/agent/extensions");
-    std::fs::create_dir_all(&ext_dir)?;
-    std::fs::write(ext_dir.join("tomo-status.ts"), pi_source)?;
-    Ok(())
+/// The files Tomo writes for its own agent starts, in the data directory.
+pub fn write_launch_files(launch_dir: &Path, tomo_bin: &Path) -> Result<()> {
+    table().into_iter().try_for_each(|p| (p.write_launch_file)(launch_dir, tomo_bin))
 }
 
-fn codex_hooks_trusted(home: &Path) -> Option<bool> {
-    let hooks: Value = serde_json::from_str(&std::fs::read_to_string(home.join(".codex/hooks.json")).ok()?).ok()?;
-    let config = std::fs::read_to_string(home.join(".codex/config.toml")).unwrap_or_default();
-    let events = hooks.get("hooks")?.as_object()?;
-    let mut ours = 0;
-    let mut trusted = 0;
-    for (event, list) in events {
-        for (idx, entry) in list.as_array().into_iter().flatten().enumerate() {
-            if !entry.to_string().contains("hook codex") {
-                continue;
-            }
-            ours += 1;
-            let snake: String = event.chars().enumerate().map(|(i, c)| if c.is_uppercase() && i > 0 { format!("_{}", c.to_lowercase()) } else { c.to_lowercase().to_string() }).collect();
-            if config.contains(&format!("hooks.json:{snake}:{idx}:0\"")) {
-                trusted += 1;
-            }
-        }
+/// The user-level hooks and extensions, so an agent started by hand also reports.
+pub fn install(tomo_bin: &Path) -> Result<()> {
+    let home = dirs::home_dir().context("no home dir")?;
+    table().into_iter().try_for_each(|p| (p.install)(&home, tomo_bin))
+}
+
+pub fn installed() -> Integrations {
+    let home = dirs::home_dir().unwrap_or_default();
+    Integrations {
+        claude_hooks: (claude::PROVIDER.installed)(&home),
+        codex_hooks: (codex::PROVIDER.installed)(&home),
+        pi_extension: (pi::PROVIDER.installed)(&home),
     }
-    Some(ours > 0 && trusted == ours)
 }
 
 /// Health of each agent integration, from what is actually installed on this machine.
@@ -184,26 +189,19 @@ pub fn record_health(inner: &mut crate::daemon::Inner, list: &[IntegrationStatus
 
 pub fn status(config: &Config) -> Vec<IntegrationStatus> {
     let home = dirs::home_dir().unwrap_or_default();
-    AgentKind::all()
+    table()
         .into_iter()
-        .map(|kind| {
+        .map(|p| {
+            let kind = p.kind;
             let key = kind.label().to_lowercase();
-            let command = config.agents.get(&key).map(|a| a.command.clone()).unwrap_or(key.clone());
+            let command = config.agents.get(&key).map(|a| a.command.clone()).unwrap_or(key);
             let binary = crate::config::resolve_program(&command);
             if binary.is_none() {
                 return IntegrationStatus { kind, level: IntegrationLevel::Unavailable, binary, lifecycle: false, resume: false, reason: Some(format!("{command} not found on PATH")) };
             }
-            match kind {
-                AgentKind::Claude => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
-                AgentKind::Pi => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
-                AgentKind::Codex => {
-                    let installed = std::fs::read_to_string(home.join(".codex/hooks.json")).map(|t| t.contains("hook codex")).unwrap_or(false);
-                    match (installed, codex_hooks_trusted(&home)) {
-                        (true, Some(true)) => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
-                        (true, _) => IntegrationStatus { kind, level: IntegrationLevel::Partial, binary, lifecycle: false, resume: true, reason: Some("hooks installed but not trusted; start Codex and press t in its hooks panel".into()) },
-                        (false, _) => IntegrationStatus { kind, level: IntegrationLevel::ProcessOnly, binary, lifecycle: false, resume: true, reason: Some("run `tomo integrations install`, then trust the hooks in Codex".into()) },
-                    }
-                }
+            match (p.gap)(&home) {
+                None => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
+                Some(gap) => IntegrationStatus { kind, level: gap.level, binary, lifecycle: false, resume: true, reason: Some(gap.reason.to_string()) },
             }
         })
         .collect()
@@ -227,26 +225,6 @@ mod tests {
         assert!(merge_hooks(&mut existing, &moved, "hook codex"));
         assert_eq!(existing["hooks"]["Stop"].as_array().unwrap().len(), 2);
         assert!(existing["hooks"]["Stop"].to_string().contains("/opt/tomo/bin/tomo"));
-    }
-
-    #[test]
-    fn codex_trust_needs_every_tomo_entry_in_config() {
-        let home = std::env::temp_dir().join(format!("tomo-codex-trust-{}", std::process::id()));
-        let codex_dir = home.join(".codex");
-        std::fs::create_dir_all(&codex_dir).unwrap();
-        assert_eq!(codex_hooks_trusted(&home), None);
-        let mut hooks = serde_json::json!({ "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "other" } ] } ] } });
-        merge_hooks(&mut hooks, &codex::hooks_entries(Path::new("/bin/tomo")), "hook codex");
-        let file = codex_dir.join("hooks.json");
-        std::fs::write(&file, hooks.to_string()).unwrap();
-        assert_eq!(codex_hooks_trusted(&home), Some(false));
-        let trust = |entries: &[(&str, usize)]| entries.iter().map(|(event, idx)| format!("\"{}:{event}:{idx}:0\" = \"trusted\"\n", file.display())).collect::<String>();
-        let ours = [("permission_request", 0), ("post_tool_use", 0), ("pre_tool_use", 0), ("session_start", 0), ("stop", 1), ("user_prompt_submit", 0)];
-        std::fs::write(codex_dir.join("config.toml"), trust(&ours[..5])).unwrap();
-        assert_eq!(codex_hooks_trusted(&home), Some(false));
-        std::fs::write(codex_dir.join("config.toml"), trust(&ours)).unwrap();
-        assert_eq!(codex_hooks_trusted(&home), Some(true));
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

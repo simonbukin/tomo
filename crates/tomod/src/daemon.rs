@@ -20,7 +20,6 @@ use tomo_proto::*;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
-const PI_EXTENSION_SOURCE: &str = include_str!("../../../integrations/pi/tomo-status.ts");
 
 pub struct Client {
     pub tx: mpsc::UnboundedSender<String>,
@@ -234,37 +233,12 @@ impl Daemon {
             seams,
             paths,
         });
-        daemon.write_integration_files()?;
+        providers::write_launch_files(&daemon.paths.integrations_dir, &daemon.tomo_bin)?;
         Ok(daemon)
     }
 
     pub fn lock(&self) -> MutexGuard<'_, Inner> {
         self.inner.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
-    pub fn claude_settings_path(&self) -> PathBuf {
-        self.paths.integrations_dir.join("claude-hooks.json")
-    }
-
-    pub fn pi_extension_path(&self) -> PathBuf {
-        self.paths.integrations_dir.join("tomo-status.ts")
-    }
-
-    fn write_integration_files(&self) -> Result<()> {
-        let settings = providers::claude::hooks_settings(&self.tomo_bin);
-        std::fs::write(self.claude_settings_path(), serde_json::to_string_pretty(&settings)?)?;
-        std::fs::write(self.pi_extension_path(), PI_EXTENSION_SOURCE)?;
-        Ok(())
-    }
-
-    pub fn integrations(&self) -> Integrations {
-        let home = dirs::home_dir().unwrap_or_default();
-        let has = |p: PathBuf, needle: &str| std::fs::read_to_string(p).map(|t| t.contains(needle)).unwrap_or(false);
-        Integrations {
-            claude_hooks: has(home.join(".claude/settings.json"), "hook claude"),
-            codex_hooks: has(home.join(".codex/hooks.json"), "hook codex"),
-            pi_extension: home.join(".pi/agent/extensions/tomo-status.ts").exists(),
-        }
     }
 
     // ---------------------------------------------------------------- events
@@ -442,7 +416,7 @@ impl Daemon {
             live_panes: inner.panes.values().filter(|p| p.pty.is_some() && p.exit_code.is_none()).count(),
             agents: inner.agents.len(),
             clients: inner.clients.len(),
-            integrations: self.integrations(),
+            integrations: providers::installed(),
         }
     }
 
@@ -1455,8 +1429,8 @@ impl Daemon {
                 Ok(Value::Null)
             }
             Call::IntegrationsInstall => {
-                providers::install(&self.tomo_bin, PI_EXTENSION_SOURCE).map_err(internal)?;
-                ok(self.integrations())
+                providers::install(&self.tomo_bin).map_err(internal)?;
+                ok(providers::installed())
             }
             Call::IntegrationsStatus => {
                 let mut inner = self.lock();

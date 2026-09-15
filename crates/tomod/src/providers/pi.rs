@@ -1,4 +1,5 @@
 use super::{str_field, HookOutcome, Program, Provider};
+use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tomo_proto::{AgentKind, AgentState};
@@ -10,6 +11,10 @@ pub static PROVIDER: Provider = Provider {
     hook_outcome,
     detects,
     nested_env: &["PI_CODING_AGENT"],
+    write_launch_file,
+    install,
+    installed,
+    gap: super::no_gap,
 };
 
 fn detects(p: &Program) -> bool {
@@ -24,9 +29,27 @@ fn runs_the_pi_package(p: &Program) -> bool {
 }
 
 const EXTENSION_FILE: &str = "tomo-status.ts";
+const EXTENSION_SOURCE: &str = include_str!("../../../../integrations/pi/tomo-status.ts");
+const EXTENSION_DIR: &str = ".pi/agent/extensions";
 
 fn extension_path(launch_dir: &Path) -> PathBuf {
     launch_dir.join(EXTENSION_FILE)
+}
+
+fn write_launch_file(launch_dir: &Path, _tomo_bin: &Path) -> Result<()> {
+    std::fs::write(extension_path(launch_dir), EXTENSION_SOURCE)?;
+    Ok(())
+}
+
+fn install(home: &Path, _tomo_bin: &Path) -> Result<()> {
+    let dir = home.join(EXTENSION_DIR);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(EXTENSION_FILE), EXTENSION_SOURCE)?;
+    Ok(())
+}
+
+fn installed(home: &Path) -> bool {
+    home.join(EXTENSION_DIR).join(EXTENSION_FILE).exists()
 }
 
 fn flags(resume: Option<&str>, launch_dir: &Path) -> (Vec<String>, Option<String>) {
