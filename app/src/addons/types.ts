@@ -5,7 +5,7 @@ import type { AddonSignal } from "../activityModel";
 import type { Status } from "../glyphs";
 import type { RailMarker } from "../shell/RightRail";
 import type { State } from "../store";
-import type { ActivityEvent, Frame, Id, Worktree } from "../types";
+import type { ActivityEvent, Frame, Id, Repo, Worktree } from "../types";
 
 /** A button on an Activity row. `label` reads the store and returns null to hide the button. `run` happens on click. */
 export interface ActivityRowAction {
@@ -65,6 +65,8 @@ export interface Addon {
   inspectorSections?: readonly InspectorSection[];
   /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
   worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
+  /** The small image before a repo name in the sidebar and on Home. The first addon that has one wins. */
+  repoAvatar?: ComponentType<{ repo: Repo; size: number }>;
   /** A field in the create-worktree dialog. The first addon that has one wins, like the daemon's one worktree namer. */
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
   /** Mounted once for the whole session. It must start no work until it has something to show. */

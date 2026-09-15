@@ -117,10 +117,27 @@ describe("GitHub marks outside the inspector", () => {
   });
 
   it("shows the owner avatar for a GitHub remote only", () => {
-    const repo = (remote_url: string, github: unknown) => ({ id: "r1", name: "acme", path: "/r", exists: true, remote_url, github }) as unknown as Repo;
-    const { container, rerender } = render(<RepoAvatar repo={repo("git@github.com:acme/acme.git", { owner: "acme", name: "acme" })} />);
+    const repo = (remote_url: string | null): Repo => ({ id: "r1", name: "acme", path: "/r", exists: true, remote_url });
+    const { container, rerender } = render(<RepoAvatar repo={repo("git@github.com:acme/acme.git")} />);
     expect(container.querySelector("img")).toHaveAttribute("src", "https://github.com/acme.png?size=64");
-    rerender(<RepoAvatar repo={repo("https://gitlab.com/acme/acme", null)} />);
+    rerender(<RepoAvatar repo={repo("https://gitlab.com/acme/acme")} />);
     expect(container.querySelector("img")).toBeNull();
+    rerender(<RepoAvatar repo={repo(null)} />);
+    expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("GitHub remote owner", () => {
+  it("reads the owner from the remote forms that the daemon parsed before", async () => {
+    const { githubOwner } = await import("./model");
+    expect(githubOwner("git@github.com:acme/acme.git")).toBe("acme");
+    expect(githubOwner("https://github.com/acme/acme")).toBe("acme");
+    expect(githubOwner("http://github.com/acme/acme.git/")).toBe("acme");
+    expect(githubOwner("ssh://git@github.com/acme/acme.git")).toBe("acme");
+    expect(githubOwner("https://gitlab.com/acme/acme")).toBeNull();
+    expect(githubOwner("https://github.com/acme")).toBeNull();
+    expect(githubOwner("https://github.com/acme/acme/tree/main")).toBeNull();
+    expect(githubOwner("git@github.com:/acme")).toBeNull();
+    expect(githubOwner(null)).toBeNull();
   });
 });

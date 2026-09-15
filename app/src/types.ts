@@ -27,7 +27,6 @@ export type {
   ErrorCode,
   EvidenceBundle,
   FsEntry,
-  GitHubRepo,
   GitSummary,
   Hello,
   HookAgent,

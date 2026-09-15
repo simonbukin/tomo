@@ -2423,8 +2423,7 @@ fn pasted(text: &str) -> String {
 pub async fn repo_view(id: Id, path: PathBuf) -> Repo {
     let exists = path.exists();
     let remote_url = if exists { git::remote_url(&path).await } else { None };
-    let github = remote_url.as_deref().and_then(git::github_repo).map(|(owner, name)| GitHubRepo { owner, name });
-    Repo { id, name: repo_name(&path), exists, path, remote_url, github }
+    Repo { id, name: repo_name(&path), exists, path, remote_url }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

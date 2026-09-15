@@ -625,14 +625,6 @@ pub struct Repo {
     pub exists: bool,
     #[serde(default)]
     pub remote_url: Option<String>,
-    #[serde(default)]
-    pub github: Option<GitHubRepo>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct GitHubRepo {
-    pub owner: String,
-    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
