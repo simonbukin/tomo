@@ -4,7 +4,7 @@ import type { ActivityEvent, AgentPresence, AttentionItem, RuntimeEndpoint } fro
 
 const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", worktree_id: "w", pane_id: null, level: "attention", message: "m", created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null, ...extra });
 const agent = (state: AgentPresence["state"], kind: AgentPresence["kind"] = "claude"): AgentPresence => ({ pane_id: `p-${kind}`, worktree_id: "w", kind, state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null });
-const endpoint = (extra: Partial<RuntimeEndpoint> = {}): RuntimeEndpoint => ({ id: "e", worktree_id: "w", pane_id: null, action_id: "dev", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, ...extra });
+const endpoint = (extra: Partial<RuntimeEndpoint> = {}): RuntimeEndpoint => ({ id: "e", worktree_id: "w", pane_id: null, action_id: "dev", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, source: null, ...extra });
 const event = (id: string, occurred_at_ms: number): ActivityEvent => ({ id, kind: "agent_started", occurred_at_ms, worktree_id: "w", pane_id: null, agent_kind: "claude", title: "t", detail: null, payload: null, attention_id: null });
 const quiet: SignalInput = { attention: [], agents: [], endpoints: [], rssBytes: null, warnBytes: 1000, addon: [] };
 

@@ -93,7 +93,7 @@ describe("actions menus", () => {
 
   it("a running action opens, focuses logs, restarts, stops, and copies url and port", async () => {
     const { runningActionItems } = await import("./commands");
-    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0 } as const;
+    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0, source: serveSource } as const;
     const s = { ...store.getState(), endpoints: { w1: [endpoint] } };
     const menu = runningActionItems("w1", "serve", s);
     expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);
@@ -102,7 +102,7 @@ describe("actions menus", () => {
   });
 
   it("offers restart and stop on an endpoint of an action", () => {
-    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0 } as const;
+    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0, source: serveSource } as const;
     const menu = endpointMenu("w1", endpoint, store.getState());
     expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);
     entry(menu, "stop").run!();

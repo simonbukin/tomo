@@ -99,15 +99,17 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
     }
 }
 
-/// One monitor tick: the process poll under the lock, then the endpoint scan
-/// (`lsof`) with the lock released, then the queued hooks. Blocking; call it
-/// from a blocking task.
+/// One monitor tick: the process poll under the lock, then the `process_polled`
+/// seams with the lock released, then the queued hooks. Blocking; call it from a
+/// blocking task.
 pub fn poll_and_scan(daemon: &Arc<Daemon>, force_full: bool) {
     {
         let mut inner = daemon.lock();
         poll_once(daemon, &mut inner, force_full);
     }
-    daemon.scan_endpoints();
+    for polled in &daemon.seams.process_polled {
+        polled(daemon);
+    }
     daemon.flush_hooks();
 }
 
