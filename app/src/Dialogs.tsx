@@ -1,12 +1,11 @@
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
-import { Minus, Plus } from "lucide-react";
-import { applyZoom, openWorktree, setAppearance } from "./actions";
-import { ACCENTS, type ThemeChoice } from "./appearance";
-import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Select } from "./components/ui";
+import { openWorktree } from "./actions";
+import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle } from "./components/ui";
+import { IntegrationStatusList, Settings } from "./Settings";
 import { notify, setState, useStore, type Dialog as DialogSpec } from "./store";
-import type { ConfigIssue, HookRun, IntegrationStatus, Repo, Town, Worktree } from "./types";
+import type { ConfigIssue, HookRun, Repo, Town, Worktree } from "./types";
 
 /** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
@@ -22,14 +21,14 @@ export function Dialogs() {
   }
   return (
     <Dialog open={!!dialog} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent width={shown.kind === "settings" ? 720 : undefined} className={shown.kind === "settings" ? "settings-dialog" : undefined}>
         {shown.kind === "add-repo" && <AddRepo close={close} />}
         {shown.kind === "create-worktree" && <CreateWorktree close={close} repoId={shown.repoId} />}
         {shown.kind === "prompt" && <Prompt close={close} title={shown.title} initial={shown.initial} placeholder={shown.placeholder} onSubmit={shown.onSubmit} />}
         {shown.kind === "integrations" && <IntegrationsDialog close={close} />}
         {shown.kind === "config-check" && <ConfigCheckDialog close={close} />}
         {shown.kind === "hook-log" && <HookLogDialog close={close} />}
-        {shown.kind === "appearance" && <AppearanceDialog close={close} />}
+        {shown.kind === "settings" && <Settings close={close} section={shown.section} />}
       </DialogContent>
     </Dialog>
   );
@@ -189,43 +188,12 @@ function useRpcList<T>(method: string, params?: Record<string, unknown>): { item
 }
 
 function IntegrationsDialog({ close }: { close: () => void }) {
-  const { items, reload } = useRpcList<IntegrationStatus>("integrations_status");
-  const [busy, setBusy] = useState(false);
-  const install = async () => {
-    setBusy(true);
-    try {
-      await rpc("integrations_install");
-      notify("info", "hooks installed");
-      reload();
-    } catch (e) {
-      notify("error", (e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <>
       <DialogTitle>integration status</DialogTitle>
-      <div className="dialog-list">
-        {items === null && <div className="faint">checking…</div>}
-        {items?.map((i) => (
-          <div key={i.kind} className="dialog-row" title={i.binary ?? "binary not found"}>
-            <span className={`state state-${i.level}`} />
-            <span className="name">{i.kind}</span>
-            <span className="detail">
-              {i.level.replace("_", " ")}
-              {i.reason ? ` · ${i.reason}` : ""}
-              {i.lifecycle ? "" : " · no lifecycle"}
-              {i.resume ? "" : " · no resume"}
-            </span>
-          </div>
-        ))}
-      </div>
+      <IntegrationStatusList />
       <DialogActions>
         <Button onClick={close}>Close</Button>
-        <Button variant="default" disabled={busy} onClick={install}>
-          {busy ? "Installing…" : "install hooks"}
-        </Button>
       </DialogActions>
     </>
   );
@@ -278,61 +246,6 @@ function HookLogDialog({ close }: { close: () => void }) {
       </div>
       <DialogActions>
         <Button onClick={close}>Close</Button>
-      </DialogActions>
-    </>
-  );
-}
-
-function AppearanceDialog({ close }: { close: () => void }) {
-  const a = useStore((s) => s.ui.appearance);
-  const configFont = useStore((s) => s.config?.font_size ?? 13);
-  const font = a.terminalFontSize ?? configFont;
-  const themes: { value: ThemeChoice; label: string }[] = [
-    { value: "system", label: "system" },
-    { value: "light", label: "light" },
-    { value: "dark", label: "dark" },
-  ];
-  return (
-    <>
-      <DialogTitle>appearance</DialogTitle>
-      <div className="appearance-grid">
-        <label>theme</label>
-        <Select<ThemeChoice> aria-label="Theme" size="sm" value={a.theme} onValueChange={(theme) => setAppearance({ theme })} options={themes} />
-        <label>accent</label>
-        <span className="swatches">
-          {ACCENTS.map((x) => (
-            <button key={x.id} className="swatch" aria-pressed={a.accent === x.id} onClick={() => setAppearance({ accent: x.id })}>
-              <span className={`swatch-dot ${x.id}`} />
-              {x.label}
-            </button>
-          ))}
-        </span>
-        <label>zoom</label>
-        <span className="stepper">
-          <IconButton label="Zoom out" onClick={() => applyZoom("out")}>
-            <Minus className="icon" />
-          </IconButton>
-          <span className="value">{Math.round(a.zoom * 100)}%</span>
-          <IconButton label="Zoom in" onClick={() => applyZoom("in")}>
-            <Plus className="icon" />
-          </IconButton>
-          {a.zoom !== 1 && <Button variant="link" onClick={() => applyZoom("reset")}>reset</Button>}
-        </span>
-        <label>terminal font</label>
-        <span className="stepper">
-          <IconButton label="Smaller terminal font" onClick={() => setAppearance({ terminalFontSize: Math.max(8, font - 1) })}>
-            <Minus className="icon" />
-          </IconButton>
-          <span className="value">{font}px</span>
-          <IconButton label="Larger terminal font" onClick={() => setAppearance({ terminalFontSize: Math.min(32, font + 1) })}>
-            <Plus className="icon" />
-          </IconButton>
-          {a.terminalFontSize != null && <Button variant="link" onClick={() => setAppearance({ terminalFontSize: null })}>use config</Button>}
-        </span>
-      </div>
-      <p className="faint">⌘ + and ⌘ − zoom the whole window; ⌘ 0 resets. Ctrl works too.</p>
-      <DialogActions>
-        <Button onClick={close}>Done</Button>
       </DialogActions>
     </>
   );

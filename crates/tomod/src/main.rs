@@ -14,6 +14,7 @@ mod procs;
 mod pty;
 mod runtime;
 mod server;
+mod settings;
 mod store;
 mod usage;
 mod watch;
@@ -80,6 +81,7 @@ async fn run(args: Args) -> Result<()> {
     tokio::spawn(monitor::run(daemon.clone()));
     tokio::spawn(usage::run(daemon.clone()));
     tokio::spawn(watch::run(daemon.clone()));
+    tokio::spawn(settings::watch(daemon.clone()));
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {

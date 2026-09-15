@@ -1,27 +1,42 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist-mono";
 
+/*
+ * Theme tokens. The names match the [theme] keys in config.toml (snake_case becomes kebab-case).
+ * theme.ts sets them on :root from the chosen theme; the values here are the Murasaki first paint.
+ * Custom CSS can override any token on :root. The short names below derive from the tokens.
+ */
 :root {
   --bg: #ffffff;
-  --bg-1: #f5f6f8;
-  --bg-2: #e8e8ee;
-  --bg-3: #dcdce4;
+  --surface: #f5f6f8;
+  --surface-hover: #e8e8ee;
   --fg: #17171c;
-  --fg-1: #45454f;
-  --fg-2: #7a7a86;
-  --fg-3: #a8a8b3;
-  --line: #e3e3e9;
-  --line-strong: #c8c8d2;
+  --fg-muted: #7a7a86;
+  --fg-faint: #a8a8b3;
+  --border: #e3e3e9;
+  --border-strong: #c8c8d2;
   --accent: #7d4dff;
   --accent-soft: #ede7ff;
   --working: #2a9d5c;
   --waiting: #d98a1a;
-  --waiting-soft: #fbf1e1;
-  --hot: #d9433b;
-  --hot-soft: #fbe6e5;
-  --ins: #2a9d5c;
-  --del: #d9433b;
-  --term-bg: #ffffff;
+  --danger: #d9433b;
+  --success: #2a9d5c;
+
+  --bg-1: var(--surface);
+  --bg-2: var(--surface-hover);
+  --bg-3: color-mix(in srgb, var(--surface-hover) 62%, var(--border-strong));
+  --fg-1: color-mix(in srgb, var(--fg) 55%, var(--fg-muted));
+  --fg-2: var(--fg-muted);
+  --fg-3: var(--fg-faint);
+  --line: var(--border);
+  --line-strong: var(--border-strong);
+  --waiting-soft: color-mix(in srgb, var(--waiting) 12%, var(--bg));
+  --hot: var(--danger);
+  --hot-soft: color-mix(in srgb, var(--danger) 13%, var(--bg));
+  --ins: var(--success);
+  --del: var(--danger);
+  --term-bg: var(--bg);
+
   --shadow-pop: 0 8px 24px rgba(20, 20, 30, 0.18), 0 1px 2px rgba(20, 20, 30, 0.1);
   --shadow-dialog: 0 16px 48px rgba(20, 20, 30, 0.28), 0 1px 2px rgba(20, 20, 30, 0.1);
   --backdrop: rgba(20, 20, 30, 0.3);
@@ -53,25 +68,21 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0f0f12;
-    --bg-1: #151519;
-    --bg-2: #1a1a21;
-    --bg-3: #24242d;
+    --surface: #151519;
+    --surface-hover: #1a1a21;
     --fg: #e8e8ee;
-    --fg-1: #b9b9c4;
-    --fg-2: #7f7f8c;
-    --fg-3: #52525e;
-    --line: #232329;
-    --line-strong: #34343e;
+    --fg-muted: #7f7f8c;
+    --fg-faint: #52525e;
+    --border: #232329;
+    --border-strong: #34343e;
     --accent: #a684ff;
     --accent-soft: #261d45;
     --working: #4cc57e;
     --waiting: #f0a23a;
-    --waiting-soft: #2e2314;
-    --hot: #f26b63;
-    --hot-soft: #3a1e1c;
-    --ins: #4cc57e;
-    --del: #f26b63;
-    --term-bg: #0f0f12;
+    --danger: #f26b63;
+    --success: #4cc57e;
+    --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
+    --hot-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
     --backdrop: rgba(0, 0, 0, 0.45);
@@ -81,43 +92,23 @@
 
 :root[data-theme="dark"] {
   --bg: #0f0f12;
-  --bg-1: #151519;
-  --bg-2: #1a1a21;
-  --bg-3: #24242d;
+  --surface: #151519;
+  --surface-hover: #1a1a21;
   --fg: #e8e8ee;
-  --fg-1: #b9b9c4;
-  --fg-2: #7f7f8c;
-  --fg-3: #52525e;
-  --line: #232329;
-  --line-strong: #34343e;
+  --fg-muted: #7f7f8c;
+  --fg-faint: #52525e;
+  --border: #232329;
+  --border-strong: #34343e;
   --accent: #a684ff;
   --accent-soft: #261d45;
   --working: #4cc57e;
   --waiting: #f0a23a;
-  --waiting-soft: #2e2314;
-  --hot: #f26b63;
-  --hot-soft: #3a1e1c;
-  --ins: #4cc57e;
-  --del: #f26b63;
-  --term-bg: #0f0f12;
+  --danger: #f26b63;
+  --success: #4cc57e;
+  --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
+  --hot-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
   --backdrop: rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }
-
-/* ---- accent presets; murasaki is the default above. Soft tints follow the ground. */
-:root[data-accent="sora"] { --accent: #2f7df6; }
-:root[data-accent="sakura"] { --accent: #d8467f; }
-:root[data-accent="sumi"] { --accent: #3f3f48; }
-:root[data-accent="sora"], :root[data-accent="sakura"], :root[data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"])[data-accent="sora"] { --accent: #6aa8ff; }
-  :root:not([data-theme="light"])[data-accent="sakura"] { --accent: #f07aa9; }
-  :root:not([data-theme="light"])[data-accent="sumi"] { --accent: #c9c9d4; }
-  :root:not([data-theme="light"])[data-accent="sora"], :root:not([data-theme="light"])[data-accent="sakura"], :root:not([data-theme="light"])[data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
-}
-:root[data-theme="dark"][data-accent="sora"] { --accent: #6aa8ff; }
-:root[data-theme="dark"][data-accent="sakura"] { --accent: #f07aa9; }
-:root[data-theme="dark"][data-accent="sumi"] { --accent: #c9c9d4; }
-:root[data-theme="dark"][data-accent="sora"], :root[data-theme="dark"][data-accent="sakura"], :root[data-theme="dark"][data-accent="sumi"] { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg)); }

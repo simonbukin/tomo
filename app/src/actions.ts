@@ -1,5 +1,5 @@
 import { moduleCommands } from "./commands";
-import { stepZoom, type Appearance, type ThemeChoice } from "./appearance";
+import { stepZoom, type Appearance } from "./appearance";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
@@ -526,11 +526,9 @@ export const actions: Action[] = [
   { id: "towns", label: "Open Japan map", run: () => setUi({ view: "towns" }) },
   { id: "activity", label: "Activity", run: () => setUi({ view: "activity" }) },
   { id: "palette", label: "Command palette", run: () => setState((s) => ({ paletteOpen: !s.paletteOpen })) },
-  { id: "appearance", label: "Appearance…", run: () => setState({ dialog: { kind: "appearance" } }) },
   { id: "zoom_in", label: "Zoom in", run: () => applyZoom("in") },
   { id: "zoom_out", label: "Zoom out", run: () => applyZoom("out") },
   { id: "zoom_reset", label: "Reset zoom", run: () => applyZoom("reset") },
-  ...(["system", "light", "dark"] as ThemeChoice[]).map((theme) => ({ id: `theme_${theme}`, label: `Theme: ${theme}`, run: () => setAppearance({ theme }) })),
   { id: "next_attention", label: "Jump to next attention item", run: nextAttention },
   { id: "prev_worktree", label: "Previous worktree", run: () => cycleWorktree(-1) },
   { id: "next_worktree", label: "Next worktree", run: () => cycleWorktree(1) },

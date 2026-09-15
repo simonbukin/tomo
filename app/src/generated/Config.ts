@@ -6,5 +6,6 @@ import type { AgentCommand } from "./AgentCommand";
 import type { HookDef } from "./HookDef";
 import type { NotificationSettings } from "./NotificationSettings";
 import type { StateDef } from "./StateDef";
+import type { ThemeConfig } from "./ThemeConfig";
 
-export type Config = { shell: string, editor_command: Array<string>, worktree_parent_dir: string | null, resource_warning_bytes: number, scrollback_lines: number, font_family: string, font_size: number, theme: string, max_panes_per_tab: number, keybindings: { [key in string]: string }, agents: { [key in string]: AgentCommand }, archive_cleanup: Array<string>, states: Array<StateDef>, hooks: Array<HookDef>, notifications: NotificationSettings, };
+export type Config = { shell: string, editor_command: Array<string>, worktree_parent_dir: string | null, resource_warning_bytes: number, scrollback_lines: number, font_family: string, font_size: number, theme: ThemeConfig, max_panes_per_tab: number, keybindings: { [key in string]: string }, agents: { [key in string]: AgentCommand }, archive_cleanup: Array<string>, states: Array<StateDef>, hooks: Array<HookDef>, notifications: NotificationSettings, };

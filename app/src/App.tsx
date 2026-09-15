@@ -1,9 +1,11 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { PanelLeft, PanelRight, SunMoon } from "lucide-react";
+import { PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { applyZoom, runAction } from "./actions";
-import { effectiveTheme, zoomKey } from "./appearance";
+import { zoomKey } from "./appearance";
+import { openSettings } from "./commands/settings";
+import { applyTheme, useResolvedTheme } from "./theme";
 import { Button, IconButton, TooltipProvider } from "./components/ui";
 import { Activity } from "./Activity";
 import { Dialogs } from "./Dialogs";
@@ -49,7 +51,7 @@ function Shell() {
   const focusRequest = useStore((s) => s.focusRequest);
   const notice = useStore((s) => s.notice);
   const attention = useStore((s) => needsMe(s).length);
-  const config = useStore((s) => s.config);
+  const theme = useResolvedTheme();
 
   useEffect(() => {
     const offFrame = onFrame(applyFrame);
@@ -102,11 +104,7 @@ function Shell() {
   }, [notice?.nonce]);
 
   const appearance = ui.appearance;
-  useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.theme = effectiveTheme(appearance.theme, config?.theme);
-    root.dataset.accent = appearance.accent;
-  }, [appearance.theme, appearance.accent, config?.theme]);
+  useEffect(() => applyTheme(document.documentElement, theme), [theme]);
 
   useEffect(() => {
     try {
@@ -133,8 +131,8 @@ function Shell() {
             {Math.round(appearance.zoom * 100)}%
           </Button>
         )}
-        <IconButton label="Appearance" onClick={() => setState({ dialog: { kind: "appearance" } })}>
-          <SunMoon className="icon" />
+        <IconButton label="Settings (⌘,)" onClick={() => openSettings()}>
+          <Settings2 className="icon" />
         </IconButton>
         <IconButton label="Command palette (⌘K)" onClick={() => runAction("palette")}>
           <span className="kbd">⌘K</span>
