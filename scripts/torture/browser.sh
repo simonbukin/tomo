@@ -48,7 +48,13 @@ EV=$($RPC call annotations_send "{\"pane_id\":\"$A\",\"bundle\":$BUNDLE}")
 echo "$EV" | jq_ "import sys; sys.exit(0 if d['kind']=='annotations_sent' and d['title']=='Sent 2 annotations → Claude' else 1)" && check 0 "annotations_send records an activity event" || check 1 "activity event" "$EV"
 sleep 1
 o=$($RPC attach "$A" 2)
-case "$o" in *"Browser annotations from Tomo"*"[#save] \"Save\" — wrong color"*) check 0 "the evidence text arrives in the agent pane";; *) check 1 "evidence text" "$(echo "$o" | tail -c 200)";; esac
+case "$o" in *"Browser feedback from Tomo"*"[#save] \"Save\" — wrong color"*) check 0 "the evidence text arrives in the agent pane";; *) check 1 "evidence text" "$(echo "$o" | tail -c 200)";; esac
+MD_BUNDLE="{\"source\":\"browser feedback\",\"worktree_id\":\"$WT\",\"url\":\"http://localhost:1420/\",\"action_id\":null,\"instruction\":\"Review and address this feedback.\",\"annotations\":[],\"markdown\":\"## Tomo (http://localhost:1420/)\\n\\n1. button \`main > button\`\\n   too dim\",\"note_count\":3}"
+EV=$($RPC call annotations_send "{\"pane_id\":\"$A\",\"bundle\":$MD_BUNDLE}")
+echo "$EV" | jq_ "import sys; sys.exit(0 if d['title']=='Sent 3 notes → Claude' else 1)" && check 0 "a markdown bundle is titled by its note count" || check 1 "markdown title" "$EV"
+sleep 1
+o=$($RPC attach "$A" 2)
+case "$o" in *"1. button \`main > button\`"*"too dim"*) check 0 "the markdown body arrives in the agent pane";; *) check 1 "markdown body" "$(echo "$o" | tail -c 200)";; esac
 $RPC call annotations_send "{\"pane_id\":\"$B\",\"bundle\":$BUNDLE}" 2>&1 | grep -q bad_request && check 0 "annotations_send refuses a pane without an agent" || check 1 "annotations guard"
 
 # 6. close

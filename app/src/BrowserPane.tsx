@@ -1,19 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowLeft, ArrowRight, ExternalLink, Globe, MessageSquarePlus, RotateCw, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, ExternalLink, Globe, MessageSquarePlus, RotateCw, SendHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import { browserCommand, closePane, copyText, focusPane, openExternalUrl } from "./actions";
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { browserMenu, isLastPane } from "./menus";
 import { agentsOf, notify, useStore } from "./store";
-import { KIND_LABEL, type Annotation, type EvidenceBundle, type Id } from "./types";
+import { KIND_LABEL, type EvidenceBundle, type Id } from "./types";
 
 type BrowserState = { pane_id: Id; url?: string; title?: string; loading?: boolean };
 type Bounds = { x: number; y: number; width: number; height: number };
+type Feedback = { count: number; markdown: string };
+type FeedbackEvent = Feedback & { pane_id: Id; kind: "change" | "copy" | "submit" };
 
-const INSTRUCTION = "Review and address these annotations.";
+const INSTRUCTION = "Review and address this feedback.";
+const NO_FEEDBACK: Feedback = { count: 0, markdown: "" };
 
 export function normalizeUrl(text: string): string {
   const t = text.trim();
@@ -21,9 +24,7 @@ export function normalizeUrl(text: string): string {
   return /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `http://${t}`;
 }
 
-export function annotationsText(notes: Annotation[]): string {
-  return notes.map((a, i) => `${i + 1}. [${a.selector ?? "-"}] "${a.element_text ?? ""}" — ${a.text}`).join("\n");
-}
+const notes = (n: number) => `${n} ${n === 1 ? "note" : "notes"}`;
 
 function hostOf(url: string): string {
   try {
@@ -52,7 +53,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
   const [draft, setDraft] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [annotate, setAnnotate] = useState(false);
-  const [notes, setNotes] = useState<Annotation[]>([]);
+  const [feedback, setFeedback] = useState<Feedback>(NO_FEEDBACK);
   const [menuOpen, setMenuOpen] = useState(false);
   const setUrl = (u: string) => {
     urlRef.current = u;
@@ -83,17 +84,22 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
       if (st.title !== undefined) setTitle(st.title);
       if (st.url !== undefined && st.url !== urlRef.current) {
         setUrl(st.url);
+        setFeedback(NO_FEEDBACK);
         rpc("browser_navigate", { pane_id: paneId, url: st.url }).catch(() => {});
       }
     });
-    const offNotes = listen<{ pane_id: Id; annotations: Annotation[] }>("browser://annotations", (e) => {
-      if (e.payload.pane_id === paneId) setNotes(e.payload.annotations);
+    const offFeedback = listen<FeedbackEvent>("browser://feedback", (e) => {
+      const { pane_id, kind, count, markdown } = e.payload;
+      if (pane_id !== paneId) return;
+      if (kind === "change") setFeedback({ count, markdown });
+      if (kind === "copy") copyText(markdown, "Feedback");
+      if (kind === "submit") setMenuOpen(true);
     });
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", pushBounds);
       offState.then((off) => off());
-      offNotes.then((off) => off());
+      offFeedback.then((off) => off());
       invoke("browser_close", { paneId }).catch(() => {});
     };
   }, [paneId]);
@@ -102,9 +108,10 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     pushBounds();
   });
 
+  const sendOpen = menuOpen && feedback.count > 0;
   useEffect(() => {
-    invoke("browser_set_visible", { paneId, visible: !(covered || menuOpen) }).catch(() => {});
-  }, [paneId, covered, menuOpen]);
+    invoke("browser_set_visible", { paneId, visible: !(covered || sendOpen) }).catch(() => {});
+  }, [paneId, covered, sendOpen]);
 
   useEffect(() => {
     if (pane?.url && pane.url !== urlRef.current) {
@@ -115,7 +122,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
 
   useEffect(() => {
     invoke("browser_set_annotate", { paneId, enabled: annotate }).catch(() => {});
-  }, [paneId, annotate, url]);
+  }, [paneId, annotate]);
 
   const navigate = (text: string) => {
     const next = normalizeUrl(text);
@@ -127,21 +134,24 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
 
   const send = async (agentPaneId: Id, label: string) => {
     if (!pane) return;
-    const bundle: EvidenceBundle = { source: "browser annotation", worktree_id: pane.worktree_id, url, action_id: null, annotations: notes, instruction: INSTRUCTION };
+    const { count, markdown } = feedback;
+    const bundle: EvidenceBundle = { source: "browser feedback", worktree_id: pane.worktree_id, url, action_id: null, annotations: [], instruction: INSTRUCTION, markdown, note_count: count };
     try {
       await rpc("annotations_send", { pane_id: agentPaneId, bundle });
-      setNotes([]);
+      setFeedback(NO_FEEDBACK);
       invoke("browser_clear_annotations", { paneId }).catch(() => {});
-      notify("info", `Sent ${bundle.annotations.length} annotations to ${label}`);
+      notify("info", `Sent ${notes(count)} to ${label}`);
     } catch (e) {
       notify("error", (e as Error).message);
     }
   };
 
+  const copyFeedback = () => copyText(feedback.markdown, "Feedback");
+
   const sendItems = (): MenuItem[] => [
     ...(agents.length ? agents.map((a) => ({ label: `${KIND_LABEL[a.kind]} — ${a.state}`, run: () => send(a.pane_id, KIND_LABEL[a.kind]) })) : [{ label: "no live agent in this worktree", disabled: true }]),
     { separator: true },
-    { label: "Copy as text", run: () => copyText(annotationsText(notes), "Annotations") },
+    { label: "Copy as markdown", run: copyFeedback },
   ];
 
   const legendTitle = pane?.user_title ?? (title || hostOf(url));
@@ -188,20 +198,27 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
           <IconButton label={annotate ? "Stop annotating" : "Annotate"} className={annotate ? "browser-annotate-on" : undefined} aria-pressed={annotate} onClick={() => setAnnotate((v) => !v)}>
             <MessageSquarePlus className="icon" />
           </IconButton>
-          <IconButton label="Open in external browser" onClick={() => openExternalUrl(url)}>
-            <ExternalLink className="icon" />
-          </IconButton>
-          {notes.length > 0 && (
-            <span className="browser-notes">
-              {notes.length} {notes.length === 1 ? "annotation" : "annotations"} ·
-              <DropdownMenu onOpenChange={setMenuOpen}>
-                <DropdownMenuTrigger render={<Button size="sm" />}>Send to…</DropdownMenuTrigger>
+          {feedback.count > 0 && (
+            <>
+              <span className="browser-count" title={notes(feedback.count)}>
+                {feedback.count}
+              </span>
+              <IconButton label="Copy feedback" onClick={copyFeedback}>
+                <Copy className="icon" />
+              </IconButton>
+              <DropdownMenu open={sendOpen} onOpenChange={setMenuOpen}>
+                <DropdownMenuTrigger render={<IconButton label="Send feedback to an agent" />}>
+                  <SendHorizontal className="icon" />
+                </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <MenuItems items={sendItems} />
                 </DropdownMenuContent>
               </DropdownMenu>
-            </span>
+            </>
           )}
+          <IconButton label="Open in external browser" className="browser-external" onClick={() => openExternalUrl(url)}>
+            <ExternalLink className="icon" />
+          </IconButton>
         </div>
         <div className="browser-host" ref={hostRef} />
       </div>
