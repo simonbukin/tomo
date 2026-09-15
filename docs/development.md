@@ -179,9 +179,13 @@ Validate in this order; each step is cheaper than the next:
    `scripts/fixtures/memory-hog`, `scripts/fixtures/cwd-wanderer`.
 3. Fake agents and hooks: `scripts/fixtures/fake-agent` speaks the real
    hook protocol through `tomo hook claude`; point `[agents.claude]` at it.
+   `scripts/fixtures/fake-provider claude|codex|pi` speaks the protocol of
+   each provider. See [agent-integrations.md](agent-integrations.md#test-fixtures).
 4. Deterministic harnesses against a scratch daemon:
-   `scripts/torture/run-all.sh` (terminal, agents, provenance, layout) and
-   `scripts/soak/busy.sh <minutes> <report path>`.
+   `scripts/torture/run-all.sh` (terminal, agents, providers, provenance,
+   layout, and the rest) and `scripts/soak/busy.sh <minutes> <report path>`.
+   `providers.sh` needs `node`. It sets `HOME` to `$TOMO_DATA_DIR-home`, which
+   must be under `/tmp`, so it never touches `~/.claude`, `~/.codex`, or `~/.pi`.
 5. Real CLI and TUI programs in a pane (`vim`, `less`, `top`, `fzf`).
 6. One short real Claude, Codex, and Pi session each.
 7. Daily use.
