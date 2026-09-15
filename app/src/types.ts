@@ -58,6 +58,7 @@ export type {
   StateDef,
   Status,
   Tab,
+  ThemeConfig,
   Town,
   TownHistory,
   TownPr,

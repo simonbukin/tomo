@@ -1546,9 +1546,11 @@ impl Daemon {
             }
             Call::IntegrationsStatus => ok(crate::integrations::status(&self.lock().config)),
             Call::ConfigCheck => {
-                let cfg = config::load(&self.paths.config).map_err(internal)?;
-                ok(config::check(&cfg))
+                let (cfg, parse_issues) = config::load_checked(&self.paths.config).map_err(internal)?;
+                ok([parse_issues, config::check(&cfg)].concat())
             }
+            Call::ConfigSet { key, value } => ok(crate::settings::set(self, &key, &value)?),
+            Call::ConfigOpen => crate::settings::open(self).map(|_| Value::Null),
             Call::HookLog { limit } => ok(events::read_log(&self.paths.hook_log, limit.unwrap_or(50))),
             Call::LayoutEqualize { tab_id } => {
                 let mut inner = self.lock();

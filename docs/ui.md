@@ -84,10 +84,12 @@ header only.
 - Cmd or Ctrl with `+`, `-`, and `0` zooms the whole window through the
   webview zoom. A chip in the title bar shows a zoom other than 100 % and
   resets it on click.
-- The appearance dialog (title bar button, or `Appearance…` in the
-  palette) sets the theme, the accent (`murasaki`, `sora`, `sakura`,
-  `sumi`), the zoom, and the terminal font size. These live in UI state,
-  not in `config.toml`. An explicit theme wins over the config theme.
+- The Settings dialog (⌘,, the title bar button, or `Settings…` in the
+  palette) edits `config.toml` through `config_set`: theme, accent, color
+  overrides, terminal font, keybindings, agents, notifications, archive
+  cleanup, and the editor. `config.toml` is the source of truth for theme
+  and terminal font. Only the zoom lives in UI state. See
+  [theming.md](theming.md).
 - Shift+Enter in a terminal sends ESC CR instead of a bare CR, so Claude
   Code, Codex, and Pi insert a newline. The mapping is `keyOverride` in
   `appearance.ts`, with a unit test.

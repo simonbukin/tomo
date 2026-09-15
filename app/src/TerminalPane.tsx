@@ -7,7 +7,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
 import { applyZoom, closePane, focusPane, runAction } from "./actions";
-import { effectiveTheme, keyOverride, zoomKey } from "./appearance";
+import { keyOverride, zoomKey } from "./appearance";
+import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
 import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
@@ -20,20 +21,11 @@ import { useShortcuts } from "./shortcuts";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
-const DARK = { background: "#0f0f12", foreground: "#e2e2e8", cursor: "#e2e2e8", selectionBackground: "#261d45" };
-const LIGHT = { background: "#ffffff", foreground: "#17171c", cursor: "#17171c", selectionBackground: "#ede7ff" };
-
-function isDark(theme: string): boolean {
-  if (theme === "dark") return true;
-  if (theme === "light") return false;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
 export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }) {
   const pane = useStore((s) => s.panes[paneId]);
   const zoomed = useStore((s) => !!pane && s.zoomed[pane.tab_id] === paneId);
   const config = useStore((s) => s.config);
-  const appearance = useStore((s) => s.ui.appearance);
+  const theme = useResolvedTheme();
   const connectionNonce = useStore((s) => s.connectionNonce);
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -45,11 +37,11 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     const term = new Terminal({
       allowProposedApi: true,
       fontFamily: config.font_family,
-      fontSize: getState().ui.appearance.terminalFontSize ?? config.font_size,
+      fontSize: config.font_size,
       scrollback: config.scrollback_lines,
       cursorBlink: true,
       macOptionIsMeta: true,
-      theme: isDark(effectiveTheme(getState().ui.appearance.theme, config.theme)) ? DARK : LIGHT,
+      theme: xtermTheme(theme),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -139,7 +131,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       term.dispose();
       termRef.current = null;
     };
-  }, [paneId, connectionNonce, config?.font_family, config?.font_size, config?.theme, config?.scrollback_lines]);
+  }, [paneId, connectionNonce, config?.font_family, config?.font_size, config?.scrollback_lines]);
 
   useEffect(() => {
     if (active) termRef.current?.focus();
@@ -147,10 +139,8 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
   useEffect(() => {
     const term = termRef.current;
-    if (!term || !config) return;
-    term.options.fontSize = appearance.terminalFontSize ?? config.font_size;
-    term.options.theme = isDark(effectiveTheme(appearance.theme, config.theme)) ? DARK : LIGHT;
-  }, [appearance.terminalFontSize, appearance.theme, config?.font_size, config?.theme]);
+    if (term) term.options.theme = xtermTheme(theme);
+  }, [theme]);
 
   const agent = pane?.agent && pane.agent.state !== "exited" ? pane.agent : null;
   const title = pane?.user_title ?? (agent ? agent.kind : (oscTitle ?? pane?.title ?? ""));

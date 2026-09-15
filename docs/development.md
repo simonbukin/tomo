@@ -178,9 +178,9 @@ daemon numbers listed in `architecture.md`.
   `unknown`.
 - Codex reports only after `tomo integrations install`, because Codex reads
   hooks from user-level files only.
-- Most config changes need `tomo daemon stop`. The GUI reads `config.toml`
-  on each `config_get`, so keybindings, fonts, and theme apply on the next
-  window open.
+- The daemon reloads `config.toml` when the file changes and sends
+  `config_changed`, so the theme, the terminal font, and keybindings apply at
+  once. A terminal that is already open keeps its shell.
 - Switching worktrees unmounts xterm and replays up to 1 MB of scrollback on
   return. This is fast but not free.
 - zsh may print a stray inverse `%` on the first prompt. The shell starts
