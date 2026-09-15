@@ -20,7 +20,7 @@ const item = (kind: AttentionItem["kind"], message = "App exited with code 1"): 
   agent_kind: null,
   resolved_at_ms: null,
 });
-const names: AttentionNames = { worktree: "aogashima", action: { id: "sampler", label: "Sampler" } };
+const names: AttentionNames = { worktree: "aogashima", source: { kind: "action", id: "sampler", label: "Sampler", restartable: true } };
 
 describe("looksAt", () => {
   it("is true only while Tomo is focused on the pane, or on the worktree for an item without a pane", () => {
@@ -80,7 +80,7 @@ describe("attentionDelivery: scenarios", () => {
   });
 
   it("D: a crash without a known Action or pane offers no dead actions", () => {
-    const d = attentionDelivery({ ...item("crash", "gone"), pane_id: null }, elsewhere, { worktree: null, action: null });
+    const d = attentionDelivery({ ...item("crash", "gone"), pane_id: null }, elsewhere, { worktree: null, source: null });
     expect(d.toast).toMatchObject({ title: "Action crashed", detail: "gone", actions: [] });
   });
 

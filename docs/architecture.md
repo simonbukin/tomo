@@ -184,12 +184,18 @@ never ran.
 
 ## Feature boundary: Actions
 
-Repo-defined Actions live in `crates/tomod/src/features/actions.rs` (the
-`.tomo.toml` parser), `Daemon::reload_actions`, `Daemon::run_action`, and
-`Daemon::stop_action`. The watcher treats a change to `.tomo.toml` at a
-worktree root as an actions change, not a Git change. A pane started by an
-action carries `Pane.action_id`, which is how a second run finds the live
-pane. See [actions.md](actions.md).
+Repo-defined Actions are an addon (see "Addons" below). The addon reads
+`.tomo.toml` through the `worktree_files` seam: Core calls its reload after
+each discovery, and the watcher calls it when that file changes at a
+worktree root, which is not a Git change. A pane that an Action starts
+carries a `PaneSource` (`kind`, `id`, `label`). Core keeps the source in
+memory, shows it as `Pane.source` and as the older `Pane.action_id`, and
+gives it to the `pane_exited` seam, where the addon records the outcome. A
+second run finds the live pane by its source. See [actions.md](actions.md).
+
+Why a source and not `action_id` in Core: the source is provenance that any
+spawner can set, and Core never reads its `kind`. Runtime labels an
+endpoint from the source, so Runtime does not depend on Actions.
 
 ## Feature boundary: Browser panes
 
@@ -261,6 +267,10 @@ imports it. Three addons exist:
   - `crates/tomo-proto/src/addons/usage.rs`: wire types
   - `crates/tomod/src/addons/usage/`: provider adapters, the last result, the poll, `usage_get`
   - `app/src/addons/usage/`: the bottom-strip meters and the diagnostics section
+- Actions
+  - `crates/tomo-proto/src/addons/actions.rs`: wire types
+  - `crates/tomod/src/addons/actions/`: the `.tomo.toml` parser, the calls, the reload and exit seams
+  - `app/src/addons/actions/`: the topbar buttons, menu items, palette entries, shortcuts, and crash restart
 
 Composition roots name the addons: `crates/tomod/src/main.rs`,
 `crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`

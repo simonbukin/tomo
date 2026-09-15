@@ -1,4 +1,4 @@
-import type { ActionDef, ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, RuntimeEndpoint } from "./types";
+import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, RuntimeEndpoint } from "./types";
 
 /**
  * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
@@ -29,8 +29,9 @@ export function httpEndpoints(list: RuntimeEndpoint[]): RuntimeEndpoint[] {
   return list.filter((e) => e.protocol !== "tcp");
 }
 
-export function endpointLabel(e: RuntimeEndpoint, actions: ActionDef[]): string {
-  return e.label ?? actions.find((a) => a.id === e.action_id)?.label ?? e.process;
+/** The daemon labels an endpoint with the source of its pane. */
+export function endpointLabel(e: RuntimeEndpoint): string {
+  return e.label ?? e.process;
 }
 
 const DAY_MS = 86_400_000;
@@ -87,7 +88,6 @@ export interface SignalInput {
   attention: AttentionItem[];
   agents: AgentPresence[];
   endpoints: RuntimeEndpoint[];
-  actions: ActionDef[];
   rssBytes: number | null;
   warnBytes: number;
   addon: readonly AddonSignal[];
@@ -102,7 +102,7 @@ export function nowSignals(input: SignalInput): Signal[] {
   const crash: Signal[] = open.filter((a) => a.kind === "crash").map((a) => ({ kind: "crash", text: a.message }));
   const agents: Signal[] = live.filter((a) => a.state !== "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
   const primary = httpEndpoints(input.endpoints)[0];
-  const runtime: Signal[] = primary ? [{ kind: "runtime", label: endpointLabel(primary, input.actions), port: primary.port, url: endpointUrl(primary) }] : [];
+  const runtime: Signal[] = primary ? [{ kind: "runtime", label: endpointLabel(primary), port: primary.port, url: endpointUrl(primary) }] : [];
   const warn: Signal[] = input.rssBytes != null && input.rssBytes >= input.warnBytes ? [{ kind: "warn", bytes: input.rssBytes }] : [];
   return [...checkpoint, ...waiting, ...crash, ...agents, ...runtime, ...warn, ...input.addon].slice(0, 3);
 }

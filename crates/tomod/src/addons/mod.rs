@@ -1,6 +1,7 @@
 //! Composition root for daemon addons: the static list, the seams each addon joins, the tables it owns, and its background tasks.
 //! Core never imports this module. Only `main.rs` and `dispatch.rs` do.
 
+pub mod actions;
 pub mod github;
 pub mod towns;
 pub mod usage;
@@ -10,7 +11,13 @@ use crate::store::Store;
 use std::sync::Arc;
 
 pub fn seams() -> Seams {
-    Seams { worktree_namer: Some(towns::name_worktree), worktree_created: vec![towns::unlock], worktree_rebound: vec![towns::rebind] }
+    Seams {
+        worktree_namer: Some(towns::name_worktree),
+        worktree_created: vec![towns::unlock],
+        worktree_rebound: vec![towns::rebind],
+        worktree_files: vec![actions::FILE],
+        pane_exited: vec![actions::exited],
+    }
 }
 
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
@@ -28,10 +35,14 @@ mod tests {
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
-    const OWNED_NOUNS: [(&str, &[&str]); 3] = [
+    const OWNED_NOUNS: [(&str, &[&str]); 4] = [
         ("towns", &["town"]),
         ("github", &["github", "pullrequest", "prstatus", "pr_status", "prchanged", "pr_changed", "review_decision", "checks_failed", "mergeable"]),
         ("usage", &["mod usage", "crate::usage", ".usage", "usage:", "usagesnapshot", "usagebucket", "usage_get", "usageget", "usage_changed", "usagechanged", "weekly", "5-hour", "allowance"]),
+        (
+            "actions",
+            &["actiondef", "actionset", "actionrunresult", "actionmode", "actionshow", "actionactivity", "tomo.toml", "features::actions", "inner.actions", "run_action", "stop_action", "reload_actions", "action_def"],
+        ),
     ];
 
     fn core_nouns() -> impl Iterator<Item = &'static &'static str> {

@@ -1,13 +1,14 @@
 import type { AddonSignal } from "../activityModel";
 import type { State } from "../store";
 import type { Id } from "../types";
+import { actions } from "./actions";
 import { github } from "./github";
 import { towns } from "./towns";
 import type { Addon, GlobalView, InspectorSection } from "./types";
 import { usage } from "./usage";
 
 /** The composition root of the GUI: every built-in addon, in render order. Core client files reach addons only through this module. */
-export const builtins: readonly Addon[] = [towns, github, usage];
+export const builtins: readonly Addon[] = [towns, github, usage, actions];
 
 export const addonViews = (): GlobalView[] => builtins.flatMap((a) => a.views ?? []);
 

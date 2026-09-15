@@ -14,7 +14,6 @@ export function signalsFor(s: State, worktreeId: Id): Signal[] {
     attention: s.attention.filter((a) => a.worktree_id === worktreeId),
     agents: agentsOf(s, worktreeId),
     endpoints: endpointsOf(s, worktreeId),
-    actions: s.actions[worktreeId]?.actions ?? [],
     rssBytes: s.resources[worktreeId]?.rss_bytes ?? null,
     warnBytes: s.config?.resource_warning_bytes ?? Infinity,
     addon: addonSignals(s, worktreeId),

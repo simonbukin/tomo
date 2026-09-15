@@ -196,47 +196,6 @@ pub struct ArchiveResult {
     pub cleanup_removed: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum ActionMode {
-    #[default]
-    Pane,
-    External,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum ActionShow {
-    Topbar,
-    #[default]
-    Menu,
-}
-
-/// One entry of `[[actions]]` in a worktree's `.tomo.toml`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct ActionDef {
-    pub id: String,
-    pub label: String,
-    pub command: String,
-    pub mode: ActionMode,
-    pub show: ActionShow,
-    pub shortcut: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct ActionSet {
-    pub worktree_id: Id,
-    pub actions: Vec<ActionDef>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct ActionRunResult {
-    pub action: ActionDef,
-    pub pane: Option<Pane>,
-    pub reused: bool,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorktreeCreate {
     pub repo_id: Id,
@@ -473,6 +432,7 @@ pub struct HookEvent {
     pub action: Option<HookAction>,
 }
 
+/// The `action` field of a hook event: the Action that started the pane. The Action and runtime events fill it.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct HookAction {
     pub id: String,
@@ -762,8 +722,11 @@ pub struct Pane {
     pub exit_code: Option<i32>,
     pub agent: Option<AgentPresence>,
     pub created_at_ms: u64,
+    /// `source.id` when `source.kind` is `action`. Clients from before the Actions addon read it; see [`PaneSource::action_id`].
     #[serde(default)]
     pub action_id: Option<String>,
+    #[serde(default)]
+    pub source: Option<PaneSource>,
     /// Command line of the newest child of the pane's shell, for icons and titles.
     #[serde(default)]
     pub process_cmd: Option<String>,
@@ -780,6 +743,28 @@ pub enum PaneKind {
     #[default]
     Terminal,
     Browser,
+}
+
+/// What started a pane, as the spawner names it. Core keeps it in memory only and never reads `kind`,
+/// so a restored or reopened pane has no source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PaneSource {
+    /// The owner, for example `action`.
+    pub kind: String,
+    /// The owner's id for the thing that runs, for example the Action id.
+    pub id: String,
+    /// A name for people: titles, endpoint labels, toasts.
+    pub label: String,
+}
+
+/// The `PaneSource.kind` of a pane that an Action started.
+pub const ACTION_SOURCE_KIND: &str = "action";
+
+impl PaneSource {
+    /// The value of the older `action_id` wire fields, which installed clients still read.
+    pub fn action_id(source: Option<&PaneSource>) -> Option<String> {
+        source.filter(|s| s.kind == ACTION_SOURCE_KIND).map(|s| s.id.clone())
+    }
 }
 
 /// One agent conversation stored by the agent itself, rooted at a worktree.
@@ -948,7 +933,7 @@ pub enum AttentionKind {
     Waiting,
     /// An agent asked a human to review or decide. Created by `tomo checkpoint`.
     Checkpoint,
-    /// An Action process exited unexpectedly.
+    /// A process that a pane source started exited, and Tomo did not stop it. The owner of the source raises it; today only Actions do.
     Crash,
 }
 
@@ -1047,8 +1032,6 @@ pub struct CoreSnapshot {
     pub attention: Vec<AttentionItem>,
     pub resources: Vec<WorktreeResources>,
     #[serde(default)]
-    pub actions: Vec<ActionSet>,
-    #[serde(default)]
     pub endpoints: Vec<RuntimeEndpoint>,
     #[ts(type = "unknown")]
     pub ui_state: Value,
@@ -1061,6 +1044,8 @@ pub struct Snapshot {
     pub core: CoreSnapshot,
     #[serde(default)]
     pub usage: Vec<UsageSnapshot>,
+    #[serde(default)]
+    pub actions: Vec<ActionSet>,
 }
 
 pub fn now_ms() -> u64 {

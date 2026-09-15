@@ -102,8 +102,9 @@ pub fn observe(inner: &Inner, listeners: &[Listener], now: u64) -> Vec<RuntimeEn
             let p = by_pid.get(&l.pid)?;
             let pane_id = p.pane_id.clone()?;
             let worktree_id = p.worktree_id.clone()?;
-            let action_id = inner.panes.get(&pane_id).and_then(|p| p.row.action_id.clone());
-            let label = action_id.as_ref().and_then(|a| inner.actions.get(&worktree_id)?.actions.iter().find(|d| &d.id == a)).map(|d| d.label.clone());
+            let source = inner.panes.get(&pane_id).and_then(|p| p.source.as_ref());
+            let action_id = PaneSource::action_id(source);
+            let label = source.map(|s| s.label.clone());
             Some(RuntimeEndpoint {
                 id: format!("{}:{}", l.pid, l.port),
                 worktree_id,

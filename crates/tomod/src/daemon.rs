@@ -6,7 +6,7 @@ use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::{actions, editor, reopen, sessions};
+use crate::features::{editor, reopen, sessions};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -57,6 +57,8 @@ pub struct PaneState {
     pub scrollback: Scrollback,
     /// Set when Tomo itself ends the pane's process, so the exit is a stop and not a crash.
     pub stop_intent: bool,
+    /// Set by the code that spawned the pane. Memory only: a restore starts without it.
+    pub source: Option<PaneSource>,
 }
 
 const DIAGNOSTICS_KEPT: usize = 200;
@@ -77,7 +79,6 @@ pub struct Inner {
     pub resources: Vec<WorktreeResources>,
     pub archiving: HashSet<Id>,
     pub hook_queue: Vec<HookEvent>,
-    pub actions: HashMap<Id, ActionSet>,
     pub discovered_once: bool,
     pub last_full_poll_ms: u64,
     pub endpoints: Vec<RuntimeEndpoint>,
@@ -97,6 +98,25 @@ pub struct Seams {
     pub worktree_created: Vec<fn(&mut Inner, &CreatedWorktree) -> Result<(), RpcError>>,
     /// Runs under the state lock when a worktree gets a new id: a move on disk, or a restore at a new path.
     pub worktree_rebound: Vec<fn(&Store, &str, &str) -> Result<()>>,
+    /// A file in the root of each worktree that an addon reads. Core calls `reload` with no lock held, after each discovery and after the watcher sees that file change.
+    pub worktree_files: Vec<WorktreeFile>,
+    /// Runs under the state lock when a pane process exits, after `pane_exited` goes out and before Core updates the agent or removes a pane that exited with 0.
+    pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
+}
+
+#[derive(Clone, Copy)]
+pub struct WorktreeFile {
+    pub name: &'static str,
+    pub reload: fn(&Arc<Daemon>),
+}
+
+pub struct PaneExit {
+    pub pane_id: Id,
+    pub worktree_id: Id,
+    pub source: Option<PaneSource>,
+    pub exit_code: Option<i32>,
+    /// True when Tomo itself ended the process, so the exit is not a crash.
+    pub stop_intent: bool,
 }
 
 pub struct CreatedWorktree {
@@ -194,7 +214,6 @@ impl Daemon {
                 resources: Vec::new(),
                 archiving: HashSet::new(),
                 hook_queue: Vec::new(),
-                actions: HashMap::new(),
                 discovered_once: false,
                 last_full_poll_ms: 0,
                 endpoints: Vec::new(),
@@ -385,7 +404,8 @@ impl Daemon {
             exit_code: p.exit_code,
             agent,
             created_at_ms: p.row.created_at_ms,
-            action_id: p.row.action_id.clone(),
+            action_id: PaneSource::action_id(p.source.as_ref()),
+            source: p.source.clone(),
             process_cmd: p.process_cmd.clone(),
             kind: p.row.kind,
             url: p.row.url.clone(),
@@ -539,65 +559,15 @@ impl Daemon {
         let worktrees = Self::worktree_views(&inner);
         Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
         drop(inner);
-        self.reload_actions();
+        for file in &self.seams.worktree_files {
+            (file.reload)(self);
+        }
         self.flush_hooks();
         Ok(())
     }
 
-    /// Re-reads every worktree's `.tomo.toml`. A malformed file never blocks
-    /// the worktree: it yields an empty set plus one notice.
-    pub fn reload_actions(self: &Arc<Self>) {
-        let targets: Vec<(Id, PathBuf)> = self.lock().worktrees.values().filter(|w| w.exists).map(|w| (w.id.clone(), w.path.clone())).collect();
-        let loaded: Vec<ActionSet> = targets.into_iter().map(|(id, path)| {
-            let (actions, error) = actions::load(&path);
-            ActionSet { worktree_id: id, actions, error }
-        }).collect();
-        let mut inner = self.lock();
-        let live: HashSet<&Id> = loaded.iter().map(|s| &s.worktree_id).collect();
-        inner.actions.retain(|id, _| live.contains(id));
-        for set in loaded {
-            let previous = inner.actions.get(&set.worktree_id);
-            let changed = previous.map_or(true, |p| p.actions != set.actions || p.error != set.error);
-            if !changed {
-                continue;
-            }
-            let name = inner.worktrees.get(&set.worktree_id).map(|w| Self::worktree_view(&inner, w).name).unwrap_or_default();
-            if Self::diagnostic_on_change(&mut inner, "config", &format!("{name} .tomo.toml"), set.error.clone()) {
-                Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{name}: {}", set.error.as_deref().unwrap_or_default()) });
-            }
-            inner.actions.insert(set.worktree_id.clone(), set.clone());
-            Self::emit(&mut inner, Event::ActionsChanged { set });
-        }
-    }
-
-    fn action_def(inner: &Inner, worktree_id: &str, action_id: &str) -> Result<ActionDef, RpcError> {
-        let set = inner.actions.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found or has no .tomo.toml"))?;
-        set.actions.iter().find(|a| a.id == action_id).cloned().ok_or_else(|| {
-            let known: Vec<&str> = set.actions.iter().map(|a| a.id.as_str()).collect();
-            err(ErrorCode::NotFound, format!("unknown action {action_id:?}; known actions: {}", known.join(", ")))
-        })
-    }
-
-    fn running_action_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id> {
-        inner.panes.values().find(|p| p.row.worktree_id == worktree_id && p.row.action_id.as_deref() == Some(action_id) && p.pty.is_some() && p.exit_code.is_none()).map(|p| p.row.id.clone())
-    }
-
     pub fn hook_pane(inner: &Inner, pane_id: &str) -> Option<HookPane> {
         inner.panes.get(pane_id).map(|p| HookPane { id: p.row.id.clone(), tab_id: p.row.tab_id.clone(), cwd: p.row.cwd.clone() })
-    }
-
-    fn queue_action_event(inner: &mut Inner, event: &str, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>) {
-        let mut ev = events::envelope(inner, event, Some(worktree_id));
-        ev.action = Some(HookAction { id: action.id.clone(), label: action.label.clone() });
-        ev.pane = pane_id.and_then(|p| Self::hook_pane(inner, p));
-        inner.hook_queue.push(ev);
-    }
-
-    fn record_action(inner: &mut Inner, kind: ActionActivity, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>, verb: &str) {
-        let mut ev = activity::event(kind, Some(worktree_id), format!("{} {verb}", action.label));
-        ev.pane_id = pane_id.map(str::to_string);
-        ev.payload = json!({ "action_id": action.id, "pane_id": pane_id });
-        Self::record(inner, ev);
     }
 
     fn set_stop_intent(inner: &mut Inner, pane_id: &str) {
@@ -606,11 +576,7 @@ impl Daemon {
         }
     }
 
-    fn action_or_placeholder(inner: &Inner, worktree_id: &str, action_id: &str) -> ActionDef {
-        Self::action_def(inner, worktree_id, action_id).unwrap_or_else(|_| ActionDef { id: action_id.to_string(), label: action_id.to_string(), command: String::new(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None })
-    }
-
-    fn focus_pane(inner: &mut Inner, pane_id: &str) {
+    pub(crate) fn focus_pane(inner: &mut Inner, pane_id: &str) {
         let Some((tab_id, worktree_id)) = inner.panes.get(pane_id).map(|p| (p.row.tab_id.clone(), p.row.worktree_id.clone())) else { return };
         let changed: Vec<TabRow> = inner
             .tabs
@@ -636,60 +602,16 @@ impl Daemon {
         Self::emit(inner, Event::FocusRequest { worktree_id, tab_id, pane_id: pane_id.to_string() });
     }
 
-    fn run_action(self: &Arc<Self>, worktree_id: &str, action_id: &str) -> Result<ActionRunResult, RpcError> {
-        let mut inner = self.lock();
-        let action = Self::action_def(&inner, worktree_id, action_id)?;
-        let w = inner.worktrees.get(worktree_id).filter(|w| w.exists).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.clone();
-        match action.mode {
-            ActionMode::External => {
-                let mut cmd = std::process::Command::new("sh");
-                cmd.arg("-c").arg(&action.command).current_dir(&w.path);
-                cmd.env("TOMO_WORKTREE_ID", worktree_id).env("TOMO_WORKTREE_PATH", &w.path).env("TOMO_SOCKET", &self.paths.socket).env("TOMO_BIN", &self.tomo_bin);
-                cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-                cmd.spawn().map_err(|e| err(ErrorCode::Internal, format!("{}: {e}", action.command)))?;
-                Self::queue_action_event(&mut inner, "action.started", worktree_id, &action, None);
-                Self::record_action(&mut inner, ActionActivity::Started, worktree_id, &action, None, "started");
-                Ok(ActionRunResult { action, pane: None, reused: false })
-            }
-            ActionMode::Pane => {
-                if let Some(pane_id) = Self::running_action_pane(&inner, worktree_id, action_id) {
-                    Self::focus_pane(&mut inner, &pane_id);
-                    let pane = Self::pane_view(&inner, &pane_id);
-                    return Ok(ActionRunResult { action, pane, reused: true });
-                }
-                let argv = [inner.config.shell.clone(), "-lc".into(), action.command.clone()];
-                let (_, pane_id) = self.spawn_in_worktree(&mut inner, worktree_id, w.path.clone(), None, None, SplitDirection::Horizontal, Some(&argv), Some(action.label.clone()), None)?;
-                if let Some(pane) = inner.panes.get_mut(&pane_id) {
-                    pane.row.action_id = Some(action.id.clone());
-                    let row = pane.row.clone();
-                    let _ = inner.store.pane_upsert(&row);
-                }
-                Self::focus_pane(&mut inner, &pane_id);
-                Self::emit_pane(&mut inner, &pane_id);
-                Self::queue_action_event(&mut inner, "action.started", worktree_id, &action, Some(&pane_id));
-                Self::record_action(&mut inner, ActionActivity::Started, worktree_id, &action, Some(&pane_id), "started");
-                let pane = Self::pane_view(&inner, &pane_id);
-                Ok(ActionRunResult { action, pane, reused: false })
-            }
-        }
-    }
-
-    fn stop_action(self: &Arc<Self>, worktree_id: &str, action_id: &str) -> Result<bool, RpcError> {
-        let mut inner = self.lock();
-        let action = Self::action_def(&inner, worktree_id, action_id)?;
-        let Some(pane_id) = Self::running_action_pane(&inner, worktree_id, action_id) else { return Ok(false) };
-        Self::set_stop_intent(&mut inner, &pane_id);
-        Self::queue_action_event(&mut inner, "action.exited", worktree_id, &action, Some(&pane_id));
-        Self::record_action(&mut inner, ActionActivity::Stopped, worktree_id, &action, Some(&pane_id), "stopped");
-        if let Some(pid) = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
+    /// Ends a pane as a stop, not a crash: kills its process tree, keeps its scrollback, and removes it. The caller emits the tabs.
+    pub(crate) fn stop_pane(&self, inner: &mut Inner, pane_id: &str) {
+        Self::set_stop_intent(inner, pane_id);
+        if let Some(pid) = inner.panes.get(pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
             for child in procs::descendants(&inner.proc_rows, pid) {
                 procs::kill_tree(&inner.proc_rows, child);
             }
         }
-        self.persist_scrollback(&inner, &pane_id);
-        Self::remove_pane(&mut inner, &pane_id);
-        Self::emit_tabs(&mut inner, worktree_id);
-        Ok(true)
+        self.persist_scrollback(inner, pane_id);
+        Self::remove_pane(inner, pane_id);
     }
 
     /// Dispatches hook events queued while the state lock was held.
@@ -874,18 +796,11 @@ impl Daemon {
         let mut inner = self.lock();
         let Some(pane) = inner.panes.get_mut(pane_id) else { return };
         pane.exit_code = Some(code.unwrap_or(-1));
-        let worktree_id = pane.row.worktree_id.clone();
-        let action_id = pane.row.action_id.clone();
-        let stop_intent = pane.stop_intent;
+        let exit = PaneExit { pane_id: pane_id.to_string(), worktree_id: pane.row.worktree_id.clone(), source: pane.source.clone(), exit_code: code, stop_intent: pane.stop_intent };
+        let worktree_id = exit.worktree_id.clone();
         Self::emit(&mut inner, Event::PaneExited { pane_id: pane_id.to_string(), exit_code: code });
-        if let Some(aid) = action_id {
-            let action = Self::action_or_placeholder(&inner, &worktree_id, &aid);
-            Self::queue_action_event(&mut inner, "action.exited", &worktree_id, &action, Some(pane_id));
-            match (code, stop_intent) {
-                (Some(0), _) => Self::record_action(&mut inner, ActionActivity::Completed, &worktree_id, &action, Some(pane_id), "completed"),
-                (_, true) => Self::record_action(&mut inner, ActionActivity::Stopped, &worktree_id, &action, Some(pane_id), "stopped"),
-                (_, false) => Self::action_crashed(&mut inner, &worktree_id, &action, pane_id, code.unwrap_or(-1)),
-            }
+        for seam in &self.seams.pane_exited {
+            seam(&mut inner, &exit);
         }
         if let Some(agent) = inner.agents.get_mut(pane_id).filter(|a| a.state != AgentState::Exited) {
             let was_waiting = agent.state == AgentState::Waiting;
@@ -1003,14 +918,13 @@ impl Daemon {
             agent_kind,
             session_ref: session_ref.clone(),
             created_at_ms: now_ms(),
-            action_id: None,
             kind: PaneKind::Terminal,
             url: None,
         };
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default(), stop_intent: false },
+            PaneState { row, pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default(), stop_intent: false, source: None },
         );
         if let Some(kind) = agent_kind {
             let presence = AgentPresence {
@@ -1052,7 +966,6 @@ impl Daemon {
             agent_kind: None,
             session_ref: None,
             created_at_ms: now_ms(),
-            action_id: None,
             kind: PaneKind::Browser,
             url: Some(url),
         };
@@ -1060,7 +973,7 @@ impl Daemon {
         let hook_pane = HookPane { id: row.id.clone(), tab_id: row.tab_id.clone(), cwd: row.cwd.clone() };
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin: PaneOrigin::Live, exit_code: None, process_title: None, process_cmd: None, stop_intent: false, pending_line: None, last_output_ms: 0, scrollback: Scrollback::default() },
+            PaneState { row, pty: None, origin: PaneOrigin::Live, exit_code: None, process_title: None, process_cmd: None, stop_intent: false, pending_line: None, last_output_ms: 0, scrollback: Scrollback::default(), source: None },
         );
         let mut ev = events::envelope(inner, "pane.created", Some(worktree_id));
         ev.pane = Some(hook_pane);
@@ -1152,13 +1065,10 @@ impl Daemon {
         for t in &tabs {
             inner.tabs.insert(t.id.clone(), t.clone());
         }
-        for mut row in panes {
+        for row in panes {
             if !referenced.contains(&row.id) {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
-            }
-            if row.action_id.take().is_some() {
-                let _ = inner.store.pane_upsert(&row);
             }
             let resume_ref = row.session_ref.clone().or_else(|| (row.agent_kind == Some(AgentKind::Codex)).then(|| "--last".to_string()));
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
@@ -1190,7 +1100,7 @@ impl Daemon {
             }
             inner.panes.insert(
                 row.id.clone(),
-                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line: pending, last_output_ms: 0, scrollback, stop_intent: false },
+                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line: pending, last_output_ms: 0, scrollback, stop_intent: false, source: None },
             );
             if let Err(e) = self.start_pty(&mut inner, &row.id, None) {
                 tracing::warn!("restore pane {}: {e}", row.id);
@@ -1316,41 +1226,13 @@ impl Daemon {
         Some(id)
     }
 
-    fn push_attention(inner: &mut Inner, item: AttentionItem) {
+    pub(crate) fn push_attention(inner: &mut Inner, item: AttentionItem) {
         let _ = inner.store.attention_insert(&item);
         let mut ev = events::envelope(inner, "attention.created", Some(&item.worktree_id));
         ev.attention = Some(item.clone());
         ev.pane = item.pane_id.as_deref().and_then(|p| Self::hook_pane(inner, p));
         inner.hook_queue.push(ev);
         Self::emit(inner, Event::AttentionAdded { item });
-    }
-
-    fn action_crashed(inner: &mut Inner, worktree_id: &str, action: &ActionDef, pane_id: &str, exit_code: i32) {
-        let item = AttentionItem {
-            id: new_id(),
-            worktree_id: worktree_id.to_string(),
-            pane_id: Some(pane_id.to_string()),
-            level: AttentionLevel::Attention,
-            message: format!("{} exited with code {exit_code}", action.label),
-            created_at_ms: now_ms(),
-            viewed_at_ms: None,
-            kind: AttentionKind::Crash,
-            url: None,
-            agent_kind: None,
-            resolved_at_ms: None,
-        };
-        Self::push_attention(inner, item.clone());
-        let mut hook = events::envelope(inner, "action.crashed", Some(worktree_id));
-        hook.action = Some(HookAction { id: action.id.clone(), label: action.label.clone() });
-        hook.pane = Self::hook_pane(inner, pane_id);
-        hook.attention = Some(item.clone());
-        inner.hook_queue.push(hook);
-        let mut ev = activity::event(ActionActivity::Crashed, Some(worktree_id), format!("{} crashed", action.label));
-        ev.pane_id = Some(pane_id.to_string());
-        ev.detail = Some(format!("exit code {exit_code}"));
-        ev.payload = json!({ "action_id": action.id, "exit_code": exit_code, "pane_id": pane_id });
-        ev.attention_id = Some(item.id);
-        Self::record(inner, ev);
     }
 
     fn agent_event(kind: CoreActivity, agent: &AgentPresence, verb: &str) -> ActivityEvent {
@@ -1563,7 +1445,6 @@ impl Daemon {
             agents: inner.agents.values().cloned().collect(),
             attention,
             resources: inner.resources.clone(),
-            actions: inner.actions.values().cloned().collect(),
             endpoints: inner.endpoints.clone(),
             ui_state,
         })
@@ -1727,22 +1608,6 @@ impl Daemon {
                 inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
             }
             Call::WorktreeArchive { worktree_id, checkpoint } => self.archive_worktree(&worktree_id, checkpoint).await,
-            Call::ActionList { worktree_id } => {
-                let inner = self.lock();
-                if !inner.worktrees.contains_key(&worktree_id) {
-                    return Err(err(ErrorCode::NotFound, "worktree not found"));
-                }
-                ok(inner.actions.get(&worktree_id).cloned().unwrap_or(ActionSet { worktree_id, actions: vec![], error: None }))
-            }
-            Call::ActionRun { worktree_id, action_id } => self.run_action(&worktree_id, &action_id).and_then(ok),
-            Call::ActionStop { worktree_id, action_id } => {
-                self.stop_action(&worktree_id, &action_id)?;
-                Ok(Value::Null)
-            }
-            Call::ActionRestart { worktree_id, action_id } => {
-                self.stop_action(&worktree_id, &action_id)?;
-                self.run_action(&worktree_id, &action_id).and_then(ok)
-            }
             Call::WorktreeRestore { worktree_id } => self.restore_worktree(&worktree_id).await,
             Call::WorktreeOpen { worktree_id } => {
                 let needs_pane = {
@@ -2341,8 +2206,8 @@ impl Daemon {
                 let runtime = bundle
                     .action_id
                     .as_deref()
-                    .and_then(|a| Self::action_def(&inner, &worktree_id, a).ok())
-                    .map(|a| a.label)
+                    .and_then(|a| inner.panes.values().filter(|p| p.row.worktree_id == worktree_id).find_map(|p| p.source.as_ref().filter(|s| PaneSource::action_id(Some(s)).as_deref() == Some(a))))
+                    .map(|s| s.label.clone())
                     .or_else(|| bundle.url.clone())
                     .unwrap_or_else(|| "-".to_string());
                 let text = evidence_text(&name, &branch, &runtime, &bundle);
