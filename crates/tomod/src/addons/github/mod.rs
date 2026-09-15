@@ -5,20 +5,15 @@ mod model;
 
 pub use model::KnownPr;
 
+use crate::addons;
 use crate::daemon::{err, ok, Daemon, Inner};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
 use tomo_proto::*;
 
-// One tomod process holds one daemon (the lock file in main.rs), so this process-wide map is the cache of that daemon.
-// Take `Daemon::lock` before this lock, never while this lock is held.
-static CACHE: Mutex<BTreeMap<Id, PrStatusResult>> = Mutex::new(BTreeMap::new());
-
-fn cache() -> MutexGuard<'static, BTreeMap<Id, PrStatusResult>> {
-    CACHE.lock().unwrap_or_else(|p| p.into_inner())
-}
+/// The last `pr_status` answer of each worktree, in `addons::State`.
+pub type Cache = BTreeMap<Id, PrStatusResult>;
 
 async fn gh_pr_view(worktree: &Path) -> std::io::Result<std::process::Output> {
     tokio::process::Command::new("gh")
@@ -32,8 +27,11 @@ async fn gh_pr_view(worktree: &Path) -> std::io::Result<std::process::Output> {
 
 /// `pr_status`: the cached answer while it is fresh, else a new `gh pr view`. It records `pr_merged` and emits `pr_changed`.
 pub async fn pr_status(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcError> {
-    let path = daemon.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
-    let cached = cache().get(&worktree_id).cloned();
+    let (path, cached) = {
+        let inner = daemon.lock();
+        let path = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+        (path, addons::state(&inner).github.get(&worktree_id).cloned())
+    };
     if model::fresh(cached.as_ref(), now_ms()) {
         return ok(cached);
     }
@@ -44,7 +42,7 @@ pub async fn pr_status(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcErr
 
 /// Keeps a new answer under the Core lock. It records `pr_merged` and emits `pr_changed`.
 pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
-    let before = cache().insert(worktree_id.clone(), result.clone());
+    let before = addons::state_mut(inner).github.insert(worktree_id.clone(), result.clone());
     let update = model::update(before.as_ref(), &result);
     if let Some(pr) = update.merged {
         Daemon::record(inner, model::merged_event(&worktree_id, pr));
@@ -55,6 +53,6 @@ pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
 }
 
 /// The pull request that this addon knows for a worktree: the cached one, or the newest `pr_merged` event in `events`.
-pub fn known_pr(worktree_id: &str, events: &[ActivityEvent]) -> Option<KnownPr> {
-    model::known_pr(cache().get(worktree_id), events)
+pub fn known_pr(inner: &Inner, worktree_id: &str, events: &[ActivityEvent]) -> Option<KnownPr> {
+    model::known_pr(addons::state(inner).github.get(worktree_id), events)
 }

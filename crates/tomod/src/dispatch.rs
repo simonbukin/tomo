@@ -1,7 +1,7 @@
 //! Composition root: sends each addon `Call` to its addon, and every other `Call` to Core.
 
 use crate::addons::{actions, github, towns, usage};
-use crate::daemon::{ok, Daemon};
+use crate::daemon::{ok, Daemon, Inner};
 use serde_json::Value;
 use std::sync::Arc;
 use tomo_proto::{ActivityEvent, Call, RpcError, Snapshot, TownPr};
@@ -13,11 +13,13 @@ pub fn is_slow(call: &Call) -> bool {
 
 pub async fn handle(daemon: &Arc<Daemon>, client_id: u64, call: Call) -> Result<Value, RpcError> {
     match call {
-        Call::Subscribe => ok(Snapshot {
-            core: daemon.subscribe(client_id)?,
-            usage: usage::snapshots(),
-            actions: actions::snapshot(),
-        }),
+        Call::Subscribe => {
+            let core = daemon.subscribe(client_id)?;
+            let inner = daemon.lock();
+            let snapshot = Snapshot { core, usage: usage::snapshots(&inner), actions: actions::snapshot(&inner) };
+            drop(inner);
+            ok(snapshot)
+        }
         Call::ActionList { worktree_id } => actions::list(daemon, worktree_id),
         Call::ActionRun { worktree_id, action_id } => actions::run(daemon, &worktree_id, &action_id),
         Call::ActionStop { worktree_id, action_id } => actions::stop(daemon, &worktree_id, &action_id),
@@ -31,7 +33,7 @@ pub async fn handle(daemon: &Arc<Daemon>, client_id: u64, call: Call) -> Result<
     }
 }
 
-/// The pull request in a town history comes from GitHub. Without the GitHub addon, Towns gets `|_, _| None`.
-fn town_pr(worktree_id: &str, events: &[ActivityEvent]) -> Option<TownPr> {
-    github::known_pr(worktree_id, events).map(|pr| TownPr { number: pr.number, url: pr.url, state: pr.state })
+/// The pull request in a town history comes from GitHub. Without the GitHub addon, Towns gets `|_, _, _| None`.
+fn town_pr(inner: &Inner, worktree_id: &str, events: &[ActivityEvent]) -> Option<TownPr> {
+    github::known_pr(inner, worktree_id, events).map(|pr| TownPr { number: pr.number, url: pr.url, state: pr.state })
 }

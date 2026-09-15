@@ -6,9 +6,27 @@ pub mod github;
 pub mod towns;
 pub mod usage;
 
-use crate::daemon::{Daemon, Seams};
+use crate::daemon::{Daemon, Inner, Seams};
 use crate::store::Store;
 use std::sync::Arc;
+
+/// The in-memory state of the addons of one daemon. Each addon owns one field. It lives in `Inner`, so the Core lock guards it.
+#[derive(Default)]
+pub struct State {
+    pub actions: actions::Sets,
+    pub github: github::Cache,
+    pub usage: usage::Last,
+}
+
+const NOT_FILLED: &str = "the composition root fills Inner.addons with addons::State";
+
+pub fn state(inner: &Inner) -> &State {
+    inner.addons.downcast_ref().expect(NOT_FILLED)
+}
+
+pub fn state_mut(inner: &mut Inner) -> &mut State {
+    inner.addons.downcast_mut().expect(NOT_FILLED)
+}
 
 pub fn seams() -> Seams {
     Seams {
@@ -115,7 +133,7 @@ mod tests {
         git(&["commit", "-q", "--allow-empty", "-m", "init"]);
         std::fs::write(repo.join(".tomo.toml"), "[[actions]]\nid = \"serve\"\ncommand = \"true\"\n").unwrap();
         let [a, b] = ["a", "b"].map(|name| {
-            let daemon = Daemon::new(crate::config::Paths::new(dir.join(name)), super::seams()).unwrap();
+            let daemon = Daemon::new(crate::config::Paths::new(dir.join(name)), super::seams(), Box::new(super::State::default())).unwrap();
             super::migrate(&daemon.lock().store).unwrap();
             daemon
         });
@@ -130,8 +148,9 @@ mod tests {
         let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);
         assert_eq!(seen_by_b.usage.len(), 0, "usage leaked into the second daemon");
         assert_eq!(seen_by_b.actions.len(), 0, "action sets leaked into the second daemon");
-        assert!(super::github::known_pr(&worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
+        assert!(super::github::known_pr(&b.lock(), &worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
         assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len()), (1, 1));
+        assert!(super::github::known_pr(&a.lock(), &worktree_id, &[]).is_some());
         a.shutdown();
         b.shutdown();
         let _ = std::fs::remove_dir_all(&dir);
@@ -154,6 +173,25 @@ mod tests {
             })
             .collect();
         assert!(hits.is_empty(), "core names an addon:\n{}", hits.join("\n"));
+    }
+
+    #[test]
+    fn addon_modules_keep_no_mutable_static() {
+        let addons = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/addons");
+        let mutable = ["Mutex", "RwLock", "Atomic", "Cell", "static mut"];
+        let hits: Vec<String> = rust_files(&addons)
+            .into_iter()
+            .flat_map(|path| {
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                text.lines()
+                    .enumerate()
+                    .map(|(i, line)| (i, line.trim_start().trim_start_matches("pub ").trim_start_matches("pub(crate) ")))
+                    .filter(|(_, line)| line.starts_with("static ") && mutable.iter().any(|m| line.contains(m)))
+                    .map(|(i, line)| format!("{}:{}: {line}", path.display(), i + 1))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(hits.is_empty(), "an addon keeps mutable state in a static; put it in addons::State:\n{}", hits.join("\n"));
     }
 
     #[test]

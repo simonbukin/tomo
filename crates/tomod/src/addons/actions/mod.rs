@@ -6,36 +6,35 @@ mod model;
 mod tests;
 
 use crate::activity;
+use crate::addons;
 use crate::daemon::{err, new_id, ok, Daemon, Inner, PaneExit, WorktreeFile};
 use crate::events;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use tomo_proto::*;
 
 pub const FILE: WorktreeFile = WorktreeFile { name: model::FILE_NAME, reload };
 
-// The parsed sets stay out of Core `Inner`. One daemon runs per process (tomod.lock), so one map is enough.
-// Lock order: the Core state lock first, then this one. Never lock Core state while holding it.
-static SETS: Mutex<BTreeMap<Id, ActionSet>> = Mutex::new(BTreeMap::new());
+/// The parsed `.tomo.toml` set of each worktree, in `addons::State`.
+pub type Sets = BTreeMap<Id, ActionSet>;
 
-fn sets() -> MutexGuard<'static, BTreeMap<Id, ActionSet>> {
-    SETS.lock().unwrap_or_else(|p| p.into_inner())
+fn sets(inner: &Inner) -> &Sets {
+    &addons::state(inner).actions
 }
 
-fn def(worktree_id: &str, action_id: &str) -> Result<ActionDef, RpcError> {
-    let sets = sets();
-    let set = sets.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found or has no .tomo.toml"))?;
+fn def(inner: &Inner, worktree_id: &str, action_id: &str) -> Result<ActionDef, RpcError> {
+    let set = sets(inner).get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found or has no .tomo.toml"))?;
     set.actions.iter().find(|a| a.id == action_id).cloned().ok_or_else(|| {
         let known: Vec<&str> = set.actions.iter().map(|a| a.id.as_str()).collect();
         err(ErrorCode::NotFound, format!("unknown action {action_id:?}; known actions: {}", known.join(", ")))
     })
 }
 
-fn def_or_placeholder(worktree_id: &str, action_id: &str) -> ActionDef {
-    def(worktree_id, action_id).unwrap_or_else(|_| ActionDef { id: action_id.to_string(), label: action_id.to_string(), command: String::new(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None })
+fn def_or_placeholder(inner: &Inner, worktree_id: &str, action_id: &str) -> ActionDef {
+    def(inner, worktree_id, action_id).unwrap_or_else(|_| ActionDef { id: action_id.to_string(), label: action_id.to_string(), command: String::new(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None })
 }
 
 fn source_of(action: &ActionDef) -> PaneSource {
@@ -71,7 +70,7 @@ fn reload(daemon: &Arc<Daemon>) {
         .collect();
     let mut inner = daemon.lock();
     let changed: Vec<ActionSet> = {
-        let mut sets = sets();
+        let sets = &mut addons::state_mut(&mut inner).actions;
         let live: HashSet<Id> = loaded.iter().map(|s| s.worktree_id.clone()).collect();
         sets.retain(|id, _| live.contains(id));
         let changed: Vec<ActionSet> = loaded.into_iter().filter(|set| sets.get(&set.worktree_id) != Some(set)).collect();
@@ -88,14 +87,14 @@ fn reload(daemon: &Arc<Daemon>) {
 }
 
 /// The `actions` field of the `subscribe` snapshot.
-pub fn snapshot() -> Vec<ActionSet> {
-    sets().values().cloned().collect()
+pub fn snapshot(inner: &Inner) -> Vec<ActionSet> {
+    sets(inner).values().cloned().collect()
 }
 
 /// The `pane_exited` seam. An Action pane that exits records its outcome; a non-zero exit that Tomo did not cause is a crash.
 pub fn exited(inner: &mut Inner, exit: &PaneExit) {
     let Some(source) = exit.source.as_ref().filter(|s| s.kind == ACTION_SOURCE_KIND) else { return };
-    let action = def_or_placeholder(&exit.worktree_id, &source.id);
+    let action = def_or_placeholder(inner, &exit.worktree_id, &source.id);
     let (worktree_id, pane_id) = (exit.worktree_id.as_str(), Some(exit.pane_id.as_str()));
     let ev = hook(inner, "action.exited", worktree_id, &action, pane_id);
     inner.hook_queue.push(ev);
@@ -133,10 +132,14 @@ fn crashed(inner: &mut Inner, worktree_id: &str, action: &ActionDef, pane_id: &s
 }
 
 pub fn list(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcError> {
-    if !daemon.lock().worktrees.contains_key(&worktree_id) {
-        return Err(err(ErrorCode::NotFound, "worktree not found"));
-    }
-    ok(sets().get(&worktree_id).cloned().unwrap_or(ActionSet { worktree_id, actions: vec![], error: None }))
+    let set = {
+        let inner = daemon.lock();
+        if !inner.worktrees.contains_key(&worktree_id) {
+            return Err(err(ErrorCode::NotFound, "worktree not found"));
+        }
+        sets(&inner).get(&worktree_id).cloned()
+    };
+    ok(set.unwrap_or(ActionSet { worktree_id, actions: vec![], error: None }))
 }
 
 pub fn run(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Value, RpcError> {
@@ -159,8 +162,8 @@ pub fn restart(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Resu
 
 fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<ActionRunResult, RpcError> {
     let mut inner = daemon.lock();
-    let action = def(worktree_id, action_id)?;
-    let path = inner.worktrees.get(worktree_id).filter(|w| w.exists).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+    let action = def(&inner, worktree_id, action_id)?;
+    let path =inner.worktrees.get(worktree_id).filter(|w| w.exists).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
     let pane_id = match action.mode {
         ActionMode::External => {
             std::process::Command::new("sh")
@@ -203,7 +206,7 @@ fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Act
 
 fn end(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<bool, RpcError> {
     let mut inner = daemon.lock();
-    let action = def(worktree_id, action_id)?;
+    let action = def(&inner, worktree_id, action_id)?;
     let Some(pane_id) = running_pane(&inner, worktree_id, action_id) else { return Ok(false) };
     let ev = hook(&inner, "action.exited", worktree_id, &action, Some(&pane_id));
     inner.hook_queue.push(ev);
