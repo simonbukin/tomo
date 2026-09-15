@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentPresence, Frame, PullRequest, Repo, Worktree } from "../../types";
+import type { PullRequest } from "../../generated";
+import type { AgentPresence, Frame, Repo, Worktree } from "../../types";
 
 const replies = vi.hoisted(() => ({}) as Record<string, unknown>);
 vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: vi.fn((method: string) => Promise.resolve(replies[method] ?? null)) }));

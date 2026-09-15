@@ -1,9 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { Action } from "../actions";
+import type { AddonSignal } from "../activityModel";
 import type { Status } from "../glyphs";
+import type { RailMarker } from "../shell/RightRail";
 import type { State } from "../store";
-import type { ActivityEvent, Frame } from "../types";
+import type { ActivityEvent, Frame, Id, Worktree } from "../types";
 
 /** A button on an Activity row. `label` reads the store and returns null to hide the button. `run` happens on click. */
 export interface ActivityRowAction {
@@ -42,11 +44,27 @@ export interface WorktreeNameFieldProps {
   onHint: (hint: string | null) => void;
 }
 
+/** A right inspector section. Addon sections come after `git` and before `processes`, in `builtins` order. */
+export interface InspectorSection {
+  /** The `data-section` of the rendered section and the `ui.rightSection` value. It must not change. */
+  id: string;
+  /** The right rail button label. */
+  label: string;
+  icon: LucideIcon;
+  /** Rendered only while the inspector is open on a worktree. */
+  component: ComponentType<{ worktree: Worktree }>;
+  /** The right rail marker for exceptional state. It reads the store and starts no work. */
+  marker?: (s: State, w: Worktree) => RailMarker | null;
+}
+
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */
 export interface Addon {
   id: string;
   views?: readonly GlobalView[];
   commands?: readonly Action[];
+  inspectorSections?: readonly InspectorSection[];
+  /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
+  worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
   /** A field in the create-worktree dialog. The first addon that has one wins, like the daemon's one worktree namer. */
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
   /** Mounted once for the whole session. It must start no work until it has something to show. */

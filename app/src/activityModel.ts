@@ -1,4 +1,4 @@
-import type { ActionDef, ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, PullRequest, RuntimeEndpoint, UsageBucket, UsageSnapshot } from "./types";
+import type { ActionDef, ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, RuntimeEndpoint, UsageBucket, UsageSnapshot } from "./types";
 
 /**
  * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
@@ -78,7 +78,10 @@ export type Signal =
   | { kind: "agent"; agent: AgentKind; state: AgentState }
   | { kind: "runtime"; label: string; port: number; url: string }
   | { kind: "warn"; bytes: number }
-  | { kind: "pr"; text: string; tone: "merged" | "failed" };
+  | AddonSignal;
+
+/** A signal from an addon. `className` styles the line, `dot` is the class of its state dot, and `glyph` stands for the dot in plain text. */
+export type AddonSignal = { kind: "addon"; text: string; glyph: string; className: string; dot: string };
 
 export interface SignalInput {
   attention: AttentionItem[];
@@ -87,7 +90,7 @@ export interface SignalInput {
   actions: ActionDef[];
   rssBytes: number | null;
   warnBytes: number;
-  pr: PullRequest | null;
+  addon: readonly AddonSignal[];
 }
 
 /** The few things worth a glance on a NOW card, in priority order, at most three. */
@@ -101,8 +104,7 @@ export function nowSignals(input: SignalInput): Signal[] {
   const primary = httpEndpoints(input.endpoints)[0];
   const runtime: Signal[] = primary ? [{ kind: "runtime", label: endpointLabel(primary, input.actions), port: primary.port, url: endpointUrl(primary) }] : [];
   const warn: Signal[] = input.rssBytes != null && input.rssBytes >= input.warnBytes ? [{ kind: "warn", bytes: input.rssBytes }] : [];
-  const pr: Signal[] = input.pr?.state === "merged" ? [{ kind: "pr", text: "merged", tone: "merged" }] : input.pr && input.pr.checks_failed > 0 ? [{ kind: "pr", text: "checks failed", tone: "failed" }] : [];
-  return [...checkpoint, ...waiting, ...crash, ...agents, ...runtime, ...warn, ...pr].slice(0, 3);
+  return [...checkpoint, ...waiting, ...crash, ...agents, ...runtime, ...warn, ...input.addon].slice(0, 3);
 }
 
 export function percentOf(b: UsageBucket): number | null {
