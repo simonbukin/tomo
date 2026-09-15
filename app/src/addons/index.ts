@@ -12,6 +12,8 @@ export const addonViews = (): GlobalView[] => builtins.flatMap((a) => a.views ??
 
 export const worktreeNameField = () => builtins.find((a) => a.worktreeNameField)?.worktreeNameField ?? null;
 
+export const repoAvatar = () => builtins.find((a) => a.repoAvatar)?.repoAvatar ?? null;
+
 export const inspectorSections = (): InspectorSection[] => builtins.flatMap((a) => a.inspectorSections ?? []);
 
 export const addonSignals = (s: State, worktreeId: Id): AddonSignal[] => builtins.flatMap((a) => a.worktreeSignals?.(s, worktreeId) ?? []);

@@ -37,7 +37,6 @@ export * from "./Event";
 export * from "./EvidenceBundle";
 export * from "./FsEntry";
 export * from "./GitHubActivity";
-export * from "./GitHubRepo";
 export * from "./GitSummary";
 export * from "./Hello";
 export * from "./HookAction";

@@ -27,8 +27,8 @@ new_wt() { $T worktree create --repo "$R" --branch "$1" --new --json | jq_ "prin
 pr_json() { printf '{"number":%s,"title":"%s","url":"https://github.com/acme/holly/pull/%s","state":"%s","isDraft":%s,"reviewDecision":"%s","mergeable":"%s","statusCheckRollup":[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"CheckRun","status":"IN_PROGRESS","conclusion":""},{"__typename":"StatusContext","state":"FAILURE"}]}' "$@"; }
 
 o=$($T repo list --json)
-has "$o" "d[0]['remote_url']=='git@github.com:acme/holly.git' and d[0]['github']=={'owner':'acme','name':'holly'}" && check 0 "repo list keeps the remote url and the GitHub owner" || check 1 "repo list" "$o"
-has "$($RPC call subscribe)" "d['repos'][0]['remote_url']=='git@github.com:acme/holly.git' and d['repos'][0]['github']['owner']=='acme'" && check 0 "the snapshot repo has the same remote fields" || check 1 "snapshot repo" "$($RPC call subscribe | head -c 400)"
+has "$o" "d[0]['remote_url']=='git@github.com:acme/holly.git' and 'github' not in d[0]" && check 0 "repo list keeps the remote url, and core adds no GitHub field" || check 1 "repo list" "$o"
+has "$($RPC call subscribe)" "d['repos'][0]['remote_url']=='git@github.com:acme/holly.git' and 'github' not in d['repos'][0]" && check 0 "the snapshot repo has the same remote fields" || check 1 "snapshot repo" "$($RPC call subscribe | head -c 400)"
 
 read -r W1 P1 < <(new_wt feat/open); N1=$(basename "$P1")
 pr_json 12 "Add kobe" 12 OPEN true CHANGES_REQUESTED CONFLICTING > "$GHD/$N1.json"

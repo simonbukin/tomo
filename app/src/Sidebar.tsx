@@ -3,7 +3,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { addonViews } from "./addons";
+import { addonViews, repoAvatar } from "./addons";
 import { byManualOrder } from "./order";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
@@ -106,7 +106,7 @@ export function Sidebar() {
             ))}
           </SortableContext>
         </DndContext>
-        {orphans.length > 0 && <RepoGroup repo={{ id: "", name: "other", path: "", exists: true, remote_url: null, github: null }} items={orphans} active={active} />}
+        {orphans.length > 0 && <RepoGroup repo={{ id: "", name: "other", path: "", exists: true, remote_url: null }} items={orphans} active={active} />}
         {repos.length === 0 && (
           <div className="sidebar-empty">
             No repositories yet. Add one with the plus button or run <code>tomo repo add &lt;path&gt;</code>.
@@ -152,8 +152,8 @@ function RepoGroup({ repo, items, active, sortable = false }: { repo: Repo; item
 }
 
 export function RepoAvatar({ repo, size = 14 }: { repo: Repo; size?: number }) {
-  if (!repo.github) return null;
-  return <img className="repo-avatar" width={size} height={size} src={`https://github.com/${repo.github.owner}.png?size=64`} alt="" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />;
+  const Avatar = repoAvatar();
+  return Avatar && <Avatar repo={repo} size={size} />;
 }
 
 function selectRow(e: React.MouseEvent, w: Worktree, siblings: Worktree[]): boolean {
