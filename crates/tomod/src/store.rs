@@ -654,6 +654,88 @@ mod tests {
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b"]);
     }
 
+    const STORED_KINDS: [&str; 16] = [
+        "agent_started",
+        "agent_waiting",
+        "agent_exited",
+        "checkpoint_created",
+        "checkpoint_resolved",
+        "action_started",
+        "action_stopped",
+        "action_completed",
+        "action_crashed",
+        "endpoint_discovered",
+        "annotations_sent",
+        "state_changed",
+        "archived",
+        "restored",
+        "hook_failed",
+        "pr_merged",
+    ];
+
+    fn kind_str(e: &ActivityEvent) -> String {
+        serde_json::to_value(&e.kind).unwrap().as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn every_stored_activity_kind_round_trips_with_the_same_string() {
+        let s = Store::open_in_memory().unwrap();
+        for (i, k) in STORED_KINDS.iter().enumerate() {
+            let kind = serde_json::from_value(serde_json::json!(k)).unwrap();
+            s.activity_insert(&activity(k, i as u64, kind, None)).unwrap();
+            let column: String = s.conn.query_row("SELECT kind FROM activity WHERE id = ?1", [k], |r| r.get(0)).unwrap();
+            assert_eq!(column, *k);
+        }
+        let back: Vec<String> = s.activity_list(&ActivityQuery { limit: Some(100), ..Default::default() }).unwrap().iter().map(kind_str).collect();
+        assert_eq!(back, STORED_KINDS.iter().rev().map(|k| k.to_string()).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn an_unknown_stored_kind_reads_back_as_hook_failed() {
+        let s = Store::open_in_memory().unwrap();
+        s.conn.execute("INSERT INTO activity (id, kind, occurred_at_ms, title) VALUES ('u', 'future.thing', 1, 'from a newer build')", []).unwrap();
+        let back = s.activity_list(&ActivityQuery::default()).unwrap();
+        assert_eq!((back.len(), kind_str(&back[0]), back[0].title.as_str()), (1, "hook_failed".to_string(), "from a newer build"));
+    }
+
+    #[test]
+    fn activity_list_filters_by_worktree_and_limit() {
+        let s = Store::open_in_memory().unwrap();
+        let kind = || serde_json::from_value(serde_json::json!("archived")).unwrap();
+        s.activity_insert(&activity("a", 1, kind(), None)).unwrap();
+        s.activity_insert(&ActivityEvent { worktree_id: Some("other".into()), ..activity("b", 2, kind(), None) }).unwrap();
+        s.activity_insert(&activity("c", 3, kind(), None)).unwrap();
+        let ids = |q: ActivityQuery| s.activity_list(&q).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(ActivityQuery { worktree_id: Some("w".into()), ..Default::default() }), vec!["c", "a"]);
+        assert_eq!(ids(ActivityQuery { limit: Some(2), ..Default::default() }), vec!["c", "b"]);
+        assert_eq!(ids(ActivityQuery { limit: Some(1), worktree_id: Some("other".into()), ..Default::default() }), vec!["b"]);
+    }
+
+    #[test]
+    fn needs_me_in_the_store_reads_only_the_attention_row() {
+        let s = Store::open_in_memory().unwrap();
+        let kind = || serde_json::from_value(serde_json::json!("agent_waiting")).unwrap();
+        let cases = [
+            ("waiting", AttentionKind::Waiting, None, None, true),
+            ("waiting-viewed", AttentionKind::Waiting, Some(2), None, false),
+            ("waiting-resolved", AttentionKind::Waiting, None, Some(2), false),
+            ("checkpoint-viewed", AttentionKind::Checkpoint, Some(2), None, true),
+            ("checkpoint-resolved", AttentionKind::Checkpoint, None, Some(2), false),
+            ("crash-viewed", AttentionKind::Crash, Some(2), None, true),
+            ("crash-resolved", AttentionKind::Crash, None, Some(2), false),
+        ];
+        for (i, (id, attention_kind, viewed, resolved, _)) in cases.iter().enumerate() {
+            s.attention_insert(&AttentionItem { viewed_at_ms: *viewed, resolved_at_ms: *resolved, pane_id: Some("p".into()), ..item(id, *attention_kind) }).unwrap();
+            s.activity_insert(&activity(id, i as u64, kind(), Some(id))).unwrap();
+        }
+        s.activity_insert(&activity("orphan", 50, kind(), Some("missing"))).unwrap();
+        let mut open: Vec<String> = s.activity_list(&ActivityQuery { needs_me: true, ..Default::default() }).unwrap().into_iter().map(|e| e.id).collect();
+        open.sort();
+        let mut expected: Vec<String> = cases.iter().filter(|c| c.4).map(|c| c.0.to_string()).collect();
+        expected.sort();
+        assert_eq!(open, expected);
+    }
+
     #[test]
     fn pane_view_and_waiting_resolve_return_changed_ids() {
         let s = Store::open_in_memory().unwrap();
