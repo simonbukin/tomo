@@ -13,7 +13,7 @@ describe("status glyphs", () => {
   it("maps agents and activity onto the same vocabulary", () => {
     expect(agentStatus("waiting")).toBe("needs");
     expect(agentStatus("none")).toBeNull();
-    expect(activityStatus("action_crashed")).toBe("failed");
+    expect(activityStatus("hook_failed")).toBe("failed");
     expect(activityStatus("checkpoint_created")).toBe(agentStatus("waiting"));
     expect(activityStatus("state_changed")).toBeNull();
     expect(dotClass("needs")).toBe("state state-waiting");
