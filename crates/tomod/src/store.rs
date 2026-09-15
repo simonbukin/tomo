@@ -301,6 +301,7 @@ impl Store {
         self.conn.execute("UPDATE panes SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
         self.conn.execute("UPDATE attention SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
         self.conn.execute("UPDATE activity SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
+        self.conn.execute("UPDATE towns SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
         Ok(())
     }
 
