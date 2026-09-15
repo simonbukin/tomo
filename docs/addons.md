@@ -2217,7 +2217,7 @@ uses. It is expected.
 | `npx tsc --noEmit` | pass | pass |
 | `npx vite build` | main JS 721.35 kB, CSS 61.46 kB | main JS 722.09 kB, CSS 61.50 kB |
 | `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass | pass, no change in `app/src/generated` |
-| torture harness (`run-all.sh` list, two halves) | 387 checks in 18 scripts, 9 known | 387 passed, 0 failed, 9 known in 19 scripts (8 known in `providers.sh`, 1 in `github.sh`); `browser.sh` 14 and `agentation.sh` 5 |
+| torture harness (`run-all.sh` list, two halves) | 387 checks in 18 scripts, 9 known | 406 passed, 0 failed, 9 known in 20 scripts, 438 s (8 known in `providers.sh`, 1 in `github.sh`); `browser.sh` 14 and `agentation.sh` 5; `client.sh` (19) came from master |
 
 The master part of the tomod count is 139; this milestone added
 `pasted_wraps_the_text_in_one_bracketed_paste_and_submits`, and the two
