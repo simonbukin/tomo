@@ -87,7 +87,7 @@ pub fn pick(daemon: &Daemon) -> Result<Value, RpcError> {
 pub fn history(daemon: &Daemon, slug: &str) -> Result<Value, RpcError> {
     let inner = daemon.lock();
     let unlock = unlocks(&inner.store).map_err(internal)?.into_iter().find(|u| u.slug == slug).ok_or_else(|| err(ErrorCode::NotFound, format!("town {slug} is not unlocked")))?;
-    let events = inner.store.activity_list(&ActivityQuery { limit: Some(1000), worktree_id: Some(unlock.worktree_id.clone()), ..Default::default() }).map_err(internal)?;
+    let events = inner.store.activity_list(&ActivityQuery { limit: Some(1000), worktree_id: Some(unlock.worktree_id.clone()), ..Default::default() }, &[]).map_err(internal)?;
     let repo_name = inner.repos.iter().find(|r| r.id == unlock.repo_id).map(|r| r.name.clone());
     let worktree = inner.worktrees.get(&unlock.worktree_id).map(|w| model::WorktreeFacts { name: Daemon::worktree_view(&inner, w).name, branch: w.branch.clone(), head: w.head.clone(), exists: w.exists, archived_at_ms: w.archived_at_ms });
     let pr = inner.prs.get(&unlock.worktree_id).and_then(|p| p.pr.as_ref());

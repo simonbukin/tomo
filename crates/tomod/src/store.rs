@@ -503,16 +503,19 @@ impl Store {
         })
     }
 
-    /// Newest first. `needs_me` keeps only events whose attention item is still open:
-    /// unresolved, and for a `waiting` item also not yet viewed.
-    pub fn activity_list(&self, q: &ActivityQuery) -> Result<Vec<ActivityEvent>> {
+    /// Newest first. `needs_me` keeps only events whose attention item needs a person: the item is
+    /// unresolved, and a `waiting` item is also unviewed and its pane is in `waiting_panes` (an agent there
+    /// still waits). `needsMeItem` in `app/src/activityModel.ts` is the same rule; both test the same cases.
+    pub fn activity_list(&self, q: &ActivityQuery, waiting_panes: &[Id]) -> Result<Vec<ActivityEvent>> {
         let mut st = self.conn.prepare(
             "SELECT id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id FROM activity
              WHERE (?1 IS NULL OR occurred_at_ms < ?1) AND (?2 IS NULL OR worktree_id = ?2)
-               AND (?3 = 0 OR attention_id IN (SELECT id FROM attention WHERE resolved_at_ms IS NULL AND (COALESCE(kind, 'waiting') != 'waiting' OR viewed_at_ms IS NULL)))
+               AND (?3 = 0 OR attention_id IN (SELECT id FROM attention WHERE resolved_at_ms IS NULL
+                    AND (COALESCE(kind, 'waiting') != 'waiting' OR (viewed_at_ms IS NULL AND pane_id IN (SELECT value FROM json_each(?5))))))
              ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?4",
         )?;
-        let rows = st.query_map(params![q.before_ms.map(|v| v as i64), q.worktree_id, q.needs_me as i64, q.limit.unwrap_or(100) as i64], Self::activity_row)?;
+        let waiting = serde_json::to_string(waiting_panes)?;
+        let rows = st.query_map(params![q.before_ms.map(|v| v as i64), q.worktree_id, q.needs_me as i64, q.limit.unwrap_or(100) as i64, waiting], Self::activity_row)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
@@ -618,7 +621,7 @@ mod tests {
         let s = Store::open_in_memory().unwrap();
         s.activity_insert(&activity("a", 1, CoreActivity::Archived.into(), None)).unwrap();
         s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
-        let count = |w: &str| s.activity_list(&ActivityQuery { worktree_id: Some(w.into()), ..Default::default() }).unwrap().len();
+        let count = |w: &str| s.activity_list(&ActivityQuery { worktree_id: Some(w.into()), ..Default::default() }, &[]).unwrap().len();
         assert_eq!((count("w"), count("w2")), (0, 1));
     }
 
@@ -634,11 +637,11 @@ mod tests {
     fn activity_lists_newest_first_and_needs_me_follows_attention_state() {
         let s = Store::open_in_memory().unwrap();
         s.attention_insert(&item("chk", AttentionKind::Checkpoint)).unwrap();
-        s.attention_insert(&item("wait", AttentionKind::Waiting)).unwrap();
+        s.attention_insert(&AttentionItem { pane_id: Some("p".into()), ..item("wait", AttentionKind::Waiting) }).unwrap();
         s.activity_insert(&activity("a", 10, ActionActivity::Started.into(), None)).unwrap();
         s.activity_insert(&activity("b", 20, CoreActivity::CheckpointCreated.into(), Some("chk"))).unwrap();
         s.activity_insert(&activity("c", 20, CoreActivity::AgentWaiting.into(), Some("wait"))).unwrap();
-        let ids = |q: ActivityQuery| s.activity_list(&q).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+        let ids = |q: ActivityQuery| s.activity_list(&q, &["p".to_string()]).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b", "a"]);
         assert_eq!(ids(ActivityQuery { before_ms: Some(20), ..Default::default() }), vec!["a"]);
         assert_eq!(ids(ActivityQuery { needs_me: true, ..Default::default() }), vec!["c", "b"]);
@@ -649,7 +652,7 @@ mod tests {
         assert!(ids(ActivityQuery { needs_me: true, ..Default::default() }).is_empty());
         assert_eq!(s.attention_list().unwrap().iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["wait"]);
         assert_eq!(s.attention_get("chk").unwrap().unwrap().resolved_at_ms, Some(6));
-        assert_eq!(s.activity_list(&ActivityQuery::default()).unwrap()[0].payload["port"], 3000);
+        assert_eq!(s.activity_list(&ActivityQuery::default(), &[]).unwrap()[0].payload["port"], 3000);
         assert_eq!(s.activity_since(CoreActivity::CheckpointCreated, 15).unwrap().len(), 1);
         s.activity_trim(2).unwrap();
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b"]);
@@ -687,7 +690,7 @@ mod tests {
             let column: String = s.conn.query_row("SELECT kind FROM activity WHERE id = ?1", [k], |r| r.get(0)).unwrap();
             assert_eq!(column, *k);
         }
-        let back: Vec<String> = s.activity_list(&ActivityQuery { limit: Some(100), ..Default::default() }).unwrap().iter().map(kind_str).collect();
+        let back: Vec<String> = s.activity_list(&ActivityQuery { limit: Some(100), ..Default::default() }, &[]).unwrap().iter().map(kind_str).collect();
         assert_eq!(back, STORED_KINDS.iter().rev().map(|k| k.to_string()).collect::<Vec<_>>());
     }
 
@@ -695,7 +698,7 @@ mod tests {
     fn an_unknown_stored_kind_keeps_its_string() {
         let s = Store::open_in_memory().unwrap();
         s.conn.execute("INSERT INTO activity (id, kind, occurred_at_ms, title) VALUES ('u', 'future.thing', 1, 'from a newer build')", []).unwrap();
-        let back = s.activity_list(&ActivityQuery::default()).unwrap();
+        let back = s.activity_list(&ActivityQuery::default(), &[]).unwrap();
         assert_eq!((back.len(), kind_str(&back[0]), back[0].title.as_str()), (1, "future.thing".to_string(), "from a newer build"));
     }
 
@@ -706,33 +709,38 @@ mod tests {
         s.activity_insert(&activity("a", 1, kind(), None)).unwrap();
         s.activity_insert(&ActivityEvent { worktree_id: Some("other".into()), ..activity("b", 2, kind(), None) }).unwrap();
         s.activity_insert(&activity("c", 3, kind(), None)).unwrap();
-        let ids = |q: ActivityQuery| s.activity_list(&q).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+        let ids = |q: ActivityQuery| s.activity_list(&q, &[]).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
         assert_eq!(ids(ActivityQuery { worktree_id: Some("w".into()), ..Default::default() }), vec!["c", "a"]);
         assert_eq!(ids(ActivityQuery { limit: Some(2), ..Default::default() }), vec!["c", "b"]);
         assert_eq!(ids(ActivityQuery { limit: Some(1), worktree_id: Some("other".into()), ..Default::default() }), vec!["b"]);
     }
 
     #[test]
-    fn needs_me_in_the_store_reads_only_the_attention_row() {
+    fn needs_me_follows_the_cases_that_the_client_tests() {
         let s = Store::open_in_memory().unwrap();
         let kind = || serde_json::from_value(serde_json::json!("agent_waiting")).unwrap();
+        let waits = Some(true);
+        let works = Some(false);
         let cases = [
-            ("waiting", AttentionKind::Waiting, None, None, true),
-            ("waiting-viewed", AttentionKind::Waiting, Some(2), None, false),
-            ("waiting-resolved", AttentionKind::Waiting, None, Some(2), false),
-            ("checkpoint-viewed", AttentionKind::Checkpoint, Some(2), None, true),
-            ("checkpoint-resolved", AttentionKind::Checkpoint, None, Some(2), false),
-            ("crash-viewed", AttentionKind::Crash, Some(2), None, true),
-            ("crash-resolved", AttentionKind::Crash, None, Some(2), false),
+            ("waiting-agent-waits", AttentionKind::Waiting, None, None, waits, true),
+            ("waiting-agent-moved-on", AttentionKind::Waiting, None, None, works, false),
+            ("waiting-no-agent-in-the-pane", AttentionKind::Waiting, None, None, None, false),
+            ("waiting-viewed", AttentionKind::Waiting, Some(2), None, waits, false),
+            ("waiting-resolved", AttentionKind::Waiting, None, Some(2), waits, false),
+            ("checkpoint-viewed-agent-working", AttentionKind::Checkpoint, Some(2), None, works, true),
+            ("checkpoint-resolved", AttentionKind::Checkpoint, None, Some(2), None, false),
+            ("crash-viewed-no-agent", AttentionKind::Crash, Some(2), None, None, true),
+            ("crash-resolved", AttentionKind::Crash, None, Some(2), None, false),
         ];
-        for (i, (id, attention_kind, viewed, resolved, _)) in cases.iter().enumerate() {
-            s.attention_insert(&AttentionItem { viewed_at_ms: *viewed, resolved_at_ms: *resolved, pane_id: Some("p".into()), ..item(id, *attention_kind) }).unwrap();
+        for (i, (id, attention_kind, viewed, resolved, _, _)) in cases.iter().enumerate() {
+            s.attention_insert(&AttentionItem { viewed_at_ms: *viewed, resolved_at_ms: *resolved, pane_id: Some(id.to_string()), ..item(id, *attention_kind) }).unwrap();
             s.activity_insert(&activity(id, i as u64, kind(), Some(id))).unwrap();
         }
         s.activity_insert(&activity("orphan", 50, kind(), Some("missing"))).unwrap();
-        let mut open: Vec<String> = s.activity_list(&ActivityQuery { needs_me: true, ..Default::default() }).unwrap().into_iter().map(|e| e.id).collect();
+        let waiting_panes: Vec<Id> = cases.iter().filter(|c| c.4 == waits).map(|c| c.0.to_string()).collect();
+        let mut open: Vec<String> = s.activity_list(&ActivityQuery { needs_me: true, ..Default::default() }, &waiting_panes).unwrap().into_iter().map(|e| e.id).collect();
         open.sort();
-        let mut expected: Vec<String> = cases.iter().filter(|c| c.4).map(|c| c.0.to_string()).collect();
+        let mut expected: Vec<String> = cases.iter().filter(|c| c.5).map(|c| c.0.to_string()).collect();
         expected.sort();
         assert_eq!(open, expected);
     }

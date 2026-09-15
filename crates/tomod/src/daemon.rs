@@ -2256,7 +2256,11 @@ impl Daemon {
                 list.sort_by(|a, b| (&a.worktree_id, a.port, a.pid).cmp(&(&b.worktree_id, b.port, b.pid)));
                 ok(list)
             }
-            Call::ActivityList(query) => ok(self.lock().store.activity_list(&query).map_err(internal)?),
+            Call::ActivityList(query) => {
+                let inner = self.lock();
+                let waiting: Vec<Id> = inner.agents.values().filter(|a| a.state == AgentState::Waiting).map(|a| a.pane_id.clone()).collect();
+                ok(inner.store.activity_list(&query, &waiting).map_err(internal)?)
+            }
             Call::CheckpointCreate(spec) => {
                 let message = spec.message.trim().to_string();
                 if message.is_empty() {
