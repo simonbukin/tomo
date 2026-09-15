@@ -15,7 +15,6 @@ mod system;
 mod moves;
 mod procs;
 mod pty;
-mod runtime;
 mod server;
 mod settings;
 mod store;

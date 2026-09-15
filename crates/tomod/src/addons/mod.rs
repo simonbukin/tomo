@@ -3,6 +3,7 @@
 
 pub mod actions;
 pub mod github;
+pub mod runtime;
 pub mod towns;
 pub mod usage;
 
@@ -15,6 +16,7 @@ use std::sync::Arc;
 pub struct State {
     pub actions: actions::Sets,
     pub github: github::Cache,
+    pub runtime: runtime::Endpoints,
     pub usage: usage::Last,
 }
 
@@ -35,6 +37,7 @@ pub fn seams() -> Seams {
         worktree_rebound: vec![towns::rebind],
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
+        process_polled: vec![runtime::scan],
     }
 }
 
@@ -144,12 +147,15 @@ mod tests {
         super::usage::remember(&mut a.lock(), vec![usage]);
         let pr = PullRequest { number: 7, title: "t".into(), url: "u".into(), state: "open".into(), draft: false, review_decision: None, mergeable: None, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: now_ms() };
         super::github::remember(&mut a.lock(), worktree_id.clone(), PrStatusResult { available: true, reason: None, pr: Some(pr) });
+        let endpoint = RuntimeEndpoint { id: "1:3000".into(), worktree_id: worktree_id.clone(), pane_id: None, action_id: None, pid: 1, process: "node".into(), protocol: RuntimeProtocol::Tcp, host: "localhost".into(), port: 3000, label: None, discovered_at_ms: now_ms(), source: None };
+        super::runtime::remember(&mut a.lock(), vec![endpoint], now_ms());
 
         let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);
         assert_eq!(seen_by_b.usage.len(), 0, "usage leaked into the second daemon");
         assert_eq!(seen_by_b.actions.len(), 0, "action sets leaked into the second daemon");
+        assert_eq!(seen_by_b.endpoints.len(), 0, "endpoints leaked into the second daemon");
         assert!(super::github::known_pr(&b.lock(), &worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
-        assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len()), (1, 1));
+        assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len(), seen_by_a.endpoints.len()), (1, 1, 1));
         assert!(super::github::known_pr(&a.lock(), &worktree_id, &[]).is_some());
         a.shutdown();
         b.shutdown();
