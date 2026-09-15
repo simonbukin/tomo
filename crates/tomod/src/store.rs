@@ -577,7 +577,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tomo_proto::{ActionActivity, CoreActivity};
+    use tomo_proto::CoreActivity;
 
     #[test]
     fn metadata_round_trip_and_malformed_tags_degrade() {
@@ -635,7 +635,7 @@ mod tests {
         let s = Store::open_in_memory().unwrap();
         s.attention_insert(&item("chk", AttentionKind::Checkpoint)).unwrap();
         s.attention_insert(&AttentionItem { pane_id: Some("p".into()), ..item("wait", AttentionKind::Waiting) }).unwrap();
-        s.activity_insert(&activity("a", 10, ActionActivity::Started.into(), None)).unwrap();
+        s.activity_insert(&activity("a", 10, CoreActivity::AgentStarted.into(), None)).unwrap();
         s.activity_insert(&activity("b", 20, CoreActivity::CheckpointCreated.into(), Some("chk"))).unwrap();
         s.activity_insert(&activity("c", 20, CoreActivity::AgentWaiting.into(), Some("wait"))).unwrap();
         let ids = |q: ActivityQuery| s.activity_list(&q, &["p".to_string()]).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
