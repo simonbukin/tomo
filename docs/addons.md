@@ -989,6 +989,30 @@ on the merged tree.
 9.4 ms. Milestone 1 found that the base commit gives the same slow first
 runs on this machine.
 
+Soak (`scripts/soak/busy.sh 300`, debug daemon, merged tree, 2 runs; no
+usage mock, as in the baseline):
+
+| Metric | Baseline | Run 1 | Run 2 |
+|---|---|---|---|
+| Result | PASS | PASS (22.5 MB at 60 s, 21.9 MB at the end) | PASS (20.7 MB at 60 s, 20.5 MB at the end) |
+| tomod RSS min, max, last | 20, 23, 20 MB | 21, 28, 21 MB | 19, 28, 20 MB |
+| tomod CPU max | 10.3 % | 9 % | 12 % |
+| `tomo ps --json` min..max | 31..90 ms | 27..244 ms | 26..346 ms |
+| `tomo worktree list --json` min..max | 26..53 ms | 24..48 ms | 23..318 ms |
+| Events | 429 | 426 | 397 |
+
+Gate: pass, with one number at the limit. No round trip is more than 1 ms
+and 20 % slower (reattach is 0.15 ms slower). Idle CPU is 0.13 % without and
+0.77 % with a subscriber. Idle RSS is below 18 MB. Both soaks pass, but
+their maximum RSS is 28 MB, which is the limit and 5 MB above the baseline.
+The RSS goes back to 20 MB, so it is a peak, not growth. The cause is not
+found: milestone 1 did not run the soak, the soak runs on the tree that
+includes the Activity kind seam, and the usage addon adds only one small
+`Vec` of snapshots. The CLI peaks in run 2 (346 ms, 318 ms) came while
+another agent built; the last samples were 40 ms and 26 ms. Measure the
+soak again at the next milestone on a quiet machine. GUI cold launch and GUI
+RSS: not measured (no GUI allowed).
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
