@@ -18,14 +18,24 @@ export function Button({ variant = "subtle", size = "md", className, type = "but
 export interface IconButtonProps extends Omit<ButtonProps, "size" | "aria-label"> {
   /** Accessible name; also the tooltip text. */
   label: string;
+  /** Key chord shown after the label in the tooltip, for example `⌘T`. */
+  shortcut?: string;
   tooltipSide?: TooltipSide;
   children?: ReactNode;
 }
 
 /** An icon-only control. Every one gets a tooltip and an accessible name. */
-export function IconButton({ label, tooltipSide, variant = "ghost", ...rest }: IconButtonProps) {
+export function IconButton({ label, shortcut, tooltipSide, variant = "ghost", ...rest }: IconButtonProps) {
+  const tip = shortcut ? (
+    <span className="tip-row">
+      {label}
+      <kbd className="tip-kbd">{shortcut}</kbd>
+    </span>
+  ) : (
+    label
+  );
   return (
-    <Tooltip content={label} side={tooltipSide}>
+    <Tooltip content={tip} side={tooltipSide}>
       <Button aria-label={label} variant={variant} size="icon" {...rest} />
     </Tooltip>
   );

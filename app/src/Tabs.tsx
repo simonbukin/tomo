@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Men
 import { openMenu } from "./MenuHost";
 import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
+import { useShortcuts } from "./shortcuts";
 import { paneIds, useStore } from "./store";
 import type { Id, Pane, Tab } from "./types";
 
@@ -19,6 +20,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const tabs = useStore((s) => s.tabs[worktreeId]) ?? [];
   const panes = useStore((s) => s.panes);
   const [editing, setEditing] = useState<{ id: Id; value: string } | null>(null);
+  const shortcut = useShortcuts();
 
   const commit = () => {
     if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(() => {});
@@ -63,6 +65,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
             {tabs.length > 1 && (
               <IconButton
                 label="Close tab"
+                shortcut={t.is_active ? shortcut("close_tab") : undefined}
                 className="tab-close"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
@@ -77,7 +80,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
         );
       })}
       <DropdownMenu>
-        <DropdownMenuTrigger render={<IconButton label="New tab: terminal, browser, or agent" className="tab-new" />}>
+        <DropdownMenuTrigger render={<IconButton label="New tab: terminal, browser, or agent" shortcut={shortcut("new_tab")} className="tab-new" />}>
           <Plus className="icon" />
         </DropdownMenuTrigger>
         <DropdownMenuContent>

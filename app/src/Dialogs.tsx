@@ -6,6 +6,7 @@ import { applyZoom, openWorktree, setAppearance } from "./actions";
 import { ACCENTS, type ThemeChoice } from "./appearance";
 import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Select, SkeletonRows } from "./components/ui";
 import { InlineError } from "./states";
+import { useShortcuts } from "./shortcuts";
 import { notify, setState, useStore, type Dialog as DialogSpec } from "./store";
 import type { ConfigIssue, HookRun, IntegrationStatus, Repo, Town, Worktree } from "./types";
 
@@ -303,6 +304,7 @@ function AppearanceDialog({ close }: { close: () => void }) {
   const a = useStore((s) => s.ui.appearance);
   const configFont = useStore((s) => s.config?.font_size ?? 13);
   const font = a.terminalFontSize ?? configFont;
+  const shortcut = useShortcuts();
   const themes: { value: ThemeChoice; label: string }[] = [
     { value: "system", label: "system" },
     { value: "light", label: "light" },
@@ -325,11 +327,11 @@ function AppearanceDialog({ close }: { close: () => void }) {
         </span>
         <label>zoom</label>
         <span className="stepper">
-          <IconButton label="Zoom out" onClick={() => applyZoom("out")}>
+          <IconButton label="Zoom out" shortcut={shortcut("zoom_out")} onClick={() => applyZoom("out")}>
             <Minus className="icon" />
           </IconButton>
           <span className="value">{Math.round(a.zoom * 100)}%</span>
-          <IconButton label="Zoom in" onClick={() => applyZoom("in")}>
+          <IconButton label="Zoom in" shortcut={shortcut("zoom_in")} onClick={() => applyZoom("in")}>
             <Plus className="icon" />
           </IconButton>
           {a.zoom !== 1 && <Button variant="link" onClick={() => applyZoom("reset")}>reset</Button>}

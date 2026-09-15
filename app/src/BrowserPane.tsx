@@ -7,6 +7,7 @@ import { browserCommand, closePane, copyText, focusPane, openExternalUrl } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { browserMenu, isLastPane } from "./menus";
+import { useShortcuts } from "./shortcuts";
 import { agentsOf, notify, useStore } from "./store";
 import { KIND_LABEL, type EvidenceBundle, type Id } from "./types";
 
@@ -46,6 +47,8 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
   const covered = useStore((s) => !!s.menu || !!s.dialog || s.paletteOpen);
   const agents = useStore((s) => (pane ? agentsOf(s, pane.worktree_id) : []));
   const lastPane = useStore(() => isLastPane(paneId));
+  const shortcut = useShortcuts();
+  const focusedKey = (id: string) => (active ? shortcut(id) : undefined);
   const hostRef = useRef<HTMLDivElement>(null);
   const lastBounds = useRef<Bounds | null>(null);
   const urlRef = useRef(pane?.url ?? "about:blank");
@@ -167,20 +170,20 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
           <span className="chip right" title={url}>
             <span>{hostOf(url)}</span>
             {!lastPane && (
-              <IconButton label="Close pane" onClick={() => closePane(paneId)}>
+              <IconButton label="Close pane" shortcut={focusedKey("close_pane")} onClick={() => closePane(paneId)}>
                 <X className="icon" />
               </IconButton>
             )}
           </span>
         </div>
         <div className="browser-toolbar" onMouseDown={() => focusPane(paneId)}>
-          <IconButton label="Back" onClick={() => browserCommand(paneId, "browser_back")}>
+          <IconButton label="Back" shortcut={focusedKey("browser_back")} onClick={() => browserCommand(paneId, "browser_back")}>
             <ArrowLeft className="icon" />
           </IconButton>
-          <IconButton label="Forward" className="browser-forward" onClick={() => browserCommand(paneId, "browser_forward")}>
+          <IconButton label="Forward" shortcut={focusedKey("browser_forward")} className="browser-forward" onClick={() => browserCommand(paneId, "browser_forward")}>
             <ArrowRight className="icon" />
           </IconButton>
-          <IconButton label="Reload" onClick={() => browserCommand(paneId, "browser_reload")}>
+          <IconButton label="Reload" shortcut={focusedKey("browser_reload")} onClick={() => browserCommand(paneId, "browser_reload")}>
             <RotateCw className="icon" />
           </IconButton>
           <input

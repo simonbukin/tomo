@@ -13,6 +13,9 @@ import { TabLayout } from "./Layout";
 import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
 import { RightSidebar } from "./RightSidebar";
+import { useAppMenu } from "./appMenu";
+import { ShortcutReference } from "./ShortcutReference";
+import { opensShortcutHelp, useShortcuts } from "./shortcuts";
 import { Sidebar } from "./Sidebar";
 import { activeTab, applyFrame, applySnapshot, getState, keyBindings, needsMe, repoName, setState, setUi, useStore } from "./store";
 import { TabBar } from "./Tabs";
@@ -54,6 +57,8 @@ function Shell() {
   const attention = useStore((s) => needsMe(s).length);
   const config = useStore((s) => s.config);
   useWindowChrome();
+  const shortcut = useShortcuts();
+  useAppMenu();
 
   useEffect(() => {
     const offFrame = onFrame(applyFrame);
@@ -77,6 +82,11 @@ function Shell() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
+      if (opensShortcutHelp(e)) {
+        e.preventDefault();
+        runAction("keyboard_shortcuts");
+        return;
+      }
       if (target?.closest(".xterm")) return;
       const zoom = zoomKey(e);
       if (zoom) {
@@ -137,17 +147,17 @@ function Shell() {
             {Math.round(appearance.zoom * 100)}%
           </Button>
         )}
-        <IconButton label="Appearance" onClick={() => setState({ dialog: { kind: "appearance" } })}>
+        <IconButton label="Appearance" shortcut={shortcut("appearance")} onClick={() => setState({ dialog: { kind: "appearance" } })}>
           <SunMoon className="icon" />
         </IconButton>
-        <IconButton label="Command palette (⌘K)" onClick={() => runAction("palette")}>
-          <span className="kbd">⌘K</span>
+        <IconButton label="Command palette" shortcut={shortcut("palette")} onClick={() => runAction("palette")}>
+          <span className="kbd">{shortcut("palette") ?? "⌘K"}</span>
         </IconButton>
-        <IconButton label={ui.leftOpen ? "Hide sidebar" : "Show sidebar"} onClick={() => setUi({ leftOpen: !ui.leftOpen })}>
+        <IconButton label={ui.leftOpen ? "Hide sidebar" : "Show sidebar"} shortcut={shortcut("toggle_left_sidebar")} onClick={() => setUi({ leftOpen: !ui.leftOpen })}>
           <PanelLeft className="icon" />
         </IconButton>
         {showWorktree && (
-          <IconButton label={ui.rightOpen ? "Hide inspector" : "Show inspector"} onClick={() => setUi({ rightOpen: !ui.rightOpen })}>
+          <IconButton label={ui.rightOpen ? "Hide inspector" : "Show inspector"} shortcut={shortcut("toggle_right_sidebar")} onClick={() => setUi({ rightOpen: !ui.rightOpen })}>
             <PanelRight className="icon" />
           </IconButton>
         )}
@@ -172,6 +182,7 @@ function Shell() {
       </main>
       {ui.rightOpen && showWorktree && <RightSidebar worktree={worktree} />}
       <Palette />
+      <ShortcutReference />
       <Dialogs />
       <TownReveal />
       {notice && (

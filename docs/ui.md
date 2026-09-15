@@ -16,7 +16,10 @@ Tomo, not like a component library.
 - Style with Tomo CSS classes and tokens. No utility-class soup in product
   code. No hard-coded colors in components.
 - Every icon-only control is an `IconButton` with a `label`. The label is
-  the tooltip and the accessible name.
+  the tooltip and the accessible name. Pass `shortcut` when a registry
+  command does the same thing, so the tooltip shows its key.
+- Keys, the palette, context menus, the shortcut reference, and the menu
+  bar read one command registry. See `docs/keyboard.md`.
 - Use `ConfirmDialog` for every confirmation. Pass `destructive` only when
   the action cannot be undone.
 - Use Popover for small anchored UI. Use Dialog only when the user must
