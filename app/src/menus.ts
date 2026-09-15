@@ -1,13 +1,12 @@
-import { endpointUrl, httpEndpoints } from "./activityModel";
-import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, focusPane, killPaneTree, newTabIn, newTerminalIn, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
 import { browserCommand, openBrowser } from "./browser/browser";
 import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
 import type { MenuItem } from "./components/ui";
 import { orderedStates } from "./homeQuery";
 import { chordFor, effectiveBindings } from "./shortcuts";
-import { activeTab, clearSelection, endpointsOf, getState, paneIds, setState, type State } from "./store";
-import type { Id, Pane, Repo, RuntimeEndpoint, Tab, Worktree } from "./types";
+import { activeTab, clearSelection, getState, paneIds, setState, type State } from "./store";
+import type { Id, Pane, Repo, Tab, Worktree } from "./types";
 
 const sep: MenuItem = { separator: true };
 
@@ -87,34 +86,15 @@ function worktreeDetailItems(w: Worktree, s: State): MenuItem[] {
   ];
 }
 
-export function endpointMenu(worktreeId: Id, e: RuntimeEndpoint, s: State = getState()): MenuItem[] {
-  const url = e.protocol === "tcp" ? null : endpointUrl(e);
-  const pane = e.pane_id ? s.panes[e.pane_id] : undefined;
-  return [
-    { label: "open", disabled: !url, run: () => url && openEndpoint(url, worktreeId) },
-    { label: "focus logs", disabled: !pane, run: () => pane && focusPane(pane.id) },
-    ...builtins.flatMap((a) => a.endpointMenu?.(worktreeId, e, s) ?? []),
-    sep,
-    copyMenu([
-      ["URL", url],
-      ["Port", String(e.port)],
-    ]),
-  ];
-}
-
 export function overflowMenu(w: Worktree, s: State = getState()): MenuItem[] {
   const acts = builtins.flatMap((a) => {
     const items = a.worktreeMenu?.(w, s) ?? [];
     return items.length ? [...items, sep] : [];
   });
-  const loose = httpEndpoints(endpointsOf(s, w.id)).filter((e) => !e.action_id);
-  const runtime: MenuItem[] = loose.length ? [{ label: "runtime", disabled: true }, ...loose.map((e) => ({ label: `open :${e.port} · ${e.process}`, run: () => openEndpoint(endpointUrl(e), w.id) }))] : [];
   const tab = activeTab(s, w.id);
   const multi = tab ? paneIds(tab.layout).length > 1 : false;
   return [
     ...acts,
-    ...runtime,
-    ...(runtime.length ? [sep] : []),
     { label: "split right", shortcut: shortcutIn(s, "new_terminal"), run: () => splitPane("horizontal") },
     { label: "split down", shortcut: shortcutIn(s, "split_vertical"), run: () => splitPane("vertical") },
     { label: "equalize panes", shortcut: shortcutIn(s, "equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },

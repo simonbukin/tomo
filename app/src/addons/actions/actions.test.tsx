@@ -10,7 +10,7 @@ vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeo
 
 const { rpc } = await import("../../api");
 const { WorktreeHeader } = await import("../../WorktreeHeader");
-const { endpointMenu, overflowMenu } = await import("../../menus");
+const { overflowMenu } = await import("../../menus");
 const { paletteEntries } = await import("../../Palette");
 const { ShortcutReference } = await import("../../ShortcutReference");
 const { runAction } = await import("../../actions");
@@ -91,23 +91,6 @@ describe("actions menus", () => {
     expect(rpcCalls()).toEqual([["action_run", { worktree_id: "w1", action_id: "quick" }]]);
   });
 
-  it("a running action opens, focuses logs, restarts, stops, and copies url and port", async () => {
-    const { runningActionItems } = await import("./commands");
-    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0, source: serveSource } as const;
-    const s = { ...store.getState(), endpoints: { w1: [endpoint] } };
-    const menu = runningActionItems("w1", "serve", s);
-    expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);
-    expect(labels(entry(menu, "copy").submenu!)).toEqual(["url", "port"]);
-    expect(labels(runningActionItems("w1", "other", s))).toEqual(["focus logs", "restart", "stop"]);
-  });
-
-  it("offers restart and stop on an endpoint of an action", () => {
-    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0, source: serveSource } as const;
-    const menu = endpointMenu("w1", endpoint, store.getState());
-    expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);
-    entry(menu, "stop").run!();
-    expect(rpcCalls()).toEqual([["action_stop", { worktree_id: "w1", action_id: "serve" }]]);
-  });
 });
 
 describe("actions palette and shortcuts", () => {

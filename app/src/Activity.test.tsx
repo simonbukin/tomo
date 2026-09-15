@@ -2,9 +2,9 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rpc } from "./api";
-import type { ActionSet } from "./generated";
+import type { ActionSet, RuntimeEndpoint } from "./generated";
 import { applyFrame, getState, setState } from "./store";
-import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, RuntimeEndpoint, Worktree } from "./types";
+import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, Worktree } from "./types";
 import { defaultUi } from "./uiState";
 
 vi.mock("./api", async (importOriginal) => {

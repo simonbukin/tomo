@@ -46,8 +46,6 @@ export type {
   PaneOrigin,
   Repo,
   RpcError,
-  RuntimeEndpoint,
-  RuntimeProtocol,
   Snapshot,
   SpawnResult,
   SplitDirection,

@@ -15,7 +15,6 @@ import type { Diagnostic, DiagnosticLevel,
   Id,
   Pane,
   Repo,
-  RuntimeEndpoint,
   Snapshot,
   Status,
   SystemStats,
@@ -39,7 +38,6 @@ export interface State {
   agents: Record<Id, AgentPresence>;
   attention: AttentionItem[];
   resources: Record<Id, WorktreeResources>;
-  endpoints: Record<Id, RuntimeEndpoint[]>;
   activity: ActivityEvent[];
   ui: UiState;
   focusRequest: { worktree_id: Id; tab_id: Id; pane_id: Id; nonce: number } | null;
@@ -92,7 +90,6 @@ let state: State = {
   agents: {},
   attention: [],
   resources: {},
-  endpoints: {},
   activity: [],
   ui: defaultUi,
   focusRequest: null,
@@ -166,10 +163,6 @@ export function setUi(patch: Partial<UiState>): void {
   }, 300);
 }
 
-function groupEndpoints(list: RuntimeEndpoint[]): Record<Id, RuntimeEndpoint[]> {
-  return list.reduce<Record<Id, RuntimeEndpoint[]>>((out, e) => ({ ...out, [e.worktree_id]: [...(out[e.worktree_id] ?? []), e] }), {});
-}
-
 function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
   const out: Record<Id, Tab[]> = {};
   for (const t of tabs) (out[t.worktree_id] ??= []).push(t);
@@ -190,7 +183,6 @@ export function applySnapshot(snap: Snapshot): void {
     agents: Object.fromEntries(snap.agents.map((a) => [a.pane_id, a])),
     attention: snap.attention,
     resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
-    endpoints: groupEndpoints(snap.endpoints ?? []),
     daemonStatus: snap.status,
     ui,
   });
@@ -300,16 +292,6 @@ export function applyFrame(frame: Frame): void {
       dismissToastKey(attentionToastKey(id));
       break;
     }
-    case "endpoints_changed": {
-      const { worktree_id, endpoints } = d as { worktree_id: Id; endpoints: RuntimeEndpoint[] };
-      setState((s) => {
-        const next = { ...s.endpoints };
-        if (endpoints.length) next[worktree_id] = endpoints;
-        else delete next[worktree_id];
-        return { endpoints: next };
-      });
-      break;
-    }
     case "activity_added":
       setState((s) => ({ activity: mergeActivity(s.activity, [(d as { event: ActivityEvent }).event]) }));
       break;
@@ -369,10 +351,6 @@ export function needsMe(s: State): AttentionItem[] {
 }
 
 export const unviewedAttention = needsMe;
-
-export function endpointsOf(s: State, worktreeId: Id): RuntimeEndpoint[] {
-  return s.endpoints[worktreeId] ?? [];
-}
 
 export function queryContext(s: State): QueryContext {
   return { repos: s.repos, agents: Object.values(s.agents), attention: s.attention, states: s.config?.states ?? [] };
