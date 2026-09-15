@@ -186,7 +186,11 @@ const AGENTATION_JS: &str = include_str!("../agentation/agentation.js");
 pub struct AnnotatePanes(Mutex<HashSet<String>>);
 
 fn agentation_script(enabled: bool) -> String {
-    format!("if(!window.__tomoAgentation){{{AGENTATION_JS}\n}}window.__tomoAgentation.set({enabled});")
+    if enabled {
+        format!("if(!window.__tomoAgentation){{{AGENTATION_JS}\n}}window.__tomoAgentation.set(true);")
+    } else {
+        "window.__tomoAgentation&&window.__tomoAgentation.set(false);".to_string()
+    }
 }
 
 #[tauri::command]
