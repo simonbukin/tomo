@@ -1048,6 +1048,228 @@ another agent built; the last samples were 40 ms and 26 ms. Measure the
 soak again at the next milestone on a quiet machine. GUI cold launch and GUI
 RSS: not measured (no GUI allowed).
 
+## Milestone 2 result: GitHub
+
+### What moved
+
+| From | To |
+|---|---|
+| `PullRequest`, `PrStatusResult` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/github.rs` (the generated names do not change) |
+| `crates/tomod/src/github.rs`, the `PrStatus` arm in `Daemon::handle`, `Inner.prs`, the `GitHubActivity::PrMerged` call site | `crates/tomod/src/addons/github/mod.rs` (the `gh` call, the cache, the handler) and `model.rs` (the pure rules) |
+| `Call::PrStatus` in the `is_slow` list of `server.rs` | `dispatch::is_slow` |
+| `git::github_repo`, `Repo.github`, `GitHubRepo` | removed from Core and the wire; `githubOwner` in `app/src/addons/github/model.ts` |
+| the cached pull request and the `pr_merged` fallback in Towns `model::history` | `github::known_pr`, which `dispatch::town_pr` gives to Towns |
+| `PrSection` in `RightSidebar.tsx`; `SECTIONS.pr` and the PR marker in `shell/RightRail.tsx`; `"pr"` in `RIGHT_SECTIONS` | `PrSection.tsx` and `prMarker` in `app/src/addons/github/`, through the `inspectorSections` slot |
+| the `pr` signal in `activityModel.ts`, `Signals.tsx`, and `shell/LeftRail.tsx` | `prSignals` in `app/src/addons/github/model.ts`, through the `worktreeSignals` slot and the generic `AddonSignal` |
+| `State.prs` and the `pr_changed` reducer in `store.ts` | `app/src/addons/github/state.ts` |
+| the GitHub avatar URL in `RepoAvatar` (`Sidebar.tsx`) | `app/src/addons/github/Avatar.tsx`, through the `repoAvatar` slot |
+
+### Seams
+
+The daemon got no new `Seams` field. GitHub is pull-based and takes part in
+no Core operation.
+
+| Seam | Where | Why it is the narrowest option |
+|---|---|---|
+| `dispatch::is_slow` | `server.rs` asks it before it runs a call inline | `server.rs` is Core and must not name `Call::PrStatus`. One `matches!` in the composition root keeps the rule that a subprocess call runs in its own task. |
+| `towns::history(daemon, slug, pr: fn(&str, &[ActivityEvent]) -> Option<TownPr>)` | `dispatch.rs` passes `town_pr` | Towns needs three facts. A plain function pointer keeps both addons free of each other. Without GitHub, the root passes `\|_, _\| None`. An event, a shared table, or a client join is wider, and the CLI and the harness read `town_history` too. |
+| GUI `inspectorSections` | `RightSidebar.tsx` renders them after `git`; `shell/RightRail.tsx` renders the buttons and markers; `store.ts` gives the ids to `sanitizeUi` | The section had one fixed place after `git`. One insertion point keeps that order without a position field. |
+| GUI `worktreeSignals` | `signalsFor` in `Signals.tsx` gives them to `nowSignals` as `addon` | The PR signal came last. Addon signals keep that place, and the cap of three stays in one function. The signal is data (`AddonSignal`), so the left rail can print it as text. |
+| GUI `repoAvatar` | `RepoAvatar` in `Sidebar.tsx`, which the sidebar and Home render | The avatar was the only reader of `Repo.github`. One component slot, where the first addon wins, like `worktreeNameField`. |
+
+### Client state decision
+
+The rail marker and the NOW signals are selectors that core components run
+through `useStore`. A private store like the one of Towns would not make
+those components render again. So `app/src/addons/github/state.ts` declares
+the optional key `prs` on the core `State` through TypeScript module
+augmentation, and it is the only writer. Core never names the key. If the
+GitHub folder is deleted, the key goes away from the type.
+
+Rejected options:
+
+- Hooks as slots. Core would call addon hooks in a loop over `builtins`.
+- A second subscription inside `useStore`. Its selector cache keys on the
+  core state object, so an addon change alone would not show.
+
+### Daemon state decision
+
+The cache is a process-wide `static Mutex` in the addon, like the Usage
+result. The lock order is `Daemon::lock` first, then the cache.
+`pr_status` never takes the Core lock while it holds the cache lock.
+
+Rejected options:
+
+- A generic addon state field on `Daemon`. That is a service locator.
+- The `kv` table. It would change the behavior after a restart and add a
+  write for each answer.
+
+### Background rule
+
+Unchanged. The daemon has no GitHub poller. `gh` runs only inside a
+`pr_status` call without a cached pull request younger than 60 s. The
+inspector section asks when it mounts, every 120 s while it is open, and on
+refresh. `tomo pr` asks once. The rail marker, the NOW signals, and the town
+history read the cache only. `scripts/torture/github.sh` checks the cache
+with a call counter in the fake `gh`, and `github.test.tsx` checks the
+120 s poll and its stop on unmount.
+
+### Wire and schema changes
+
+- **Changed:** `Repo.github` and `GitHubRepo` are removed (commit `4904e59`).
+  The generated `GitHubRepo.ts` is deleted. `Repo.remote_url` stays. The
+  only consumer, the GUI repo avatar, changed in the same commit. The
+  installed CLI never read the field. An installed GUI older than this
+  change shows no repo avatar against a newer daemon; nothing fails. A newer
+  GUI against an older daemon works, because it reads `remote_url`.
+- **Unchanged:** `pr_status`, `pr_changed`, `PullRequest`, `PrStatusResult`,
+  `town_history`, `TownPr`, every method and event name, and every other
+  snapshot field.
+- **SQLite:** no change.
+- **Client UI state:** a saved `rightSection: "pr"` stays valid while GitHub
+  is built in. Without GitHub, `sanitizeUi` drops it.
+
+### GitHub deletion test (milestone 2)
+
+Done with `remove_github.py`, a script of exact replacements, on a throwaway
+branch from the merge commit `4c50df1`, then deleted. The removal changed 23
+files: 637 lines deleted, 10 lines added. Outside the three deleted folders
+and the regenerated `GitHubActivity.ts`, `PrStatusResult.ts`,
+`PullRequest.ts`, `Event.ts`, and `index.ts`, these are the only lines that
+changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod github;` |
+| `crates/tomod/src/dispatch.rs` | `use crate::addons::{github, towns, usage};` becomes `use crate::addons::{towns, usage};`; `ActivityEvent` and `TownPr` leave the `tomo_proto` import; `is_slow` returns `false` and its parameter becomes `_call`; the `TownHistory` arm passes `\|_, _\| None`; remove the `PrStatus` arm and `fn town_pr` |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod github;`, `pub use addons::github::*;`, `Call::PrStatus`, `Event::PrChanged`, the `PrStatusResult` and `GitHubActivity` `export_all` lines, and `GitHubActivity::PrMerged` with `"pr_merged"` in the test `addon_kinds_keep_their_stored_strings` |
+| `crates/tomo-cli/src/main.rs` | remove `Cmd::Pr` and its handler (7 lines) |
+| `crates/tomo-cli/src/print.rs` | remove `print::pr` (16 lines) |
+| `app/src/addons/index.ts` | remove the `github` import; `builtins` becomes `[towns, usage]` |
+| `app/src/addons/activity.ts` | remove the `githubActivity` import and its entry |
+| `scripts/torture/run-all.sh` | remove `github` from the list |
+
+The `github` entry of `OWNED_NOUNS` can stay. It is a test list, and it
+keeps GitHub nouns out of Core after the removal too.
+
+Result with GitHub removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` | pass: 127 tests (tomod 118, tomo-proto 7, tomo_app_lib 2); no new compiler warning |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vite build` | pass |
+| `npx vitest run` | 31 files, 220 tests pass |
+| `scripts/torture/archive.sh` | 17 passed, 0 failed |
+| `scripts/torture/terminal.sh` | 17 passed, 0 failed |
+| `scripts/torture/towns.sh` (town history without a pull request) | 11 passed, 0 failed |
+
+The first try, from commit `53e9b79` before the merge of Usage, found one
+failure, and the test did its job. The core test `Activity.test.tsx`
+asserted the GitHub view of a `pr_merged` row. Without the addon that row
+renders as a plain row by design. Commit `ef95913` moved the case into
+`github.test.tsx`. The second try above passed.
+
+`tomo pr` goes away with the addon. The `.pr-*` and `.check-*` CSS
+selectors stay as dead selectors.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Call::PrStatus`, `Event::PrChanged`, and the re-export in `tomo-proto/src/lib.rs` | composition root; the typed wire needs the variants |
+| `tomo pr` in `crates/tomo-cli/src/main.rs` and `print::pr` | one clap tree; they are listed deletion lines |
+| `dispatch::is_slow` and `dispatch::town_pr` | composition root |
+| `.pr-open`, `.pr-merged`, `.pr-closed`, `.check-passed`, `.check-failed` in `styles/base.css`, and `.pr-title` in `styles/layout.css` | they share rule lists with the core `.state-*` classes; a move could change the cascade |
+| `TownHistory.pr` and `TownPr` | the Towns wire type; the field is `null` without GitHub |
+| the `prs` key on the client `State` | declared by the addon; see "Client state decision" |
+| the placeholder `git@github.com:org/repo.git` in the clone dialog | example text for any Git remote |
+
+### Problems found in milestone 2 (not fixed)
+
+1. An archive, a move, or a restore at a new path does not clear or move
+   the cache entry. After a rebind, the new id starts without a cache, so a
+   merged pull request can record `pr_merged` again. `worktree_rebound`
+   could move the entry. This milestone keeps the behavior.
+2. After a daemon restart, the next merged answer records `pr_merged` again.
+   `github.sh` reports it as a known limitation.
+3. `pr_changed` fires on each new fetch of an open pull request, because
+   `fetched_at_ms` is part of the equality. An open inspector gets one extra
+   store update every 120 s. It does no harm.
+
+### Tests
+
+| Suite | Before milestone 2 | Milestone 2 (before the merge) | After the merge of Usage |
+|---|---|---|---|
+| `cargo test --workspace` | 128 | 131 (tomod 122, tomo-proto 7, tomo_app_lib 2) | 133 (tomod 124, tomo-proto 7, tomo_app_lib 2) |
+| vitest | 30 files, 212 tests | 31 files, 226 tests | 32 files, 232 tests |
+| torture harness | 283 checks in 15 scripts | 302 checks in 16 scripts, 1 known | 317 checks in 17 scripts, 1 known |
+
+New tests: 6 in `crates/tomod/src/addons/github/model.rs`; 12 in
+`app/src/addons/github/github.test.tsx` (10 characterization tests written
+before the move); 1 addon section case in `uiState.test.ts`; the GitHub noun
+test in `boundary.test.ts`; `scripts/torture/github.sh` (19 checks and 1
+known). Tests that moved: `github.rs::parses_checks_from_both_rollup_shapes`
+to `model.rs`; `towns::model::a_cached_pull_request_wins_over_the_merge_event`
+to `a_cached_pull_request_wins_over_the_newest_merge_event` in `model.rs`;
+`git.rs::parses_github_remotes` to the owner test in `github.test.tsx`; the
+`pr_merged` case of `Activity.test.tsx` and the PR case of
+`activity.test.ts` to `github.test.tsx` and a generic addon signal case. No
+test was removed without a replacement.
+
+### Performance
+
+Measured on 2026-09-15 with `addons-bench.py` on the merge commit `4c50df1`
+(GitHub and Usage), release build, data dir `/tmp/tomo-addons-github-bench`.
+Another agent built in parallel during the session, and the owner used the
+machine. The bench does not call `pr_status`. So the numbers show the code
+paths that always run: discovery without the GitHub parse, `subscribe`, and
+the dispatcher.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Activity kind seam | Milestone 2, after the merge |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.48 ms | 7.90 ms |
+| of which `subscribe` | 0.51 ms | 0.46 ms | 0.38 ms |
+| of which `pane_attach` | 7.14 ms | 6.97 ms | 7.51 ms |
+| Worktree switch | 0.14 ms | 0.13 ms | 0.08 ms |
+| Worktree switch with attach | 9.26 ms | 7.90 ms | 7.15 ms |
+| Refresh | 164.31 ms | 166.34 ms | 124.88 ms (trials 112.74, 128.82, 124.88) |
+| Process poll, fresh | 23.41 ms | 13.45 ms | 19.12 ms |
+| Process poll, cached | 0.63 ms | 0.30 ms | 0.49 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Activity kind seam | Milestone 2, after the merge |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.10 % | 0.12 % (0.12, 0.17, 0.08) |
+| Idle CPU, one subscriber | 1.05 % | 0.75 % | 0.83 % (0.83, 0.75, 0.90) |
+| RSS at window end, no subscriber | 14.6 MB | 14.8 MB | 12.1 MB (14.0, 12.0, 12.1) |
+| RSS at window end, subscribed | 14.6 MB | 14.6 MB | 12.8 MB (12.0, 12.8, 13.3) |
+
+The first three windows without a subscriber ran directly after `setup` and
+`ops`. They gave 0.10, 0.13, and 0.13 % CPU, but the RSS stayed at 35.3 MB.
+The memory came back during the subscribed windows, which started at
+14.9 MB. The no-subscriber rows above are a second set of three windows,
+after the memory settled. The baseline saw the same effect: its first window
+started at 31.2 MB.
+
+Gate: pass. The largest increase is `pane_attach`, 0.37 ms above the
+baseline, which is less than 1 ms. Idle CPU and RSS are below the limits.
+The main JS chunk is 720.79 kB after the merge (720.40 kB before), below the
+800 KB budget. Not measured: GUI cold launch and GUI RSS (no GUI allowed).
+Not run: `scripts/perf.sh` and the soak.
+
+### Stop conditions
+
+None was hit. Near: TypeScript module augmentation is a feature that some
+readers do not expect. `state.ts` and this section explain it. The slot code
+(three `Addon` fields, three helper lines, `AddonSignal`, and
+`railSections`) is about the size of the PR code that left the core client
+files.
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
