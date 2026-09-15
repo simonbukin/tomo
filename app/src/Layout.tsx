@@ -43,7 +43,7 @@ function Split({ node, tabId, activePane }: { node: Extract<LayoutNode, { type: 
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
       document.body.classList.remove(horizontal ? "resizing-h" : "resizing-v");
-      rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: latest }).catch(() => {});
+      if (latest !== node.ratio) rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: latest }).catch(() => {});
       setDrag(null);
     };
     document.body.classList.add(horizontal ? "resizing-h" : "resizing-v");
@@ -51,12 +51,15 @@ function Split({ node, tabId, activePane }: { node: Extract<LayoutNode, { type: 
     window.addEventListener("mouseup", up);
   };
 
+  const equalize = () => {
+    if (node.ratio !== 0.5) rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: 0.5 }).catch(() => {});
+  };
   return (
     <div ref={ref} className={`split split-${node.direction}`}>
       <div className="split-child" style={{ flexBasis: `${ratio * 100}%` }}>
         <Node node={node.first} tabId={tabId} activePane={activePane} />
       </div>
-      <div className={`splitter splitter-${node.direction}`} onMouseDown={onMouseDown} />
+      <div className={`splitter splitter-${node.direction}`} onMouseDown={onMouseDown} onDoubleClick={equalize} />
       <div className="split-child" style={{ flexBasis: `${(1 - ratio) * 100}%` }}>
         <Node node={node.second} tabId={tabId} activePane={activePane} />
       </div>

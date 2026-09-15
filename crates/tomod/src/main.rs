@@ -10,6 +10,7 @@ mod integrations;
 mod layout;
 mod login_env;
 mod monitor;
+mod moves;
 mod procs;
 mod pty;
 mod runtime;

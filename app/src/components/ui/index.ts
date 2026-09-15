@@ -23,6 +23,7 @@ export {
   type MenuSide,
 } from "./menu";
 export { Popover, PopoverClose, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "./popover";
+export { PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./preview-card";
 export { Select, type SelectOption, type SelectProps } from "./select";
 export { Separator } from "./separator";
 export { Skeleton, SkeletonRows, type SkeletonProps } from "./skeleton";
