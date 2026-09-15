@@ -63,6 +63,16 @@ describe("normalizeUrl", () => {
     expect(normalizeUrl("https://example.com")).toBe("https://example.com");
     expect(normalizeUrl("about:blank")).toBe("about:blank");
   });
+
+  it("adds http to a host with a port and keeps a real scheme", () => {
+    expect(normalizeUrl("localhost:3000")).toBe("http://localhost:3000");
+    expect(normalizeUrl("localhost:3000/a?b=1")).toBe("http://localhost:3000/a?b=1");
+    expect(normalizeUrl("127.0.0.1:8080")).toBe("http://127.0.0.1:8080");
+    expect(normalizeUrl("example.com:8443/x")).toBe("http://example.com:8443/x");
+    expect(normalizeUrl("http://localhost:3000")).toBe("http://localhost:3000");
+    expect(normalizeUrl("file:///tmp/a.html")).toBe("file:///tmp/a.html");
+    expect(normalizeUrl("data:text/html,hi")).toBe("data:text/html,hi");
+  });
 });
 
 describe("BrowserPane", () => {

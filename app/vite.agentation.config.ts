@@ -11,6 +11,6 @@ export default defineConfig({
     emptyOutDir: true,
     minify: true,
     sourcemap: false,
-    lib: { entry: "agentation/entry.tsx", formats: ["iife"], name: "TomoAgentation", fileName: () => "agentation.js" },
+    lib: { entry: "src/addons/agentation/page/entry.tsx", formats: ["iife"], name: "TomoAgentation", fileName: () => "agentation.js" },
   },
 });

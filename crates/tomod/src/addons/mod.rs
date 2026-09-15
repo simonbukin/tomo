@@ -2,6 +2,7 @@
 //! Core never imports this module. Only `main.rs` and `dispatch.rs` do.
 
 pub mod actions;
+pub mod agentation;
 pub mod github;
 pub mod runtime;
 pub mod towns;
@@ -58,7 +59,7 @@ mod tests {
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
-    const OWNED_NOUNS: [(&str, &[&str]); 5] = [
+    const OWNED_NOUNS: [(&str, &[&str]); 6] = [
         (
             "runtime",
             &["runtimeendpoint", "runtimeprotocol", "runtimeactivity", "runtime_list", "runtimelist", "endpoints_changed", "endpointschanged", "scan_endpoints", "endpoint_gone", "endpoints_at", "endpoint_repeat", "inner.endpoints", "lsof"],
@@ -70,6 +71,7 @@ mod tests {
             "actions",
             &["actiondef", "actionset", "actionrunresult", "actionmode", "actionshow", "actionactivity", "tomo.toml", "features::actions", "inner.actions", "run_action", "stop_action", "reload_actions", "action_def"],
         ),
+        ("agentation", &["agentation", "evidencebundle", "evidence_text", "evidence_title", "annotationssend", "annotations_send", "annotation.sent"]),
     ];
 
     fn core_nouns() -> impl Iterator<Item = &'static &'static str> {

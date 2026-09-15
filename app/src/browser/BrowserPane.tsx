@@ -1,26 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowLeft, ArrowRight, Copy, ExternalLink, Globe, MessageSquarePlus, RotateCw, SendHorizontal, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { closePane, copyText, focusPane, openExternalUrl } from "../actions";
+import { ArrowLeft, ArrowRight, ExternalLink, Globe, RotateCw, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { closePane, focusPane, openExternalUrl } from "../actions";
+import { browserToolbarItems } from "../addons";
 import { rpc } from "../api";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "../components/ui";
+import { IconButton } from "../components/ui";
 import { openMenu } from "../MenuHost";
 import { browserMenu, isLastPane } from "../menus";
 import { useShortcuts } from "../shortcuts";
-import { agentsOf, failToast, getState, showStatus, useStore } from "../store";
-import { KIND_LABEL, type EvidenceBundle, type Id } from "../types";
+import { getState, useStore } from "../store";
+import type { Id } from "../types";
 import { browserCommand, browserHostFailed, normalizeUrl } from "./browser";
 
 type BrowserState = { pane_id: Id; url?: string; title?: string; loading?: boolean };
 type Bounds = { x: number; y: number; width: number; height: number };
-type Feedback = { count: number; markdown: string };
-type FeedbackEvent = Feedback & { pane_id: Id; kind: "change" | "copy" | "submit" };
-
-const INSTRUCTION = "Review and address this feedback.";
-const NO_FEEDBACK: Feedback = { count: 0, markdown: "" };
-
-const notes = (n: number) => `${n} ${n === 1 ? "note" : "notes"}`;
 
 function hostOf(url: string): string {
   try {
@@ -42,7 +36,6 @@ const sameBounds = (a: Bounds | null, b: Bounds) => !!a && a.x === b.x && a.y ==
 export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean }) {
   const pane = useStore((s) => s.panes[paneId]);
   const covered = useStore((s) => !!s.menu || !!s.dialog || s.paletteOpen);
-  const agents = useStore((s) => (pane ? agentsOf(s, pane.worktree_id) : []));
   const lastPane = useStore(() => isLastPane(paneId));
   const shortcut = useShortcuts();
   const focusedKey = (id: string) => (active ? shortcut(id) : undefined);
@@ -52,9 +45,12 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
   const [url, setUrlState] = useState(urlRef.current);
   const [draft, setDraft] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [annotate, setAnnotate] = useState(false);
-  const [feedback, setFeedback] = useState<Feedback>(NO_FEEDBACK);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const toolbarItems = browserToolbarItems();
+  const [covering, setCovering] = useState<Readonly<Record<string, boolean>>>({});
+  const coverSetters = useMemo(
+    () => Object.fromEntries(toolbarItems.map(({ id }) => [id, (on: boolean) => setCovering((prev) => (!!prev[id] === on ? prev : { ...prev, [id]: on }))])),
+    [],
+  );
   const setUrl = (u: string) => {
     urlRef.current = u;
     setUrlState(u);
@@ -86,29 +82,20 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
       if (st.title !== undefined) setTitle(st.title);
       if (st.url !== undefined && st.url !== urlRef.current) {
         setUrl(st.url);
-        setFeedback(NO_FEEDBACK);
         rpc("browser_navigate", { pane_id: paneId, url: st.url }).catch(() => {});
       }
-    });
-    const offFeedback = listen<FeedbackEvent>("browser://feedback", (e) => {
-      const { pane_id, kind, count, markdown } = e.payload;
-      if (pane_id !== paneId) return;
-      if (kind === "change") setFeedback({ count, markdown });
-      if (kind === "copy") copyText(markdown, "Feedback");
-      if (kind === "submit") setMenuOpen(true);
     });
     return () => {
       cancelAnimationFrame(frame);
       offState.then((off) => off());
-      offFeedback.then((off) => off());
       invoke("browser_close", { paneId }).catch(browserHostFailed("browser_close"));
     };
   }, [paneId]);
 
-  const sendOpen = menuOpen && feedback.count > 0;
+  const itemCovering = Object.values(covering).some(Boolean);
   useEffect(() => {
-    invoke("browser_set_visible", { paneId, visible: !(covered || sendOpen) }).catch(browserHostFailed("browser_set_visible"));
-  }, [paneId, covered, sendOpen]);
+    invoke("browser_set_visible", { paneId, visible: !(covered || itemCovering) }).catch(browserHostFailed("browser_set_visible"));
+  }, [paneId, covered, itemCovering]);
 
   useEffect(() => {
     if (pane?.url && pane.url !== urlRef.current) {
@@ -117,10 +104,6 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     }
   }, [pane?.url]);
 
-  useEffect(() => {
-    invoke("browser_set_annotate", { paneId, enabled: annotate }).catch(browserHostFailed("browser_set_annotate"));
-  }, [paneId, annotate]);
-
   const navigate = (text: string) => {
     const next = normalizeUrl(text);
     setDraft(null);
@@ -128,28 +111,6 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     invoke("browser_navigate", { paneId, url: next }).catch(browserHostFailed("browser_navigate", "Navigation failed"));
     rpc("browser_navigate", { pane_id: paneId, url: next }).catch(() => {});
   };
-
-  const send = async (agentPaneId: Id, label: string) => {
-    if (!pane) return;
-    const { count, markdown } = feedback;
-    const bundle: EvidenceBundle = { source: "browser feedback", worktree_id: pane.worktree_id, url, action_id: null, annotations: [], instruction: INSTRUCTION, markdown, note_count: count };
-    try {
-      await rpc("annotations_send", { pane_id: agentPaneId, bundle });
-      setFeedback(NO_FEEDBACK);
-      invoke("browser_clear_annotations", { paneId }).catch(browserHostFailed("browser_clear_annotations"));
-      showStatus(`Sent ${notes(count)} to ${label}`);
-    } catch (e) {
-      failToast("Send failed")(e);
-    }
-  };
-
-  const copyFeedback = () => copyText(feedback.markdown, "Feedback");
-
-  const sendItems = (): MenuItem[] => [
-    ...(agents.length ? agents.map((a) => ({ label: `${KIND_LABEL[a.kind]} — ${a.state}`, run: () => send(a.pane_id, KIND_LABEL[a.kind]) })) : [{ label: "no live agent in this worktree", disabled: true }]),
-    { separator: true },
-    { label: "Copy as markdown", run: copyFeedback },
-  ];
 
   const legendTitle = pane?.user_title ?? (title || hostOf(url));
   return (
@@ -192,27 +153,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
               if (e.key === "Escape") setDraft(null);
             }}
           />
-          <IconButton label={annotate ? "Stop annotating" : "Annotate"} className={annotate ? "browser-annotate-on" : undefined} aria-pressed={annotate} onClick={() => setAnnotate((v) => !v)}>
-            <MessageSquarePlus className="icon" />
-          </IconButton>
-          {feedback.count > 0 && (
-            <>
-              <span className="browser-count" title={notes(feedback.count)}>
-                {feedback.count}
-              </span>
-              <IconButton label="Copy feedback" onClick={copyFeedback}>
-                <Copy className="icon" />
-              </IconButton>
-              <DropdownMenu open={sendOpen} onOpenChange={setMenuOpen}>
-                <DropdownMenuTrigger render={<IconButton label="Send feedback to an agent" />}>
-                  <SendHorizontal className="icon" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <MenuItems items={sendItems} />
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          )}
+          {pane && toolbarItems.map(({ id, component: Item }) => <Item key={id} paneId={paneId} worktreeId={pane.worktree_id} url={url} setCovering={coverSetters[id]} />)}
           <IconButton label="Open in external browser" className="browser-external" onClick={() => openExternalUrl(url)}>
             <ExternalLink className="icon" />
           </IconButton>
