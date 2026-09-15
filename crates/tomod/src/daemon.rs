@@ -6,7 +6,7 @@ use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::{actions, sessions, towns};
+use crate::features::{actions, editor, reopen, sessions, towns};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -84,6 +84,7 @@ pub struct Inner {
     pub endpoints: Vec<RuntimeEndpoint>,
     pub endpoint_gone_ms: HashMap<Id, u64>,
     pub endpoints_at_ms: u64,
+    pub closed_tabs: Vec<reopen::ClosedTab>,
 }
 
 pub struct Daemon {
@@ -172,6 +173,7 @@ impl Daemon {
                 endpoints: Vec::new(),
                 endpoint_gone_ms: HashMap::new(),
                 endpoints_at_ms: 0,
+                closed_tabs: Vec::new(),
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
@@ -223,7 +225,7 @@ impl Daemon {
         }
     }
 
-    fn emit_tabs(inner: &mut Inner, worktree_id: &str) {
+    pub(crate) fn emit_tabs(inner: &mut Inner, worktree_id: &str) {
         for t in inner.tabs.values().filter(|t| t.worktree_id == worktree_id && !layout::is_valid(&t.layout)) {
             tracing::warn!("tab {} has an invalid layout: {:?}", t.id, t.layout);
         }
@@ -231,7 +233,7 @@ impl Daemon {
         Self::emit(inner, Event::TabsChanged { worktree_id: worktree_id.to_string(), tabs });
     }
 
-    fn emit_pane(inner: &mut Inner, pane_id: &str) {
+    pub(crate) fn emit_pane(inner: &mut Inner, pane_id: &str) {
         if let Some(pane) = Self::pane_view(inner, pane_id) {
             Self::emit(inner, Event::PaneChanged { pane });
         }
@@ -684,7 +686,7 @@ impl Daemon {
             .map(|w| w.id.clone())
     }
 
-    fn touch(inner: &mut Inner, worktree_id: &str) {
+    pub(crate) fn touch(inner: &mut Inner, worktree_id: &str) {
         let now = now_ms();
         if let Some(w) = inner.worktrees.get_mut(worktree_id) {
             w.last_active_ms = Some(now);
@@ -895,7 +897,7 @@ impl Daemon {
         Some(pane)
     }
 
-    fn create_tab(inner: &mut Inner, worktree_id: &str, title: Option<String>) -> TabRow {
+    pub(crate) fn create_tab(inner: &mut Inner, worktree_id: &str, title: Option<String>) -> TabRow {
         let position = inner.tabs.values().filter(|t| t.worktree_id == worktree_id).map(|t| t.position).max().map_or(0, |p| p + 1);
         for t in inner.tabs.values_mut().filter(|t| t.worktree_id == worktree_id) {
             t.is_active = false;
@@ -914,7 +916,7 @@ impl Daemon {
     }
 
     /// Creates the pane row in memory and in the store, then starts its PTY.
-    fn create_pane(
+    pub(crate) fn create_pane(
         self: &Arc<Self>,
         inner: &mut Inner,
         tab_id: &str,
@@ -975,7 +977,7 @@ impl Daemon {
         Ok(id)
     }
 
-    fn create_browser_pane(inner: &mut Inner, tab_id: &str, worktree_id: &str, cwd: PathBuf, url: String) -> Result<Id> {
+    pub(crate) fn create_browser_pane(inner: &mut Inner, tab_id: &str, worktree_id: &str, cwd: PathBuf, url: String) -> Result<Id> {
         let id = new_id();
         let row = PaneRow {
             id: id.clone(),
@@ -1776,6 +1778,7 @@ impl Daemon {
                 if !force && panes.iter().any(|p| Self::pane_has_children(&inner, p)) {
                     return Err(err(ErrorCode::Conflict, "tab has running processes"));
                 }
+                reopen::remember(&mut inner, &tab);
                 for p in &panes {
                     Self::set_stop_intent(&mut inner, p);
                     self.persist_scrollback(&inner, p);
@@ -1794,6 +1797,14 @@ impl Daemon {
                 inner.store.tab_upsert(&tab).map_err(internal)?;
                 Self::emit_tabs(&mut inner, &tab.worktree_id);
                 ok(Self::tab_view(&inner, &tab))
+            }
+            Call::TabReopen { worktree_id } => {
+                let mut inner = self.lock();
+                if !inner.worktrees.get(&worktree_id).is_some_and(|w| w.exists) {
+                    return Err(err(ErrorCode::NotFound, "worktree not found"));
+                }
+                let tab_id = self.reopen_tab(&mut inner, &worktree_id).map_err(internal)?.ok_or_else(|| err(ErrorCode::NotFound, "no closed tab to reopen"))?;
+                ok(Self::tab_view(&inner, &inner.tabs[&tab_id]))
             }
             Call::TabMove { .. } => Err(err(ErrorCode::Unsupported, "tab_move: not implemented yet")),
             Call::PaneMove { .. } => Err(err(ErrorCode::Unsupported, "pane_move: not implemented yet")),
@@ -1848,6 +1859,7 @@ impl Daemon {
                 if !force && Self::pane_has_children(&inner, &pane_id) {
                     return Err(err(ErrorCode::Conflict, "pane has running processes"));
                 }
+                reopen::remember_if_last(&mut inner, &pane_id);
                 Self::set_stop_intent(&mut inner, &pane_id);
                 self.persist_scrollback(&inner, &pane_id);
                 Self::remove_pane(&mut inner, &pane_id);
@@ -2134,6 +2146,19 @@ impl Daemon {
                 }
             }
 
+            Call::OpenLocation { path, line, col } => {
+                if !path.is_absolute() {
+                    return Err(err(ErrorCode::BadRequest, "path must be absolute"));
+                }
+                if !path.exists() {
+                    return Err(err(ErrorCode::NotFound, format!("{} does not exist", path.display())));
+                }
+                let editor_command = self.lock().config.editor_command.clone();
+                if let Some(message) = editor::open_location(&editor_command, &path, line, col) {
+                    Self::emit(&mut self.lock(), Event::Notice { level: NoticeLevel::Warning, message });
+                }
+                Ok(Value::Null)
+            }
             Call::SessionList { worktree_id, limit } => {
                 let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
                 let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;

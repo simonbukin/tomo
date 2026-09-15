@@ -129,7 +129,7 @@ source of truth; delete it freely. See [activity.md](activity.md).
 
 | Key        | Category | Meaning                                      |
 |------------|----------|----------------------------------------------|
-| `ui_state` | R        | JSON: view, active worktree, sidebar widths, Home filters |
+| `ui_state` | R        | JSON: view, active worktree, sidebar widths and open state, collapsed and hidden repos, sidebar order, Home options, appearance. The GUI checks every field on load; see [state-and-recovery.md](state-and-recovery.md) |
 
 ## Worktree identity
 
@@ -189,7 +189,7 @@ commented copy when the file is missing.
 | Key                   | Default                                   | Meaning                                 |
 |-----------------------|-------------------------------------------|-----------------------------------------|
 | `shell`               | `$SHELL`, else `/bin/zsh`                 | Started as a login shell (`-l`)         |
-| `editor_command`      | `["zed", "{path}"]`                       | `{path}` is replaced; appended if absent; falls back to `open` when the program is missing |
+| `editor_command`      | `["zed", "{path}"]`                       | `{path}` is replaced; appended if absent; falls back to `open` when the program is missing. For a Cmd-click on `path:line` in a terminal, `{path}` becomes `path:line:col`. To place the numbers yourself, use `{line}` and `{col}`, for example `["code", "-g", "{path}:{line}:{col}"]` |
 | `worktree_parent_dir` | unset (sibling of the repository)         | Where `worktree create` puts new trees  |
 | `resource_warning_gb` | `2.0`                                     | Memory above which the sidebar shows a total |
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
@@ -202,6 +202,8 @@ commented copy when the file is missing.
 | `[archive] cleanup`   | `["node_modules","target","dist",".next",".turbo",".venv","build"]` | Direct children deleted by `worktree archive`; plain names only |
 | `[[states]]`          | exploring, active, waiting-review, merged | `id`, `label` (default: humanized id), `order` (default: position × 10) |
 | `[[hooks]]`           | none                                      | `event`, `command`, optional `state`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
+| `[notifications] desktop` | `true`                                | A desktop notification for a new attention item while the Tomo window is not focused. See [ui.md](ui.md) |
+| `[notifications] sounds`  | `false`                               | A short chime for a human checkpoint and a rare town unlock |
 
 Default keybindings (`mod` is ⌘):
 
@@ -211,6 +213,7 @@ next_attention = "mod+shift+a"
 prev_worktree = "mod+shift+["  next_worktree = "mod+shift+]"
 new_terminal = "mod+d"         split_vertical = "mod+shift+d"
 new_tab = "mod+t"              close_pane = "mod+w"
+reopen_tab = "mod+shift+t"
 next_tab = "mod+shift+right"   prev_tab = "mod+shift+left"
 focus_left/right/up/down = "mod+alt+<arrow>"
 toggle_left_sidebar = "mod+b"  toggle_right_sidebar = "mod+shift+b"

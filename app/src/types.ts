@@ -68,7 +68,7 @@ export type {
   WorktreeResources,
 } from "./generated";
 
-import type { AgentKind, AgentState } from "./generated";
+import type { AgentKind } from "./generated";
 
 export type Id = string;
 
@@ -129,13 +129,5 @@ export interface HomeOptions {
 }
 
 export type Frame = { seq: number; event: string; data?: unknown };
-
-export const STATE_GLYPH: Record<AgentState, string> = {
-  working: "●",
-  waiting: "◉",
-  idle: "○",
-  exited: "×",
-  unknown: "?",
-};
 
 export const KIND_LABEL: Record<AgentKind, string> = { claude: "Claude", codex: "Codex", pi: "Pi" };

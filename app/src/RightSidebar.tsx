@@ -211,7 +211,7 @@ function FilesSection({ w }: { w: Worktree }) {
     setOpenDirs(next);
   };
   const act = (target: "finder" | "editor") => rpc("open_external", { worktree_id: w.id, rel_path: selected, target }).catch((e) => notify("error", (e as Error).message));
-  const copy = () => navigator.clipboard.writeText(selected ? `${w.path}/${selected}` : w.path).then(() => notify("info", "Path copied"));
+  const copy = () => navigator.clipboard.writeText(selected ? `${w.path}/${selected}` : w.path).catch(() => {});
   const render = (rel: string, depth: number): React.ReactNode =>
     (dirs[rel] ?? []).map((e) => (
       <div key={e.rel_path}>

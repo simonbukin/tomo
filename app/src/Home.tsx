@@ -7,6 +7,7 @@ import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
 import { worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
+import { agentStatus, dotClass } from "./glyphs";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
@@ -146,7 +147,7 @@ function Row({ w }: { w: Worktree }) {
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
       title={w.path}
     >
-      <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
+      <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
       <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       <span className="muted">{w.metadata.project ?? repo}</span>
       <span className="muted">{busy ? "archiving…" : archived ? "archived" : (state ?? "")}</span>
@@ -182,7 +183,7 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
       title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}
     >
       <div className="card-title">
-        <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
+        <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
         <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       </div>
       <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>

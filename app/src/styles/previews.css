@@ -1,0 +1,12 @@
+/* ---- hover previews and status glyphs */
+.popover.preview-card { min-width: 160px; max-width: 320px; padding: var(--sp-2) var(--sp-3); gap: 0; }
+.preview { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-0); line-height: 1.45; min-width: 0; }
+.preview > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-head { display: flex; align-items: center; gap: 6px; color: var(--fg); font-weight: 500; margin-bottom: 2px; }
+
+.glyph { flex: none; width: 1em; text-align: center; font-family: var(--mono); }
+.glyph-working { color: var(--working); }
+.glyph-needs { color: var(--waiting); }
+.glyph-failed { color: var(--hot); }
+.glyph-complete { color: var(--ins); }
+.glyph-idle, .glyph-unknown { color: var(--fg-3); }

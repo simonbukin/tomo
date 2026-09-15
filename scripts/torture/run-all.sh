@@ -4,7 +4,7 @@ cd "$(dirname "$0")/../.." || exit 1
 cargo build -p tomod -p tomo-cli 2>&1 | grep -E "^error" && exit 1
 export TOMO_DATA_DIR="${TOMO_DATA_DIR:-/tmp/tomo-harness}"
 rc=0
-for s in terminal agents provenance layout archive actions runtime activity browser; do
+for s in terminal agents provenance layout archive actions runtime activity browser continuity; do
   echo "=== $s"
   bash "scripts/torture/$s.sh" || rc=1
 done

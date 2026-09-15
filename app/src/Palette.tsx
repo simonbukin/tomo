@@ -3,7 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { allActions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, runWorktreeAction, spawnAgent } from "./actions";
 import { Dialog, DialogContent } from "./components/ui";
 import { describeBinding } from "./keys";
-import { activeActionSet, repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { agentStatus, GLYPH } from "./glyphs";
+import { needsAttention } from "./homeQuery";
+import { summarizeState } from "./Sidebar";
+import { activeActionSet, agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 
 interface Item {
   key: string;
@@ -57,6 +60,7 @@ export function Palette() {
   const tabs = useStore((s) => (current ? (s.tabs[current.id] ?? []) : []));
   const worktreeActions = useStore((s) => activeActionSet(s)?.actions ?? []);
   const selectionSize = useStore((s) => s.selection.size);
+  const statuses = useStore((s) => Object.fromEntries(s.worktrees.map((w) => [w.id, agentStatus(summarizeState(agentsOf(s, w.id), needsAttention(w, queryContext(s))))])));
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +89,8 @@ export function Palette() {
       : [];
     const tabItems: Item[] = tabs.map((t) => ({ key: `tab:${t.id}`, label: `tab: ${t.title}`, hint: t.is_active ? "current" : undefined, run: () => activateTab(t.id), rank: 8 }));
     const ws: Item[] = worktrees.flatMap((w) => {
-      const hint = [repoOf(w), w.metadata.project, w.branch].filter(Boolean).join(" · ");
+      const status = statuses[w.id];
+      const hint = [status ? GLYPH[status] : null, [repoOf(w), w.metadata.project, w.branch].filter(Boolean).join(" · ")].filter(Boolean).join(" ");
       const archived = !!w.archived_at_ms;
       const base = boost(`wt:${w.id}`);
       return [
@@ -106,7 +111,7 @@ export function Palette() {
     });
     const rs: Item[] = repos.map((r) => ({ key: `repo:${r.id}`, label: `new worktree in ${r.name}`, hint: r.path, run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }), rank: 2 + boost(`repo:${r.id}`) }));
     return [...tabItems, ...acts, ...cmds, ...ws, ...rs];
-  }, [worktrees, repos, bindings, current, tabs, selectionSize, worktreeActions]);
+  }, [worktrees, repos, bindings, current, tabs, selectionSize, worktreeActions, statuses]);
 
   const results = useMemo(() => {
     return items
