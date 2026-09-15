@@ -34,5 +34,34 @@ has "$o" "d['status']=='archived' and d['final_commit']=='$C'" && check 0 "histo
 o=$($RPC call town_history '{"slug":"no-such-town"}' 2>&1); rc=$?
 [ $rc != 0 ] && case "$o" in *not_found*|*"not unlocked"*) check 0 "a locked town has no history";; *) check 1 "locked town" "$o";; esac || check 1 "locked town" "rc=0 $o"
 
+slug_of() { $T towns list --unlocked --json | jq_ "print(next((r['town']['slug'] for r in d if r['unlock']['worktree_id']=='$1'), None))"; }
+name_of() { $T worktree list --json | jq_ "print(next((w['name'] for w in d if w['id']=='$1'), None))"; }
+town_name() { $T towns list --unlocked --json | jq_ "print(next((r['town']['name'] for r in d if r['town']['slug']=='$1'), None))"; }
+parent_dir() { printf 'worktree_parent_dir = "%s"\n' "$1" > "$TOMO_DATA_DIR/config.toml"; daemon_restart; }
+
+# Restore at a new path gives the worktree a new id. The unlock and the town name must follow it.
+A=$(cd "$(mktemp -d /tmp/tomo-harness-wts.XXXX)" && pwd -P); B=$(cd "$(mktemp -d /tmp/tomo-harness-wts.XXXX)" && pwd -P)
+parent_dir "$A"
+read -r W2 P2 < <($T worktree create --repo "$R" --branch feat/restored --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
+S2=$(slug_of "$W2")
+$T worktree archive "$W2" --json >/dev/null 2>&1
+rm -rf "$A"
+parent_dir "$B"
+$T worktree restore "$W2" >/dev/null 2>&1
+N2=$(wt_id "$B/$S2" 2>/dev/null)
+[ -n "$N2" ] && [ "$N2" != "$W2" ] && [ "$(slug_of "$N2")" = "$S2" ] && check 0 "restore at a new path moves the unlock to the new worktree" || check 1 "unlock after restore at a new path" "old=$W2 new=$N2 unlock=$(slug_of "$N2")"
+[ -n "$N2" ] && [ "$(name_of "$N2")" = "$(town_name "$S2")" ] && check 0 "restore at a new path keeps the town name" || check 1 "name after restore" "$(name_of "$N2")"
+has "$($RPC call town_history "{\"slug\":\"$S2\"}")" "d['status']=='active' and d['branch']=='feat/restored'" && check 0 "restored town history is active" || check 1 "history after restore" "$($RPC call town_history "{\"slug\":\"$S2\"}")"
+
+# A worktree moved with git keeps its unlock and its activity rows.
+read -r W3 P3 < <($T worktree create --repo "$R" --branch feat/moved --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
+S3=$(slug_of "$W3")
+$T checkpoint "before the move" --worktree "$W3" >/dev/null
+git -C "$R" worktree move "$P3" "$P3-moved"
+$T worktree refresh >/dev/null
+N3=$(wt_id "$P3-moved" 2>/dev/null)
+[ -n "$N3" ] && [ "$(slug_of "$N3")" = "$S3" ] && check 0 "a moved worktree keeps its unlock" || check 1 "unlock after move" "old=$W3 new=$N3 unlock=$(slug_of "$N3")"
+[ -n "$N3" ] && $T activity --json --worktree "$N3" | jq_ "import sys; sys.exit(0 if any(e['kind']=='checkpoint_created' for e in d) else 1)" && check 0 "a moved worktree keeps its activity" || check 1 "activity after move" "$($T activity --json --worktree "$N3" 2>&1 | head -5)"
+
 daemon_stop
 summary
