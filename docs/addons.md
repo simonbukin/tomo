@@ -80,7 +80,7 @@ source code with a clean dependency boundary.
 | runtime, agentation | addon, not moved yet |
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
-| agent providers | evaluate last |
+| agent providers | **provider modules** (milestone 9; they are Core, not addons) |
 
 ## The dependency law
 
@@ -2034,6 +2034,108 @@ locator (see the decision). The framework code is 20 lines (`State`, two
 accessors, one field, one parameter); it removed three statics, three lock
 helpers, three lock-order comments, and the merged Actions test.
 
+## Milestone 9 result: agent providers
+
+### The question
+
+Tomo supports three agent providers: Claude, Codex, and Pi. Core owns
+`AgentKind`, `AgentPresence`, `AgentState`, session identity, the generic
+spawn and resume calls, and attention. The question of this milestone: do
+the provider specifics belong in one module for each provider, or does that
+add indirection without a gain?
+
+### Where the code branched on a provider before this milestone
+
+| Site | Symbol | Branches |
+|---|---|---|
+| `agents.rs:48-53` | `hook_outcome` | 2 (Codex shares the Claude table) |
+| `agents.rs:59-88` | `claude_style_outcome`, `pi_outcome` | 2 tables |
+| `agents.rs:95-144` | `spawn_plan` | 3 |
+| `agents.rs:159-190` | `claude_hooks_settings`, `codex_hooks_entries` | 2 |
+| `integrations.rs:52-62` | `install` | 3 |
+| `integrations.rs:104-123` | `codex_hooks_trusted` | 1 |
+| `integrations.rs:134-159` | `status` | 3 |
+| `procs.rs:191-205` | `detect_agent` | 3 |
+| `daemon.rs:22`, `1458` | `PI_EXTENSION_SOURCE` and the install call | 1 |
+| `daemon.rs:244-257` | `claude_settings_path`, `pi_extension_path`, `write_integration_files` | 2 |
+| `daemon.rs:259-267` | `integrations()` | 3 |
+| `daemon.rs:706-711` | `inherited_env_to_remove` | 3 markers of 2 providers |
+| `daemon.rs:1048` | restore: Codex without a session uses `--last` | 1 |
+| `daemon.rs:1051-1052`, `daemon.rs:1884-1886`, `features/reopen.rs:112-114` | the spawn plan, built three times with both provider file paths | 3 |
+| `features/sessions.rs:13-139` | `claude_project_dir`, `parse_claude`, `codex_text`, `parse_codex`, `list` | 2 readers |
+| `config.rs:253-257` | `default_agents` | 3 |
+
+That is **28 provider branches at 16 sites in 7 daemon files**.
+
+Ten more branches are identity, not behavior: `store.rs:167-173`
+(`agent_kind_str`) and `tomo-proto/src/lib.rs:784-814` (`AgentKind`,
+`label`, `all`, `from_str`). They stay where they are.
+
+Outside the daemon: the `Integrations` wire struct (`lib.rs:361-366`), the
+CLI (`main.rs:55`, `303` value parsers, `print.rs:45`, three help texts), the
+GUI (`actions.ts:508-510`, `591-593`, `appMenu.ts:31`,
+`ProcessIcon.tsx:56-68`, `types.ts:150`), and `fetch_all` in the Usage addon
+(`addons/usage/mod.rs:283`).
+
+### The target shape
+
+```text
+crates/tomod/src/providers/
+  mod.rs      the Provider table, fn provider(kind) -> &'static Provider, the loops, shared helpers
+  claude.rs   Claude: flags, hook table, detection, env markers, hooks file, install, sessions
+  codex.rs    Codex: the same set, plus resume --last and the trust check
+  pi.rs       Pi: the same set, plus the embedded extension
+```
+
+`Provider` is a plain struct of function pointers and data. `provider(kind)`
+is one `match`. There is no dynamic registration, no lookup by key, and no
+trait object.
+
+### Does it reduce the places a future agent must touch?
+
+Yes. To add a provider:
+
+| | Before | After |
+|---|---|---|
+| Daemon files | `agents.rs`, `integrations.rs`, `procs.rs`, `daemon.rs`, `config.rs`, `features/sessions.rs` (6) | `providers/mod.rs` (one `match` arm) and the new `providers/<name>.rs` (2) |
+| Identity | `tomo-proto/src/lib.rs`, `store.rs` | the same |
+| Client | CLI value parsers and the GUI commands | the same |
+| Compiler help | 5 of 16 sites are exhaustive matches. A new variant compiles with no detection, no env markers, no install, no launch file, and no default command. | every capability is a field of `Provider`, so a missing one does not compile |
+
+It also removes a real duplicate: the spawn plan, built in three places,
+becomes one `providers::launch`.
+
+### Does debugging stay easy?
+
+Yes.
+
+- `rg -i claude crates/tomod/src` lands on `providers/claude.rs`, plus the
+  composition points in `providers/mod.rs`. Before, it landed on six files.
+- A backtrace keeps the real names: `providers::claude::flags`, called from
+  `providers::launch`, called from `Daemon::handle`. A function pointer does
+  not hide the symbol.
+- The cost is one hop: "go to definition" on a table field goes to the
+  `PROVIDER` value of the module, and from there to the function. The
+  `PROVIDER` value of each module is also the index of what that provider
+  supports.
+
+### Decision
+
+**Extract.** The branch count in Core goes from 28 to 0, the file count for
+a new provider goes from 6 to 2, and the compiler checks the set of
+capabilities. No stop condition is hit: no registry, no service locator, no
+event replaces a direct call, and the wire stays typed.
+
+### Not moved, with the reason
+
+| Item | Why it stays |
+|---|---|
+| `AgentKind`, `AgentPresence`, `AgentState`, `agents::merge`, attention | Core identity and Core coordination, as the PRD says (section 23) |
+| `store.rs::agent_kind_str`, `AgentKind::label`, `all`, `from_str` | identity text of a Core enum, not provider behavior |
+| `Integrations { claude_hooks, codex_hooks, pi_extension }` | wire type; a rename is a wire change |
+| the usage capability | Usage is an addon. A usage hook in the table would make Core name `UsageSnapshot`, which `core_does_not_import_addons` forbids. `fetch_all` keeps the two provider names inside the addon. |
+| the CLI value parsers and the GUI spawn commands, labels, and icons | client code; this milestone changes the daemon only |
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
@@ -2046,7 +2148,7 @@ helpers, three lock-order comments, and the merged Actions test.
 | browser | **built-in pane kind** | not an addon; see "Milestone 6 result: Browser" |
 | agentation | addon on Core client Browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `app/src/browser/BrowserPane.tsx`, inject code inside Tauri `browser::browser_create`; see "Agentation boundary for milestone 7" |
 | activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
-| agent providers | evaluate last | closed `AgentKind` in 10 types, spawn plan built in 3 places, `detect_agent` and env stripping in core |
+| agent providers | **provider modules** | none in Core; see "Milestone 9 result: agent providers" |
 
 ## Migration order
 
