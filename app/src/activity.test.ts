@@ -24,6 +24,25 @@ describe("needsMeItems", () => {
   });
 });
 
+describe("needsMeItem cases", () => {
+  const onPane = (extra: Partial<AttentionItem>) => attention({ pane_id: "p-claude", ...extra });
+  const cases: [string, AttentionItem, AgentPresence[] | undefined, boolean][] = [
+    ["waiting, no agent list", onPane({}), undefined, true],
+    ["waiting, agent waits", onPane({}), [agent("waiting")], true],
+    ["waiting, agent moved on", onPane({}), [agent("working")], false],
+    ["waiting, no agent in the pane", onPane({}), [], false],
+    ["waiting, viewed", onPane({ viewed_at_ms: 2 }), [agent("waiting")], false],
+    ["waiting, resolved", onPane({ resolved_at_ms: 2 }), [agent("waiting")], false],
+    ["checkpoint, viewed, agent working", onPane({ kind: "checkpoint", viewed_at_ms: 2 }), [agent("working")], true],
+    ["checkpoint, resolved", onPane({ kind: "checkpoint", resolved_at_ms: 2 }), [], false],
+    ["crash, viewed, no agent", onPane({ kind: "crash", viewed_at_ms: 2 }), [], true],
+    ["crash, resolved", onPane({ kind: "crash", resolved_at_ms: 2 }), [], false],
+  ];
+  it.each(cases)("%s", (_, item, agents, expected) => {
+    expect(needsMeItem(item, agents)).toBe(expected);
+  });
+});
+
 describe("day grouping", () => {
   const now = new Date(2026, 8, 14, 15, 0).getTime();
   it("labels today, yesterday, and older days", () => {
