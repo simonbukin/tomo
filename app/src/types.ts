@@ -1,8 +1,5 @@
 import type { Appearance } from "./appearance";
 export type {
-  ActionDef,
-  ActionRunResult,
-  ActionSet,
   ActivityEvent,
   ActivityKind,
   ActivityQuery,

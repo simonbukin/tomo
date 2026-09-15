@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MenuEntry, MenuItem } from "./components/ui";
-import { editorName, endpointMenu, paneMenu, runningActionItems, tabMenu, toggledTag, worktreeMenu } from "./menus";
+import { editorName, endpointMenu, paneMenu, tabMenu, toggledTag, worktreeMenu } from "./menus";
 import { getState, type State } from "./store";
 import type { Pane, RuntimeEndpoint, Tab, Worktree } from "./types";
 
@@ -78,17 +78,7 @@ describe("pane menu", () => {
   });
 });
 
-describe("action and runtime menus", () => {
-  it("a running action opens, focuses logs, restarts, stops, and copies url and port", () => {
-    const menu = runningActionItems("w1", "app", state);
-    expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);
-    expect(labels(entry(menu, "copy").submenu!)).toEqual(["url", "port"]);
-  });
-
-  it("a running action without endpoints has no open or copy", () => {
-    expect(labels(runningActionItems("w1", "other", state))).toEqual(["focus logs", "restart", "stop"]);
-  });
-
+describe("runtime menus", () => {
   it("an endpoint row menu disables open for tcp and keeps the port copy", () => {
     const menu = endpointMenu("w1", endpoint({ protocol: "tcp", action_id: null }), state);
     expect(labels(menu)).toEqual(["open", "focus logs", "—", "copy"]);

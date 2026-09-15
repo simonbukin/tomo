@@ -2,8 +2,9 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rpc } from "./api";
-import { getState, setState } from "./store";
-import type { ActionSet, ActivityEvent, AgentPresence, AttentionItem, Pane, RuntimeEndpoint, Worktree } from "./types";
+import type { ActionSet } from "./generated";
+import { applyFrame, getState, setState } from "./store";
+import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, RuntimeEndpoint, Worktree } from "./types";
 import { defaultUi } from "./uiState";
 
 vi.mock("./api", async (importOriginal) => {
@@ -14,7 +15,7 @@ vi.mock("./api", async (importOriginal) => {
 const { Activity } = await import("./Activity");
 
 const worktree = { id: "w1", name: "kobe", repo_id: "r1", path: "/src/kobe", branch: "feat/kobe", archived_at_ms: 5, metadata: { state: null, tags: [], project: null, display_name: null } } as unknown as Worktree;
-const pane = { id: "p1", worktree_id: "w1", tab_id: "t1", live: true } as unknown as Pane;
+const pane = { id: "p1", worktree_id: "w1", tab_id: "t1", live: true, source: { kind: "action", id: "serve", label: "Serve" } } as unknown as Pane;
 const agent = (state: AgentPresence["state"]) => ({ pane_id: "p1", worktree_id: "w1", kind: "claude", state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null }) as AgentPresence;
 const attention = (id: string, kind: AttentionItem["kind"]): AttentionItem => ({ id, worktree_id: "w1", pane_id: "p1", level: "attention", message: id, created_at_ms: 1, viewed_at_ms: null, kind, url: null, agent_kind: null, resolved_at_ms: null });
 const serve: ActionSet = { worktree_id: "w1", actions: [{ id: "serve", label: "Serve", command: "sleep 30", mode: "pane", show: "topbar", shortcut: null }], error: null };
@@ -53,12 +54,12 @@ beforeEach(() => {
     worktrees: [worktree],
     panes: { p1: pane },
     agents: { p1: agent("waiting") },
-    actions: { w1: serve },
     endpoints: { w1: [endpoint] },
     attention: [attention("att-wait", "waiting"), attention("att-chk", "checkpoint"), attention("att-crash", "crash")],
     activity: events,
     ui: { ...defaultUi, view: "activity", activeWorktreeId: "w1" },
   });
+  applyFrame({ event: "actions_changed", data: { set: serve } } as unknown as Frame);
 });
 afterEach(cleanup);
 

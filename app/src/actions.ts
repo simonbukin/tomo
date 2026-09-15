@@ -7,7 +7,7 @@ import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
 import { activeTab, agentsOf, clearSelection, errorText, failToast, getState, needsMe, paneIds, recordDiagnostic, setRowError, setState, setUi, showStatus, toast } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
-import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
+import type { AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
@@ -263,7 +263,6 @@ const failOn = (worktreeId: Id, op: string) => (e: unknown) => {
   setRowError(worktreeId, { op, message });
   toast({ level: "error", title: `${op} failed`, detail: message });
 };
-const clearRowError = (worktreeId: Id) => () => setRowError(worktreeId, null);
 
 export function archiveWorktree(worktreeId: Id): void {
   const w = byId(worktreeId);
@@ -284,18 +283,6 @@ export function archiveWorktree(worktreeId: Id): void {
       },
     },
   });
-}
-
-export function runWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc<ActionRunResult>("action_run", { worktree_id: worktreeId, action_id: actionId }).then(clearRowError(worktreeId), failOn(worktreeId, actionId));
-}
-
-export function stopWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc("action_stop", { worktree_id: worktreeId, action_id: actionId }).then(clearRowError(worktreeId), failOn(worktreeId, `stop ${actionId}`));
-}
-
-export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).then(clearRowError(worktreeId), failOn(worktreeId, `restart ${actionId}`));
 }
 
 /** Opens a runtime endpoint in the worktree's browser surface, or externally when no worktree is known. */
@@ -685,12 +672,7 @@ export function allActions(): Action[] {
 }
 
 export function runAction(id: string): void {
-  if (id.startsWith("action:")) {
-    const w = currentWorktree();
-    if (w) runWorktreeAction(w.id, id.slice("action:".length));
-    return;
-  }
-  const a = allActions().find((x) => x.id === id);
+  const a = builtins.flatMap((addon) => addon.shortcuts?.(getState()) ?? []).find((x) => x.id === id) ?? allActions().find((x) => x.id === id);
   if (!a) return;
   if (a.whenWorktree && !currentWorktree()) {
     toast({ level: "info", title: "Open a worktree first" });

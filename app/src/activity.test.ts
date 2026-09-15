@@ -6,7 +6,7 @@ const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", 
 const agent = (state: AgentPresence["state"], kind: AgentPresence["kind"] = "claude"): AgentPresence => ({ pane_id: `p-${kind}`, worktree_id: "w", kind, state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null });
 const endpoint = (extra: Partial<RuntimeEndpoint> = {}): RuntimeEndpoint => ({ id: "e", worktree_id: "w", pane_id: null, action_id: "dev", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, ...extra });
 const event = (id: string, occurred_at_ms: number): ActivityEvent => ({ id, kind: "agent_started", occurred_at_ms, worktree_id: "w", pane_id: null, agent_kind: "claude", title: "t", detail: null, payload: null, attention_id: null });
-const quiet: SignalInput = { attention: [], agents: [], endpoints: [], actions: [], rssBytes: null, warnBytes: 1000, pr: null };
+const quiet: SignalInput = { attention: [], agents: [], endpoints: [], rssBytes: null, warnBytes: 1000, pr: null };
 
 describe("needsMeItems", () => {
   it("keeps unresolved checkpoints and crashes even after a view, drops viewed waiting items", () => {
@@ -67,7 +67,7 @@ describe("nowSignals", () => {
     expect(nowSignals(quiet)).toEqual([]);
   });
   it("shows the agent and the primary runtime for a healthy busy worktree", () => {
-    const out = nowSignals({ ...quiet, agents: [agent("working")], endpoints: [endpoint()], actions: [{ id: "dev", label: "App", command: "pnpm dev", mode: "pane", show: "topbar", shortcut: null }] });
+    const out = nowSignals({ ...quiet, agents: [agent("working")], endpoints: [endpoint({ label: "App" })] });
     expect(out).toEqual([
       { kind: "agent", agent: "claude", state: "working" },
       { kind: "runtime", label: "App", port: 3000, url: "http://localhost:3000" },

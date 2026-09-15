@@ -1,34 +1,23 @@
 import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { endpointLabel, endpointUrl, httpEndpoints } from "./activityModel";
-import { activateTab, allActions, focusPane, openEndpoint, openWorktree, restartWorktreeAction, runAction, runWorktreeAction, stopWorktreeAction } from "./actions";
+import { activateTab, allActions, focusPane, openEndpoint, openWorktree, runAction } from "./actions";
+import { builtins } from "./addons";
 import { Dialog, DialogContent } from "./components/ui";
-import { describeBinding } from "./keys";
 import { menuEntries, rankEntries, remembered, type PaletteEntry } from "./paletteModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { chordFor, effectiveBindings } from "./shortcuts";
-import { getState, repoName, runningActionIds, setState, setUi, useStore, visibleRepos, type State } from "./store";
+import { getState, repoName, setState, setUi, useStore, visibleRepos, type State } from "./store";
 import { KIND_LABEL, type Worktree } from "./types";
 
-function actionEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
-  const running = runningActionIds(s, w.id);
-  return (s.actions[w.id]?.actions ?? []).flatMap((a): PaletteEntry[] => {
-    const key = `action:${w.id}:${a.id}`;
-    const hint = [w.name, a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · ");
-    if (!running.includes(a.id)) return [{ key, label: `start ${a.label}`, hint, context, run: () => runWorktreeAction(w.id, a.id) }];
-    return [
-      { key: `${key}:logs`, label: `focus ${a.label} logs`, hint, context, run: () => runWorktreeAction(w.id, a.id) },
-      { key: `${key}:restart`, label: `restart ${a.label}`, hint, context, run: () => restartWorktreeAction(w.id, a.id) },
-      { key: `${key}:stop`, label: `stop ${a.label}`, hint, context, run: () => stopWorktreeAction(w.id, a.id) },
-    ];
-  });
+function addonEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
+  return builtins.flatMap((a) => a.paletteEntries?.(s, w, context) ?? []);
 }
 
 function endpointEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
-  const actions = s.actions[w.id]?.actions ?? [];
   return httpEndpoints(s.endpoints[w.id] ?? []).map((e) => ({
     key: `endpoint:${w.id}:${e.port}`,
-    label: `open ${endpointLabel(e, actions)} :${e.port}`,
+    label: `open ${endpointLabel(e)} :${e.port}`,
     hint: `${w.name} · runtime`,
     context,
     run: () => openEndpoint(endpointUrl(e), w.id),
@@ -38,7 +27,7 @@ function endpointEntries(s: State, w: Worktree, context: boolean): PaletteEntry[
 export function worktreeChildren(s: State, w: Worktree): PaletteEntry[] {
   const key = `wt:${w.id}`;
   const [open, ...rest] = menuEntries(worktreeMenu(w, s), key);
-  const extras = w.exists && !w.archived_at_ms ? [...actionEntries(s, w, false), ...endpointEntries(s, w, false)] : [];
+  const extras = w.exists && !w.archived_at_ms ? [...addonEntries(s, w, false), ...endpointEntries(s, w, false)] : [];
   return open ? [open, ...extras, ...rest] : [...extras, ...rest];
 }
 
@@ -64,7 +53,7 @@ export function paletteEntries(s: State): PaletteEntry[] {
     };
     return [{ key: `agent:${a.pane_id}`, label: `focus ${KIND_LABEL[a.kind]} · ${w.name}`, hint: a.state, context: w.id === current?.id, run: () => void run() }];
   });
-  const contextual = current ? [...actionEntries(s, current, true), ...endpointEntries(s, current, true)] : [];
+  const contextual = current ? [...addonEntries(s, current, true), ...endpointEntries(s, current, true)] : [];
   const commands: PaletteEntry[] = allActions()
     .filter((a) => (!a.whenWorktree || !!current) && (!a.when || a.when()))
     .map((a) => ({ key: `cmd:${a.id}`, label: a.label, hint: a.group?.toLowerCase(), shortcut: chordFor(a.id, bindings), run: () => runAction(a.id) }));

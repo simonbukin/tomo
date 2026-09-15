@@ -1,21 +1,19 @@
-import { ArrowUpRight, Ellipsis, Radio, Star, TriangleAlert } from "lucide-react";
+import { Ellipsis, Radio, Star } from "lucide-react";
+import { builtins } from "./addons";
 import { endpointLabel, endpointUrl, httpEndpoints, needsMeItem } from "./activityModel";
-import { focusPane, openEndpoint, openExternalFor, resolveCheckpoint, runWorktreeAction } from "./actions";
+import { focusPane, openEndpoint, openExternalFor, resolveCheckpoint } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
 import { dotClass } from "./glyphs";
-import { GitPreview, RuntimePreview } from "./HoverPreviews";
+import { GitPreview } from "./HoverPreviews";
 import { stateLabel } from "./homeQuery";
-import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
-import { editorName, endpointMenu, overflowMenu, runningActionItems } from "./menus";
+import { editorName, endpointMenu, overflowMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { RowError } from "./RowError";
-import { endpointsOf, liveEndpointFor, runningActionIds, setState, useStore } from "./store";
-import { rpc } from "./api";
-import { useEffect } from "react";
-import { KIND_LABEL, type ActionSet, type RuntimeEndpoint, type Worktree } from "./types";
+import { endpointsOf, useStore } from "./store";
+import { KIND_LABEL, type RuntimeEndpoint, type Worktree } from "./types";
 
-/** The top-middle control plane: name, branch, state on the left; Actions, the overflow menu, and the spawn menu on the right. */
+/** The top-middle control plane: name, branch, state on the left; addon buttons, the editor button, runtime, and the overflow menu on the right. */
 export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
   const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
@@ -38,39 +36,24 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
         </span>
       )}
       <RowError worktreeId={w.id} />
-      <ActionBar worktree={w} />
+      <HeaderControls worktree={w} />
     </div>
   );
 }
 
-function ActionBar({ worktree: w }: { worktree: Worktree }) {
-  const set = useStore((s) => s.actions[w.id] ?? null);
-  useEffect(() => {
-    if (set) return;
-    rpc<ActionSet>("action_list", { worktree_id: w.id })
-      .then((loaded) => setState((s) => ({ actions: { ...s.actions, [w.id]: loaded } })))
-      .catch(() => {});
-  }, [w.id, set === null]);
-  const running = useStore((s) => runningActionIds(s, w.id));
+function HeaderControls({ worktree: w }: { worktree: Worktree }) {
   const endpoints = useStore((s) => endpointsOf(s, w.id));
-  const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");
   return (
     <div className="actionbar" data-tauri-drag-region>
-      {topbar.map((a) => {
-        const live = running.includes(a.id);
-        const hint = [a.command, a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · ");
-        return (
-          <Tooltip key={a.id} content={live ? `${hint} · running (right-click for more)` : hint}>
-            <Button variant="ghost" size="sm" className="action-btn" onClick={() => runWorktreeAction(w.id, a.id)} onContextMenu={(e) => live && openMenu(e, runningActionItems(w.id, a.id))}>
-              {live && <span className="state state-working" />}
-              {a.label}
-              <EndpointMark worktreeId={w.id} actionId={a.id} />
-            </Button>
-          </Tooltip>
-        );
+      {builtins.map((a) => {
+        const Buttons = a.topbar?.buttons;
+        return Buttons && <Buttons key={a.id} worktree={w} />;
       })}
       <EditorButton worktree={w} />
-      {set?.error && <ActionWarning error={set.error} />}
+      {builtins.map((a) => {
+        const Marks = a.topbar?.marks;
+        return Marks && <Marks key={a.id} worktree={w} />;
+      })}
       {endpoints.length > 0 && <RuntimePopover worktree={w} endpoints={endpoints} />}
       <DropdownMenu>
         <DropdownMenuTrigger render={<IconButton label="More actions" />}>
@@ -98,23 +81,9 @@ function EditorButton({ worktree: w }: { worktree: Worktree }) {
   );
 }
 
-function EndpointMark({ worktreeId, actionId }: { worktreeId: string; actionId: string }) {
-  const endpoint = useStore((s) => liveEndpointFor(s, worktreeId, actionId));
-  const actions = useStore((s) => s.actions[worktreeId]?.actions ?? []);
-  if (!endpoint) return null;
-  return (
-    <HoverCard content={<RuntimePreview endpoint={endpoint} label={endpointLabel(endpoint, actions)} />}>
-      <span className="action-live">
-        <ArrowUpRight className="icon" />
-      </span>
-    </HoverCard>
-  );
-}
-
 function RuntimePopover({ worktree: w, endpoints }: { worktree: Worktree; endpoints: RuntimeEndpoint[] }) {
-  const actions = useStore((s) => s.actions[w.id]?.actions ?? []);
   const panes = useStore((s) => s.panes);
-  const owner = (e: RuntimeEndpoint) => actions.find((a) => a.id === e.action_id)?.label ?? (e.pane_id ? panes[e.pane_id]?.title : null) ?? e.process;
+  const owner = (e: RuntimeEndpoint) => e.label ?? (e.pane_id ? panes[e.pane_id]?.title : null) ?? e.process;
   return (
     <Popover>
       <PopoverTrigger render={<IconButton label="Runtime endpoints" />}>
@@ -124,7 +93,7 @@ function RuntimePopover({ worktree: w, endpoints }: { worktree: Worktree; endpoi
         <PopoverTitle>runtime</PopoverTitle>
         {endpoints.map((e) => (
           <div key={e.id} className="runtime-row" onContextMenu={(ev) => openMenu(ev, endpointMenu(w.id, e))}>
-            <span className="runtime-label">{endpointLabel(e, actions)}</span>
+            <span className="runtime-label">{endpointLabel(e)}</span>
             <span className="mono">{e.host}:{e.port}</span>
             <span className="muted">{owner(e)} · {e.pid}</span>
             <Button size="sm" onClick={() => openEndpoint(endpointUrl(e), w.id)}>open</Button>
@@ -154,19 +123,5 @@ export function CheckpointBanner({ worktree: w }: { worktree: Worktree }) {
       <button className="link" onClick={() => resolveCheckpoint(item.id)}>Resolve</button>
       {items.length > 1 && <span className="faint">+{items.length - 1} more</span>}
     </div>
-  );
-}
-
-function ActionWarning({ error }: { error: string }) {
-  return (
-    <Popover>
-      <PopoverTrigger render={<IconButton label="Actions config problem" className="action-warn" />}>
-        <TriangleAlert className="icon" />
-      </PopoverTrigger>
-      <PopoverContent align="end">
-        <PopoverTitle>.tomo.toml</PopoverTitle>
-        <pre>{error}</pre>
-      </PopoverContent>
-    </Popover>
   );
 }
