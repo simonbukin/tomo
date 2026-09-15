@@ -824,12 +824,16 @@ impl Daemon {
             }
         }
         if let Some(agent) = inner.agents.get_mut(pane_id).filter(|a| a.state != AgentState::Exited) {
+            let was_waiting = agent.state == AgentState::Waiting;
             agent.state = AgentState::Exited;
             agent.authority = Authority::Lifecycle;
             agent.updated_at_ms = now_ms();
             let agent = agent.clone();
             Self::emit(&mut inner, Event::AgentChanged { agent: agent.clone() });
             Self::record_agent(&mut inner, ActivityKind::AgentExited, &agent, "exited");
+            if was_waiting {
+                Self::resolve_waiting(&mut inner, pane_id);
+            }
         }
         if code == Some(0) {
             let _ = Self::remove_pane(&mut inner, pane_id);
@@ -855,7 +859,9 @@ impl Daemon {
         if let Some(pty) = &pane.pty {
             pty.hangup();
         }
-        inner.agents.remove(pane_id);
+        if inner.agents.remove(pane_id).is_some_and(|a| a.state == AgentState::Waiting) {
+            Self::resolve_waiting(inner, pane_id);
+        }
         Self::emit(inner, Event::AgentRemoved { pane_id: pane_id.to_string() });
         let _ = inner.store.pane_delete(pane_id);
         let tab_id = pane.row.tab_id.clone();
@@ -1103,6 +1109,7 @@ impl Daemon {
             let mut scrollback = scrollback;
             scrollback.push(b"\r\n\x1b[2m[tomo] daemon restarted: output above is from the previous session\x1b[0m\r\n");
             if let Some(kind) = row.agent_kind {
+                let _ = inner.store.attention_resolve_waiting(&row.id, now_ms());
                 inner.agents.insert(
                     row.id.clone(),
                     AgentPresence {
@@ -1207,7 +1214,13 @@ impl Daemon {
             Self::record_agent(inner, ActivityKind::AgentExited, &next, "exited");
         }
         if next.state != AgentState::Waiting && previous == Some(AgentState::Waiting) {
-            let _ = inner.store.attention_view_pane(&report.pane_id, now_ms());
+            Self::resolve_waiting(inner, &report.pane_id);
+        }
+    }
+
+    fn resolve_waiting(inner: &mut Inner, pane_id: &str) {
+        for id in inner.store.attention_resolve_waiting(pane_id, now_ms()).unwrap_or_default() {
+            Self::emit(inner, Event::AttentionResolved { id });
         }
     }
 
@@ -1864,7 +1877,9 @@ impl Daemon {
                     let _ = inner.store.tab_upsert(t);
                 }
                 Self::touch(&mut inner, &worktree_id);
-                let _ = inner.store.attention_view_pane(&pane_id, now_ms());
+                for id in inner.store.attention_view_pane(&pane_id, now_ms()).unwrap_or_default() {
+                    Self::emit(&mut inner, Event::AttentionViewed { id });
+                }
                 if !changed.is_empty() {
                     Self::emit_tabs(&mut inner, &worktree_id);
                 }
@@ -2022,8 +2037,9 @@ impl Daemon {
             }
             Call::AttentionView { id } => {
                 let mut inner = self.lock();
-                inner.store.attention_view(&id, now_ms()).map_err(internal)?;
-                Self::emit(&mut inner, Event::AttentionViewed { id });
+                if inner.store.attention_view(&id, now_ms()).map_err(internal)? {
+                    Self::emit(&mut inner, Event::AttentionViewed { id });
+                }
                 Ok(Value::Null)
             }
             Call::AttentionClear => {

@@ -28,6 +28,20 @@ $RPC send "$A" 'wait\r'
 wait_for "[ \"\$(agent_field $A state)\" = waiting ]" 6 && check 0 "permission_prompt -> waiting" || check 1 "waiting" "$(agent_field $A state)"
 $T attention list --json | jq_ "import sys; sys.exit(0 if any(i['pane_id']=='$A' and i['viewed_at_ms'] is None for i in d) else 1)" && check 0 "waiting creates an attention item" || check 1 "attention item"
 
+# 3b. answering the agent resolves its waiting item and tells subscribers
+WID=$($T attention list --json | jq_ "a=[i['id'] for i in d if i['pane_id']=='$A' and i['kind']=='waiting']; print(a[0] if a else 'none')")
+EV=$(mktemp /tmp/tomo-harness-events.XXXX)
+$RPC watch 20 attention_resolved > "$EV" & WATCH=$!
+sleep 0.5
+$RPC send "$A" 'work 3\r'
+wait_for "[ \"\$(agent_field $A state)\" = working ]" 6 && check 0 "answered agent leaves waiting" || check 1 "waiting -> working" "$(agent_field $A state)"
+$T attention list --json | jq_ "import sys; sys.exit(0 if '$WID' != 'none' and not any(i['id']=='$WID' for i in d) else 1)" && check 0 "leaving waiting resolves the waiting item" || check 1 "waiting item still listed" "$WID"
+wait_for "grep -q '\"$WID\"' '$EV'" 6 && check 0 "subscribers get attention_resolved for the item" || check 1 "attention_resolved event" "$(cat "$EV")"
+kill $WATCH 2>/dev/null; wait $WATCH 2>/dev/null; rm -f "$EV"
+wait_for "[ \"\$(agent_field $A state)\" = idle ]" 16
+$RPC send "$A" 'wait\r'
+wait_for "[ \"\$(agent_field $A state)\" = waiting ]" 6 && check 0 "a second wait opens a new item" || check 1 "waiting again" "$(agent_field $A state)"
+
 # 4. authority races through agent_report
 now=$(python3 -c 'import time; print(int(time.time()*1000))')
 $RPC call agent_report "{\"pane_id\":\"$A\",\"kind\":\"claude\",\"state\":\"working\",\"session_ref\":null,\"authority\":\"heuristic\",\"at_ms\":$now}" >/dev/null

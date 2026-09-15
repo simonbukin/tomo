@@ -525,17 +525,30 @@ impl Store {
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
-    pub fn attention_view(&self, id: &str, now_ms: u64) -> Result<()> {
-        self.conn.execute("UPDATE attention SET viewed_at_ms = ?2 WHERE id = ?1 AND viewed_at_ms IS NULL", params![id, now_ms as i64])?;
-        Ok(())
+    pub fn attention_view(&self, id: &str, now_ms: u64) -> Result<bool> {
+        let n = self.conn.execute("UPDATE attention SET viewed_at_ms = ?2 WHERE id = ?1 AND viewed_at_ms IS NULL", params![id, now_ms as i64])?;
+        Ok(n > 0)
     }
 
-    pub fn attention_view_pane(&self, pane_id: &str, now_ms: u64) -> Result<()> {
-        self.conn.execute(
-            "UPDATE attention SET viewed_at_ms = ?2 WHERE pane_id = ?1 AND viewed_at_ms IS NULL",
-            params![pane_id, now_ms as i64],
-        )?;
-        Ok(())
+    fn changed_ids(&self, sql: &str, pane_id: &str, now_ms: u64) -> Result<Vec<Id>> {
+        let mut st = self.conn.prepare(sql)?;
+        let rows = st.query_map(params![pane_id, now_ms as i64], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Returns the ids that were not viewed before.
+    pub fn attention_view_pane(&self, pane_id: &str, now_ms: u64) -> Result<Vec<Id>> {
+        self.changed_ids("UPDATE attention SET viewed_at_ms = ?2 WHERE pane_id = ?1 AND viewed_at_ms IS NULL RETURNING id", pane_id, now_ms)
+    }
+
+    /// Resolves the open `waiting` items of a pane and returns their ids. Checkpoints and crashes stay open.
+    pub fn attention_resolve_waiting(&self, pane_id: &str, now_ms: u64) -> Result<Vec<Id>> {
+        self.changed_ids(
+            "UPDATE attention SET resolved_at_ms = ?2, viewed_at_ms = COALESCE(viewed_at_ms, ?2)
+             WHERE pane_id = ?1 AND COALESCE(kind, 'waiting') = 'waiting' AND resolved_at_ms IS NULL RETURNING id",
+            pane_id,
+            now_ms,
+        )
     }
 
     pub fn attention_clear(&self) -> Result<()> {
@@ -651,6 +664,30 @@ mod tests {
         assert_eq!(s.activity_since(ActivityKind::CheckpointCreated, 15).unwrap().len(), 1);
         s.activity_trim(2).unwrap();
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b"]);
+    }
+
+    #[test]
+    fn pane_view_and_waiting_resolve_return_changed_ids() {
+        let s = Store::open_in_memory().unwrap();
+        let on_pane = |id: &str, kind| AttentionItem { pane_id: Some("p".into()), ..item(id, kind) };
+        s.attention_insert(&on_pane("w1", AttentionKind::Waiting)).unwrap();
+        s.attention_insert(&on_pane("w2", AttentionKind::Waiting)).unwrap();
+        s.attention_insert(&on_pane("chk", AttentionKind::Checkpoint)).unwrap();
+        s.attention_insert(&on_pane("crash", AttentionKind::Crash)).unwrap();
+        s.attention_insert(&item("elsewhere", AttentionKind::Waiting)).unwrap();
+        assert!(s.attention_view("w2", 3).unwrap());
+        assert!(!s.attention_view("w2", 4).unwrap());
+        let mut resolved = s.attention_resolve_waiting("p", 5).unwrap();
+        resolved.sort();
+        assert_eq!(resolved, vec!["w1", "w2"]);
+        assert!(s.attention_resolve_waiting("p", 6).unwrap().is_empty());
+        let (w1, w2) = (s.attention_get("w1").unwrap().unwrap(), s.attention_get("w2").unwrap().unwrap());
+        assert_eq!((w1.resolved_at_ms, w1.viewed_at_ms, w2.viewed_at_ms), (Some(5), Some(5), Some(3)));
+        assert_eq!(s.attention_list().unwrap().iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["chk", "crash", "elsewhere"]);
+        let mut viewed = s.attention_view_pane("p", 7).unwrap();
+        viewed.sort();
+        assert_eq!(viewed, vec!["chk", "crash"]);
+        assert!(s.attention_view_pane("p", 8).unwrap().is_empty());
     }
 
     #[test]
