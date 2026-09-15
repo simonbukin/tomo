@@ -293,4 +293,146 @@ mod tests {
         let next = merge(Some(&old), &fresh, "w", Some(11)).unwrap();
         assert_eq!((next.state, next.pid, next.session_ref.as_deref()), (AgentState::Idle, Some(11), Some("sess")));
     }
+
+    fn plan(kind: AgentKind, command: &str, args: &[&str], resume: Option<&str>, extra: &[&str]) -> SpawnPlan {
+        let owned = |list: &[&str]| list.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+        let cmd = AgentCommand { command: command.into(), args: owned(args) };
+        spawn_plan(kind, &cmd, resume, Path::new("/d/claude-hooks.json"), Path::new("/d/tomo-status.ts"), &owned(extra))
+    }
+
+    fn state_of(kind: AgentKind, payload: Value) -> Option<AgentState> {
+        hook_outcome(kind, &payload).state
+    }
+
+    #[test]
+    fn claude_spawn_plan_passes_settings_and_a_new_session_id() {
+        let fresh = plan(AgentKind::Claude, "claude", &["--model", "opus"], None, &["--verbose"]);
+        let id = fresh.session_ref.clone().unwrap();
+        assert!(uuid::Uuid::parse_str(&id).is_ok(), "{id}");
+        assert_eq!(fresh.argv, ["claude", "--model", "opus", "--settings", "/d/claude-hooks.json", "--session-id", id.as_str(), "--verbose"]);
+        assert_ne!(plan(AgentKind::Claude, "claude", &[], None, &[]).session_ref, fresh.session_ref);
+        let resumed = plan(AgentKind::Claude, "claude", &[], Some("s1"), &[]);
+        assert_eq!(resumed.argv, ["claude", "--settings", "/d/claude-hooks.json", "--resume", "s1"]);
+        assert_eq!(resumed.session_ref.as_deref(), Some("s1"));
+    }
+
+    #[test]
+    fn codex_spawn_plan_has_no_session_until_a_hook_reports_one() {
+        let fresh = plan(AgentKind::Codex, "codex", &["--full-auto"], None, &["-m", "o3"]);
+        assert_eq!(fresh.argv, ["codex", "--full-auto", "-m", "o3"]);
+        assert_eq!(fresh.session_ref, None);
+        let resumed = plan(AgentKind::Codex, "codex", &["--full-auto"], Some("019a"), &["-m", "o3"]);
+        assert_eq!(resumed.argv, ["codex", "--full-auto", "resume", "019a", "-m", "o3"]);
+        let last = plan(AgentKind::Codex, "codex", &[], Some("--last"), &[]);
+        assert_eq!(last.argv, ["codex", "resume", "--last"]);
+        assert_eq!(last.session_ref.as_deref(), Some("--last"), "the restore fallback flag comes back as a session reference");
+    }
+
+    #[test]
+    fn pi_spawn_plan_loads_the_extension_and_resumes_by_session_ref() {
+        let fresh = plan(AgentKind::Pi, "pi", &[], None, &[]);
+        let id = fresh.session_ref.clone().unwrap();
+        assert!(uuid::Uuid::parse_str(&id).is_ok(), "{id}");
+        assert_eq!(fresh.argv, ["pi", "-e", "/d/tomo-status.ts", "--session-id", id.as_str()]);
+        let file = "/h/.pi/agent/sessions/--w--/2026_s.jsonl";
+        let resumed = plan(AgentKind::Pi, "pi", &[], Some(file), &["--model", "x"]);
+        assert_eq!(resumed.argv, ["pi", "-e", "/d/tomo-status.ts", "--session", file, "--model", "x"]);
+        assert_eq!(resumed.session_ref.as_deref(), Some(file));
+    }
+
+    #[test]
+    fn shell_line_quotes_only_what_the_shell_would_split() {
+        let argv: Vec<String> = ["/Applications/My Tools/claude", "--settings", "/d/claude-hooks.json", "--resume", "it's"].map(String::from).to_vec();
+        assert_eq!(shell_line(&argv), "'/Applications/My Tools/claude' --settings /d/claude-hooks.json --resume 'it'\\''s'");
+        assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("a=b:c@d%e+f,g"), "a=b:c@d%e+f,g");
+        assert_eq!(shell_quote("$HOME"), "'$HOME'");
+    }
+
+    #[test]
+    fn claude_and_codex_share_one_hook_table() {
+        use AgentState::*;
+        let table = [
+            ("SessionStart", Some(Idle)),
+            ("UserPromptSubmit", Some(Working)),
+            ("PreToolUse", Some(Working)),
+            ("PostToolUse", Some(Working)),
+            ("PostToolUseFailure", Some(Working)),
+            ("PreCompact", Some(Working)),
+            ("PermissionRequest", Some(Waiting)),
+            ("Stop", Some(Idle)),
+            ("StopFailure", Some(Idle)),
+            ("SessionEnd", Some(Exited)),
+            ("PostCompact", None),
+            ("SubagentStart", None),
+            ("SubagentStop", None),
+            ("Interrupt", None),
+            ("", None),
+        ];
+        for kind in [AgentKind::Claude, AgentKind::Codex] {
+            for (event, want) in table {
+                assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": event, "session_id": "s" })), want, "{kind:?} {event}");
+            }
+            for t in ["permission_prompt", "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input"] {
+                assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": "Notification", "notification_type": t })), Some(Waiting), "{t}");
+            }
+            for t in ["idle_prompt", "auth_success", ""] {
+                assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": "Notification", "notification_type": t })), None, "{t}");
+            }
+        }
+    }
+
+    #[test]
+    fn hook_session_ref_ignores_missing_and_empty_ids() {
+        assert_eq!(hook_outcome(AgentKind::Codex, &serde_json::json!({ "hook_event_name": "Stop", "session_id": "" })).session_ref, None);
+        assert_eq!(hook_outcome(AgentKind::Codex, &serde_json::json!({ "hook_event_name": "Stop", "session_id": 7 })).session_ref, None);
+        let o = hook_outcome(AgentKind::Codex, &serde_json::json!({ "hook_event_name": "UserPromptSubmit", "session_id": "019a" }));
+        assert_eq!((o.state, o.session_ref.as_deref()), (Some(AgentState::Working), Some("019a")));
+        assert_eq!(state_of(AgentKind::Claude, serde_json::json!({ "event": "agent_start" })), None, "a Pi payload means nothing to the Claude table");
+        assert_eq!(state_of(AgentKind::Pi, serde_json::json!({ "hook_event_name": "Stop" })), None, "a Claude payload means nothing to the Pi table");
+    }
+
+    #[test]
+    fn pi_event_table() {
+        use AgentState::*;
+        let table = [
+            ("session_start", None, Some(Idle)),
+            ("agent_start", None, Some(Working)),
+            ("ui_prompt_end", None, Some(Working)),
+            ("ui_prompt_start", None, Some(Waiting)),
+            ("agent_settled", None, Some(Idle)),
+            ("session_shutdown", Some("quit"), Some(Exited)),
+            ("session_shutdown", Some("reload"), None),
+            ("session_shutdown", None, None),
+            ("agent_end", None, None),
+            ("turn_end", None, None),
+        ];
+        for (event, reason, want) in table {
+            assert_eq!(state_of(AgentKind::Pi, serde_json::json!({ "event": event, "reason": reason })), want, "{event} {reason:?}");
+        }
+        let without_file = hook_outcome(AgentKind::Pi, &serde_json::json!({ "event": "session_start", "session_id": "id", "session_file": "" }));
+        assert_eq!(without_file.session_ref.as_deref(), Some("id"));
+    }
+
+    #[test]
+    fn installed_hook_events_all_translate_to_a_state() {
+        let sorted_keys = |v: &Value| {
+            let mut keys: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
+            keys.sort();
+            keys
+        };
+        let claude = claude_hooks_settings(Path::new("/opt/My Tomo/tomo"));
+        let claude_events = sorted_keys(&claude["hooks"]);
+        assert_eq!(claude_events, ["Notification", "PermissionRequest", "PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "UserPromptSubmit"]);
+        assert_eq!(claude["hooks"]["PreToolUse"][0]["matcher"], "*");
+        assert!(claude["hooks"]["Stop"][0].get("matcher").is_none());
+        assert_eq!(claude["hooks"]["Stop"][0]["hooks"][0]["command"], "'/opt/My Tomo/tomo' hook claude");
+        let codex = codex_hooks_entries(Path::new("/usr/local/bin/tomo"));
+        let codex_events = sorted_keys(&codex);
+        assert_eq!(codex_events, ["PermissionRequest", "PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"], "no SessionEnd: only the process monitor sees Codex exit");
+        assert_eq!(codex["Stop"][0]["hooks"][0]["command"], "/usr/local/bin/tomo hook codex");
+        for event in claude_events.iter().filter(|e| *e != "Notification").chain(&codex_events) {
+            assert!(state_of(AgentKind::Claude, serde_json::json!({ "hook_event_name": event })).is_some(), "{event}");
+        }
+    }
 }
