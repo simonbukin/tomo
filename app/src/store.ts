@@ -49,6 +49,7 @@ export interface State {
   focusRequest: { worktree_id: Id; tab_id: Id; pane_id: Id; nonce: number } | null;
   notice: { level: string; message: string; nonce: number } | null;
   paletteOpen: boolean;
+  shortcutsOpen: boolean;
   dialog: Dialog | null;
   connectionNonce: number;
   menu: { anchor: MenuAnchor; items: MenuItem[]; nonce: number } | null;
@@ -76,7 +77,7 @@ export type Dialog =
 
 export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
-const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance };
+const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
 
 let state: State = {
   connected: false,
@@ -97,6 +98,7 @@ let state: State = {
   focusRequest: null,
   notice: null,
   paletteOpen: false,
+  shortcutsOpen: false,
   dialog: null,
   connectionNonce: 0,
   menu: null,
@@ -189,6 +191,7 @@ export function applySnapshot(snap: Snapshot): void {
     manualOrder: stringLists(saved.manualOrder),
     repoOrder: Array.isArray(saved.repoOrder) ? saved.repoOrder.filter((x): x is string => typeof x === "string") : [],
     appearance: sanitizeAppearance(saved.appearance),
+    paletteRecent: Array.isArray(saved.paletteRecent) ? saved.paletteRecent.filter((x): x is string => typeof x === "string").slice(0, 12) : [],
     collapsedRepos: Array.isArray(saved.collapsedRepos) ? saved.collapsedRepos : [],
     hiddenRepos: Array.isArray(saved.hiddenRepos) ? saved.hiddenRepos : [],
     home: {

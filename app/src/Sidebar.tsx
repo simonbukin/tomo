@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Men
 import { openMenu } from "./MenuHost";
 import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
+import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
 
@@ -27,6 +28,7 @@ export function Sidebar() {
   const attention = useStore((s) => s.attention);
   const states = useStore((s) => s.config?.states ?? []);
   const ui = useStore((s) => s.ui);
+  const shortcut = useShortcuts();
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
   const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
   const shown = worktrees.filter((w) => ui.showArchivedInSidebar || !w.archived_at_ms);
@@ -77,15 +79,15 @@ export function Sidebar() {
       <div className="sidebar-top">
         <Mark size={14} />
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
-        <IconButton label="Activity" className={`side-btn${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" /></IconButton>
-        <IconButton label="Japan map" className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "towns" })}><Map className="icon" /></IconButton>
+        <IconButton label="Activity" shortcut={shortcut("activity")} className={`side-btn${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" /></IconButton>
+        <IconButton label="Japan map" shortcut={shortcut("towns")} className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "towns" })}><Map className="icon" /></IconButton>
         <span className="spacer" />
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
         </DropdownMenu>
-        <IconButton label="Add repository" onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
-        <IconButton label="Refresh repositories and worktrees" onClick={() => runAction("refresh")}><RotateCw className="icon" /></IconButton>
+        <IconButton label="Add repository" shortcut={shortcut("add_repo")} onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
+        <IconButton label="Refresh repositories and worktrees" shortcut={shortcut("refresh")} onClick={() => runAction("refresh")}><RotateCw className="icon" /></IconButton>
       </div>
       <div className="sidebar-scroll" ref={listRef}>
         {selectionSize > 0 && (
@@ -153,6 +155,7 @@ function RepoGroup({ repo, items, active, sortable = false }: { repo: Repo; item
   const hidden = useStore((s) => s.ui.hiddenRepos.includes(repo.id));
   const attention = useStore((s) => items.some((w) => needsAttention(w, queryContext(s))));
   const toggle = () => repo.id && toggleRepoCollapsed(repo.id);
+  const shortcut = useShortcuts();
   return (
     <div ref={drag.setNodeRef} className={`repo-group${drag.isDragging ? " is-dragging" : ""}`} style={{ transform: CSS.Translate.toString(drag.transform), transition: drag.transition }}>
       <div ref={drag.setActivatorNodeRef} className="section-label repo-head" {...drag.attributes} {...drag.listeners} onContextMenu={(e) => repo.id && openMenu(e, repoMenu(repo))}>
@@ -163,7 +166,7 @@ function RepoGroup({ repo, items, active, sortable = false }: { repo: Repo; item
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
         {collapsed && attention && <span className="state state-waiting" />}
-        {repo.id && <IconButton label="New worktree" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
+        {repo.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
       </div>
       {!collapsed && (
         <SortableContext items={items.filter((w) => !w.is_main && !w.archived_at_ms).map((w) => w.id)} strategy={verticalListSortingStrategy}>
