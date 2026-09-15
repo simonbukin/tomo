@@ -3,17 +3,21 @@
 Read this before you add a feature or move one. It takes a few minutes.
 
 Status: milestone 1 (Towns), milestone 2 (GitHub), milestone 3 (Actions),
-milestone 4 (Runtime), milestone 5 (Usage), and the Activity kind seam are
-done. Milestone 6 decided
+milestone 4 (Runtime), milestone 5 (Usage), milestone 7 (Agentation), and the
+Activity kind seam are done. Milestone 6 decided
 that Browser stays a built-in pane kind; see "Milestone 6 result: Browser".
 Each daemon owns its addon state in `addons::State`; see "Addon state" and
 "Addon state result". Towns is the first
 addon and the reference for every later extraction. GitHub added the first
 GUI slots that core components render. Usage added a background task, a
 snapshot field, and two GUI slots. Actions added the Core pane source, two
-daemon seams, and six GUI slots. The procedures below are the ones that these
-addons proved. See "Activity kind seam result", "Milestone 2 result:
-GitHub", "Milestone 3 result: Actions", and "Milestone 5 result: Usage".
+daemon seams, and six GUI slots. Runtime added the monitor tick seam and the
+slots that let two addons meet at a Core pane source. Agentation added a
+browser toolbar slot, two Tauri host hooks, and `Daemon::paste_to_agent`. The
+procedures below are the ones that these addons proved. See "Activity kind
+seam result", "Milestone 2 result: GitHub", "Milestone 3 result: Actions",
+"Milestone 4 result: Runtime", "Milestone 5 result: Usage", and "Milestone 7
+result: Agentation".
 
 Related files:
 
@@ -23,6 +27,7 @@ Related files:
 - [features/github.md](features/github.md) describes the GitHub addon.
 - [usage.md](usage.md) describes the Usage addon.
 - [actions.md](actions.md) describes the Actions addon.
+- [browser.md](browser.md) describes Browser and the Agentation addon on top of it.
 
 ## The three layers
 
@@ -79,7 +84,7 @@ source code with a clean dependency boundary.
 | usage | **done** (milestone 5) |
 | actions | **done** (milestone 3) |
 | runtime | **done** (milestone 4) |
-| agentation | addon, not moved yet |
+| agentation | **done** (milestone 7) |
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
@@ -100,6 +105,7 @@ source code with a clean dependency boundary.
    - `app/src/addons/index.ts`: the `builtins` list
    - `app/src/addons/activity.ts`: the Activity row views of addon kinds
    - one `@import` line for each addon in `app/src/styles/index.css`
+   - `app/src-tauri/src/lib.rs`: the host composition root: the `mod` line of each host addon module, its managed state, its command handlers, and the browser hook lists; with `build.rs` and `capabilities/` for its command names
 5. **Deleting an addon must not damage Core.** If you remove the addon
    folders and their registration lines, Tomo must still build. Everything
    except that feature must still work. The Towns deletion test below proves
@@ -114,7 +120,7 @@ where naming an addon is correct.
 
 | From | To | Reason |
 |---|---|---|
-| none | | Milestone 6 kept Browser as a built-in pane kind. So Agentation depends on Core client code, and needs no exception. |
+| none | | Milestone 6 kept Browser as a built-in pane kind. So Agentation depends on Core client code (the `browserToolbar` slot, the host hooks, `browser_webview`), and needs no exception. |
 
 Towns does not import GitHub. `town_history` gets the pull request from a
 plain function that `dispatch.rs` supplies (`town_pr`). Without GitHub, the
@@ -263,6 +269,10 @@ Actions also calls Core functions: `spawn_in_worktree`, `pane_view`,
 `focus_pane` and `push_attention`, and the new `Daemon::stop_pane`, which
 ends a pane as a stop (stop intent, process tree kill, scrollback, removal).
 
+Agentation calls `Daemon::paste_to_agent(&Inner, pane_id, text)`: the live
+agent check, the live PTY check, and one bracketed paste that submits. It
+returns the agent and the hook pane. See "Milestone 7 result: Agentation".
+
 Without a namer, a worktree created without a `path` gets the branch name as
 its directory (`feat/x` becomes `feat-x`). That fallback exists so that Tomo
 still creates worktrees when no addon names them.
@@ -278,11 +288,11 @@ split.
 
 ```ts
 // app/src/addons/index.ts
-export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime];
+export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime, agentation];
 ```
 
 The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns,
-GitHub, Usage, Actions, and Runtime need:
+GitHub, Usage, Actions, Runtime, and Agentation need:
 
 | Slot | Who renders it | First user |
 |---|---|---|
@@ -303,6 +313,7 @@ GitHub, Usage, Actions, and Runtime need:
 | `appUrl(s, worktreeId)` | `CheckpointBanner` in `WorktreeHeader.tsx` and `appUrl` in `activityKinds.ts` (the first addon that returns a URL wins) | runtime |
 | `paletteEntries(s, w, context)` | `Palette.tsx`: the context list of the worktree on screen and the worktree sub-list, before the endpoint entries | actions |
 | `shortcuts(s)` | `keyBindings` in `store.ts`, `runAction` in `actions.ts`, and `ShortcutReference.tsx` | actions |
+| `browserToolbar` (`{ paneId, worktreeId, url, setCovering }`) | `BrowserPane.tsx` in `app/src/browser/`, after the url field and before open-external; the page hides while an item sets `covering` | agentation |
 | `paneSource { kind, restart }` | the crash toast in `attention.ts`: Restart calls the addon that owns the `kind` of the pane source | actions |
 | `onSnapshot(snapshot)` | `applySnapshot` in `store.ts`, with each `subscribe` snapshot | towns, usage, actions |
 | `onFrame` | `applyFrame` in `store.ts`, for each daemon event | towns, github, usage, actions |
@@ -328,7 +339,25 @@ module that `addons/index.ts` loads must not import `actions.ts`,
 `commands/panes.ts` before `store.ts` exists (see "Activity kind seam
 result"). Import `store.ts`, `api.ts`, and leaf modules, and reach
 `actions.ts` with `import()` inside a click handler. Actions does that for
-`copyText` and `openEndpoint`, as `attention.ts` does.
+`copyText` and `openEndpoint`, as `attention.ts` does. Agentation does it for
+`copyText`, and does not import `browser/browser.ts`, which imports `actions.ts`.
+
+### Tauri host
+
+```rust
+// app/src-tauri/src/lib.rs
+mod agentation;
+mod browser;
+
+pub(crate) const BROWSER_PAGE_LOADED: &[fn(&Webview, &str)] = &[agentation::page_loaded];
+pub(crate) const BROWSER_CLOSED: &[fn(&AppHandle, &str)] = &[agentation::closed];
+```
+
+`browser.rs` calls each `BROWSER_PAGE_LOADED` entry with the webview and the
+pane id when a page finishes loading, and each `BROWSER_CLOSED` entry in
+`browser_close`. A host addon module adds its `manage` line and its command
+handlers in `run`, its command names in `build.rs`, and its permissions in
+`capabilities/`.
 
 `.bottom-items` always renders, also when it is empty, so that the status
 slot and the metrics keep their grid columns.
@@ -520,6 +549,10 @@ app/src/
   addons/types.ts         the Addon type, ActivityKindView
   addons/boundary.test.ts the import check and the activity kind check
   addons/<name>/          index.ts (the Addon value), activity.ts (its kind views), views, state, CSS, data, tests
+app/src-tauri/src/
+  lib.rs                  host composition root: host addon modules, managed state, command handlers, browser hook lists
+  browser.rs              Core client: child webviews of browser panes
+  <name>.rs               the host part of an addon (Agentation: bundle, annotate flags, feedback commands)
 ```
 
 Milestone 1 did not split `lib.rs` into a `core.rs`. The re-export keeps the
@@ -544,7 +577,9 @@ addon: `town` for Towns; `github`, `pullrequest`, `prstatus`, `pr_status`,
 keep window and allowance words out of the Core agent code. Actions owns
 `actiondef`, `actionset`, `actionrunresult`, `actionmode`, `actionshow`,
 `actionactivity`, `tomo.toml`, `features::actions`, `inner.actions`,
-`run_action`, `stop_action`, `reload_actions`, and `action_def`. The plain
+`run_action`, `stop_action`, `reload_actions`, and `action_def`. Agentation
+owns `agentation`, `evidencebundle`, `evidence_text`, `evidence_title`,
+`annotationssend`, `annotations_send`, and `annotation.sent`. The plain
 word `action` is not a noun of the check, because Core keeps the
 compatibility names `Pane.action_id`, `HookEvent.action`, and
 `PaneSource::action_id`. Runtime owns `runtimeendpoint`, `runtimeprotocol`,
@@ -559,9 +594,9 @@ addon, add its nouns there.
 **Rust, between addons.** `an_addon_does_not_name_another_addon` reads every
 file under `tomod/src/addons/` (without the composition root `mod.rs`) and
 under `tomo-proto/src/addons/`. A file fails if it names a noun that another
-addon owns. The Activity kind module of the addon that is not moved yet
-(`agentation.rs`) must not name them either. Runtime passes it: it reads the
-Core `PaneSource` and `PaneSource::action_id`, and names no Action type.
+addon owns. Every addon now owns its own Activity kind module. Runtime passes
+the check: it reads the Core `PaneSource` and `PaneSource::action_id`, and
+names no Action type.
 
 **Rust, addon state.** `addon_modules_keep_no_mutable_static` in
 `crates/tomod/src/addons/mod.rs` reads every file under `tomod/src/addons/`.
@@ -600,7 +635,16 @@ allowed, because `openEndpoint` in `actions.ts` is the one Core client
 entry point that opens a URL. The test "the Runtime and the Actions addon do
 not name each other" reads the files of those two folders and fails when a
 Runtime file names an Action type, call, or event, or when an Actions file
-names a runtime endpoint noun.
+names a runtime endpoint noun. The test "core client files do not name
+Agentation" fails on `agentation` or `annotat` (any case), `EvidenceBundle`,
+`browser_feedback`, or `browser://feedback` in a core client file, which
+includes `app/src/browser/`.
+
+**Tauri host.** `the_browser_host_does_not_name_agentation` in
+`app/src-tauri/src/lib.rs` reads `browser.rs` and `main.rs` with
+`include_str!`, and fails on `agentation`, `annotat`, or `feedback`. The
+daemon side of Browser (`features/browser.rs`) is Core, so
+`core_does_not_import_addons` covers it.
 
 **Activity kinds.** `core_activity_code_does_not_name_addon_kinds` in
 `crates/tomod/src/addons/mod.rs` reads the code before `#[cfg(test)]` in
@@ -609,8 +653,8 @@ names a runtime endpoint noun.
 kind string, or `endpoint_repeat`. The test "core activity files do not name
 an addon activity kind" in `boundary.test.ts` does the same for
 `Activity.tsx`, `activityKinds.ts`, `activityModel.ts`, and `glyphs.ts`.
-`daemon.rs` still names `AgentationActivity`, because the Agentation code is
-not extracted yet.
+No Core file names an addon kind any more. The last two call sites moved
+with the Runtime code (milestone 4) and the Agentation code (milestone 7).
 
 All four checks were proven. A planted core file that named `addons::towns`
 (Rust) or imported `./addons/towns` (TypeScript) made the import checks
@@ -623,8 +667,11 @@ line in `tomod/src/monitor.rs` and a planted `"action_run"` constant in
 `glyphs.ts` made the checks fail. Milestone 4 proved the runtime nouns the
 same way: a planted `// RuntimeEndpoint scan_endpoints lsof` line in
 `procs.rs`, a planted `// endpointsOf RuntimeEndpoint` line in `glyphs.ts`,
-and a planted `// ActionSet runningAction` line in
-`addons/runtime/model.ts` made the three checks fail.
+and a planted `// ActionSet runningAction` line in `addons/runtime/model.ts`
+made the three checks fail. Milestone 7 proved the Agentation checks: a
+planted `// EvidenceBundle` line in `glyphs.ts`, `// agentation` in
+`app/src-tauri/src/browser.rs`, and `// evidence_text` in
+`tomod/src/features/browser.rs` made each check fail.
 
 **Omission check.** Milestone 1 chose a deletion test over Cargo features.
 Features would spread `#[cfg]` through Core, and the GUI and the proto crate
@@ -674,6 +721,7 @@ Towns is the worked example for each step.
    - its `@import` line in `app/src/styles/index.css`
    - its CLI subcommand block and printer
    - its entry in `run-all.sh`
+   - for a host part: its `mod`, `manage`, handler, and hook lines in `app/src-tauri/src/lib.rs`, its command names in `build.rs`, and its permissions in `capabilities/`
 3. Run `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto`.
 4. Keep its SQLite tables. Do not write a migration that drops user data.
    Its activity rows stay. They read back with their kind string and render as plain rows.
@@ -835,8 +883,8 @@ one site from `builtins`.
 Slots that exist (see "Static composition, GUI"): `views`, `commands`,
 `inspectorSections`, `worktreeSignals`, `repoAvatar`, `worktreeNameField`,
 `mount`, `bottomItem`, `diagnosticsSection`, `topbar`, `worktreeMenu`,
-`endpointMenu`, `paletteEntries`, `shortcuts`, `paneSource`, `onSnapshot`,
-`onFrame`.
+`endpointMenu`, `paletteEntries`, `shortcuts`, `paneSource`, `browserToolbar`,
+`onSnapshot`, `onFrame`.
 
 Slots that later milestones will need (from the map):
 
@@ -845,7 +893,7 @@ Slots that later milestones will need (from the map):
 | inspector section | **done**: `inspectorSections` (milestone 2) | none |
 | worktree signal | **done**: `worktreeSignals` (milestone 2), with `signalLine` for a signal that draws itself (milestone 4) | none |
 | pane renderer | **not built** (milestone 6: the switch is shorter; see "Milestone 6 result: Browser") | `Layout.tsx` keeps the switch |
-| browser toolbar item | agentation (milestone 7) | `app/src/browser/BrowserPane.tsx`; see "Agentation boundary for milestone 7" |
+| browser toolbar item | **done**: `browserToolbar` (milestone 7) | none |
 | activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
 
 Each slot must have these properties:
@@ -1823,7 +1871,7 @@ What did not move, and why:
 - `PaneKind`, `Pane.url`, `Call::BrowserOpen`, `Call::BrowserNavigate`, the
   `panes.kind` and `panes.url` columns, `ClosedPane::Browser`, and
   `tomo browser open` stay. They are the Core part of the pane kind.
-- The Agentation parts stay where they are. Milestone 7 moves them.
+- The Agentation parts stay where they are. Milestone 7 moves them (done; see "Milestone 7 result: Agentation").
 
 Seams: none. Slots: none. Wire, schema, and CLI: no change. The bindings did
 not change. Behavior: no change is intended; the pane code and its bounds
@@ -1837,8 +1885,10 @@ cycle runs nothing at module load, like the existing cycle between
 
 ### Agentation boundary for milestone 7
 
-Today every piece below is inside Browser or Core. After milestone 7,
-Agentation must depend on Browser, and Browser must not name Agentation.
+Built in milestone 7; see "Milestone 7 result: Agentation". The list below
+is the plan from milestone 6. Today every piece below is inside Browser or
+Core. After milestone 7, Agentation must depend on Browser, and Browser must
+not name Agentation.
 
 **GUI, `app/src/browser/BrowserPane.tsx`:**
 
@@ -1879,9 +1929,9 @@ The contribution hooks that Browser must offer, and nothing more:
 Agentation needs no Browser call on the daemon side, and Browser needs no
 Agentation type.
 
-### Problems found in milestone 6 (not fixed)
+### Problems found in milestone 6 (fixed in milestone 7)
 
-1. `BrowserPane` runs the `browser_set_annotate` effect on mount with
+1. **Fixed in milestone 7.** `BrowserPane` runs the `browser_set_annotate` effect on mount with
    `enabled: false`. `agentation_script(false)` holds the whole bundle inside
    its `if (!window.__tomoAgentation)` guard, so the host evaluates the
    bundle (about 620 kB) into a page that the user never annotated.
@@ -1889,7 +1939,7 @@ Agentation type.
    also come before the webview exists and record a `browser_set_annotate`
    diagnostic. The toolbar slot of milestone 7 can call it only on a toggle.
    A human must confirm this in a window.
-2. `normalizeUrl("localhost:3000")` returns `localhost:3000`, because
+2. **Fixed in milestone 7.** `normalizeUrl("localhost:3000")` returned `localhost:3000`, because
    `localhost:` matches the scheme pattern. The webview then gets a URL
    that `Url::parse` reads as the scheme `localhost`. `example.com/x` works.
 
@@ -2064,6 +2114,215 @@ locator (see the decision). The framework code is 20 lines (`State`, two
 accessors, one field, one parameter); it removed three statics, three lock
 helpers, three lock-order comments, and the merged Actions test.
 
+## Milestone 7 result: Agentation
+
+Agentation is an addon on top of Browser. Browser works without it, agents
+work without it, and Browser code names no Agentation. It keeps no daemon
+state, so it has no field in `addons::State`.
+
+### What moved
+
+| From | To |
+|---|---|
+| `Annotation`, `EvidenceBundle` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/agentation.rs`, next to `AgentationActivity` |
+| the `Call::AnnotationsSend` arm, `evidence_text`, `evidence_title`, and their two tests in `daemon.rs` | `crates/tomod/src/addons/agentation/mod.rs` (`send`, `worktree_label`, `runtime_label`); `dispatch.rs` has one arm |
+| the live agent check, the PTY check, `pasted`, and the write inside that arm | Core `Daemon::paste_to_agent` in `daemon.rs` |
+| `AGENTATION_JS`, `AnnotatePanes`, `agentation_script`, `browser_set_annotate`, `browser_clear_annotations`, `feedback_pane`, `browser_feedback`, and their tests in `app/src-tauri/src/lib.rs`; the re-inject in `browser_create` and the flag removal in `browser_close` | `app/src-tauri/src/agentation.rs` (`page_loaded`, `closed`), joined through two hook lists in `lib.rs` |
+| the Agentation state, listener, send, menu, and toolbar buttons in `app/src/browser/BrowserPane.tsx` | `app/src/addons/agentation/Toolbar.tsx`, through the `browserToolbar` slot |
+| `.browser-annotate-on` and `.browser-count` in `app/src/browser/browser.css` | `app/src/addons/agentation/agentation.css`, imported directly after `browser.css` |
+| `app/agentation/` (`entry.tsx`, `markdown.ts`, `markdown.test.ts`) | `app/src/addons/agentation/page/`; `vite.agentation.config.ts` points there, and the rebuilt `agentation.js` is byte for byte the same |
+| `Annotation` and `EvidenceBundle` in the re-export list of `app/src/types.ts` | the addon imports them from `generated/` |
+| section 5 of `scripts/torture/browser.sh` (5 checks) | `scripts/torture/agentation.sh`, listed in `run-all.sh` |
+
+### Seams
+
+| Seam | Shape | Why it is the narrowest option |
+|---|---|---|
+| `browserToolbar` slot | `ComponentType<{ paneId, worktreeId, url, setCovering }>`, rendered by `BrowserPane` after the url field and before open-external, in `builtins` order | The toolbar needs the pane (host calls, the event filter), the worktree (live agents, the bundle), the url (the bundle, the count reset), and a way to hide the native page while its Send menu is open, because a child webview paints above React. `BrowserPane` keeps one `covering` record keyed by addon id and hides the page while one is true. |
+| `BROWSER_PAGE_LOADED: &[fn(&Webview, &str)]` and `BROWSER_CLOSED: &[fn(&AppHandle, &str)]` | two `const` lists in `app/src-tauri/src/lib.rs`; `browser.rs` calls each entry on `PageLoadEvent::Finished` and in `browser_close` | The re-inject must run inside the page-load callback of the webview, and the flag must go when the pane closes. A plain list of functions is static composition. The webview gives `eval` and the managed state; the app handle gives the state. Without Agentation both lists are `&[]`. |
+| `Daemon::paste_to_agent(&Inner, pane_id, text) -> Result<(AgentPresence, HookPane), RpcError>` | a Core function; `addons::agentation::send` calls it under the lock that it already holds | Pasting text into a live agent is Core reality: the agent check, the PTY check, and the bracketed paste. Evidence text, the activity row, and the hook stay in the addon. It takes `&Inner` so the text, the paste, the record, and the hook stay under one lock, as before. |
+
+The addon handler reads the worktree of the pane before it calls
+`paste_to_agent`, and `paste_to_agent` checks the pane again. The error codes
+and their order do not change. The addon calls `flush_hooks` itself, because
+a dispatched call does not go through `Daemon::handle`.
+
+### Fixed bugs
+
+Tests first, then one commit for each fix:
+
+1. **The bundle loaded into every page.** On mount `BrowserPane` called
+   `browser_set_annotate` with `enabled: false`, and that script carried the
+   whole bundle inside its guard. The call could also come before the webview
+   existed and record a diagnostic. Now the GUI calls the command only on a
+   toggle, and `agentation_script(false)` is
+   `window.__tomoAgentation&&window.__tomoAgentation.set(false);`. Tests:
+   `only_enabling_carries_the_bundle`, `a_page_load_injects_again_only_while_annotate_is_on`
+   (Tauri crate), and "asks the host for annotate only on a toggle, never on
+   mount" (vitest). Commits `9078af4` (failing) and `9d8c743`.
+2. **`normalizeUrl("localhost:3000")` kept no scheme.** `localhost:` matched
+   the scheme pattern. A scheme followed by a digit is now a host and a port,
+   and gets `http://`. Commits `31c848d` (failing) and `e2076bb`.
+
+### Wire and schema changes
+
+None. `annotations_send`, the `annotation.sent` hook, the `annotations_sent`
+activity kind, the Tauri command names, the `browser://feedback` payload, and
+`app/src/generated` do not change. SQLite does not change. `browser_close`
+lost its unused state parameter; its name and its arguments stay.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Call::AnnotationsSend`, `"annotation.sent"`, the two `export_all` lines, and the kind test entry in `tomo-proto/src/lib.rs` | composition root |
+| `mod agentation`, the `manage` line, three handler entries, and the two hook entries in `app/src-tauri/src/lib.rs` | the host composition root |
+| three command names in `app/src-tauri/build.rs`, two permissions in `capabilities/default.json`, and `capabilities/browser.json` | Tauri reads them at build time; they are registration lines |
+| the bundle `app/src-tauri/agentation/agentation.js`, `vite.agentation.config.ts`, the `build:agentation` script, and the `agentation` dependency | build output and build step; `include_str!` needs a path in the host crate |
+| the `browser-` prefix of `.browser-annotate-on` and `.browser-count` | a rename is a separate change |
+| Agentation writes its host failures as `browser` diagnostics with its own two-line helper | `browser/browser.ts` imports `actions.ts`, which a module that `addons/index.ts` loads must not do (see "Module load") |
+| `app/src-tauri/src/browser.rs` `browser_webview` is `pub(crate)` | Agentation reaches the webview of a pane through Browser |
+| `Activity.test.tsx` renders an `annotations_sent` row | a cross-addon test; it passes without the addon, because the row falls back to a plain row |
+
+### Small user-visible changes
+
+- A page that is never annotated does not get the 622 kB bundle, and has no
+  `window.__tomoAgentation`. No `browser_set_annotate` diagnostic comes on mount.
+- `localhost:3000` in the url field opens `http://localhost:3000`.
+- The note count resets on each change of the pane url: a link in the page,
+  Enter in the url field, and a daemon navigation. Before, only a url that the
+  page reported reset it, and a typed url could keep the count of the old page.
+
+### Agentation deletion test (milestone 7)
+
+Done with `m7_delete.py` on a throwaway branch from commit `1187f22` (the
+milestone merged with master `6f80ace`), then deleted. The removal deleted
+three folders (`crates/tomod/src/addons/agentation/`,
+`app/src/addons/agentation/`, `app/src-tauri/agentation/`) and five files
+(`tomo-proto/src/addons/agentation.rs`, `app/src-tauri/src/agentation.rs`,
+`capabilities/browser.json`, `vite.agentation.config.ts`,
+`scripts/torture/agentation.sh`). In total: 26 files, 8 lines added, 772
+deleted, without the bundle and the regenerated `AgentationActivity.ts`,
+`Annotation.ts`, `EvidenceBundle.ts`, and `index.ts`. These are the only lines
+that changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod agentation;` |
+| `crates/tomod/src/dispatch.rs` | remove `agentation` from the `use` line and the `Call::AnnotationsSend` arm |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod agentation;`, `pub use addons::agentation::*;`, `AnnotationsSend`, `"annotation.sent"`, the `AgentationActivity` and `EvidenceBundle` `export_all` lines, and the `annotations_sent` entry of the kind string test |
+| `app/src-tauri/src/lib.rs` | remove `mod agentation;`, the `manage` line, and the three handler entries; both hook lists become `&[]` |
+| `app/src-tauri/build.rs` | remove `browser_set_annotate`, `browser_clear_annotations`, `browser_feedback` |
+| `app/src-tauri/capabilities/default.json` | remove `allow-browser-set-annotate`, `allow-browser-clear-annotations` |
+| `app/package.json` | remove the `build:agentation` script and the `agentation` dependency (the lock file was not changed) |
+| `app/src/addons/index.ts` | remove the import; `builtins` becomes `[towns, github, usage, actions]` |
+| `app/src/addons/activity.ts` | remove the `agentationActivity` import and entry |
+| `app/src/styles/index.css` | remove `@import "../addons/agentation/agentation.css";` |
+| `scripts/torture/run-all.sh` | remove `agentation` from the list |
+
+No Browser or Core file changed: not `browser.rs`, `BrowserPane.tsx`,
+`browser.css`, `daemon.rs`, `features/browser.rs`, or `store.ts`.
+
+Result with Agentation removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` (with the Tauri crate) | pass: 146 passed, 1 ignored (tomod 138, tomo-proto 7, tomo_app_lib 1) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 33 files, 252 tests pass |
+| `npx vite build` | pass; main JS 719.33 kB, CSS 61.17 kB |
+| `browser.sh` | 14 passed, 0 failed |
+| `continuity.sh` | 19 passed, 0 failed |
+| `agents.sh` | 18 passed, 0 failed |
+
+The removed build has one compiler warning and no errors:
+`Daemon::paste_to_agent` is not used. It shows a Core function that no addon
+uses. It is expected.
+
+### Tests
+
+| Suite | Before (`07581d0`) | Milestone 7 (`1187f22`, merged with master `6f80ace`) |
+|---|---|---|
+| `cargo test --workspace` | 144 passed, 1 ignored (tomod 135, tomo-proto 7, tomo_app_lib 2) | 152 passed, 1 ignored (tomod 140, tomo-proto 7, tomo_app_lib 5) |
+| vitest | 34 files, 252 tests | 35 files, 260 tests |
+| `npx tsc --noEmit` | pass | pass |
+| `npx vite build` | main JS 721.35 kB, CSS 61.46 kB | main JS 722.09 kB, CSS 61.50 kB |
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass | pass, no change in `app/src/generated` |
+| torture harness (`run-all.sh` list, two halves) | 387 checks in 18 scripts, 9 known | 406 passed, 0 failed, 9 known in 20 scripts, 438 s (8 known in `providers.sh`, 1 in `github.sh`); `browser.sh` 14 and `agentation.sh` 5; `client.sh` (19) came from master |
+
+The master part of the tomod count is 139; this milestone added
+`pasted_wraps_the_text_in_one_bracketed_paste_and_submits`, and the two
+evidence tests moved into the addon. New before the move (commit `a65cdeb`,
+green on the old code): `app/src/addons/agentation/agentation.test.tsx`, which
+checks the count of its own page, Copy feedback and the page copy button, the
+send payload and the clear, the reset on a new url, and the annotate toggle
+and the close. New checks: "core client files do not name Agentation"
+(vitest), `the_browser_host_does_not_name_agentation` (Tauri crate), and the
+Agentation nouns in `OWNED_NOUNS`. No test was removed.
+
+### GUI checks for a human
+
+Native child webviews cannot be checked without a window. Do these in the
+installed app after a merge:
+
+1. Open a browser pane on a local dev page. In the Web Inspector of the page, `window.__tomoAgentation` is `undefined` and no `[data-tomo-agentation]` element exists. The diagnostics show no `browser_set_annotate` error.
+2. Turn Annotate on. The Agentation toolbar appears, and the page gets keyboard focus. Add two notes: the count shows 2.
+3. Click Copy feedback, and the copy button of the Agentation toolbar. Each puts the markdown on the clipboard.
+4. Click the send button of the Agentation toolbar. The Send menu opens and the page hides. Choose a live agent: the text arrives in its pane, the count goes away, the notes clear, the status says `Sent 2 notes to Claude`, and the page shows again.
+5. Add a note, then follow a link: the count resets. With Annotate on, the toolbar comes back after the new page loads. Reload: it comes back again.
+6. Turn Annotate off: the toolbar goes away. Reload: it does not come back, and `window.__tomoAgentation` is `undefined` on the new page.
+7. Close the pane, and switch tabs away and back: Annotate is off, and the page has no toolbar.
+8. Make the pane narrower than 360 px: the count and open-external hide.
+9. Type `localhost:3000` in the url field and press Enter: the pane opens `http://localhost:3000/`.
+
+### Performance
+
+Measured on 2026-09-15 with `addons-bench.py`, release build, data dir
+`/tmp/tomo-addons-agentation-bench`, on the tree merged with master
+`6f80ace`. As in milestones 3, 5, and 6, `TOMO_USAGE_MOCK` pointed at a file
+with a far `fetched_at_ms`, so no window called the network. The owner used
+the machine. The change moves code and adds no work to a daemon path.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 6 | Milestone 7 |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.51 ms | 7.21 ms |
+| of which `subscribe` | 0.51 ms | 0.37 ms | 0.44 ms |
+| of which `pane_attach` | 7.14 ms | 7.16 ms | 6.80 ms |
+| Worktree switch | 0.14 ms | 0.10 ms | 0.10 ms |
+| Worktree switch with attach | 9.26 ms | 8.20 ms | 7.11 ms |
+| Refresh | 164.31 ms | 172.83 ms | 125.04 ms |
+| Process poll, fresh | 23.41 ms | 10.39 ms | 19.11 ms |
+| Process poll, cached | 0.63 ms | 0.39 ms | 0.61 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 6 | Milestone 7 (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.13 % | **0.15 %** (0.15, 0.15, 0.13) |
+| Idle CPU, one subscriber | 1.05 % | 0.78 % | **0.82 %** (0.82, 0.60, 0.98) |
+| RSS at window end, no subscriber | 14.6 MB | 14.8 MB | **14.8 MB** (14.8, 15.0, 6.9) |
+| RSS at window end, subscribed | 14.6 MB | 14.8 MB | **13.8 MB** (13.4, 13.8, 13.8) |
+
+Gate: pass. No round trip is slower than the baseline by more than 1 ms and
+20 %. Idle CPU without a subscriber is 0.15 %, below the limit of 0.3 %; with
+a subscriber it is 0.82 %, below 1.5 %. RSS stays below 18 MB. The GUI does
+one thing less on each pane mount (no `browser_set_annotate` call and no
+622 kB evaluation), which no headless number shows. Not measured: GUI cold
+launch and GUI RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
+
+### Stop conditions
+
+None was hit. Near: "agents need more files to understand a feature".
+Agentation now has five homes (proto, daemon, GUI, host, page source), but
+each is one folder or one file named `agentation`, and Browser files lost the
+Agentation code (`BrowserPane.tsx` lost 60 lines). The framework code is small:
+the slot type and helper (about 10 lines), the covering record in
+`BrowserPane` (7 lines), two hook lists and two call sites (4 lines), and
+`paste_to_agent` (8 lines that moved out of the arm).
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
@@ -2074,7 +2333,7 @@ helpers, three lock-order comments, and the merged Actions test.
 | runtime | **done** | none in Core; see "Milestone 4 result: Runtime" |
 | usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | **built-in pane kind** | not an addon; see "Milestone 6 result: Browser" |
-| agentation | addon on Core client Browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `app/src/browser/BrowserPane.tsx`, inject code inside Tauri `browser::browser_create`; see "Agentation boundary for milestone 7" |
+| agentation | **done** | none in Core or Browser; see "Milestone 7 result: Agentation" |
 | activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
 | agent providers | evaluate last | closed `AgentKind` in 10 types, spawn plan built in 3 places, `detect_agent` and env stripping in core |
 
@@ -2177,6 +2436,13 @@ Risks:
 Narrowest seam: keep `PaneKind` as a Core discriminator, because a pane with no PTY is a real Core fact that recovery and `terminal_only` need. Move `create_browser_pane`, `BrowserOpen`, `BrowserNavigate`, and the UI into the addon. Change the `Layout.tsx` switch to a renderer map only if the map is shorter than the switch. Otherwise keep the switch and write the reason here.
 
 ### 7. Agentation
+
+Done. See "Milestone 7 result: Agentation". Built as planned, with these
+changes: `paste_to_agent` takes `&Inner` and returns the agent and the hook
+pane; the hook lists are `const` slices; the overlay source moved into
+`app/src/addons/agentation/page/`; `browser.sh` section 5 became
+`agentation.sh`. The first two risks below stay open. The plan is kept for the
+record.
 
 Risks:
 

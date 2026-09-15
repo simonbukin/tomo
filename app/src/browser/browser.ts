@@ -7,7 +7,7 @@ import type { Id } from "../types";
 export function normalizeUrl(text: string): string {
   const t = text.trim();
   if (!t) return "about:blank";
-  return /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `http://${t}`;
+  return /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(t) ? t : `http://${t}`;
 }
 
 export async function openBrowser(worktreeId: Id, url: string | null = null, tabId: Id | null = null): Promise<Id | null> {
