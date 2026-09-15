@@ -1,10 +1,12 @@
-//! Composition root for daemon addons: the static list, the seams each addon joins, and the tables it owns.
+//! Composition root for daemon addons: the static list, the seams each addon joins, the tables it owns, and its background tasks.
 //! Core never imports this module. Only `main.rs` and `dispatch.rs` do.
 
 pub mod towns;
+pub mod usage;
 
-use crate::daemon::Seams;
+use crate::daemon::{Daemon, Seams};
 use crate::store::Store;
+use std::sync::Arc;
 
 pub fn seams() -> Seams {
     Seams { worktree_namer: Some(towns::name_worktree), worktree_created: vec![towns::unlock], worktree_rebound: vec![towns::rebind] }
@@ -14,12 +16,34 @@ pub fn migrate(store: &Store) -> anyhow::Result<()> {
     towns::migrate(store)
 }
 
+/// Starts the background task of each addon that has one. The addon doc gives the reason for each task.
+pub fn start(daemon: &Arc<Daemon>) {
+    tokio::spawn(usage::run(daemon.clone()));
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
-    const ADDON_NOUNS: [&str; 3] = ["addons::", "mod addons", "town"];
+    const ADDON_NOUNS: &[&str] = &[
+        "addons::",
+        "mod addons",
+        "town",
+        "mod usage",
+        "crate::usage",
+        ".usage",
+        "usage:",
+        "usagesnapshot",
+        "usagebucket",
+        "usage_get",
+        "usageget",
+        "usage_changed",
+        "usagechanged",
+        "weekly",
+        "5-hour",
+        "allowance",
+    ];
 
     fn rust_files(dir: &Path) -> Vec<PathBuf> {
         std::fs::read_dir(dir)
