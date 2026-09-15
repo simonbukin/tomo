@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveTheme, sanitizeAppearance, stepZoom, zoomKey } from "./appearance";
+import { effectiveTheme, keyOverride, sanitizeAppearance, stepZoom, zoomKey } from "./appearance";
 
 describe("stepZoom", () => {
   it("walks the steps and stops at the ends", () => {
@@ -42,5 +42,17 @@ describe("effectiveTheme", () => {
     expect(effectiveTheme("light", "dark")).toBe("light");
     expect(effectiveTheme("system", "dark")).toBe("dark");
     expect(effectiveTheme("system", "system")).toBe("system");
+  });
+});
+
+describe("keyOverride", () => {
+  const key = (k: string, mods: Partial<KeyboardEvent> = {}) => keyOverride({ key: k, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, ...mods });
+  it("sends ESC CR for Shift+Enter so agents insert a newline", () => {
+    expect(key("Enter", { shiftKey: true })).toBe("\x1b\r");
+  });
+  it("leaves Enter and chorded Enter to xterm", () => {
+    expect(key("Enter")).toBeNull();
+    expect(key("Enter", { shiftKey: true, metaKey: true })).toBeNull();
+    expect(key("a", { shiftKey: true })).toBeNull();
   });
 });
