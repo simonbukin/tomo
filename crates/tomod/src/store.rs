@@ -633,6 +633,23 @@ mod tests {
         assert!(s.meta_all().unwrap().is_empty());
     }
 
+    #[test]
+    fn rebind_moves_activity_rows() {
+        let s = Store::open_in_memory().unwrap();
+        s.activity_insert(&activity("a", 1, ActivityKind::Archived, None)).unwrap();
+        s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
+        let count = |w: &str| s.activity_list(&ActivityQuery { worktree_id: Some(w.into()), ..Default::default() }).unwrap().len();
+        assert_eq!((count("w"), count("w2")), (0, 1));
+    }
+
+    #[test]
+    fn rebind_moves_the_town_unlock() {
+        let s = Store::open_in_memory().unwrap();
+        s.town_unlock(&TownUnlock { slug: "x".into(), worktree_id: "w".into(), repo_id: "r".into(), unlocked_at_ms: 1 }).unwrap();
+        s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
+        assert_eq!(s.town_unlocks().unwrap()[0].worktree_id, "w2");
+    }
+
     fn item(id: &str, kind: AttentionKind) -> AttentionItem {
         AttentionItem { id: id.into(), worktree_id: "w".into(), pane_id: None, level: AttentionLevel::Attention, message: id.into(), created_at_ms: 1, viewed_at_ms: None, kind, url: None, agent_kind: None, resolved_at_ms: None }
     }
