@@ -102,8 +102,8 @@ tokens on `:root`. A unit test makes sure that the first-paint values in
 
 ## Settings view
 
-Open it with ⌘, (`settings` in `[keybindings]`), the title bar button, or
-`Settings…` in the palette. Sections:
+Open it with ⌘, (`settings` in `[keybindings]`), the gear in the bottom
+strip, or `Settings…` in the palette. Sections:
 
 - **appearance**: theme, light and dark theme for `system`, accent, color
   overrides, and zoom (UI state).

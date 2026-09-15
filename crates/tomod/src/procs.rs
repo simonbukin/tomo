@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tomo_proto::{AgentKind, Id, Ownership, ProcessInfo, WorktreeResources};
 
@@ -26,11 +27,39 @@ pub struct Root {
 
 pub struct ProcMonitor {
     sys: System,
+    machine_at: Option<Instant>,
+}
+
+pub struct Machine {
+    pub cpu_percent: f32,
+    pub memory_used_bytes: u64,
+    pub memory_total_bytes: u64,
+    pub own_rss_bytes: u64,
 }
 
 impl ProcMonitor {
     pub fn new() -> Self {
-        ProcMonitor { sys: System::new() }
+        ProcMonitor { sys: System::new(), machine_at: None }
+    }
+
+    /// CPU usage is the average since the previous call, so a caller that
+    /// needs a current value checks `machine_age` first.
+    pub fn machine(&mut self) -> Machine {
+        self.sys.refresh_cpu_usage();
+        self.sys.refresh_memory();
+        let me = sysinfo::Pid::from_u32(std::process::id());
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&[me]), false, ProcessRefreshKind::nothing().with_memory());
+        self.machine_at = Some(Instant::now());
+        Machine {
+            cpu_percent: self.sys.global_cpu_usage().clamp(0.0, 100.0),
+            memory_used_bytes: self.sys.used_memory(),
+            memory_total_bytes: self.sys.total_memory(),
+            own_rss_bytes: self.sys.process(me).map_or(0, |p| p.memory()),
+        }
+    }
+
+    pub fn machine_age(&self) -> Option<Duration> {
+        self.machine_at.map(|t| t.elapsed())
     }
 
     /// Command lines are fetched once per process. Working directories are

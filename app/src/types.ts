@@ -59,6 +59,7 @@ export type {
   SplitDirection,
   StateDef,
   Status,
+  SystemStats,
   Tab,
   ThemeConfig,
   Town,
