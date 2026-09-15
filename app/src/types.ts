@@ -62,11 +62,6 @@ export type {
   SystemStats,
   Tab,
   ThemeConfig,
-  Town,
-  TownHistory,
-  TownPr,
-  TownUnlock,
-  TownWorktreeStatus,
   UsageBucket,
   UsageSnapshot,
   Worktree,
@@ -96,8 +91,6 @@ export interface ProcessInfo {
   depth: number;
 }
 
-export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
-
 export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" | "manual";
 
 export type SidebarMode = "open" | "minimal" | "closed";
@@ -105,7 +98,8 @@ export type SidebarMode = "open" | "minimal" | "closed";
 export type RightSection = "worktree" | "git" | "pr" | "processes" | "sessions" | "files";
 
 export interface UiState {
-  view: "home" | "worktree" | "towns" | "activity";
+  /** A core view, or the id of an addon view. */
+  view: "home" | "worktree" | "activity" | (string & {});
   activeWorktreeId: Id | null;
   /** `open` shows the full sidebar at its width, `minimal` a narrow rail, `closed` nothing. */
   leftMode: SidebarMode;

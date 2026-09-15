@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { playChime } from "./sounds";
-import { setState, setUi, useStore } from "./store";
-import { ceremonyTier, chimeFor, prefersReducedMotion, revealDurationMs, unlockedLine } from "./townCeremony";
-import type { Town } from "./types";
+import { playChime } from "../../sounds";
+import { setUi } from "../../store";
+import { setTownState, useTownState } from "./state";
+import { ceremonyTier, chimeFor, prefersReducedMotion, revealDurationMs, unlockedLine } from "./model";
+import type { Town } from "../../generated";
 
 const loadTowns = () => import("./data/japan-towns.json").then((m) => m.default as Town[]);
 
 /** The unlock moment. It never takes focus: a common town is a small corner reveal, a rare one gets a card. */
 export function TownReveal() {
-  const reveal = useStore((s) => s.townReveal);
-  const have = useStore((s) => s.unlocks.length);
+  const reveal = useTownState((s) => s.reveal);
+  const have = useTownState((s) => s.unlocks.length);
   const [towns, setTowns] = useState<Town[] | null>(null);
   const [hiddenNonce, setHiddenNonce] = useState(0);
 
@@ -19,7 +20,7 @@ export function TownReveal() {
 
   const town = reveal && towns ? (towns.find((t) => t.slug === reveal.unlock.slug) ?? null) : null;
   const tier = town ? ceremonyTier(town.rarity) : null;
-  const dismiss = () => setState({ townReveal: null });
+  const dismiss = () => setTownState({ reveal: null });
 
   useEffect(() => {
     if (!town || !tier) return;

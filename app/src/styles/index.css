@@ -6,7 +6,7 @@
 @import "./home.css";
 @import "./terminal.css";
 @import "./palette.css";
-@import "./towns.css";
+@import "../addons/towns/towns.css";
 @import "./activity.css";
 @import "./bottom.css";
 @import "./interaction.css";

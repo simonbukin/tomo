@@ -1,82 +1,21 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import towns from "./data/japan-towns.json";
-import { activityEmptyText, homeEmpty, townsProgress } from "./emptyStates";
+import { activityEmptyText, homeEmpty } from "./emptyStates";
 import { EmptyState } from "./states";
 import { getState, setState, type State } from "./store";
-import { ceremonyTier, chimeFor, prefersReducedMotion, revealDurationMs } from "./townCeremony";
-import type { Tab, Town, TownUnlock, Worktree } from "./types";
+import type { Tab, Worktree } from "./types";
 
 vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn(() => Promise.resolve([])) }));
-vi.mock("./sounds", () => ({ playChime: vi.fn() }));
 
 const { Activity } = await import("./Activity");
 const { Home } = await import("./Home");
-const { TownReveal } = await import("./TownReveal");
-const { playChime } = await import("./sounds");
 const { paneToRestore } = await import("./windowChrome");
 
 const initial: State = getState();
-const withMotion = (reduced: boolean) => (query: string) => ({ matches: reduced && query.includes("reduce"), media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList;
 
 beforeEach(() => setState(initial));
-afterEach(() => {
-  cleanup();
-  vi.mocked(playChime).mockClear();
-});
-
-describe("town unlock ceremony", () => {
-  it("scales with rarity", () => {
-    expect(["common", "uncommon", "rare", "epic", "legendary"].map(ceremonyTier)).toEqual(["small", "small", "strong", "strong", "special"]);
-    expect(ceremonyTier("unknown-tier")).toBe("small");
-    expect([chimeFor("small"), chimeFor("strong"), chimeFor("special")]).toEqual([null, "rare", "legendary"]);
-    expect(revealDurationMs("small")).toBeLessThan(revealDurationMs("strong"));
-    expect(revealDurationMs("strong")).toBeLessThan(revealDurationMs("special"));
-  });
-
-  it("reads the reduced-motion preference and survives a broken matchMedia", () => {
-    expect(prefersReducedMotion({ matchMedia: withMotion(true) })).toBe(true);
-    expect(prefersReducedMotion({ matchMedia: withMotion(false) })).toBe(false);
-    expect(prefersReducedMotion({ matchMedia: () => { throw new Error("no media"); } })).toBe(false);
-    expect(prefersReducedMotion(undefined)).toBe(false);
-  });
-
-  const reveal = async (town: Town, reduced: boolean) => {
-    const original = window.matchMedia;
-    window.matchMedia = withMotion(reduced);
-    const unlock: TownUnlock = { slug: town.slug, worktree_id: "w", repo_id: "r", unlocked_at_ms: 1 };
-    setState({ unlocks: [unlock], townReveal: { unlock, nonce: 1 } });
-    render(<TownReveal />);
-    const status = await screen.findByRole("status");
-    window.matchMedia = original;
-    return status;
-  };
-  const first = (rarity: string) => (towns as Town[]).find((t) => t.rarity === rarity)!;
-
-  it("gives a common town a small reveal with no sound", async () => {
-    const status = await reveal(first("common"), false);
-    expect(status).toHaveAttribute("data-tier", "small");
-    expect(status).toHaveAttribute("data-motion", "full");
-    expect(status).toHaveTextContent(`1 / ${towns.length}`);
-    expect(playChime).not.toHaveBeenCalled();
-  });
-
-  it("gives a legendary town the special moment and its chime, and honors reduced motion", async () => {
-    const status = await reveal(first("legendary"), true);
-    expect(status).toHaveAttribute("data-tier", "special");
-    expect(status).toHaveAttribute("data-motion", "reduced");
-    expect(playChime).toHaveBeenCalledWith("legendary");
-  });
-
-  it("dismisses on Escape", async () => {
-    await reveal(first("rare"), false);
-    expect(playChime).toHaveBeenCalledWith("rare");
-    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
-    expect(getState().townReveal).toBeNull();
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-});
+afterEach(cleanup);
 
 describe("empty states", () => {
   it("picks the Home empty state", () => {
@@ -89,7 +28,6 @@ describe("empty states", () => {
 
   it("uses short copy", () => {
     expect(activityEmptyText("needs_me")).toBe("Nothing needs you.");
-    expect(townsProgress(0, 1681)).toBe("0 / 1681 municipalities unlocked.");
   });
 
   it("renders a title, a detail, and one action", () => {

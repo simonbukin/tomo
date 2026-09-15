@@ -1,5 +1,6 @@
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
+import { worktreeNameField } from "./addons";
 import { rpc } from "./api";
 import { openWorktree } from "./actions";
 import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, SkeletonRows } from "./components/ui";
@@ -7,7 +8,7 @@ import { IntegrationStatusList, Settings } from "./Settings";
 import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
-import type { ConfigIssue, HookRun, Repo, Town, Worktree } from "./types";
+import type { ConfigIssue, HookRun, Repo, Worktree } from "./types";
 
 /** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
@@ -109,24 +110,21 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   const [from, setFrom] = useState("");
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
-  const [town, setTown] = useState<Town | null>(null);
+  const [nameHint, setNameHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const reroll = () => rpc<Town>("town_pick").then(setTown).catch(() => setTown(null));
-  useEffect(() => {
-    reroll();
-  }, []);
+  const NameField = worktreeNameField();
   useEffect(() => {
     if (!repo && repos[0]) setRepo(repos[0].id);
   }, [repos, repo]);
   const r = repos.find((x) => x.id === repo);
   const parent = r ? (config?.worktree_parent_dir ?? r.path.replace(/\/[^/]+$/, "")) : "";
-  const defaultPath = r ? `${parent}/${town?.slug ?? "<town>"}` : "";
+  const defaultPath = r ? `${parent}/${nameHint ?? "<name>"}` : "";
   const create = async () => {
     if (!repo || !branch.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, name_hint: path.trim() ? null : (town?.slug ?? null) });
+      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, name_hint: path.trim() ? null : nameHint });
       close();
       openWorktree(w.id);
     } catch (e) {
@@ -159,17 +157,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
       )}
       <label>Location</label>
       <input className="mono" value={path} placeholder={defaultPath} onChange={(e) => setPath(e.target.value)} />
-      {!path.trim() && town && (
-        <div className="town-suggest rise">
-          <span className={`rarity-dot rarity-${town.rarity}`} />
-          <span>{town.name}</span>
-          <span className="muted">{town.ja}</span>
-          <span className="faint">
-            {town.pref} · {town.rarity}
-          </span>
-          <Button variant="link" onClick={reroll}>reroll</Button>
-        </div>
-      )}
+      {NameField && <NameField hidden={!!path.trim()} onHint={setNameHint} />}
       {error && <InlineError>{error}</InlineError>}
       <DialogActions>
         <Button onClick={close}>Cancel</Button>

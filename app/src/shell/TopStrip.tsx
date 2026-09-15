@@ -1,14 +1,16 @@
 import { PanelLeft, PanelLeftDashed, PanelLeftOpen, PanelRight, PanelRightDashed, PanelRightOpen, type LucideIcon } from "lucide-react";
 import { runAction } from "../actions";
+import { addonViews } from "../addons";
 import { Mark } from "../Brand";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
 import { useStore } from "../store";
-import type { SidebarMode, UiState, Worktree } from "../types";
+import type { SidebarMode, Worktree } from "../types";
 import { WorktreeHeader } from "../WorktreeHeader";
 import type { ShellLayout, Side } from "./sidebarMode";
 
-const VIEW_TITLE: Record<UiState["view"], string> = { home: "home", activity: "activity", towns: "japan", worktree: "worktree" };
+const VIEW_TITLE: Record<string, string> = { home: "home", activity: "activity", worktree: "worktree" };
+const viewTitle = (view: string) => VIEW_TITLE[view] ?? addonViews().find((v) => v.id === view)?.title ?? "home";
 
 const TOGGLE_ICON: Record<Side, Record<SidebarMode, LucideIcon>> = {
   left: { open: PanelLeft, minimal: PanelLeftDashed, closed: PanelLeftOpen },
@@ -46,7 +48,7 @@ export function TopStrip({ worktree, layout }: { worktree: Worktree | null; layo
     <header className="topbar" data-tauri-drag-region>
       <TopLeft mode={layout.left} />
       <div className="top-middle" data-tauri-drag-region>
-        {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="top-title" data-tauri-drag-region>{VIEW_TITLE[view]}</span>}
+        {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="top-title" data-tauri-drag-region>{viewTitle(view)}</span>}
       </div>
       <div className="top-right" data-tauri-drag-region>
         {worktree && <SidebarToggle side="right" mode={layout.right} />}
