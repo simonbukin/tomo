@@ -8,7 +8,7 @@ GOOD='shell = "/bin/sh"'
 daemon_fresh "$GOOD"
 CFG="$TOMO_DATA_DIR/config.toml"
 sleep 1
-diags() { $RPC call diagnostics_list; }
+diags() { $RPC call diagnostics_list '{}'; }
 broken() { diags | jq_ "print(sum(1 for x in d if x['source'] == 'config' and x['level'] == 'warning' and 'Tomo uses the defaults' in x['message']))"; }
 reloads() { diags | jq_ "print(sum(1 for x in d if x['source'] == 'config' and x['level'] == 'info' and x['message'] == 'config reloaded'))"; }
 
