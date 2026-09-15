@@ -49,6 +49,14 @@
 .tab-close { opacity: 0; }
 .tab:hover .tab-close, .tab-close:focus-visible { opacity: 1; }
 .tab-new { color: var(--fg-3); align-self: center; margin: 0 var(--sp-1); }
+.tab { position: relative; }
+.tab-dragging { z-index: 2; background: var(--bg-1); color: var(--fg); }
+.tab-drop-before::before, .tab-drop-after::before { content: ""; position: absolute; top: 5px; bottom: 5px; width: 2px; border-radius: 1px; background: var(--accent); }
+.tab-drop-before::before { left: 0; }
+.tab-drop-after::before { right: 0; }
+.tab-pane-over { background: var(--accent-soft); color: var(--fg); }
+.tab-tail { max-width: min(520px, var(--available-width)); }
+.tab-tail-lines { margin: 0; max-height: 12em; overflow: hidden; font-family: var(--mono); font-size: var(--fs-0); line-height: 1.45; color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---- right inspector */
 .rightbar { grid-area: right; display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); overflow-y: auto; }

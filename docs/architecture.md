@@ -211,7 +211,14 @@ keep.
 The tab layout is a binary split tree (`LayoutNode`). Pure functions in
 `layout.rs` implement split, remove, resize, equalize, swap, rotate, and
 `split_of`; `is_valid` checks unique pane ids and ratios in range after
-every mutation. Zoom is transient GUI state: the daemon only forwards a
+every mutation. `insert`, `beside`, `move_within`, `move_to_edge`, and
+`reorder` back the `pane_move` and `tab_move` calls; `moves.rs` applies them
+to daemon state and refuses to store a tree that is not valid. A pane moves
+next to a target pane (a new 50/50 split on the drop side), swaps with it
+(`center`, also across tabs), or goes to an edge of a tab. A cross-tab move
+out of the last pane of a tab deletes that empty tab. A move never crosses
+worktrees, and a cross-tab move into a tab that holds `max_panes_per_tab`
+panes is a conflict. Zoom is transient GUI state: the daemon only forwards a
 `ZoomRequest` event and never changes the persisted tree. Agent-driven
 spawns go to a new tab once a tab holds `max_panes_per_tab` panes.
 

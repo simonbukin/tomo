@@ -16,6 +16,7 @@ justified? The harnesses run without model tokens and without the GUI.
 | `agents.sh` | fake agent: SessionStart→idle, working→idle, waiting + attention, heuristic vs fresh lifecycle, stale lifecycle ignored, heuristic after the stale threshold, two same-kind agents per pane, resume after daemon restart, exit | 14 pass |
 | `provenance.sh` | owned 3-level tree, grandchildren, no duplicate pids, reparented (setsid) child never owned, memory hog attribution, worktree total, observed stranger, refused kill of observed pid, dead parent disappears | 10 pass, 2 known |
 | `layout.sh` | split right/down ×4, swap, equalize (leaf-count fractions), rotate, no-op resize, removals, `max_panes_per_tab` policy | 15 pass |
+| `layout-move.sh` | `pane_move` on each side and center, drop on self, stale ids, own-tab edge, 40 random moves, `tab_move` order and clamp, rapid reorder, restart persistence, cross-tab split and swap, last pane closes its tab, full tab, cross-worktree reject, moves during heavy output, `pane_tail`, resize event | 47 pass |
 
 `cargo test -p tomod`: 41 tests, including the authority battery (PRD §23),
 provenance trees (PRD §24), split-sequence replay, scrollback tail, and a

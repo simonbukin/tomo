@@ -8,11 +8,28 @@
 .split-child > * { flex: 1; min-width: 0; min-height: 0; }
 .splitter { flex: none; background: transparent; position: relative; }
 .splitter::after { content: ""; position: absolute; background: var(--line-strong); opacity: 0; border-radius: 2px; transition: opacity var(--dur-fast) ease-out; }
-.splitter:hover::after, body.resizing-h .splitter-horizontal::after, body.resizing-v .splitter-vertical::after { opacity: 1; background: var(--accent); }
+.splitter::before { content: ""; position: absolute; z-index: 2; }
+.splitter:hover::after { opacity: 1; transition-delay: 60ms; }
+body.resizing-h .splitter-horizontal::after, body.resizing-v .splitter-vertical::after { opacity: 1; background: var(--accent); }
 .splitter-horizontal { width: var(--sp-2); cursor: col-resize; }
+.splitter-horizontal::before { top: 0; bottom: 0; left: -4px; right: -4px; }
 .splitter-horizontal::after { top: 12px; bottom: 4px; left: 3px; width: 2px; }
 .splitter-vertical { height: var(--sp-2); cursor: row-resize; }
+.splitter-vertical::before { left: 0; right: 0; top: -4px; bottom: -4px; }
 .splitter-vertical::after { left: 4px; right: 4px; top: 3px; height: 2px; }
+
+/* ---- pane drag: the legend chip is the handle; the drop area shows where the pane lands */
+.pane-grip { cursor: grab; }
+body.pane-dragging, body.pane-dragging * { cursor: grabbing !important; }
+body.pane-dragging .xterm { pointer-events: none; }
+.pane-drop { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.pane-drop-area { position: absolute; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); }
+.pane-drop-center { inset: 25%; }
+.pane-drop-left { inset: 0 50% 0 0; }
+.pane-drop-right { inset: 0 0 0 50%; }
+.pane-drop-top { inset: 0 0 50% 0; }
+.pane-drop-bottom { inset: 50% 0 0 0; }
+.pane-drag-chip { display: inline-block; padding: 0 8px; line-height: 18px; background: var(--bg-1); border: 1px solid var(--accent); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); white-space: nowrap; }
 
 .pane-wrap { flex: 1; display: flex; min-width: 0; min-height: 0; padding-top: 9px; }
 .pane { container-type: inline-size; position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--term-bg); transition: border-color var(--dur-fast) ease-out; }

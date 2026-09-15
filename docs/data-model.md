@@ -215,6 +215,9 @@ next_tab = "mod+shift+right"   prev_tab = "mod+shift+left"
 focus_left/right/up/down = "mod+alt+<arrow>"
 toggle_left_sidebar = "mod+b"  toggle_right_sidebar = "mod+shift+b"
 zoom_pane = "mod+shift+enter"
+move_tab_left/right = "mod+alt+shift+<arrow>"
+move_pane_left/right/up/down = "mod+ctrl+alt+<arrow>"
+equalize_splits = "mod+alt+e"
 ```
 
 `tomo config check` validates the file: unknown hook events, duplicate
