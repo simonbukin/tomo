@@ -19,6 +19,8 @@ use tomo_proto::*;
 
 /// A port that vanishes and returns within this window (a restart) makes no event.
 pub const REMOVAL_GRACE_MS: u64 = 5_000;
+/// One `endpoint_discovered` activity per worktree and port in this window.
+pub const ENDPOINT_REPEAT_MS: u64 = 60_000;
 const PROBE_TIMEOUT: Duration = Duration::from_millis(400);
 const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
 
@@ -212,9 +214,9 @@ impl Daemon {
         let changed: BTreeSet<Id> = r.added.iter().chain(&r.removed).chain(&r.restarted).map(|e| e.worktree_id.clone()).collect();
         for e in &r.added {
             Self::queue_endpoint_event(&mut inner, "runtime.endpoint_discovered", e);
-            let repeat = Self::recorded_recently(&inner, ActivityKind::EndpointDiscovered, activity::ENDPOINT_REPEAT_MS, |a| a.worktree_id == Some(e.worktree_id.clone()) && a.payload["port"] == e.port);
+            let repeat = Self::recorded_recently(&inner, RuntimeActivity::EndpointDiscovered, ENDPOINT_REPEAT_MS, |a| a.worktree_id == Some(e.worktree_id.clone()) && a.payload["port"] == e.port);
             if !repeat {
-                let mut ev = activity::event(ActivityKind::EndpointDiscovered, Some(&e.worktree_id), format!("{} listens on {}", e.label.clone().unwrap_or_else(|| e.process.clone()), e.port));
+                let mut ev = activity::event(RuntimeActivity::EndpointDiscovered, Some(&e.worktree_id), format!("{} listens on {}", e.label.clone().unwrap_or_else(|| e.process.clone()), e.port));
                 ev.pane_id = e.pane_id.clone();
                 ev.detail = Some(format!("{}:{}", e.host, e.port));
                 ev.payload = json!({ "port": e.port, "host": e.host, "pid": e.pid, "action_id": e.action_id, "endpoint_id": e.id });

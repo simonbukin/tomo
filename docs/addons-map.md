@@ -388,6 +388,13 @@ injected again on each page load while annotation is on. Notes live in
 
 ## Activity projections
 
+**Status after the Activity kind seam:** the closed `ActivityKind`, the
+`HookFailed` decode fallback, the `ENDPOINT_REPEAT_MS` leak, the kind switch
+in `Activity.tsx`, the `ACTIVITY` map in `glyphs.ts`, and the two "Needs Me"
+definitions are gone. Addon kind call sites stay in `daemon.rs` and
+`runtime.rs` until their milestones. See "Activity kind seam result" in
+[addons.md](addons.md). The line numbers below are from before the change.
+
 Background work: none. Activity is written when an event occurs and read on
 request.
 

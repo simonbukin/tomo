@@ -2,10 +2,11 @@
 
 Read this before you add a feature or move one. It takes a few minutes.
 
-Status: milestones 1 and 5 are done. Towns is the first addon and the
-reference for every later extraction. Usage is the second addon; it added a
-background task, a snapshot field, and two GUI slots. The procedures below
-are the ones that Towns and Usage proved.
+Status: milestone 1 (Towns), the Activity kind seam, and milestone 5
+(Usage) are done. Towns is the first addon and the reference for every
+later extraction. Usage is the second addon; it added a background task, a
+snapshot field, and two GUI slots. The procedures below are the ones that
+Towns and Usage proved. For the kind seam, see "Activity kind seam result".
 
 Related files:
 
@@ -35,7 +36,7 @@ opinions.
 | Processes, ownership, provenance | `procs.rs`, `monitor.rs` |
 | Agent abstraction, presence, authority | `agents.rs` (`merge`, `AgentPresence`) |
 | Attention, checkpoints | `daemon.rs`, `store.rs` |
-| Hooks, activity recording | `events.rs`, `activity.rs` |
+| Hooks, activity recording, core activity kinds | `events.rs`, `activity.rs`; `CoreActivity` in `crates/tomo-proto/src/activity.rs` |
 | Persistence, recovery | `store.rs`, `daemon.rs` (`restore`) |
 | IPC, CLI transport, config | `server.rs`, `main.rs`, `config.rs`, `settings.rs`, `crates/tomo-cli/src/client.rs` |
 | Wire types | `crates/tomo-proto/src/lib.rs` |
@@ -66,7 +67,7 @@ source code with a clean dependency boundary.
 | usage | **done** (milestone 5) |
 | github, actions, runtime, agentation | addon, not moved yet |
 | browser | study (milestone 6) |
-| activity projections | partial |
+| activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
 
 ## The dependency law
@@ -83,6 +84,7 @@ source code with a clean dependency boundary.
    - `crates/tomod/src/dispatch.rs`: the match that sends an addon `Call` to its addon, and the `Snapshot` that adds the addon fields to the `CoreSnapshot`
    - `crates/tomo-proto/src/lib.rs`: the `Call`, `Event`, `Snapshot`, and `HOOK_EVENTS` definitions, and the addon re-exports
    - `app/src/addons/index.ts`: the `builtins` list
+   - `app/src/addons/activity.ts`: the Activity row views of addon kinds
    - one `@import` line for each addon in `app/src/styles/index.css`
 5. **Deleting an addon must not damage Core.** If you remove the addon
    folders and their registration lines, Tomo must still build. Everything
@@ -317,7 +319,8 @@ This layout is confirmed by Towns.
 ```text
 crates/tomo-proto/src/
   lib.rs                  composition root: Call, Event, Snapshot, HOOK_EVENTS, `pub mod addons { pub mod <name>; }`, re-exports
-  addons/<name>.rs        the addon wire types (Town, TownUnlock, ...)
+  activity.rs             core: ActivityKind, CoreActivity, ActivityKinds, ActivityEvent, ActivityQuery
+  addons/<name>.rs        the addon wire types (Town, TownUnlock, ...) and its activity kind enum
 crates/tomod/src/
   main.rs                 composition root: startup, seams, migrate
   dispatch.rs             composition root: addon Call -> addon handler, the rest -> Daemon::handle
@@ -329,10 +332,12 @@ crates/tomo-cli/src/
   main.rs                 one clap tree; each addon keeps its subcommand block together
 app/src/
   App.tsx store.ts shell/ components/ui/ commands/   client core
+  activityKinds.ts        core kind views, activityView(), the plain fallback row
   addons/index.ts         composition root: builtins
-  addons/types.ts         the Addon type
-  addons/boundary.test.ts the import check
-  addons/<name>/          index.ts (the Addon value), views, state, CSS, data, tests
+  addons/activity.ts      composition root: the activity kind views of the addons
+  addons/types.ts         the Addon type, ActivityKindView
+  addons/boundary.test.ts the import check and the activity kind check
+  addons/<name>/          index.ts (the Addon value), activity.ts (its kind views), views, state, CSS, data, tests
 ```
 
 Milestone 1 did not split `lib.rs` into a `core.rs`. The re-export keeps the
@@ -341,26 +346,51 @@ change.
 
 ## Automated dependency checks
 
-Both checks run in the normal test commands.
+All checks run in the normal test commands.
 
 **Rust.** `core_does_not_import_addons` in `crates/tomod/src/addons/mod.rs`
 reads every `.rs` file under `crates/tomod/src` and `crates/tomo-proto/src`.
 It skips the `addons/` folders and the composition roots `main.rs`,
 `dispatch.rs`, and `tomo-proto/src/lib.rs`. It fails on `addons::`,
-`mod addons`, or the word `town` (any case), and prints the file, the line,
-and the match. When a milestone finishes an addon, add its nouns to
-`ADDON_NOUNS`. The check between two addons is not written yet, because one
-addon exists; add it with the second addon.
+`mod addons`, or a noun that an addon owns (any case), and prints the file,
+the line, and the match. `OWNED_NOUNS` lists the nouns of each finished
+addon: `town` for Towns; `mod usage`, `crate::usage`, `.usage`, `usage:`,
+`usagesnapshot`, `usagebucket`, `usage_get`, `usageget`, `usage_changed`,
+`usagechanged`, `weekly`, `5-hour`, and `allowance` for Usage. The last three
+keep window and allowance words out of the Core agent code. When a milestone
+finishes an addon, add its nouns there.
+
+**Rust, between addons.** `an_addon_does_not_name_another_addon` reads every
+file under `tomod/src/addons/` (without the composition root `mod.rs`) and
+under `tomo-proto/src/addons/`. A file fails if it names a noun that another
+addon owns. The Activity kind modules of the addons that are not moved yet
+(`actions.rs`, `agentation.rs`, `github.rs`, `runtime.rs`) must not name
+them either.
 
 **TypeScript.** `app/src/addons/boundary.test.ts` reads every non-test `.ts`
 and `.tsx` file under `app/src` outside `generated/` and `addons/` with
 `import.meta.glob(..., { query: "?raw" })`. It fails if a file imports an
 addon folder. A core file may import only `addons/index.ts` and
 `addons/types.ts`. It does not read CSS, so the `@import` line in
-`styles/index.css` is a listed registration line.
+`styles/index.css` is a listed registration line. The test "an addon
+imports no other addon folder" resolves each relative import of a file in
+`addons/<name>/`, and fails if the import lands in another addon folder.
 
-Both checks were proven: a planted core file that named `addons::towns`
-(Rust) or imported `./addons/towns` (TypeScript) made the test fail.
+**Activity kinds.** `core_activity_code_does_not_name_addon_kinds` in
+`crates/tomod/src/addons/mod.rs` reads the code before `#[cfg(test)]` in
+`tomod/src/activity.rs`, `store.rs`, `events.rs`, and
+`tomo-proto/src/activity.rs`. It fails on an addon kind enum name, an addon
+kind string, or `endpoint_repeat`. The test "core activity files do not name
+an addon activity kind" in `boundary.test.ts` does the same for
+`Activity.tsx`, `activityKinds.ts`, `activityModel.ts`, and `glyphs.ts`.
+`daemon.rs` and `runtime.rs` still name addon kinds, because the Actions,
+Runtime, GitHub, and Agentation code is not extracted yet.
+
+All four checks were proven. A planted core file that named `addons::towns`
+(Rust) or imported `./addons/towns` (TypeScript) made the import checks
+fail. A planted `ActionActivity::Crashed` doc line in `tomod/src/activity.rs`
+and a planted `"pr_merged"` constant in `glyphs.ts` made the activity checks
+fail.
 
 **Omission check.** Milestone 1 chose a deletion test over Cargo features.
 Features would spread `#[cfg]` through Core, and the GUI and the proto crate
@@ -376,6 +406,8 @@ Towns is the worked example for each step.
    In `lib.rs`, add `pub mod <name>;` inside `pub mod addons`, add `pub use addons::<name>::*;`,
    and add the `Call` and `Event` variants next to the other variants of that addon.
    Run `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` and commit `app/src/generated`.
+   If the addon records activity, put an enum of its kinds in the same file. Rename each variant to
+   `<addon>.<name>`, add `impl ActivityKinds for <Enum> {}`, and add its `export_all` line.
 3. **Daemon.** Make `crates/tomod/src/addons/<name>/mod.rs` with the handlers, the SQL, and a `migrate`.
    Add `pub mod <name>;` and its lines to `seams()` and `migrate()` in `addons/mod.rs`.
    Add one arm for each call in `dispatch.rs`.
@@ -387,6 +419,8 @@ Towns is the worked example for each step.
 6. **GUI.** Make `app/src/addons/<name>/index.ts`, which exports one `Addon` value. Add it to `builtins`.
    Put its CSS next to it and add one `@import` line in `app/src/styles/index.css`.
    Keep its client state in its own module.
+   If the addon records activity, add `app/src/addons/<name>/activity.ts` with a `Record<Kind, ActivityKindView>`
+   of its generated kind union, and list it in `app/src/addons/activity.ts`.
 7. **Tests.** Put unit tests next to the code.
    For daemon behavior, add `scripts/torture/<name>.sh` and add its name to `scripts/torture/run-all.sh`.
    Add the addon nouns to `ADDON_NOUNS`.
@@ -401,11 +435,13 @@ Towns is the worked example for each step.
    - its arms, its `use` line, and its field line in the `Subscribe` arm in `dispatch.rs`
    - its `mod` line, its re-export, its `Call` and `Event` variants, its `Snapshot` field, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
    - its entry in `builtins`
+   - its entry in `app/src/addons/activity.ts`
    - its `@import` line in `app/src/styles/index.css`
    - its CLI subcommand block and printer
    - its entry in `run-all.sh`
 3. Run `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto`.
 4. Keep its SQLite tables. Do not write a migration that drops user data.
+   Its activity rows stay. They read back with their kind string and render as plain rows.
 5. Run the full gates. Everything except the removed feature must work.
 
 If step 2 needs more than these lines, the extraction is not complete.
@@ -467,7 +503,7 @@ Slots that later milestones will need (from the map):
 | topbar item | actions | `WorktreeHeader.tsx` `ActionBar` |
 | pane renderer | browser | `Layout.tsx`, `Tabs.tsx` |
 | browser toolbar item | agentation | `BrowserPane.tsx` |
-| activity row renderer | actions, runtime, github, agentation | `Activity.tsx` `whoOf`, `EventRow`; `glyphs.ts` `ACTIVITY` |
+| activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
 
 Each slot must have these properties:
 
@@ -613,18 +649,174 @@ No test was removed. The Towns tests moved from `delight.test.tsx` to
 `app/src/addons/towns/towns.test.tsx`, and one store test moved to the Towns
 addon.
 
+## Activity kind seam result
+
+This step moved forward from milestone 8, so that GitHub, Actions, Runtime,
+and Agentation do not add nouns to a Core enum.
+
+### Decision
+
+- **Core kinds.** `CoreActivity` in `crates/tomo-proto/src/activity.rs` is a
+  closed enum of 9 kinds. The wire type `ActivityKind` is a string newtype.
+- **Addon kinds.** Each addon owns an enum in
+  `crates/tomo-proto/src/addons/<name>.rs` that implements `ActivityKinds`.
+  `impl<K: ActivityKinds> From<K> for ActivityKind` makes the string from the
+  serde name. A Rust call site stays typed:
+  `activity::event(ActionActivity::Crashed, ...)`.
+- **Strings.** The 16 stored strings do not change. Namespaced strings such as
+  `actions.crashed` were rejected for the existing kinds. The installed CLI
+  decodes `ActivityEvent.kind` into its closed enum, and serde fails the
+  whole `Vec`. So `tomo activity` would fail for every list that holds one
+  such row. Stored rows would also need a read mapping. A **new** addon kind
+  uses `<addon>.<name>`.
+- **Unknown kinds.** The store keeps the string. A row of an omitted or newer
+  addon no longer reads back as `hook_failed`.
+- **No `source` field.** The registry already knows the owner of each kind,
+  and a field needs a new column. Add it when a client must show the owner of
+  an unknown kind.
+- **No typed payload per kind.** The views read the payload with
+  `payloadString`, as before. Add a payload type when a view needs more than
+  one string.
+- **GUI registry.** `app/src/activityKinds.ts` has
+  `Record<CoreActivity, ActivityKindView>`. Each addon has
+  `Record<ActionActivity, ActivityKindView>` (and so on) in
+  `app/src/addons/<name>/activity.ts`. A missing view is a compile error,
+  because ts-rs generates the unions from the Rust enums. A kind without a
+  view renders as a plain row.
+- **Not an `Addon` slot.** The first attempt was an `activity` slot on
+  `Addon`. It broke module load in 7 test files: the views import
+  `actions.ts` for Restart and "go to pane", `actions.ts` imports
+  `addons/index.ts`, and the cycle left `failToast` undefined when
+  `commands/panes.ts` loaded. The second composition root
+  `app/src/addons/activity.ts` has only one importer, `activityKinds.ts`.
+
+### Kinds before and after
+
+| Stored string | Before | After |
+|---|---|---|
+| `agent_started` | `ActivityKind::AgentStarted` | core `CoreActivity::AgentStarted` |
+| `agent_waiting` | `ActivityKind::AgentWaiting` | core `CoreActivity::AgentWaiting` |
+| `agent_exited` | `ActivityKind::AgentExited` | core `CoreActivity::AgentExited` |
+| `checkpoint_created` | `ActivityKind::CheckpointCreated` | core `CoreActivity::CheckpointCreated` |
+| `checkpoint_resolved` | `ActivityKind::CheckpointResolved` | core `CoreActivity::CheckpointResolved` |
+| `state_changed` | `ActivityKind::StateChanged` | core `CoreActivity::StateChanged` |
+| `archived` | `ActivityKind::Archived` | core `CoreActivity::Archived` |
+| `restored` | `ActivityKind::Restored` | core `CoreActivity::Restored` |
+| `hook_failed` | `ActivityKind::HookFailed` | core `CoreActivity::HookFailed` |
+| `action_started` | `ActivityKind::ActionStarted` | actions `ActionActivity::Started` |
+| `action_stopped` | `ActivityKind::ActionStopped` | actions `ActionActivity::Stopped` |
+| `action_completed` | `ActivityKind::ActionCompleted` | actions `ActionActivity::Completed` |
+| `action_crashed` | `ActivityKind::ActionCrashed` | actions `ActionActivity::Crashed` |
+| `endpoint_discovered` | `ActivityKind::EndpointDiscovered` | runtime `RuntimeActivity::EndpointDiscovered` |
+| `pr_merged` | `ActivityKind::PrMerged` | github `GitHubActivity::PrMerged` |
+| `annotations_sent` | `ActivityKind::AnnotationsSent` | agentation `AgentationActivity::AnnotationsSent` |
+| any other string | read back as `hook_failed` | kept as the string, plain row |
+
+Milestone 0 counted 6 addon kinds by feature. By variant, 7 of 16 belong to
+addons.
+
+### Compatibility
+
+- **Stored kinds.** The mapping from old stored strings to new kinds is the
+  identity for all 16 strings (table above). No migration. A store test
+  round trips every string.
+- **Wire.** The JSON is unchanged. The generated `ActivityKind.ts` is now
+  `string`. New generated files: `CoreActivity.ts`, `ActionActivity.ts`,
+  `RuntimeActivity.ts`, `GitHubActivity.ts`, `AgentationActivity.ts`.
+- **Installed CLI.** It decodes every current row. It fails on a kind string
+  that it does not know, which only a newer build can write.
+- **Installed GUI.** The strings are the same, so its rows render as before.
+
+### Needs me
+
+One rule. An attention item needs me when it is unresolved, and a `waiting`
+item also is unviewed and has an agent in its pane that still waits. The
+daemon applies it in `Store::activity_list`: `ActivityList` passes the panes
+where an agent waits, and the SQL checks them with `json_each`. The client
+applies it in `needsMeItem`, which now requires the agent list. The Rust
+store test and the TypeScript test use the same case table. See
+[activity.md](activity.md#needs-me).
+
+### Behavior changes
+
+- `tomo activity --needs-me` drops a waiting item whose agent left `waiting`
+  before the daemon resolved the item. The daemon resolves such an item at
+  the same state change, so the window is short.
+- The "Resolve" button on an Activity row and the checkpoint banner use the
+  agent-aware rule. Before, a waiting row whose agent moved on still showed
+  "Resolve".
+- A row of an unknown kind shows its own kind data, not `hook_failed`.
+- A row whose kind has no action view no longer takes the actor from a
+  payload `action_id`. No core kind has such a payload.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `daemon.rs` and `runtime.rs` name `ActionActivity`, `RuntimeActivity`, `GitHubActivity`, `AgentationActivity` | the Actions, Runtime, GitHub, and Agentation code is not extracted; each milestone moves its call site with its code |
+| the core `checkpoint_created` view falls back to the first HTTP endpoint (`appUrl` reads `State.endpoints`) | the existing checkpoint to runtime link in the map; milestone 4 decides |
+| the actions and runtime views read `State.actions` for the action label | Actions state is still Core client state |
+| Towns `town_history` names `GitHubActivity::PrMerged` | the existing towns to github link; milestone 2 must resolve it |
+| `lib.rs` declares and re-exports the four kind modules | composition root |
+| the seven older addon kind strings are snake_case | stored rows and installed CLIs |
+
+### Tests
+
+| Suite | Milestone 1 | Activity kind seam |
+|---|---|---|
+| `cargo test --workspace` | 121 | 128 (tomod 119, tomo-proto 7, tomo_app_lib 2) |
+| vitest | 29 files, 197 tests | 30 files, 212 tests |
+| torture harness | 283 checks | 283 checks, all pass |
+
+New tests: the store round trip of every kind, the unknown kind, list
+filters, the shared "Needs me" cases (Rust and TypeScript), the Activity view
+row of every kind in jsdom with filters and row actions, the addon kind
+strings in `tomo-proto`, and the two activity dependency checks. No test was
+removed. One client case ("waiting, no agent list") was removed, because the
+rule without agents no longer exists.
+
+### Performance
+
+Measured on 2026-09-15 with `addons-bench.py`, release build, data dir
+`/tmp/tomo-addons-activity-bench`. Another agent built in parallel during
+the session, and the owner used the machine.
+
+| Metric | Baseline | Milestone 1 | Activity kind seam |
+|---|---|---|---|
+| Reattach | 7.66 ms | 8.24 ms | 7.48 ms |
+| of which `subscribe` | 0.51 ms | 0.52 ms | 0.46 ms |
+| of which `pane_attach` | 7.14 ms | 7.48 ms | 6.97 ms |
+| Worktree switch | 0.14 ms | 0.19 ms | 0.13 ms |
+| Worktree switch with attach | 9.26 ms | 8.95 ms | 7.90 ms |
+| Refresh | 164.31 ms | 155.83 ms | 166.34 ms |
+| Process poll, fresh | 23.41 ms | 19.53 ms | 13.45 ms |
+| Process poll, cached | 0.63 ms | 0.60 ms | 0.30 ms |
+| Idle CPU, no subscriber | 0.13 % | 0.13 % | 0.10 % (0.08, 0.12, 0.10) |
+| Idle CPU, one subscriber | 1.05 % | 0.78 % | 0.75 % (0.77, 0.75, 0.63) |
+| RSS at window end, no subscriber | 14.6 MB | 11.3 MB | 14.8 MB (15.0, 14.8, 14.7) |
+| RSS at window end, subscribed | 14.6 MB | 13.2 MB | 14.6 MB (14.1, 15.1, 14.6) |
+
+The refresh trials were 173.90, 166.34, and 128.35 ms. The change adds no
+work to discovery, the monitor, or startup. `ActivityList` now collects the
+waiting panes under the lock that it already took.
+
+Gate: pass. No round trip is more than 1 ms and 20 % slower than the
+baseline. Idle CPU and RSS are below the limits. The main JS chunk is
+719.39 kB, below the 800 KB budget. Not measured: GUI cold launch and GUI
+RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
 |---|---|---|
 | towns | **done** | none in Core; see "Coupling that stays" |
-| github | addon | `Repo.github` computed in core `repo_view`, `Inner.prs`, `ActivityKind::PrMerged`, `TownHistory.pr` |
-| actions | addon | `Pane.action_id` and `panes.action_id`, `on_exit` action branch, `AttentionKind::Crash`, `HookEvent.action`, four `ActivityKind::Action*` |
-| runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, `RuntimeEndpoint.action_id` filled from `inner.actions`, `ENDPOINT_REPEAT_MS` in `activity.rs` |
+| github | addon | `Repo.github` computed in core `repo_view`, `Inner.prs`, the `GitHubActivity::PrMerged` call site in `daemon.rs`, `TownHistory.pr` |
+| actions | addon | `Pane.action_id` and `panes.action_id`, `on_exit` action branch, `AttentionKind::Crash`, `HookEvent.action`, the `ActionActivity` call sites in `daemon.rs` |
+| runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, `RuntimeEndpoint.action_id` filled from `inner.actions`, the `RuntimeActivity` call site in `runtime.rs` |
 | usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | study (milestone 6) | `PaneKind`, `Pane.url`, `create_browser_pane` in `daemon.rs`, `Layout.tsx` switch |
-| agentation | addon on browser | `AnnotationsSend` arm, `ActivityKind::AnnotationsSent`, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
-| activity projections | partial | closed `ActivityKind` with 8 feature nouns, unknown kind decodes as `HookFailed`, two different "Needs Me" definitions |
+| agentation | addon on browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
+| activity projections | kind seam **done** | `activityModel.ts` still mixes runtime, usage, and PR helpers; see "Activity kind seam result" |
 | agent providers | evaluate last | closed `AgentKind` in 10 types, spawn plan built in 3 places, `detect_agent` and env stripping in core |
 
 ## Migration order
@@ -749,16 +941,14 @@ Narrowest seam:
 
 Risks:
 
-- "Needs Me" is defined in SQL (`store.rs`) and in `activityModel.ts` `needsMeItem`, and the two definitions differ.
-- `activityModel.ts` mixes runtime, usage, and PR helpers.
-- A string kind loses compile-time checks.
+- **Fixed.** "Needs Me" was defined in SQL (`store.rs`) and in `activityModel.ts` `needsMeItem`, and the two definitions differed.
+- **Open.** `activityModel.ts` mixes runtime, usage, and PR helpers.
+- **Avoided.** A string kind loses compile-time checks. Each owner has a typed enum and a typed record of views.
 
-Narrowest seam (decide in the moved-forward step 2):
-
-- `ActivityKind` keeps the Core variants.
-- Each addon defines its kinds in its proto module as a typed enum that serializes to the same snake_case strings, so the wire and the rows do not change.
-- `activity_row` keeps an unknown kind as its string and does not rewrite it to `HookFailed`.
-- The GUI renders rows through the activity row slot.
+The kind seam is done. See "Activity kind seam result". The plan above was
+built as planned, with one change: the GUI views are a second composition
+root, not a slot on `Addon`. Milestone 8 keeps only the UI cleanup: split
+`activityModel.ts` and move each addon's helpers with its milestone.
 
 ### 9. Agent providers
 
@@ -786,7 +976,7 @@ Do this milestone only if milestones 1 to 9 leave an obvious library edge.
 
 1. **Fixed in milestone 1.** Restore lost the town unlock move.
 2. **Fixed in milestone 1.** A worktree move lost the `towns` and `activity` rows.
-3. **Open.** `action_stopped` on pane close. `docs/activity.md` says that pane close and archive record `action_stopped`. `remove_pane` removes the pane before `hangup`, so `on_exit` returns early, and no activity or `action.exited` hook runs.
-4. **Partly fixed in milestone 5.** Stale docs. `docs/usage.md` now describes `scope`, and `README.md` puts usage in the bottom strip. Still open: `docs/activity.md` omits `annotations_sent`, and `docs/architecture.md` gives an old main bundle size.
+3. **Open.** `action_stopped` on pane close. `docs/activity.md` says that pane close and archive record `action_stopped`. `remove_pane` removes the pane before `hangup`, so `on_exit` returns early, and no activity or `action.exited` hook runs. The Activity kind seam changed `docs/activity.md` to describe what the code does. The code is not changed; the Actions milestone decides.
+4. **Fixed.** Stale docs. The Activity kind seam fixed two: `docs/activity.md` lists `annotations_sent`, and `docs/architecture.md` gives the measured main bundle size. Milestone 5 fixed the other two: `docs/usage.md` describes `scope`, and `README.md` puts usage in the bottom strip.
 5. **Open.** `scripts/perf.sh` sends `hello` with `protocol: 1` and subscribes before discovery ends.
 6. **Partly fixed in milestone 5.** Dead code. `usageSummary` and `percentOf` are removed. Still open: `townBySlug` (`app/src/addons/towns/Towns.tsx`) has no importer.

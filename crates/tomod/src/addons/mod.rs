@@ -56,6 +56,39 @@ mod tests {
             .collect()
     }
 
+    const CORE_ACTIVITY_FILES: [&str; 4] = ["tomod/src/activity.rs", "tomod/src/store.rs", "tomod/src/events.rs", "tomo-proto/src/activity.rs"];
+    const ADDON_ACTIVITY_NOUNS: [&str; 12] = [
+        "actionactivity",
+        "runtimeactivity",
+        "githubactivity",
+        "agentationactivity",
+        "action_started",
+        "action_stopped",
+        "action_completed",
+        "action_crashed",
+        "endpoint_discovered",
+        "endpoint_repeat",
+        "annotations_sent",
+        "pr_merged",
+    ];
+
+    #[test]
+    fn core_activity_code_does_not_name_addon_kinds() {
+        let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+        let hits: Vec<String> = CORE_ACTIVITY_FILES
+            .iter()
+            .flat_map(|rel| {
+                let text = std::fs::read_to_string(crates.join(rel)).unwrap();
+                let code = text.split("#[cfg(test)]").next().unwrap_or_default().to_lowercase();
+                code.lines()
+                    .enumerate()
+                    .filter_map(|(i, line)| ADDON_ACTIVITY_NOUNS.iter().find(|noun| line.contains(**noun)).map(|noun| format!("{rel}:{}: {noun}", i + 1)))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(hits.is_empty(), "core activity code names an addon kind:\n{}", hits.join("\n"));
+    }
+
     #[test]
     fn core_does_not_import_addons() {
         let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();

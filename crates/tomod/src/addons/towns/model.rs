@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
-use tomo_proto::{ActivityEvent, ActivityKind, PullRequest, Town, TownHistory, TownPr, TownUnlock, TownWorktreeStatus};
+use tomo_proto::{ActivityEvent, ActivityKind, CoreActivity, GitHubActivity, PullRequest, Town, TownHistory, TownPr, TownUnlock, TownWorktreeStatus};
 
 const DATA: &str = include_str!("../../../../../app/src/addons/towns/data/japan-towns.json");
 const WEIGHTS: [(&str, u32); 5] = [("common", 55), ("uncommon", 25), ("rare", 13), ("epic", 5), ("legendary", 2)];
@@ -45,7 +45,8 @@ pub struct WorktreeFacts {
     pub archived_at_ms: Option<u64>,
 }
 
-fn newest(events: &[ActivityEvent], kind: ActivityKind) -> Option<&ActivityEvent> {
+fn newest(events: &[ActivityEvent], kind: impl Into<ActivityKind>) -> Option<&ActivityEvent> {
+    let kind = kind.into();
     events.iter().filter(|e| e.kind == kind).max_by_key(|e| e.occurred_at_ms)
 }
 
@@ -55,7 +56,7 @@ fn payload_str(e: &ActivityEvent, key: &str) -> Option<String> {
 
 /// `events` are the activity events of the unlocking worktree; `pr` is the cached pull request, if any.
 pub fn history(unlock: TownUnlock, repo_name: Option<String>, worktree: Option<WorktreeFacts>, events: &[ActivityEvent], pr: Option<&PullRequest>) -> TownHistory {
-    let archive = newest(events, ActivityKind::Archived);
+    let archive = newest(events, CoreActivity::Archived);
     let status = match &worktree {
         None => TownWorktreeStatus::Gone,
         Some(w) if w.archived_at_ms.is_some() => TownWorktreeStatus::Archived,
@@ -73,7 +74,7 @@ pub fn history(unlock: TownUnlock, repo_name: Option<String>, worktree: Option<W
         _ => None,
     };
     let pr = pr.map(|p| TownPr { number: p.number, url: p.url.clone(), state: p.state.clone() }).or_else(|| {
-        let e = newest(events, ActivityKind::PrMerged)?;
+        let e = newest(events, GitHubActivity::PrMerged)?;
         Some(TownPr { number: e.payload.get("number")?.as_u64()?, url: payload_str(e, "url")?, state: "merged".into() })
     });
     TownHistory {
@@ -116,8 +117,8 @@ mod tests {
         TownUnlock { slug: "aogashima".into(), worktree_id: "w1".into(), repo_id: "r1".into(), unlocked_at_ms: 10 }
     }
 
-    fn event(kind: ActivityKind, at: u64, payload: serde_json::Value) -> ActivityEvent {
-        ActivityEvent { id: format!("e{at}"), kind, occurred_at_ms: at, worktree_id: Some("w1".into()), pane_id: None, agent_kind: None, title: String::new(), detail: None, payload, attention_id: None }
+    fn event(kind: impl Into<ActivityKind>, at: u64, payload: serde_json::Value) -> ActivityEvent {
+        ActivityEvent { id: format!("e{at}"), kind: kind.into(), occurred_at_ms: at, worktree_id: Some("w1".into()), pane_id: None, agent_kind: None, title: String::new(), detail: None, payload, attention_id: None }
     }
 
     fn facts(archived_at_ms: Option<u64>) -> WorktreeFacts {
@@ -135,10 +136,10 @@ mod tests {
     #[test]
     fn history_of_an_archived_town_uses_the_archive_record() {
         let events = [
-            event(ActivityKind::Archived, 50, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": null, "head": "old0001" })),
-            event(ActivityKind::Restored, 60, serde_json::json!({})),
-            event(ActivityKind::Archived, 90, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": "8c1fd62", "head": "old0002" })),
-            event(ActivityKind::PrMerged, 70, serde_json::json!({ "number": 12, "url": "https://github.com/o/r/pull/12" })),
+            event(CoreActivity::Archived, 50, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": null, "head": "old0001" })),
+            event(CoreActivity::Restored, 60, serde_json::json!({})),
+            event(CoreActivity::Archived, 90, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": "8c1fd62", "head": "old0002" })),
+            event(GitHubActivity::PrMerged, 70, serde_json::json!({ "number": 12, "url": "https://github.com/o/r/pull/12" })),
         ];
         let h = history(unlock(), None, Some(facts(Some(95))), &events, None);
         assert_eq!(h.status, TownWorktreeStatus::Archived);
@@ -148,7 +149,7 @@ mod tests {
 
     #[test]
     fn a_clean_archive_falls_back_to_the_head_at_archive_time() {
-        let events = [event(ActivityKind::Archived, 50, serde_json::json!({ "branch": "feat/clean", "checkpoint_commit": null, "head": "head777" }))];
+        let events = [event(CoreActivity::Archived, 50, serde_json::json!({ "branch": "feat/clean", "checkpoint_commit": null, "head": "head777" }))];
         let h = history(unlock(), None, None, &events, None);
         assert_eq!(h.status, TownWorktreeStatus::Gone);
         assert_eq!((h.branch.as_deref(), h.final_commit.as_deref(), h.archived_at_ms, h.worktree_name), (Some("feat/clean"), Some("head777"), Some(50), None));
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn a_cached_pull_request_wins_over_the_merge_event() {
         let pr = PullRequest { number: 3, title: "t".into(), url: "u".into(), state: "open".into(), draft: false, review_decision: None, mergeable: None, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 };
-        let events = [event(ActivityKind::PrMerged, 70, serde_json::json!({ "number": 12, "url": "x" }))];
+        let events = [event(GitHubActivity::PrMerged, 70, serde_json::json!({ "number": 12, "url": "x" }))];
         let h = history(unlock(), None, Some(facts(None)), &events, Some(&pr));
         assert_eq!(h.pr.map(|p| (p.number, p.state)), Some((3, "open".to_string())));
     }

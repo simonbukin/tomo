@@ -302,6 +302,11 @@ Phase 3 adds, at the same protocol version:
 call per monitor tick, attributes each pid to the pane whose PTY root is
 its ancestor, and debounces a restart. `crates/tomod/src/activity.rs`
 holds `Daemon::record`, the one way an event enters the `activity` table.
+A kind is a plain string on the wire. Core owns the kinds in
+`CoreActivity`, and each addon owns an enum of its kinds in
+`crates/tomo-proto/src/addons/<name>.rs`. The GUI renders rows from
+`app/src/activityKinds.ts` and `app/src/addons/activity.ts`. "Needs me" has
+one rule, in `Store::activity_list` and `needsMeItem`.
 `PaneState.stop_intent` is how `Daemon::on_exit` tells a crash from a
 stop. See [runtime.md](runtime.md) and [activity.md](activity.md).
 
@@ -369,7 +374,7 @@ Measured with `scripts/perf.sh` on an Apple Silicon Mac, release build,
 | daemon resident memory                 | ~13 MB   |
 | app: window created (Tauri setup)      | ~240 ms after process start |
 | app: first request to the daemon       | ~430 ms after process start (warm) |
-| app main bundle                        | ~295 KB JS; terminal and map chunks load on demand |
+| app main bundle                        | ~720 kB JS (`vite build`, 2026-09-15); terminal and map chunks load on demand |
 
 Run the app binary with `TOMO_TIMING=1` to print these marks on stderr.
 

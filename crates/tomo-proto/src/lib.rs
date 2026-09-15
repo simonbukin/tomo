@@ -13,10 +13,21 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use ts_rs::TS;
 
+pub mod activity;
+pub use activity::*;
+
 pub mod addons {
+    pub mod actions;
+    pub mod agentation;
+    pub mod github;
+    pub mod runtime;
     pub mod towns;
     pub mod usage;
 }
+pub use addons::actions::*;
+pub use addons::agentation::*;
+pub use addons::github::*;
+pub use addons::runtime::*;
 pub use addons::towns::*;
 pub use addons::usage::*;
 
@@ -988,58 +999,6 @@ pub struct RuntimeEndpoint {
     pub discovered_at_ms: u64,
 }
 
-// ---- activity: one chronological stream of meaningful events
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum ActivityKind {
-    AgentStarted,
-    AgentWaiting,
-    AgentExited,
-    CheckpointCreated,
-    CheckpointResolved,
-    ActionStarted,
-    ActionStopped,
-    ActionCompleted,
-    ActionCrashed,
-    EndpointDiscovered,
-    AnnotationsSent,
-    StateChanged,
-    Archived,
-    Restored,
-    HookFailed,
-    PrMerged,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct ActivityEvent {
-    pub id: Id,
-    pub kind: ActivityKind,
-    pub occurred_at_ms: u64,
-    pub worktree_id: Option<Id>,
-    pub pane_id: Option<Id>,
-    pub agent_kind: Option<AgentKind>,
-    pub title: String,
-    pub detail: Option<String>,
-    #[ts(type = "unknown")]
-    pub payload: Value,
-    /// The attention item this event opened or resolved, if any.
-    pub attention_id: Option<Id>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-pub struct ActivityQuery {
-    #[serde(default)]
-    pub limit: Option<usize>,
-    #[serde(default)]
-    pub before_ms: Option<u64>,
-    #[serde(default)]
-    pub worktree_id: Option<Id>,
-    /// Only events whose attention item is still unresolved.
-    #[serde(default)]
-    pub needs_me: bool,
-}
-
 // ---- evidence bundles: structured context sent to an existing agent session
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1215,6 +1174,11 @@ mod bindings {
         ThemeConfig::export_all(&cfg).unwrap();
         ActivityEvent::export_all(&cfg).unwrap();
         ActivityQuery::export_all(&cfg).unwrap();
+        CoreActivity::export_all(&cfg).unwrap();
+        ActionActivity::export_all(&cfg).unwrap();
+        RuntimeActivity::export_all(&cfg).unwrap();
+        GitHubActivity::export_all(&cfg).unwrap();
+        AgentationActivity::export_all(&cfg).unwrap();
         CheckpointSpec::export_all(&cfg).unwrap();
         EvidenceBundle::export_all(&cfg).unwrap();
         UsageSnapshot::export_all(&cfg).unwrap();
@@ -1268,5 +1232,27 @@ mod bindings {
         let actual = snapshot(&target);
         let _ = std::fs::remove_dir_all(&tmp);
         assert_eq!(actual, expected, "app/src/generated is stale; run TOMO_WRITE_TYPES=1 cargo test -p tomo-proto");
+    }
+}
+
+#[cfg(test)]
+mod addon_activity_kinds {
+    use super::*;
+
+    #[test]
+    fn addon_kinds_keep_their_stored_strings() {
+        let kinds: Vec<ActivityKind> = vec![
+            ActionActivity::Started.into(),
+            ActionActivity::Stopped.into(),
+            ActionActivity::Completed.into(),
+            ActionActivity::Crashed.into(),
+            RuntimeActivity::EndpointDiscovered.into(),
+            GitHubActivity::PrMerged.into(),
+            AgentationActivity::AnnotationsSent.into(),
+        ];
+        assert_eq!(
+            kinds.iter().map(ActivityKind::as_str).collect::<Vec<_>>(),
+            ["action_started", "action_stopped", "action_completed", "action_crashed", "endpoint_discovered", "pr_merged", "annotations_sent"]
+        );
     }
 }

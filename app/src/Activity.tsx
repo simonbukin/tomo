@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, payloadString, timeLabel } from "./activityModel";
-import { focusPane, openEndpoint, openWorktree, resolveCheckpoint, restartWorktreeAction, restoreWorktree } from "./actions";
+import { activityView } from "./activityKinds";
+import { groupByDay, mergeActivity, needsMeItem, payloadString, timeLabel } from "./activityModel";
+import { openEndpoint, resolveCheckpoint } from "./actions";
 import { rpc } from "./api";
 import { SkeletonRows } from "./components/ui";
 import { activityEmptyText, type ActivityFilter as Filter } from "./emptyStates";
-import { activityStatus, GLYPH } from "./glyphs";
+import { GLYPH } from "./glyphs";
 import "./styles/previews.css";
 import { ProcessIcon } from "./ProcessIcon";
 import { EmptyState } from "./states";
-import { endpointsOf, setState, useStore, type State } from "./store";
+import { setState, useStore } from "./store";
 import { KIND_LABEL, type ActivityEvent } from "./types";
 
 const PAGE = 200;
@@ -65,40 +66,21 @@ export function Activity() {
   );
 }
 
-function whoOf(e: ActivityEvent, s: State): { agent: ActivityEvent["agent_kind"]; text: string } {
-  if (e.agent_kind) return { agent: e.agent_kind, text: KIND_LABEL[e.agent_kind] };
-  const actionId = payloadString(e, "action_id");
-  if (actionId || e.kind.startsWith("action_") || e.kind === "endpoint_discovered") {
-    const label = (e.worktree_id ? s.actions[e.worktree_id]?.actions : undefined)?.find((a) => a.id === actionId)?.label;
-    return { agent: null, text: label ?? payloadString(e, "label") ?? actionId ?? "action" };
-  }
-  if (["state_changed", "annotations_sent", "archived", "restored"].includes(e.kind)) return { agent: null, text: "You" };
-  return { agent: null, text: "" };
-}
-
 function EventRow({ e }: { e: ActivityEvent }) {
-  const who = useStore((s) => whoOf(e, s));
-  const worktree = useStore((s) => s.worktrees.find((w) => w.id === e.worktree_id) ?? null);
-  const pane = useStore((s) => (e.pane_id ? (s.panes[e.pane_id] ?? null) : null));
-  const open = useStore((s) => !!e.attention_id && s.attention.some((a) => a.id === e.attention_id && needsMeItem(a)));
-  const endpoint = useStore((s) => (e.worktree_id ? (httpEndpoints(endpointsOf(s, e.worktree_id))[0] ?? null) : null));
-  const runtimeEvent = e.kind === "endpoint_discovered" || e.kind === "checkpoint_created";
-  const url = payloadString(e, "url") ?? (runtimeEvent && endpoint ? endpointUrl(endpoint) : null);
-  const actionId = payloadString(e, "action_id");
-  const crashed = e.kind === "action_crashed";
-  const agentEvent = e.kind.startsWith("agent_") || e.kind === "checkpoint_created";
-  const goTo = () => {
-    if (e.worktree_id) openWorktree(e.worktree_id);
-    if (pane) window.setTimeout(() => focusPane(pane.id), 80);
-  };
-  const line = [who.text, worktree?.name].filter(Boolean).join(" · ");
-  const status = activityStatus(e.kind);
+  const view = activityView(e.kind);
+  const who = useStore((s) => (e.agent_kind ? KIND_LABEL[e.agent_kind] : (view.who?.(e, s) ?? "")));
+  const worktreeName = useStore((s) => s.worktrees.find((w) => w.id === e.worktree_id)?.name ?? null);
+  const url = useStore((s) => payloadString(e, "url") ?? view.url?.(e, s) ?? null);
+  const labels = useStore((s) => (view.actions ?? []).map((a) => a.label(e, s)));
+  const open = useStore((s) => !!e.attention_id && s.attention.some((a) => a.id === e.attention_id && needsMeItem(a, Object.values(s.agents))));
+  const line = [who, worktreeName].filter(Boolean).join(" · ");
+  const status = view.status ?? null;
   return (
     <div className="activity-row">
       <span className="activity-time mono">{timeLabel(e.occurred_at_ms)}</span>
       <span className="activity-who">
         {status && <span className={`glyph glyph-${status}`} aria-label={status}>{GLYPH[status]}</span>}
-        {who.agent && <ProcessIcon agent={who.agent} size={11} />}
+        {e.agent_kind && <ProcessIcon agent={e.agent_kind} size={11} />}
         {line}
       </span>
       <span className="activity-text">
@@ -107,11 +89,8 @@ function EventRow({ e }: { e: ActivityEvent }) {
       </span>
       <span className="activity-actions">
         {url && <button className="link" onClick={() => openEndpoint(url, e.worktree_id ?? undefined)}>Open App</button>}
-        {pane && agentEvent && who.agent && <button className="link" onClick={goTo}>Go to {KIND_LABEL[who.agent]}</button>}
-        {pane && crashed && <button className="link" onClick={goTo}>Logs</button>}
-        {e.worktree_id && actionId && (crashed || e.kind === "action_stopped") && <button className="link" onClick={() => restartWorktreeAction(e.worktree_id!, actionId)}>Restart</button>}
+        {(view.actions ?? []).map((a, i) => labels[i] && <button key={i} className="link" onClick={() => a.run(e)}>{labels[i]}</button>)}
         {open && e.attention_id && <button className="link" onClick={() => resolveCheckpoint(e.attention_id!)}>Resolve</button>}
-        {e.kind === "archived" && worktree?.archived_at_ms && <button className="link" onClick={() => restoreWorktree(worktree.id)}>Restore</button>}
       </span>
     </div>
   );

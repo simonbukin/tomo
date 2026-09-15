@@ -12,15 +12,33 @@ describe("needsMeItems", () => {
   it("keeps unresolved checkpoints and crashes even after a view, drops viewed waiting items", () => {
     const list = [
       attention({ id: "viewed-wait", viewed_at_ms: 5 }),
-      attention({ id: "wait" }),
+      attention({ id: "wait", pane_id: "p-claude" }),
       attention({ id: "cp", kind: "checkpoint", viewed_at_ms: 9 }),
       attention({ id: "done", kind: "crash", resolved_at_ms: 3 }),
     ];
-    expect(needsMeItems(list).map((a) => a.id)).toEqual(["wait", "cp"]);
+    expect(needsMeItems(list, [agent("waiting")]).map((a) => a.id)).toEqual(["wait", "cp"]);
   });
   it("puts the least recently viewed item first so next_attention cycles", () => {
     const list = [attention({ id: "b", kind: "crash", viewed_at_ms: 20 }), attention({ id: "a", kind: "checkpoint", viewed_at_ms: 10 })];
-    expect(needsMeItems(list).map((a) => a.id)).toEqual(["a", "b"]);
+    expect(needsMeItems(list, []).map((a) => a.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("needsMeItem cases", () => {
+  const onPane = (extra: Partial<AttentionItem>) => attention({ pane_id: "p-claude", ...extra });
+  const cases: [string, AttentionItem, AgentPresence[], boolean][] = [
+    ["waiting, agent waits", onPane({}), [agent("waiting")], true],
+    ["waiting, agent moved on", onPane({}), [agent("working")], false],
+    ["waiting, no agent in the pane", onPane({}), [], false],
+    ["waiting, viewed", onPane({ viewed_at_ms: 2 }), [agent("waiting")], false],
+    ["waiting, resolved", onPane({ resolved_at_ms: 2 }), [agent("waiting")], false],
+    ["checkpoint, viewed, agent working", onPane({ kind: "checkpoint", viewed_at_ms: 2 }), [agent("working")], true],
+    ["checkpoint, resolved", onPane({ kind: "checkpoint", resolved_at_ms: 2 }), [], false],
+    ["crash, viewed, no agent", onPane({ kind: "crash", viewed_at_ms: 2 }), [], true],
+    ["crash, resolved", onPane({ kind: "crash", resolved_at_ms: 2 }), [], false],
+  ];
+  it.each(cases)("%s", (_, item, agents, expected) => {
+    expect(needsMeItem(item, agents)).toBe(expected);
   });
 });
 

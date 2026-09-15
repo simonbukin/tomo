@@ -5,6 +5,6 @@
 
 export type ActivityQuery = { limit: number | null, before_ms: number | null, worktree_id: string | null, 
 /**
- * Only events whose attention item is still unresolved.
+ * Only events whose attention item still needs a person. See `needs_me` in `tomod`.
  */
 needs_me: boolean, };

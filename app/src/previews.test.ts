@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activityStatus, agentStatus, dotClass, GLYPH } from "./glyphs";
+import { activityStatus } from "./activityKinds";
+import { agentStatus, dotClass, GLYPH } from "./glyphs";
 import { durationLabel, gitLines } from "./previewModel";
 import type { GitSummary } from "./types";
 
