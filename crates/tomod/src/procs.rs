@@ -253,6 +253,25 @@ mod tests {
         assert_eq!(detect_agent("zsh", "-zsh"), None);
     }
 
+    #[test]
+    fn detect_agent_reads_argv0_and_misses_launcher_paths() {
+        assert_eq!(detect_agent("2.1.273", "claude --settings /d/claude-hooks.json --session-id s"), Some(AgentKind::Claude), "a versioned native binary is found by argv[0]");
+        assert_eq!(detect_agent("node", "/Users/me/.local/bin/claude --resume s"), Some(AgentKind::Claude));
+        assert_eq!(detect_agent("codex-aarch64-apple-darwin", "/x/codex-aarch64-apple-darwin resume abc"), Some(AgentKind::Codex));
+        assert_eq!(detect_agent("node", "node /opt/homebrew/bin/codex resume abc"), None, "an npm shim is found only through its native child");
+        assert_eq!(detect_agent("node", "pi"), Some(AgentKind::Pi), "process.title rewrites argv[0] to pi");
+        assert_eq!(detect_agent("node", "node /opt/homebrew/bin/pi -e /d/tomo-status.ts --session-id s"), None, "before process.title runs, the npm symlink path hides pi");
+        assert_eq!(detect_agent("claude-trace", "claude-trace"), None);
+        assert_eq!(detect_agent("pip", "pip install x"), None);
+    }
+
+    #[test]
+    #[ignore = "bug: detect_agent matches any program named codex* and any command that mentions pi-coding-agent (procs.rs detect_agent)"]
+    fn detect_agent_ignores_programs_that_only_mention_a_provider() {
+        assert_eq!(detect_agent("vim", "vim /src/pi-coding-agent/README.md"), None);
+        assert_eq!(detect_agent("codexbar", "codexbar"), None);
+    }
+
     fn row_at(pid: u32, ppid: u32, name: &str, cwd: Option<&str>, rss: u64) -> ProcRow {
         ProcRow { pid, ppid: Some(ppid), name: name.into(), exe: None, cmd: name.into(), cwd: cwd.map(PathBuf::from), cpu_percent: 0.5, rss_bytes: rss, start_time_s: 0 }
     }

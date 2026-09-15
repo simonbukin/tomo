@@ -1,0 +1,198 @@
+#!/usr/bin/env node
+// Pretends to be Claude Code, Codex, or Pi for the harness. No model calls.
+// usage: fake-provider claude|codex|pi [the provider's own flags]
+// stdin: work N | wait | quit
+//
+// Each flavor reads the same integration files as the real binary, sends the
+// same hook payloads, keeps session files under $HOME, and fails a resume the
+// way the installed binary does. process.title rewrites argv[0], as Pi does,
+// so the process monitor sees the provider name.
+"use strict"
+const fs = require("fs")
+const os = require("os")
+const path = require("path")
+const crypto = require("crypto")
+const readline = require("readline")
+const { spawnSync } = require("child_process")
+const { pathToFileURL } = require("url")
+
+const [flavor, ...args] = process.argv.slice(2)
+process.title = flavor
+const home = os.homedir()
+const cwd = process.cwd()
+const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined)
+const sleep = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000))
+const readJson = (file) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"))
+  } catch {
+    return undefined
+  }
+}
+const firstLine = (file) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8").split("\n")[0])
+  } catch {
+    return undefined
+  }
+}
+const jsonlUnder = (dir) => {
+  try {
+    return fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith(".jsonl")).map((f) => path.join(dir, f))
+  } catch {
+    return []
+  }
+}
+const appendLine = (file, value) => {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.appendFileSync(file, JSON.stringify(value) + "\n")
+}
+const exitWith = (message) => {
+  console.error(message)
+  process.exit(1)
+}
+
+const runCommandHooks = (hooks, event, payload, trusted) =>
+  (hooks?.[event] ?? []).forEach((entry, i) =>
+    (entry.hooks ?? []).forEach((hook, j) => {
+      if (hook.type === "command" && trusted(event, i, j)) {
+        spawnSync("/bin/sh", ["-c", hook.command], { input: JSON.stringify(payload), stdio: ["pipe", "ignore", "inherit"], timeout: (hook.timeout ?? 60) * 1000 })
+      }
+    }),
+  )
+
+function claude() {
+  const settings = readJson(flag("--settings") ?? "")
+  const resume = flag("--resume")
+  const id = resume ?? flag("--session-id") ?? crypto.randomUUID()
+  const transcript = path.join(home, ".claude", "projects", cwd.replace(/[/.]/g, "-"), `${id}.jsonl`)
+  if (resume && !fs.existsSync(transcript)) exitWith(`No conversation found with session ID: ${resume}`)
+  const hook = (event, extra = {}) =>
+    runCommandHooks(settings?.hooks, event, { session_id: id, transcript_path: transcript, cwd, hook_event_name: event, permission_mode: "default", ...extra }, () => true)
+  const tool = (n) => ({ tool_name: "Bash", tool_input: { command: `sleep ${n}` } })
+  return {
+    id,
+    start: () => hook("SessionStart", { source: resume ? "resume" : "startup" }),
+    work: async (n) => {
+      appendLine(transcript, { type: "user", message: { role: "user", content: `work ${n}` } })
+      hook("UserPromptSubmit", { prompt: `work ${n}` })
+      hook("PreToolUse", tool(n))
+      await sleep(n)
+      hook("PostToolUse", { ...tool(n), tool_response: {} })
+      appendLine(transcript, { type: "assistant", message: { role: "assistant", content: "done" } })
+      hook("Stop", { stop_hook_active: false })
+    },
+    wait: () => {
+      hook("PermissionRequest", tool(0))
+      hook("Notification", { notification_type: "permission_prompt", message: "Claude needs your permission to use Bash" })
+    },
+    quit: () => hook("SessionEnd", { reason: "prompt_input_exit" }),
+  }
+}
+
+function codex() {
+  const codexHome = process.env.CODEX_HOME ?? path.join(home, ".codex")
+  const hooks = readJson(path.join(codexHome, "hooks.json"))?.hooks
+  const config = fs.existsSync(path.join(codexHome, "config.toml")) ? fs.readFileSync(path.join(codexHome, "config.toml"), "utf8") : ""
+  const snake = (event) => event.replace(/[A-Z]/g, (c, i) => (i ? "_" : "") + c.toLowerCase())
+  const trusted = (event, i, j) => config.includes(`hooks.json:${snake(event)}:${i}:${j}"`)
+  const resume = args.includes("resume") ? args[args.indexOf("resume") + 1] : undefined
+  const rollouts = jsonlUnder(path.join(codexHome, "sessions")).map((file) => ({ file, meta: firstLine(file)?.payload, mtime: fs.statSync(file).mtimeMs }))
+  const previous =
+    resume === "--last" ? rollouts.filter((r) => r.meta?.cwd === cwd).sort((a, b) => b.mtime - a.mtime)[0] : rollouts.find((r) => resume && r.meta?.id === resume)
+  if (resume && resume !== "--last" && !previous) exitWith(`fake-provider codex: no saved session ${resume}`)
+  const id = previous?.meta?.id ?? crypto.randomUUID()
+  const now = new Date()
+  const rollout = previous?.file ?? path.join(codexHome, "sessions", now.toISOString().slice(0, 10).replaceAll("-", "/"), `rollout-${now.toISOString().replace(/[:.]/g, "-")}-${id}.jsonl`)
+  if (!previous) appendLine(rollout, { timestamp: now.toISOString(), type: "session_meta", payload: { id, cwd, originator: "fake-provider" } })
+  const hook = (event, extra = {}) =>
+    runCommandHooks(hooks, event, { session_id: id, transcript_path: rollout, cwd, hook_event_name: event, model: "fake", permission_mode: "default", ...extra }, trusted)
+  return {
+    id,
+    start: () => hook("SessionStart", { source: previous ? "resume" : "startup" }),
+    work: async (n) => {
+      const turn_id = crypto.randomUUID()
+      const tool = { turn_id, tool_name: "shell", tool_input: { command: ["sleep", String(n)] }, tool_use_id: crypto.randomUUID() }
+      appendLine(rollout, { type: "event_msg", payload: { type: "user_message", message: `work ${n}` } })
+      hook("UserPromptSubmit", { turn_id, prompt: `work ${n}` })
+      hook("PreToolUse", tool)
+      await sleep(n)
+      hook("PostToolUse", { ...tool, tool_response: "" })
+      hook("Stop", { turn_id, stop_hook_active: false, last_assistant_message: "done" })
+    },
+    wait: () => hook("PermissionRequest", { turn_id: crypto.randomUUID(), tool_name: "shell", tool_input: { command: ["rm", "-rf", "build"] } }),
+    quit: () => hook("SessionEnd", { reason: "exit" }),
+  }
+}
+
+async function pi() {
+  const sessionDir = path.join(home, ".pi", "agent", "sessions", `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`)
+  const arg = flag("--session")
+  const byPath = arg !== undefined && (arg.includes("/") || arg.endsWith(".jsonl"))
+  const local = jsonlUnder(sessionDir)
+  const match = arg === undefined || byPath ? undefined : (local.find((f) => firstLine(f)?.id === arg) ?? local.find((f) => firstLine(f)?.id?.startsWith(arg)))
+  if (arg !== undefined && !byPath && !match) exitWith(`No session found matching '${arg}'`)
+  const file = byPath ? path.resolve(arg) : (match ?? path.join(sessionDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_${flag("--session-id") ?? crypto.randomUUID()}.jsonl`))
+  const id = firstLine(file)?.id ?? path.basename(file, ".jsonl").split("_").pop()
+  const handlers = {}
+  const api = { on: (event, handler) => (handlers[event] = [...(handlers[event] ?? []), handler]) }
+  const ctx = { sessionManager: { getSessionId: () => id, getSessionFile: () => file } }
+  const emit = (type, extra = {}) => Promise.all((handlers[type] ?? []).map((handler) => handler({ type, ...extra }, ctx)))
+  const extension = flag("-e")
+  if (extension) {
+    // The extension calls a bare require(), which Pi's loader provides.
+    globalThis.require = require
+    process.emitWarning = () => {}
+    const mod = await import(pathToFileURL(path.resolve(extension)).href)
+    await mod.default(api)
+  }
+  let prompting = false
+  return {
+    id,
+    start: () => emit("session_start", { reason: match || byPath ? "resume" : "startup" }),
+    work: async (n) => {
+      if (prompting) await emit("ui_prompt_end")
+      prompting = false
+      if (!fs.existsSync(file)) appendLine(file, { type: "session", version: 3, id, timestamp: new Date().toISOString(), cwd })
+      appendLine(file, { type: "message", message: { role: "user", content: `work ${n}` } })
+      await emit("agent_start")
+      await sleep(n)
+      await emit("turn_end")
+      await emit("agent_end")
+      await emit("agent_settled")
+    },
+    wait: async () => {
+      prompting = true
+      await emit("ui_prompt_start", { reason: "ui_prompt", kind: "confirm", title: "Allow rm -rf build?" })
+    },
+    quit: () => emit("session_shutdown", { reason: "quit" }),
+  }
+}
+
+async function main() {
+  const agents = { claude, codex, pi }
+  if (!agents[flavor]) exitWith(`unknown flavor: ${flavor}`)
+  const agent = await agents[flavor]()
+  console.log(`fake-provider ${flavor} session ${agent.id} argv: ${args.join(" ")}`)
+  await agent.start()
+  for await (const line of readline.createInterface({ input: process.stdin })) {
+    const [command, count] = line.trim().split(/\s+/)
+    const seconds = Number(count) || 2
+    if (command === "work") {
+      await agent.work(seconds)
+      console.log(`done ${seconds}s`)
+    } else if (command === "wait") {
+      await agent.wait()
+      console.log("waiting for approval")
+    } else if (command === "quit") {
+      await agent.quit()
+      console.log("bye")
+      await sleep(0.3)
+      process.exit(0)
+    } else if (command) {
+      console.log(`unknown: ${line}`)
+    }
+  }
+}
+
+main()
