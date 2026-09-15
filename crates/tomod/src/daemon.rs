@@ -1497,21 +1497,19 @@ impl Daemon {
             parent.join(path.file_name().map(|n| n.to_os_string()).unwrap_or_default())
         };
         git::worktree_add(&repo_path, &path, &branch, false, None).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
-        {
-            let inner = self.lock();
-            inner.store.meta_upsert(&MetaRow { archived_at_ms: None, archived_branch: None, path: path.clone(), ..row }).map_err(internal)?;
-        }
-        self.discover(Summaries::Cached).await.map_err(internal)?;
         let id = path_id(&canonical(&path));
-        let mut inner = self.lock();
-        if id != worktree_id {
-            let unlock = inner.store.town_unlocks().unwrap_or_default().into_iter().find(|u| u.worktree_id == worktree_id);
-            if let Some(mut u) = unlock {
-                u.worktree_id = id.clone();
-                let _ = inner.store.town_unlock(&u);
-                inner.town_by_worktree.insert(id.clone(), u.slug);
+        {
+            let mut inner = self.lock();
+            inner.store.meta_upsert(&MetaRow { archived_at_ms: None, archived_branch: None, path: path.clone(), ..row }).map_err(internal)?;
+            if id != worktree_id {
+                match inner.store.rebind_worktree(worktree_id, &id, &canonical(&path)) {
+                    Ok(()) => Self::rebind_runtime(&mut inner, worktree_id, &id),
+                    Err(e) => tracing::warn!("restore {worktree_id}: rebind to {id}: {e}"),
+                }
             }
         }
+        self.discover(Summaries::Cached).await.map_err(internal)?;
+        let mut inner = self.lock();
         let ev = events::envelope(&inner, "worktree.restored", Some(&id));
         inner.hook_queue.push(ev);
         let title = format!("{} restored", Self::worktree_name(&inner, &id));
