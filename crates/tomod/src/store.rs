@@ -468,7 +468,7 @@ impl Store {
             "INSERT INTO activity (id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
             params![
                 e.id,
-                enum_str(e.kind),
+                e.kind.as_str(),
                 e.occurred_at_ms as i64,
                 e.worktree_id,
                 e.pane_id,
@@ -491,7 +491,7 @@ impl Store {
         let payload: String = r.get(8)?;
         Ok(ActivityEvent {
             id: r.get(0)?,
-            kind: parse_enum::<ActivityKind>(r.get(1)?).unwrap_or(ActivityKind::HookFailed),
+            kind: ActivityKind(r.get(1)?),
             occurred_at_ms: r.get::<_, i64>(2)? as u64,
             worktree_id: r.get(3)?,
             pane_id: r.get(4)?,
@@ -516,9 +516,9 @@ impl Store {
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
-    pub fn activity_since(&self, kind: ActivityKind, since_ms: u64) -> Result<Vec<ActivityEvent>> {
+    pub fn activity_since(&self, kind: impl Into<ActivityKind>, since_ms: u64) -> Result<Vec<ActivityEvent>> {
         let mut st = self.conn.prepare("SELECT id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id FROM activity WHERE kind = ?1 AND occurred_at_ms >= ?2")?;
-        let rows = st.query_map(params![enum_str(kind), since_ms as i64], Self::activity_row)?;
+        let rows = st.query_map(params![kind.into().as_str(), since_ms as i64], Self::activity_row)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
@@ -577,6 +577,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tomo_proto::{ActionActivity, CoreActivity};
 
     #[test]
     fn metadata_round_trip_and_malformed_tags_degrade() {
@@ -615,7 +616,7 @@ mod tests {
     #[test]
     fn rebind_moves_activity_rows() {
         let s = Store::open_in_memory().unwrap();
-        s.activity_insert(&activity("a", 1, ActivityKind::Archived, None)).unwrap();
+        s.activity_insert(&activity("a", 1, CoreActivity::Archived.into(), None)).unwrap();
         s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
         let count = |w: &str| s.activity_list(&ActivityQuery { worktree_id: Some(w.into()), ..Default::default() }).unwrap().len();
         assert_eq!((count("w"), count("w2")), (0, 1));
@@ -634,9 +635,9 @@ mod tests {
         let s = Store::open_in_memory().unwrap();
         s.attention_insert(&item("chk", AttentionKind::Checkpoint)).unwrap();
         s.attention_insert(&item("wait", AttentionKind::Waiting)).unwrap();
-        s.activity_insert(&activity("a", 10, ActivityKind::ActionStarted, None)).unwrap();
-        s.activity_insert(&activity("b", 20, ActivityKind::CheckpointCreated, Some("chk"))).unwrap();
-        s.activity_insert(&activity("c", 20, ActivityKind::AgentWaiting, Some("wait"))).unwrap();
+        s.activity_insert(&activity("a", 10, ActionActivity::Started.into(), None)).unwrap();
+        s.activity_insert(&activity("b", 20, CoreActivity::CheckpointCreated.into(), Some("chk"))).unwrap();
+        s.activity_insert(&activity("c", 20, CoreActivity::AgentWaiting.into(), Some("wait"))).unwrap();
         let ids = |q: ActivityQuery| s.activity_list(&q).unwrap().iter().map(|e| e.id.clone()).collect::<Vec<_>>();
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b", "a"]);
         assert_eq!(ids(ActivityQuery { before_ms: Some(20), ..Default::default() }), vec!["a"]);
@@ -649,7 +650,7 @@ mod tests {
         assert_eq!(s.attention_list().unwrap().iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["wait"]);
         assert_eq!(s.attention_get("chk").unwrap().unwrap().resolved_at_ms, Some(6));
         assert_eq!(s.activity_list(&ActivityQuery::default()).unwrap()[0].payload["port"], 3000);
-        assert_eq!(s.activity_since(ActivityKind::CheckpointCreated, 15).unwrap().len(), 1);
+        assert_eq!(s.activity_since(CoreActivity::CheckpointCreated, 15).unwrap().len(), 1);
         s.activity_trim(2).unwrap();
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b"]);
     }
@@ -691,11 +692,11 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_stored_kind_reads_back_as_hook_failed() {
+    fn an_unknown_stored_kind_keeps_its_string() {
         let s = Store::open_in_memory().unwrap();
         s.conn.execute("INSERT INTO activity (id, kind, occurred_at_ms, title) VALUES ('u', 'future.thing', 1, 'from a newer build')", []).unwrap();
         let back = s.activity_list(&ActivityQuery::default()).unwrap();
-        assert_eq!((back.len(), kind_str(&back[0]), back[0].title.as_str()), (1, "hook_failed".to_string(), "from a newer build"));
+        assert_eq!((back.len(), kind_str(&back[0]), back[0].title.as_str()), (1, "future.thing".to_string(), "from a newer build"));
     }
 
     #[test]

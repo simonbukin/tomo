@@ -1,6 +1,7 @@
 // GENERATED FROM tomo-proto. DO NOT EDIT.
 // Run: TOMO_WRITE_TYPES=1 cargo test -p tomo-proto
 
+export * from "./ActionActivity";
 export * from "./ActionDef";
 export * from "./ActionMode";
 export * from "./ActionRunResult";
@@ -16,6 +17,7 @@ export * from "./AgentReport";
 export * from "./AgentSession";
 export * from "./AgentSpawn";
 export * from "./AgentState";
+export * from "./AgentationActivity";
 export * from "./Annotation";
 export * from "./ArchiveResult";
 export * from "./AttentionItem";
@@ -26,6 +28,7 @@ export * from "./CheckpointMode";
 export * from "./CheckpointSpec";
 export * from "./Config";
 export * from "./ConfigIssue";
+export * from "./CoreActivity";
 export * from "./Diagnostic";
 export * from "./DiagnosticLevel";
 export * from "./DropPlace";
@@ -33,6 +36,7 @@ export * from "./ErrorCode";
 export * from "./Event";
 export * from "./EvidenceBundle";
 export * from "./FsEntry";
+export * from "./GitHubActivity";
 export * from "./GitHubRepo";
 export * from "./GitSummary";
 export * from "./Hello";
@@ -60,6 +64,7 @@ export * from "./PrStatusResult";
 export * from "./PullRequest";
 export * from "./Repo";
 export * from "./RpcError";
+export * from "./RuntimeActivity";
 export * from "./RuntimeEndpoint";
 export * from "./RuntimeProtocol";
 export * from "./Snapshot";
