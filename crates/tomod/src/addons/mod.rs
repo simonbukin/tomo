@@ -1,6 +1,7 @@
 //! Composition root for daemon addons: the static list, the seams each addon joins, and the tables it owns.
 //! Core never imports this module. Only `main.rs` and `dispatch.rs` do.
 
+pub mod actions;
 pub mod towns;
 
 use crate::daemon::Seams;
