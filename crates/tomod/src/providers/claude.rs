@@ -1,5 +1,6 @@
 use super::{str_field, HookOutcome, Program, Provider};
 use crate::agents::shell_quote;
+use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tomo_proto::{AgentKind, AgentState};
@@ -11,7 +12,24 @@ pub static PROVIDER: Provider = Provider {
     hook_outcome,
     detects,
     nested_env: &["CLAUDECODE", "CLAUDE_CODE_*"],
+    write_launch_file,
+    install,
+    installed,
+    gap: super::no_gap,
 };
+
+fn write_launch_file(launch_dir: &Path, tomo_bin: &Path) -> Result<()> {
+    std::fs::write(settings_path(launch_dir), serde_json::to_string_pretty(&hooks_settings(tomo_bin))?)?;
+    Ok(())
+}
+
+fn install(home: &Path, tomo_bin: &Path) -> Result<()> {
+    super::merge_into_file(&home.join(".claude/settings.json"), &hooks_settings(tomo_bin)["hooks"], "hook claude")
+}
+
+fn installed(home: &Path) -> bool {
+    std::fs::read_to_string(home.join(".claude/settings.json")).map(|t| t.contains("hook claude")).unwrap_or(false)
+}
 
 fn detects(p: &Program) -> bool {
     p.name == "claude" || p.argv0 == "claude"
