@@ -42,7 +42,7 @@ content view, and a child added later lands in the old view and never
 paints. For each browser pane the GUI asks the host for a child webview
 labelled `browser-<pane id>` in that window (`tauri` with the `unstable`
 feature, `Window::add_child`). The
-React component `app/src/BrowserPane.tsx` renders a toolbar and an empty
+React component `app/src/browser/BrowserPane.tsx` renders a toolbar and an empty
 host box; it measures the box with a `ResizeObserver` and on every render,
 and pushes the bounds to `browser_set_bounds` in logical pixels. The child
 webview covers the box.

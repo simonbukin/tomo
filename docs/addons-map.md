@@ -344,6 +344,17 @@ fetches when the newest snapshot is at least 5 min old. A fetch runs
 
 ## Browser
 
+**Status after milestone 6:** a built-in pane kind, not an addon. The
+**leak** rows below stay as Core and Core client code by decision. The code
+moved: `create_browser_pane` and the `BrowserOpen` and `BrowserNavigate`
+arms are in `features/browser.rs`; `BrowserPane.tsx`, `openBrowser`,
+`openInBrowser`, `browserHostFailed`, `browserCommand`, `normalizeUrl`, and
+the `.browser-*` CSS are in `app/src/browser/`; the child webview commands
+are in `app/src-tauri/src/browser.rs`. `browserMenu` stays in `menus.ts`,
+and the four browser commands stay in `commands/discovery.ts`. See
+"Milestone 6 result: Browser" in [addons.md](addons.md). The line numbers
+below are from before the change.
+
 Background work: the daemon has none. Each mounted `BrowserPane` runs a
 `requestAnimationFrame` loop that calls `browser_set_bounds` only on a change.
 The webview closes when the pane unmounts.

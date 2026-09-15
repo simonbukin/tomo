@@ -2,7 +2,7 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { rpc } from "./api";
 import { paneIds, useStore } from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
-import { BrowserPane } from "./BrowserPane";
+import { BrowserPane } from "./browser/BrowserPane";
 import type { Id, LayoutNode, Tab } from "./types";
 
 export function TabLayout({ tab }: { tab: Tab }) {

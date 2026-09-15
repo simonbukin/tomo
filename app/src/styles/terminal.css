@@ -50,13 +50,3 @@ body.pane-dragging .xterm { pointer-events: none; }
 .pane-body { flex: 1; min-height: 0; padding: var(--sp-3) var(--sp-1) var(--sp-1) var(--sp-3); user-select: text; overflow: hidden; border-radius: var(--radius); }
 .pane-body .xterm { height: 100%; }
 .pane-body .xterm-viewport { overflow-y: auto; }
-
-/* ---- browser panes: same frame as a terminal, a toolbar, then the host box the child webview covers */
-.browser-toolbar { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; padding: 10px var(--sp-2) var(--sp-1); }
-.browser-toolbar > * { flex: none; }
-.browser-toolbar > .browser-url { flex: 1 1 60px; min-width: 40px; font-family: var(--mono); font-size: var(--fs-1); padding: 2px 8px; margin: 0 var(--sp-1); }
-.browser-annotate-on { color: var(--accent); background: var(--accent-soft); }
-.browser-count { min-width: 16px; padding: 0 4px; margin: 0 2px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); line-height: 16px; text-align: center; }
-@container (max-width: 359px) { .browser-count, .browser-external { display: none; } }
-@container (max-width: 259px) { .browser-forward { display: none; } .browser-toolbar > .browser-url { min-width: 24px; padding: 2px 4px; margin: 0 2px; } }
-.browser-host { flex: 1; min-height: 0; margin: 0 var(--sp-1) var(--sp-1); border-radius: var(--radius-sm); background: var(--bg-1); }
