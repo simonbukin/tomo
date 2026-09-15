@@ -5,7 +5,7 @@ mod model;
 
 pub use model::KnownPr;
 
-use crate::daemon::{err, ok, Daemon};
+use crate::daemon::{err, ok, Daemon, Inner};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -38,16 +38,20 @@ pub async fn pr_status(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcErr
         return ok(cached);
     }
     let result = model::answer(gh_pr_view(&path).await);
-    let mut inner = daemon.lock();
+    remember(&mut daemon.lock(), worktree_id, result.clone());
+    ok(result)
+}
+
+/// Keeps a new answer under the Core lock. It records `pr_merged` and emits `pr_changed`.
+pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
     let before = cache().insert(worktree_id.clone(), result.clone());
     let update = model::update(before.as_ref(), &result);
     if let Some(pr) = update.merged {
-        Daemon::record(&mut inner, model::merged_event(&worktree_id, pr));
+        Daemon::record(inner, model::merged_event(&worktree_id, pr));
     }
     if update.changed {
-        Daemon::emit(&mut inner, Event::PrChanged { worktree_id, pr: result.pr.clone() });
+        Daemon::emit(inner, Event::PrChanged { worktree_id, pr: result.pr });
     }
-    ok(result)
 }
 
 /// The pull request that this addon knows for a worktree: the cached one, or the newest `pr_merged` event in `events`.
