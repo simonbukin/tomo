@@ -3,7 +3,9 @@
 Read this before you add a feature or move one. It takes a few minutes.
 
 Status: milestone 1 (Towns), milestone 2 (GitHub), milestone 3 (Actions),
-milestone 5 (Usage), and the Activity kind seam are done. Towns is the first
+milestone 5 (Usage), and the Activity kind seam are done. Milestone 6 decided
+that Browser stays a built-in pane kind; see "Milestone 6 result: Browser".
+Towns is the first
 addon and the reference for every later extraction. GitHub added the first
 GUI slots that core components render. Usage added a background task, a
 snapshot field, and two GUI slots. Actions added the Core pane source, two
@@ -73,7 +75,7 @@ source code with a clean dependency boundary.
 | usage | **done** (milestone 5) |
 | actions | **done** (milestone 3) |
 | runtime, agentation | addon, not moved yet |
-| browser | study (milestone 6) |
+| browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
 
@@ -107,7 +109,7 @@ where naming an addon is correct.
 
 | From | To | Reason |
 |---|---|---|
-| agentation | browser | Agentation annotates a browser pane (not moved yet). |
+| none | | Milestone 6 kept Browser as a built-in pane kind. So Agentation depends on Core client code, and needs no exception. |
 
 Towns does not import GitHub. `town_history` gets the pull request from a
 plain function that `dispatch.rs` supplies (`town_pr`). Without GitHub, the
@@ -716,8 +718,8 @@ Slots that later milestones will need (from the map):
 |---|---|---|
 | inspector section | **done**: `inspectorSections` (milestone 2) | none |
 | worktree signal | **done**: `worktreeSignals` (milestone 2); runtime is the next user | the runtime signal in `activityModel.ts` `nowSignals` |
-| pane renderer | browser | `Layout.tsx`, `Tabs.tsx` |
-| browser toolbar item | agentation | `BrowserPane.tsx` |
+| pane renderer | **not built** (milestone 6: the switch is shorter; see "Milestone 6 result: Browser") | `Layout.tsx` keeps the switch |
+| browser toolbar item | agentation (milestone 7) | `app/src/browser/BrowserPane.tsx`; see "Agentation boundary for milestone 7" |
 | activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
 
 Each slot must have these properties:
@@ -1579,6 +1581,260 @@ None was hit. Near:
 - An addon module that `addons/index.ts` loads cannot import `actions.ts` at
   module start. Two menu items use a lazy import. See "Module load".
 
+## Milestone 6 result: Browser
+
+### Decision
+
+**Browser stays a built-in pane kind. It is not an addon.** Its code moved
+into three browser modules, and the closed `PaneKind` and the `Layout.tsx`
+switch stay. The PRD says to abstract Browser only if that makes the code
+simpler. The count below shows that an extraction adds more parts than it
+removes.
+
+Why Browser is Core and Core client, not an opinion:
+
+- A pane that has no PTY is a Core fact. `start_pty`, `pane_view.live`,
+  `terminal_only`, restore, and reopen must know it. Tabs, pane layout, and
+  layout persistence are Core, and the PRD does not move them.
+- The page is Client work: the Tauri host owns the child webviews, and the
+  main window is a child webview only because of Browser.
+- The opinion is Agentation. It annotates a page and sends it to an agent.
+  With Browser in the Core client, Agentation depends on Core like every
+  other addon, and needs no addon-to-addon exception.
+
+### Question 1: a pane renderer registry
+
+A registry maps a pane kind id to a client renderer. Count of the change:
+
+| Side | Registry | Closed switch (kept) |
+|---|---|---|
+| `Layout.tsx` | a lookup in `builtins`, and a fallback for an unknown kind | 1 line: `kind === "browser"` |
+| `Addon` type and `addons/index.ts` | a `paneRenderers` field and a helper (about 5 lines) | none |
+| Type safety | `Pane.kind` must become a string so that Core names no addon; 4 GUI checks (`Layout.tsx`, `Tabs.tsx`, `commands/discovery.ts`, `browser/browser.ts`) and 12 Rust `PaneKind` matches in 4 files lose the compiler check | `"terminal" \| "browser"`, generated from the Rust enum |
+| Module load | `BrowserPane.tsx` imports `actions.ts` and `menus.ts`. A module that `addons/index.ts` loads must not do that (see "Module load"), so the pane must load lazily. That changes when `browser_create` runs, and nobody can see the result without a window. | no change |
+| Pane persistence and restore | `panes.kind` is already `TEXT`; the read must keep an unknown string | no change |
+| Layout validation | none; `layout.rs` does not read the kind | none |
+| Reopen (`tab_reopen` restores the URL) | `ClosedPane::Browser` becomes a generic `ClosedPane::Surface { kind, url }` and a generic `create_surface_pane`, or a new reopen seam | no change |
+| Drag and drop, pane zoom | none; `LayoutDnd.tsx` and `zoomed` do not read the kind | none |
+| App zoom | none; `boundsOf` in the pane scales by `appearance.zoom` | none |
+
+The registry alone does not make Browser removable: the tab preview, the four
+commands, the spawn menu, the browser menu, the File menu, and the command
+group still name Browser. The addons.md rule from milestone 0 was: "Change
+the switch to a renderer map only if the map is shorter than the switch."
+It is not shorter. **Result: keep the switch.**
+
+### Question 2: can Browser be deleted believably?
+
+Only after these changes:
+
+1. Proto: `PaneKind` becomes a string newtype (the `ActivityKind` pattern),
+   and `Pane.url` stays as a generic surface address. An addon payload on
+   `Pane` would be generic JSON, which the laws forbid.
+2. Daemon: the three kind checks in `daemon.rs` become "not a terminal".
+   Reopen gets a generic surface record. The addon gets `browser_open` and
+   `browser_navigate` through `dispatch.rs`, and Core makes `place_pane` and a
+   URL setter public to the crate.
+3. GUI: new slots for the pane renderer, the spawn menu items (two places),
+   the File menu item, and "open a URL in Tomo". The four commands move
+   after the core actions in the palette and the shortcut reference, which
+   the user sees.
+4. Tauri host: it is one crate. The eight webview commands, `build.rs`, the
+   `default.json` permissions, and `open_main_window` stay, or the deletion
+   edits four host files.
+5. Agentation: an "Allowed addon dependencies" row, and a toolbar slot that
+   one addon offers to another. No mechanism for that exists.
+
+What Core would still keep: a pane kind string with "no PTY" meaning, the
+`url` field and column, a generic surface create and reopen, and the host
+window layout. So the deletion removes the view and two calls, and leaves
+the rest of Browser in Core under generic names. That is the stop condition
+"addon framework code exceeds feature simplification". **Result: not
+extracted. No deletion test was run, because nothing was extracted.**
+
+### Question 3: open a URL in Tomo
+
+Eight call sites in six files open a URL in the worktree browser: terminal Cmd-click
+(`terminalHooks.ts`), the checkpoint banner and the runtime popover
+(`WorktreeHeader.tsx`), the Activity "Open App" link, the palette endpoint
+entry, two runtime menu items (`menus.ts`), and the running Action submenu
+(`addons/actions/commands.ts`). They all call `openEndpoint(url,
+worktreeId?)` in `actions.ts`.
+
+| Option | Moving parts | Verdict |
+|---|---|---|
+| A typed command in the registry | `Action.run` takes no arguments; a URL argument changes the type of every command for one kind of caller | rejected |
+| A small Core client capability, with the system browser as the fallback when no Browser addon exists | one slot ("the first addon wins") and one fallback line | the right option **if** Browser ever becomes an addon; `openEndpoint` is already the one entry point, so only its body changes |
+| Browser is a built-in client capability | none: `openEndpoint` calls `openInBrowser` directly | **chosen**, fewest moving parts |
+
+`openEndpoint` without a worktree already opens the system browser.
+
+### What moved
+
+| From | To |
+|---|---|
+| `create_browser_pane` and the `BrowserOpen` and `BrowserNavigate` arms in `daemon.rs` | `crates/tomod/src/features/browser.rs` (`create_browser_pane`, `browser_open`, `browser_navigate`); the arms call them |
+| `app/src/BrowserPane.tsx` | `app/src/browser/BrowserPane.tsx` (`git mv`, imports changed only) |
+| `normalizeUrl` in `BrowserPane.tsx`; `openBrowser`, `openInBrowser`, `browserHostFailed`, `browserCommand` in `actions.ts` | `app/src/browser/browser.ts` |
+| the `.browser-*` rules at the end of `styles/terminal.css` | `app/src/browser/browser.css`, imported directly after `terminal.css`, so the cascade order does not change (the built CSS is 61.46 kB, as before) |
+| the eight child webview commands and their helpers in `app/src-tauri/src/lib.rs` | `app/src-tauri/src/browser.rs`; the command names do not change, so `build.rs` and the capabilities do not change |
+
+What did not move, and why:
+
+- `browserMenu` stays in `menus.ts`. It uses the private helpers of that file
+  (`paneContext`, `copyMenu`, `sendToItem`), like `paneMenu`.
+- The four commands stay in `commands/discovery.ts`. The registry loads
+  `commands/*.ts` by file name, so a `commands/browser.ts` file would change
+  the command order.
+- `openEndpoint` stays in `actions.ts`, because seven callers import it.
+- `PaneKind`, `Pane.url`, `Call::BrowserOpen`, `Call::BrowserNavigate`, the
+  `panes.kind` and `panes.url` columns, `ClosedPane::Browser`, and
+  `tomo browser open` stay. They are the Core part of the pane kind.
+- The Agentation parts stay where they are. Milestone 7 moves them.
+
+Seams: none. Slots: none. Wire, schema, and CLI: no change. The bindings did
+not change. Behavior: no change is intended; the pane code and its bounds
+logic (the frame loop and the zoom scale) are the same lines.
+
+The new module `features/browser.rs` makes `Daemon::place_pane` public to
+the crate. Browser code in `app/src/browser/browser.ts` imports `actions.ts`
+(`focusPane`, `openWorktree`), and `actions.ts` imports `openInBrowser`. The
+cycle runs nothing at module load, like the existing cycle between
+`actions.ts` and `commands/*.ts`.
+
+### Agentation boundary for milestone 7
+
+Today every piece below is inside Browser or Core. After milestone 7,
+Agentation must depend on Browser, and Browser must not name Agentation.
+
+**GUI, `app/src/browser/BrowserPane.tsx`:**
+
+- imports only for Agentation: `Copy`, `MessageSquarePlus`, `SendHorizontal`, `DropdownMenu*`, `MenuItems`, `MenuItem`, `copyText`, `agentsOf`, `failToast`, `showStatus`, `KIND_LABEL`, `EvidenceBundle`, and `rpc` (only for `annotations_send`)
+- `Feedback`, `FeedbackEvent`, `INSTRUCTION`, `NO_FEEDBACK`, `notes`
+- the state `annotate`, `feedback`, `menuOpen`, and the `agents` selector
+- the `browser://feedback` listener in the mount effect
+- `setFeedback(NO_FEEDBACK)` in the `browser://state` listener (a new URL resets the count)
+- `sendOpen` in the `browser_set_visible` effect (the send menu hides the webview)
+- the `browser_set_annotate` effect
+- `send` (the `annotations_send` call and `browser_clear_annotations`), `copyFeedback`, `sendItems`
+- the toolbar part after the URL field: Annotate, the count, Copy feedback, the Send menu
+- CSS in `app/src/browser/browser.css`: `.browser-annotate-on`, `.browser-count`, and `.browser-count` in the 359 px container rule
+
+**Tauri host:**
+
+- `lib.rs`: `AGENTATION_JS`, `AnnotatePanes` and its `manage`, `agentation_script`, `browser_set_annotate`, `browser_clear_annotations`, `feedback_pane`, `browser_feedback`, their three handler entries, and the two tests
+- `browser.rs`: `use crate::{agentation_script, AnnotatePanes}`, the re-injection in `on_page_load` of `browser_create`, and the flag removal in `browser_close`
+- `build.rs`: `browser_set_annotate`, `browser_clear_annotations`, `browser_feedback`
+- `capabilities/default.json`: `allow-browser-set-annotate`, `allow-browser-clear-annotations`; `capabilities/browser.json` (the whole file: remote pages may call `browser_feedback`)
+- `app/src-tauri/agentation/agentation.js`, and its build: `app/agentation/`, `vite.agentation.config.ts`, the `build:agentation` script and the `agentation` dependency in `package.json`
+
+**Daemon, `crates/tomod/src/daemon.rs`:** the `Call::AnnotationsSend` arm (the live agent check, the PTY write with `pasted`, the runtime line from the pane source, the `AgentationActivity::AnnotationsSent` event, the `annotation.sent` hook), `evidence_text`, `evidence_title`, and the tests `evidence_text_lists_annotations_in_order` and `evidence_text_uses_the_markdown_body`. `pasted` is generic and stays.
+
+**Proto, `crates/tomo-proto/src/lib.rs`:** `Call::AnnotationsSend` and `"annotation.sent"` in `HOOK_EVENTS` (they stay in the composition root); `Annotation` and `EvidenceBundle` (they move to `addons/agentation.rs`, next to `AgentationActivity`); the `EvidenceBundle` `export_all` line.
+
+**Other:** `app/src/addons/agentation/activity.ts` exists already. `scripts/torture/browser.sh` section 5 is Agentation. `docs/browser.md` "Feedback overlay" and "Evidence bundle" go to an Agentation doc.
+
+The contribution hooks that Browser must offer, and nothing more:
+
+| Hook | Where Browser calls it | Shape |
+|---|---|---|
+| browser toolbar slot | `BrowserPane.tsx`, after the URL field and before open-external, in `builtins` order | `browserToolbar?: ComponentType<{ paneId: Id; worktreeId: Id; url: string; setCovering: (covering: boolean) => void }>`. The pane hides the webview while `covered` or any item is covering. The item resets its own count when `url` changes. |
+| page-load hook | `browser::browser_create`, on `PageLoadEvent::Finished` | a static list in the host composition root, `&[fn(&Webview, &str)]` (webview, pane id); Agentation re-injects for a flagged pane |
+| close hook | `browser::browser_close` | a static list `&[fn(&AppHandle, &str)]`; Agentation removes the flag |
+| paste into an agent pane | a Core daemon function that `addons/agentation` calls from `dispatch.rs` | `Daemon::paste_to_agent(inner, pane_id, text)`: the live agent check, `pasted`, and the PTY write; it returns the agent and the hook pane. `record` and `events::envelope` exist already. |
+
+Agentation needs no Browser call on the daemon side, and Browser needs no
+Agentation type.
+
+### Problems found in milestone 6 (not fixed)
+
+1. `BrowserPane` runs the `browser_set_annotate` effect on mount with
+   `enabled: false`. `agentation_script(false)` holds the whole bundle inside
+   its `if (!window.__tomoAgentation)` guard, so the host evaluates the
+   bundle (about 620 kB) into a page that the user never annotated.
+   `docs/browser.md` says that such a page does not load it. The call can
+   also come before the webview exists and record a `browser_set_annotate`
+   diagnostic. The toolbar slot of milestone 7 can call it only on a toggle.
+   A human must confirm this in a window.
+2. `normalizeUrl("localhost:3000")` returns `localhost:3000`, because
+   `localhost:` matches the scheme pattern. The webview then gets a URL
+   that `Url::parse` reads as the scheme `localhost`. `example.com/x` works.
+
+### Tests
+
+| Suite | Before milestone 6 (`39f2448`) | Milestone 6 | Merged with master `951aa1d` |
+|---|---|---|---|
+| `cargo test --workspace` | 134 (tomod 125, tomo-proto 7, tomo_app_lib 2) | 134 | 144 passed and 1 ignored (tomod 135) |
+| vitest | 33 files, 241 tests | 34 files, 252 tests | not changed by the merge |
+| `npx tsc --noEmit`, `npx vite build` | pass | pass; main JS 721.35 kB | not changed by the merge |
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass | pass, no change in `app/src/generated` | |
+| `browser.sh`, `continuity.sh`, `layout.sh`, `layout-move.sh` | 19, 19, 15, 47 | 19, 19, 15, 47 passed, 0 failed | |
+
+New: `app/src/browser/browser.test.tsx` (11 tests), written and green before
+the move (commit `3339cfd`). It checks `normalizeUrl`, the zoomed bounds of
+`browser_create`, the frame loop that sends only a change, the hide under the
+palette, the navigation of its own pane only, the stop and close on unmount,
+the layout switch, `openInBrowser` with and without a live pane,
+`openEndpoint` without a worktree, and the browser menu. No test was removed.
+
+### GUI checks for a human
+
+Native child webviews cannot be checked without a window. Do these in the
+installed app after a merge:
+
+1. Open a browser pane with "New browser", with `+` → browser, and with split with → browser. The page paints inside the pane box.
+2. Change the app zoom (zoom in, zoom out, reset). The page follows the box.
+3. Collapse and open the left sidebar and the right inspector, drag a splitter, and resize the window. The page follows at once, with no lag and no offset.
+4. Open the palette, a context menu, and a dialog over the pane. The page hides, and comes back when they close.
+5. Back, forward, reload (buttons and shortcuts), Enter in the URL field, and "open in external browser".
+6. Click a link inside the page: the URL field and the pane legend change. Restart the daemon: the pane comes back at the last URL.
+7. Cmd-click a URL in a terminal: the live browser pane of the worktree goes to the URL; without one, a new browser tab opens.
+8. "Open App" in the checkpoint banner and in Activity, "open" in the runtime popover and menus, and the palette endpoint entry.
+9. Switch tabs away and back (the page reloads). Close the browser tab and reopen it: same URL.
+10. Zoom a browser pane in a split, then unzoom.
+11. Hover an inactive tab whose first pane is a browser: no preview. Drag a terminal pane onto that tab.
+12. Make the pane narrow: under 360 px the count and open-external hide; under 260 px forward hides.
+13. Agentation: Annotate on, add a note, see the count, Copy feedback, send to an agent (the text arrives), navigate (the count resets), reload with Annotate on (the toolbar comes back), close the pane.
+14. Problem 1 above: in the Web Inspector of a page that was never annotated, check if `window.__tomoAgentation` exists.
+
+### Performance
+
+Measured on 2026-09-15 with `addons-bench.py`, release build, data dir
+`/tmp/tomo-addons-browser-bench`, on the tree merged with master `951aa1d`.
+As in milestones 3 and 5, `TOMO_USAGE_MOCK` pointed at a file with a far
+`fetched_at_ms`, so no window called the network. The owner used the
+machine. The change moves code and adds no work to a daemon path, so the
+numbers show noise only.
+
+| Metric | Baseline | Milestone 3 | Milestone 6 |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.76 ms | 7.51 ms |
+| of which `subscribe` | 0.51 ms | 0.39 ms | 0.37 ms |
+| of which `pane_attach` | 7.14 ms | 7.40 ms | 7.16 ms |
+| Worktree switch | 0.14 ms | 0.08 ms | 0.10 ms |
+| Worktree switch with attach | 9.26 ms | 7.53 ms | 8.20 ms |
+| Refresh | 164.31 ms | 128.08 ms | 172.83 ms (trials 134.71, 172.83, 174.24) |
+| Process poll, fresh | 23.41 ms | 19.00 ms | 10.39 ms |
+| Process poll, cached | 0.63 ms | 0.55 ms | 0.39 ms |
+| Idle CPU, no subscriber | 0.13 % | 0.12 % | **0.13 %** (0.13, 0.13, 0.13) |
+| Idle CPU, one subscriber | 1.05 % | 1.00 % | **0.78 %** (0.78, 0.68, 0.90) |
+| RSS at window end, no subscriber | 14.6 MB | 11.9 MB | **14.8 MB** (15.0, 14.8, 14.8) |
+| RSS at window end, subscribed | 14.6 MB | 13.3 MB | **14.8 MB** (14.5, 14.8, 15.0) |
+
+Gate: pass. Refresh is 8.5 ms (5 %) slower than the baseline, which is
+below the 20 % limit; one refresh sample was 331 ms while the machine was
+busy, and discovery code did not change. Idle CPU and RSS are below the
+limits. The main JS chunk is 721.35 kB and the CSS 61.46 kB. Not measured:
+GUI cold launch and GUI RSS (no GUI allowed). Not run: `scripts/perf.sh`,
+the soak, and the full `run-all.sh`.
+
+### Stop conditions
+
+Hit for the extraction path: "addon framework code exceeds feature
+simplification" and "generic JSON or strings replace typed APIs". So the
+direct implementation stays. Not hit for the isolation: no new seam, slot,
+or type; `daemon.rs` lost 66 lines and `actions.ts` 44.
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
@@ -1588,8 +1844,8 @@ None was hit. Near:
 | actions | **done** | none in Core; see "Milestone 3 result: Actions" |
 | runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, the `RuntimeActivity` call site in `runtime.rs`; `RuntimeEndpoint.action_id` and `label` now come from the Core `PaneSource` |
 | usage | **done** | none in Core; see "Milestone 5 result: Usage" |
-| browser | study (milestone 6) | `PaneKind`, `Pane.url`, `create_browser_pane` in `daemon.rs`, `Layout.tsx` switch |
-| agentation | addon on browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
+| browser | **built-in pane kind** | not an addon; see "Milestone 6 result: Browser" |
+| agentation | addon on Core client Browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `app/src/browser/BrowserPane.tsx`, inject code inside Tauri `browser::browser_create`; see "Agentation boundary for milestone 7" |
 | activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
 | agent providers | evaluate last | closed `AgentKind` in 10 types, spawn plan built in 3 places, `detect_agent` and env stripping in core |
 
@@ -1678,6 +1934,10 @@ The poll reads `inner.clients` in one line, as `monitor.rs` and `system.rs`
 do. A shared helper for the three is a Core refactor for another change.
 
 ### 6. Browser (study)
+
+Done. See "Milestone 6 result: Browser". Change from the plan: Browser did
+not become an addon. `PaneKind` stays, and the code moved into three browser
+modules. The plan below is kept for the record.
 
 Risks:
 
