@@ -7,7 +7,7 @@ import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
 import { activeTab, agentsOf, clearSelection, errorText, failToast, getState, needsMe, paneIds, recordDiagnostic, setRowError, setState, setUi, showStatus, toast } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
-import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
+import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
@@ -307,12 +307,6 @@ export function openEndpoint(url: string, worktreeId?: Id): void {
 export function resolveCheckpoint(id: Id): void {
   rpc("checkpoint_resolve", { id })
     .then(() => setState((s) => ({ attention: s.attention.filter((a) => a.id !== id) })))
-    .catch(() => {});
-}
-
-export function refreshUsage(): void {
-  rpc<UsageSnapshot[]>("usage_get", { refresh: true })
-    .then((list) => Array.isArray(list) && setState({ usage: list }))
     .catch(() => {});
 }
 

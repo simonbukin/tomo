@@ -1,20 +1,20 @@
 import { CircleHelp, Settings2 } from "lucide-react";
 import { useEffect } from "react";
-import { resetsIn } from "../activityModel";
-import { refreshUsage, runAction } from "../actions";
+import { runAction } from "../actions";
+import { builtins } from "../addons";
 import { rpc } from "../api";
 import { openSettings } from "../commands/settings";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
 import { formatBytes, setState, useStore } from "../store";
-import type { SidebarMode, SystemStats, UsageSnapshot } from "../types";
-import { bucketTone, headlineBucket, microBar, percentText, stripMetrics, systemDetail, usageRows, usageTone } from "./bottomModel";
+import type { SidebarMode, SystemStats } from "../types";
+import { stripMetrics, systemDetail } from "./bottomModel";
 import { HealthArea } from "./Diagnostics";
 import { HoverPopover } from "./HoverPopover";
 import { StatusSlot } from "./StatusSlot";
 
 /**
- * The fixed bottom strip, aligned to the shell columns: help and settings, usage, the status message, system metrics,
+ * The fixed bottom strip, aligned to the shell columns: help and settings, addon items, the status message, system metrics,
  * and daemon health. `left` is the mode on screen from `shellLayout`, which can differ from the saved mode.
  */
 export function BottomStrip({ left }: { left: SidebarMode }) {
@@ -22,7 +22,7 @@ export function BottomStrip({ left }: { left: SidebarMode }) {
     <footer className="bottom-strip" data-left={left}>
       {left !== "closed" && <HelpControls />}
       <div className="bottom-middle">
-        <UsageStrip />
+        <div className="bottom-items">{builtins.map(({ id, bottomItem: Item }) => Item && <Item key={id} />)}</div>
         <div className="bottom-status">
           <StatusSlot />
         </div>
@@ -45,75 +45,6 @@ function HelpControls() {
       <IconButton label="Settings" shortcut={shortcut("settings")} tooltipSide="top" onClick={() => openSettings()}>
         <Settings2 className="icon" />
       </IconButton>
-    </div>
-  );
-}
-
-function MicroBar({ fraction, width }: { fraction: number | null; width?: number }) {
-  const bar = microBar(fraction, width);
-  return (
-    <span className="micro-bar" aria-hidden="true">
-      <span className="on">{bar.on}</span>
-      <span className="off">{bar.off}</span>
-    </span>
-  );
-}
-
-function UsageStrip() {
-  const usage = useStore((s) => s.usage);
-  return (
-    <div className="bottom-usage">
-      {usageRows(usage).map((row) => (
-        <UsageMeter key={row.key} name={row.name} snapshot={row.snapshot} />
-      ))}
-    </div>
-  );
-}
-
-function UsageMeter({ name, snapshot: u }: { name: string; snapshot: UsageSnapshot }) {
-  const head = headlineBucket(u);
-  return (
-    <HoverPopover
-      title={name}
-      preview={<UsageBuckets snapshot={u} />}
-      detail={
-        <>
-          <UsageBuckets snapshot={u} wide />
-          <button type="button" className="link" onClick={refreshUsage}>
-            refresh
-          </button>
-        </>
-      }
-      trigger={
-        <button type="button" className={`bottom-item usage-meter tone-${usageTone(u)}`} aria-label={`${name} usage ${head ? percentText(head.fraction_used) : "unavailable"}`}>
-          <span className="usage-name">{name}</span>
-          {head ? (
-            <>
-              <MicroBar fraction={head.fraction_used} />
-              <span className="num">{percentText(head.fraction_used)}</span>
-            </>
-          ) : (
-            <span className="faint">—</span>
-          )}
-        </button>
-      }
-    />
-  );
-}
-
-function UsageBuckets({ snapshot: u, wide = false }: { snapshot: UsageSnapshot; wide?: boolean }) {
-  if (!u.available) return <div className="muted">{u.reason ?? "Usage unavailable"}</div>;
-  if (!u.buckets.length) return <div className="muted">No usage data</div>;
-  return (
-    <div className="usage-buckets">
-      {u.buckets.map((b) => (
-        <div key={b.label} className={`usage-bucket tone-${bucketTone(b)}`} title={b.detail ?? undefined}>
-          <span className="usage-bucket-label">{b.label}</span>
-          <MicroBar fraction={b.fraction_used} width={wide ? 16 : 10} />
-          <span className="num">{percentText(b.fraction_used)}</span>
-          <span className="faint">{resetsIn(b.resets_at_ms) ?? ""}</span>
-        </div>
-      ))}
     </div>
   );
 }
