@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:agentation": "vite build --config vite.agentation.config.ts",
     "tauri": "tauri",
     "test": "vitest run"
   },
