@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PullRequest } from "../../generated";
-import type { AgentPresence, Frame, Repo, Worktree } from "../../types";
+import type { ActivityEvent, AgentPresence, Frame, Repo, Worktree } from "../../types";
 
 const replies = vi.hoisted(() => ({}) as Record<string, unknown>);
 vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: vi.fn((method: string) => Promise.resolve(replies[method] ?? null)) }));
@@ -124,6 +124,22 @@ describe("GitHub marks outside the inspector", () => {
     expect(container.querySelector("img")).toBeNull();
     rerender(<RepoAvatar repo={repo(null)} />);
     expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("GitHub activity", () => {
+  it("renders a pr_merged row as complete with the pull request link", async () => {
+    replies.activity_list = [];
+    const { Activity } = await import("../../Activity");
+    const merged = { id: "e1", kind: "pr_merged", occurred_at_ms: Date.now(), worktree_id: "w1", pane_id: null, agent_kind: null, title: "PR #12 merged", detail: "Add kobe", payload: { number: 12, url: "https://github.com/acme/holly/pull/12" }, attention_id: null } as ActivityEvent;
+    act(() => setState({ activity: [merged], ui: { ...defaultUi, view: "activity", activeWorktreeId: "w1" } }));
+    await act(async () => {
+      render(<Activity />);
+    });
+    const row = screen.getByText("PR #12 merged", { selector: ".activity-title-text" }).closest(".activity-row") as HTMLElement;
+    expect(row.querySelector(".activity-who .glyph")).toHaveAttribute("aria-label", "complete");
+    expect(row.querySelector(".activity-who")).toHaveTextContent("kobe");
+    expect([...row.querySelectorAll(".activity-actions button")].map((b) => b.textContent)).toEqual(["Open App"]);
   });
 });
 
