@@ -30,12 +30,10 @@ export function signalText(signal: Signal): string {
       return `${GLYPH.failed} ${signal.text}`;
     case "agent":
       return signal.state === "waiting" ? `${GLYPH.needs} ${KIND_LABEL[signal.agent]} needs input` : `${signal.state === "working" ? GLYPH.working : GLYPH.idle} ${KIND_LABEL[signal.agent]}`;
-    case "runtime":
-      return `${signal.label} :${signal.port}`;
     case "warn":
       return `⚠ ${formatBytes(signal.bytes)}`;
     case "addon":
-      return `${signal.glyph} ${signal.text}`;
+      return [signal.glyph, signal.text].filter(Boolean).join(" ");
   }
 }
 

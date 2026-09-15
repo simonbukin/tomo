@@ -951,31 +951,6 @@ pub struct CheckpointSpec {
     pub pane_id: Option<Id>,
 }
 
-// ---- runtime endpoints: observed listening sockets owned by tracked processes
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeProtocol {
-    Http,
-    Https,
-    Tcp,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct RuntimeEndpoint {
-    pub id: Id,
-    pub worktree_id: Id,
-    pub pane_id: Option<Id>,
-    pub action_id: Option<String>,
-    pub pid: u32,
-    pub process: String,
-    pub protocol: RuntimeProtocol,
-    pub host: String,
-    pub port: u16,
-    pub label: Option<String>,
-    pub discovered_at_ms: u64,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct FsEntry {
     pub name: String,
@@ -1003,8 +978,6 @@ pub struct CoreSnapshot {
     pub agents: Vec<AgentPresence>,
     pub attention: Vec<AttentionItem>,
     pub resources: Vec<WorktreeResources>,
-    #[serde(default)]
-    pub endpoints: Vec<RuntimeEndpoint>,
     #[ts(type = "unknown")]
     pub ui_state: Value,
 }
@@ -1018,6 +991,8 @@ pub struct Snapshot {
     pub usage: Vec<UsageSnapshot>,
     #[serde(default)]
     pub actions: Vec<ActionSet>,
+    #[serde(default)]
+    pub endpoints: Vec<RuntimeEndpoint>,
 }
 
 pub fn now_ms() -> u64 {

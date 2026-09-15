@@ -1,7 +1,6 @@
 import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { endpointLabel, endpointUrl, httpEndpoints } from "./activityModel";
-import { activateTab, allActions, focusPane, openEndpoint, openWorktree, runAction } from "./actions";
+import { activateTab, allActions, focusPane, openWorktree, runAction } from "./actions";
 import { builtins } from "./addons";
 import { Dialog, DialogContent } from "./components/ui";
 import { menuEntries, rankEntries, remembered, type PaletteEntry } from "./paletteModel";
@@ -14,20 +13,10 @@ function addonEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
   return builtins.flatMap((a) => a.paletteEntries?.(s, w, context) ?? []);
 }
 
-function endpointEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
-  return httpEndpoints(s.endpoints[w.id] ?? []).map((e) => ({
-    key: `endpoint:${w.id}:${e.port}`,
-    label: `open ${endpointLabel(e)} :${e.port}`,
-    hint: `${w.name} · runtime`,
-    context,
-    run: () => openEndpoint(endpointUrl(e), w.id),
-  }));
-}
-
 export function worktreeChildren(s: State, w: Worktree): PaletteEntry[] {
   const key = `wt:${w.id}`;
   const [open, ...rest] = menuEntries(worktreeMenu(w, s), key);
-  const extras = w.exists && !w.archived_at_ms ? [...addonEntries(s, w, false), ...endpointEntries(s, w, false)] : [];
+  const extras = w.exists && !w.archived_at_ms ? addonEntries(s, w, false) : [];
   return open ? [open, ...extras, ...rest] : [...extras, ...rest];
 }
 
@@ -53,7 +42,7 @@ export function paletteEntries(s: State): PaletteEntry[] {
     };
     return [{ key: `agent:${a.pane_id}`, label: `focus ${KIND_LABEL[a.kind]} · ${w.name}`, hint: a.state, context: w.id === current?.id, run: () => void run() }];
   });
-  const contextual = current ? [...addonEntries(s, current, true), ...endpointEntries(s, current, true)] : [];
+  const contextual = current ? addonEntries(s, current, true) : [];
   const commands: PaletteEntry[] = allActions()
     .filter((a) => (!a.whenWorktree || !!current) && (!a.when || a.when()))
     .map((a) => ({ key: `cmd:${a.id}`, label: a.label, hint: a.group?.toLowerCase(), shortcut: chordFor(a.id, bindings), run: () => runAction(a.id) }));

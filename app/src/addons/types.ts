@@ -7,7 +7,8 @@ import type { Status } from "../glyphs";
 import type { PaletteEntry } from "../paletteModel";
 import type { RailMarker } from "../shell/RightRail";
 import type { State } from "../store";
-import type { ActivityEvent, Frame, Id, Repo, RuntimeEndpoint, Snapshot, Worktree } from "../types";
+import type { PaneSource } from "../generated";
+import type { ActivityEvent, Frame, Id, Repo, Snapshot, Worktree } from "../types";
 
 /** A button on an Activity row. `label` reads the store and returns null to hide the button. `run` happens on click. */
 export interface ActivityRowAction {
@@ -58,6 +59,20 @@ export interface TopbarProps {
   worktree: Worktree;
 }
 
+/** A pane source without its label: the key of the controls and menu items of one source. */
+export type SourceKey = Pick<PaneSource, "kind" | "id">;
+
+export interface SourceMarkProps {
+  worktreeId: Id;
+  source: SourceKey;
+}
+
+/** Items for the menu of a running pane source: `first` before the owner's items, `last` after a separator at the end. */
+export interface SourceMenu {
+  first: MenuItem[];
+  last: MenuItem[];
+}
+
 /** A command that has its own key binding, such as the shortcut of a repo Action. */
 export interface BoundCommand extends Action {
   binding: string;
@@ -84,24 +99,30 @@ export interface Addon {
   inspectorSections?: readonly InspectorSection[];
   /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
   worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
+  /** Draws each NOW signal of this `className` instead of the plain line. It reads the store and starts no work. */
+  signalLine?: { className: string; Line: ComponentType<{ worktreeId: Id }> };
   /** The small image before a repo name in the sidebar and on Home. The first addon that has one wins. */
   repoAvatar?: ComponentType<{ repo: Repo; size: number }>;
   /** A field in the create-worktree dialog. The first addon that has one wins, like the daemon's one worktree namer. */
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
-  /** The worktree top bar. `buttons` render before the editor button; `marks` render after it, before the runtime and overflow buttons. */
+  /** The worktree top bar. `buttons` render before the editor button; `marks` render after it, before the overflow menu. */
   topbar?: { buttons?: ComponentType<TopbarProps>; marks?: ComponentType<TopbarProps> };
   /** Controls in the browser pane toolbar, after the url field and before open-external. */
   browserToolbar?: ComponentType<BrowserToolbarProps>;
   /** Items at the top of the worktree overflow menu. The menu adds a separator after a list that is not empty. */
   worktreeMenu?: (w: Worktree, s: State) => MenuItem[];
-  /** Items after "focus logs" in the menu of one runtime endpoint. */
-  endpointMenu?: (worktreeId: Id, e: RuntimeEndpoint, s: State) => MenuItem[];
+  /** A mark inside the control of a pane source that another addon draws, such as the arrow in an Action button. It reads the store and starts no work. */
+  sourceMark?: ComponentType<SourceMarkProps>;
+  /** Items for the menu of a running pane source that another addon draws. */
+  sourceMenu?: (worktreeId: Id, source: SourceKey, s: State) => SourceMenu;
+  /** The "Open App" URL of a worktree for an item that has none. The first addon that returns a URL wins. */
+  appUrl?: (s: State, worktreeId: Id) => string | null;
   /** Palette entries for one worktree: `context` is true in the root list for the worktree on screen, and false in its sub-list. */
   paletteEntries?: (s: State, w: Worktree, context: boolean) => PaletteEntry[];
   /** Commands with a key binding in this state. Read on each key press and by the shortcut reference. */
   shortcuts?: (s: State) => BoundCommand[];
-  /** The `PaneSource.kind` that this addon starts, and how to start it again from a crash toast. */
-  paneSource?: { kind: string; restart: (worktreeId: Id, sourceId: string) => void };
+  /** The `PaneSource.kind` that this addon starts, and how to restart or stop one of its panes from a crash toast or another addon's menu. */
+  paneSource?: { kind: string; restart: (worktreeId: Id, sourceId: string) => void; stop: (worktreeId: Id, sourceId: string) => void };
   /** Mounted once for the whole session. It must start no work until it has something to show. */
   mount?: ComponentType;
   /** An item in the middle of the bottom strip, before the status slot. It renders from its own state and starts no work. */

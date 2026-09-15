@@ -81,9 +81,6 @@ pub struct Inner {
     pub hook_queue: Vec<HookEvent>,
     pub discovered_once: bool,
     pub last_full_poll_ms: u64,
-    pub endpoints: Vec<RuntimeEndpoint>,
-    pub endpoint_gone_ms: HashMap<Id, u64>,
-    pub endpoints_at_ms: u64,
     pub closed_tabs: Vec<reopen::ClosedTab>,
     pub diagnostics: std::collections::VecDeque<Diagnostic>,
     /// The current problem per `source:subject`, so a repeated poll records a diagnostic only on a change.
@@ -104,6 +101,8 @@ pub struct Seams {
     pub worktree_files: Vec<WorktreeFile>,
     /// Runs under the state lock when a pane process exits, after `pane_exited` goes out and before Core updates the agent or removes a pane that exited with 0.
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
+    /// Runs with no lock held after each process poll of the monitor, before the queued hooks go out.
+    pub process_polled: Vec<fn(&Arc<Daemon>)>,
 }
 
 #[derive(Clone, Copy)]
@@ -218,9 +217,6 @@ impl Daemon {
                 hook_queue: Vec::new(),
                 discovered_once: false,
                 last_full_poll_ms: 0,
-                endpoints: Vec::new(),
-                endpoint_gone_ms: HashMap::new(),
-                endpoints_at_ms: 0,
                 closed_tabs: Vec::new(),
                 diagnostics: std::collections::VecDeque::new(),
                 problems: HashMap::new(),
@@ -1403,7 +1399,6 @@ impl Daemon {
             agents: inner.agents.values().cloned().collect(),
             attention,
             resources: inner.resources.clone(),
-            endpoints: inner.endpoints.clone(),
             ui_state,
         })
     }
@@ -2032,17 +2027,6 @@ impl Daemon {
                 ok(inner.diagnostics.iter().rev().take(limit.map_or(DIAGNOSTICS_KEPT, |n| n as usize)).cloned().collect::<Vec<_>>())
             }
             Call::SystemStats => ok(crate::system::fresh(self).await),
-            Call::RuntimeList { worktree_id } => {
-                let stale = now_ms().saturating_sub(self.lock().endpoints_at_ms) > 1500;
-                if stale {
-                    let d = self.clone();
-                    let _ = tokio::task::spawn_blocking(move || crate::monitor::poll_and_scan(&d, false)).await;
-                }
-                let inner = self.lock();
-                let mut list: Vec<RuntimeEndpoint> = inner.endpoints.iter().filter(|e| worktree_id.as_deref().map_or(true, |w| e.worktree_id == w)).cloned().collect();
-                list.sort_by(|a, b| (&a.worktree_id, a.port, a.pid).cmp(&(&b.worktree_id, b.port, b.pid)));
-                ok(list)
-            }
             Call::ActivityList(query) => {
                 let inner = self.lock();
                 let waiting: Vec<Id> = inner.agents.values().filter(|a| a.state == AgentState::Waiting).map(|a| a.pane_id.clone()).collect();

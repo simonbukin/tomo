@@ -2,9 +2,9 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rpc } from "./api";
-import type { ActionSet } from "./generated";
+import type { ActionSet, RuntimeEndpoint } from "./generated";
 import { applyFrame, getState, setState } from "./store";
-import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, RuntimeEndpoint, Worktree } from "./types";
+import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, Worktree } from "./types";
 import { defaultUi } from "./uiState";
 
 vi.mock("./api", async (importOriginal) => {
@@ -19,7 +19,7 @@ const pane = { id: "p1", worktree_id: "w1", tab_id: "t1", live: true, source: { 
 const agent = (state: AgentPresence["state"]) => ({ pane_id: "p1", worktree_id: "w1", kind: "claude", state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null }) as AgentPresence;
 const attention = (id: string, kind: AttentionItem["kind"]): AttentionItem => ({ id, worktree_id: "w1", pane_id: "p1", level: "attention", message: id, created_at_ms: 1, viewed_at_ms: null, kind, url: null, agent_kind: null, resolved_at_ms: null });
 const serve: ActionSet = { worktree_id: "w1", actions: [{ id: "serve", label: "Serve", command: "sleep 30", mode: "pane", show: "topbar", shortcut: null }], error: null };
-const endpoint: RuntimeEndpoint = { id: "e", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0 };
+const endpoint: RuntimeEndpoint = { id: "e", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, source: pane.source };
 
 const claude = { agent_kind: "claude", pane_id: "p1" } as const;
 const EVENTS: [string, Partial<ActivityEvent>][] = [

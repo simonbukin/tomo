@@ -1,4 +1,4 @@
-import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, RuntimeEndpoint } from "./types";
+import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem } from "./types";
 
 /**
  * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
@@ -19,19 +19,6 @@ export function needsMeItems(list: AttentionItem[], agents: AgentPresence[]): At
 
 export function truncate(text: string, max = 80): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
-}
-
-export function endpointUrl(e: RuntimeEndpoint): string {
-  return `${e.protocol === "tcp" ? "http" : e.protocol}://${e.host}:${e.port}`;
-}
-
-export function httpEndpoints(list: RuntimeEndpoint[]): RuntimeEndpoint[] {
-  return list.filter((e) => e.protocol !== "tcp");
-}
-
-/** The daemon labels an endpoint with the source of its pane. */
-export function endpointLabel(e: RuntimeEndpoint): string {
-  return e.label ?? e.process;
 }
 
 const DAY_MS = 86_400_000;
@@ -77,17 +64,18 @@ export type Signal =
   | { kind: "attention"; text: string }
   | { kind: "crash"; text: string }
   | { kind: "agent"; agent: AgentKind; state: AgentState }
-  | { kind: "runtime"; label: string; port: number; url: string }
   | { kind: "warn"; bytes: number }
   | AddonSignal;
 
-/** A signal from an addon. `className` styles the line, `dot` is the class of its state dot, and `glyph` stands for the dot in plain text. */
-export type AddonSignal = { kind: "addon"; text: string; glyph: string; className: string; dot: string };
+/**
+ * A signal from an addon. `className` styles the line, `dot` is the class of its state dot, and `glyph` stands for the dot in plain text.
+ * A signal with `beforeWarn` comes after the agents and before the memory warning; the others come last.
+ */
+export type AddonSignal = { kind: "addon"; text: string; glyph: string; className: string; dot: string; beforeWarn?: boolean };
 
 export interface SignalInput {
   attention: AttentionItem[];
   agents: AgentPresence[];
-  endpoints: RuntimeEndpoint[];
   rssBytes: number | null;
   warnBytes: number;
   addon: readonly AddonSignal[];
@@ -101,10 +89,10 @@ export function nowSignals(input: SignalInput): Signal[] {
   const waiting: Signal[] = live.filter((a) => a.state === "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
   const crash: Signal[] = open.filter((a) => a.kind === "crash").map((a) => ({ kind: "crash", text: a.message }));
   const agents: Signal[] = live.filter((a) => a.state !== "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
-  const primary = httpEndpoints(input.endpoints)[0];
-  const runtime: Signal[] = primary ? [{ kind: "runtime", label: endpointLabel(primary), port: primary.port, url: endpointUrl(primary) }] : [];
   const warn: Signal[] = input.rssBytes != null && input.rssBytes >= input.warnBytes ? [{ kind: "warn", bytes: input.rssBytes }] : [];
-  return [...checkpoint, ...waiting, ...crash, ...agents, ...runtime, ...warn, ...input.addon].slice(0, 3);
+  const early = input.addon.filter((a) => a.beforeWarn);
+  const late = input.addon.filter((a) => !a.beforeWarn);
+  return [...checkpoint, ...waiting, ...crash, ...agents, ...early, ...warn, ...late].slice(0, 3);
 }
 
 export const SPARK_WIDTH = 10;

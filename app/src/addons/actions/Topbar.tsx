@@ -1,16 +1,14 @@
-import { ArrowUpRight, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { useEffect } from "react";
-import { endpointLabel } from "../../activityModel";
 import { rpc } from "../../api";
-import { Button, HoverCard, IconButton, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "../../components/ui";
+import { Button, IconButton, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "../../components/ui";
 import type { ActionSet } from "../../generated";
-import { RuntimePreview } from "../../HoverPreviews";
 import { describeBinding } from "../../keys";
 import { openMenu } from "../../MenuHost";
 import { useStore } from "../../store";
-import type { Id } from "../../types";
+import { sourceMarks } from "../index";
 import type { TopbarProps } from "../types";
-import { liveEndpointFor, runningActionIds, runningActionItems, runWorktreeAction } from "./commands";
+import { runningActionIds, runningActionItems, runWorktreeAction, SOURCE_KIND } from "./commands";
 import { putActionSet, useActionSet } from "./state";
 
 /** The `show = "topbar"` actions. A running one has a dot and a right-click menu. */
@@ -32,23 +30,13 @@ export function ActionButtons({ worktree: w }: TopbarProps) {
         <Button variant="ghost" size="sm" className="action-btn" onClick={() => runWorktreeAction(w.id, a.id)} onContextMenu={(e) => live && openMenu(e, runningActionItems(w.id, a.id))}>
           {live && <span className="state state-working" />}
           {a.label}
-          <EndpointMark worktreeId={w.id} actionId={a.id} />
+          {sourceMarks().map(({ id, Mark }) => (
+            <Mark key={id} worktreeId={w.id} source={{ kind: SOURCE_KIND, id: a.id }} />
+          ))}
         </Button>
       </Tooltip>
     );
   });
-}
-
-function EndpointMark({ worktreeId, actionId }: { worktreeId: Id; actionId: string }) {
-  const endpoint = useStore((s) => liveEndpointFor(s, worktreeId, actionId));
-  if (!endpoint) return null;
-  return (
-    <HoverCard content={<RuntimePreview endpoint={endpoint} label={endpointLabel(endpoint)} />}>
-      <span className="action-live">
-        <ArrowUpRight className="icon" />
-      </span>
-    </HoverCard>
-  );
 }
 
 /** The problem in `.tomo.toml`, after the editor button. */

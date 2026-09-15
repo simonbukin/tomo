@@ -1,15 +1,22 @@
 # Runtime endpoints
 
 A runtime endpoint is a TCP port that a process inside a Tomo pane listens
-on. Tomo finds the port, names the pane and the Action that own it, and
+on. Tomo finds the port, names the pane and the source that own it, and
 tells clients when it appears and when it goes away. Tomo never opens the
 port itself.
+
+Runtime is an addon: `crates/tomod/src/addons/runtime/` in the daemon and
+`app/src/addons/runtime/` in the GUI. Core owns the processes, their
+ownership, and the pane provenance; the addon interprets the ports. Without
+the addon, processes and panes work as before, and nothing reports a port.
+See [addons.md](addons.md).
 
 ## Discovery
 
 The process monitor polls the process table every 2 seconds while a GUI is
-subscribed and every 15 seconds otherwise. After each poll the daemon runs
-one `lsof` call for the owned processes:
+subscribed and every 15 seconds otherwise. After each poll Core calls the
+`process_polled` seam with no lock held, and the addon runs one `lsof` call
+for the owned processes:
 
 ```text
 lsof -nP -iTCP -sTCP:LISTEN -a -p <pid,pid,...> -F pn
@@ -34,6 +41,7 @@ source, not the Actions addon. The endpoint carries:
 | `id`             | `<pid>:<port>`                                          |
 | `worktree_id`    | The pane's worktree                                     |
 | `pane_id`        | The pane that owns the process                          |
+| `source`         | The pane source (`kind`, `id`, `label`), when it has one |
 | `action_id`      | The source id, when an Action started the pane          |
 | `label`          | The source label, when the pane has a source            |
 | `pid`, `process` | The listening process and its name                      |
@@ -77,3 +85,17 @@ Prints one line per endpoint: `port protocol pid process action pane`.
 Without an argument it uses `TOMO_WORKTREE_ID`, else every worktree.
 `--json` prints the `RuntimeEndpoint` list. The snapshot that `subscribe`
 returns carries the same list in `endpoints`.
+
+## In the GUI
+
+The addon draws the runtime button of the worktree top bar, the endpoint
+menu, the palette entries, the NOW signal of the first HTTP endpoint, and
+the endpoints that no pane source owns in the overflow menu. It gives the
+checkpoint banner and the Activity rows their "Open App" link through the
+`appUrl` slot.
+
+Runtime and Actions do not know each other. Both meet at the Core
+`PaneSource`: Runtime draws the arrow inside an Action button through the
+`sourceMark` slot, gives that button its open and copy items through
+`sourceMenu`, and asks the owner of a source for restart and stop through
+`paneSource`.

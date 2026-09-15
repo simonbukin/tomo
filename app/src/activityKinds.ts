@@ -1,10 +1,10 @@
-import { endpointUrl, httpEndpoints } from "./activityModel";
 import { focusPane, openWorktree, restoreWorktree } from "./actions";
+import { appUrl as addonAppUrl } from "./addons";
 import { addonActivity } from "./addons/activity";
 import type { ActivityKindView, ActivityRowAction } from "./addons/types";
 import type { CoreActivity } from "./generated";
 import type { Status } from "./glyphs";
-import { endpointsOf, type State } from "./store";
+import type { State } from "./store";
 import { KIND_LABEL, type ActivityEvent } from "./types";
 
 export function goToPane(e: ActivityEvent): void {
@@ -12,10 +12,9 @@ export function goToPane(e: ActivityEvent): void {
   if (e.pane_id) window.setTimeout(() => focusPane(e.pane_id!), 80);
 }
 
-/** The first HTTP endpoint of the event's worktree, for an "Open App" link. */
+/** The "Open App" link of the event's worktree, from the `appUrl` slot. */
 export function appUrl(e: ActivityEvent, s: State): string | null {
-  const endpoint = e.worktree_id ? httpEndpoints(endpointsOf(s, e.worktree_id))[0] : undefined;
-  return endpoint ? endpointUrl(endpoint) : null;
+  return e.worktree_id ? addonAppUrl(s, e.worktree_id) : null;
 }
 
 const you = () => "You";

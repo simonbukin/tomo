@@ -1,6 +1,6 @@
 import { agentStatus, dotClass } from "./glyphs";
 import { durationLabel, gitLines } from "./previewModel";
-import { KIND_LABEL, type AgentPresence, type RuntimeEndpoint, type Worktree } from "./types";
+import { KIND_LABEL, type AgentPresence, type Worktree } from "./types";
 import "./styles/previews.css";
 
 export function AgentPreview({ agent }: { agent: AgentPresence }) {
@@ -12,21 +12,6 @@ export function AgentPreview({ agent }: { agent: AgentPresence }) {
       </div>
       {agent.session_ref && <div className="mono muted">session {agent.session_ref.slice(0, 8)}</div>}
       <div className="muted">last activity {durationLabel(agent.updated_at_ms)} ago</div>
-    </div>
-  );
-}
-
-export function RuntimePreview({ endpoint: e, label }: { endpoint: RuntimeEndpoint; label: string }) {
-  return (
-    <div className="preview">
-      <div className="preview-head">{label}</div>
-      <div className="mono">
-        {e.host}:{e.port}
-      </div>
-      <div className="muted">
-        {e.process} · pid {e.pid}
-      </div>
-      <div className="muted">up {durationLabel(e.discovered_at_ms)}</div>
     </div>
   );
 }
