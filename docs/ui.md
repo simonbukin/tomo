@@ -78,8 +78,8 @@ header only.
 - Drag a worktree row or a repo header to reorder it. The first drop
   switches the sidebar to `manual` sort and keeps the order that was on
   screen for everything else. The order lives in UI state
-  (`manualOrder`, `repoOrder`). Dragging is pointer-driven in
-  `useRowDrag.ts`: HTML5 drag and drop is unreliable in the Tauri
+  (`manualOrder`, `repoOrder`). Dragging uses dnd-kit pointer and
+  keyboard sensors: HTML5 drag and drop is unreliable in the Tauri
   webview.
 - Cmd or Ctrl with `+`, `-`, and `0` zooms the whole window through the
   webview zoom. A chip in the title bar shows a zoom other than 100 % and
