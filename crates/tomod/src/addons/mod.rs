@@ -27,7 +27,24 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
-    const ADDON_NOUNS: [&str; 3] = ["addons::", "mod addons", "town"];
+    const ADDON_NOUNS: &[&str] = &[
+        "addons::",
+        "mod addons",
+        "town",
+        "actiondef",
+        "actionset",
+        "actionrunresult",
+        "actionmode",
+        "actionshow",
+        "actionactivity",
+        "tomo.toml",
+        "features::actions",
+        "inner.actions",
+        "run_action",
+        "stop_action",
+        "reload_actions",
+        "action_def",
+    ];
 
     fn rust_files(dir: &Path) -> Vec<PathBuf> {
         std::fs::read_dir(dir)

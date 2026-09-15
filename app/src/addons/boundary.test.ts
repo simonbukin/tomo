@@ -14,6 +14,15 @@ describe("addon boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("core client files do not name an Action type, call, or event", () => {
+    const actionNoun = /\bAction(Def|Set|RunResult|Mode|Show|Activity)\b|["'`]action_(list|run|stop|restart)["'`]|actions_changed|WorktreeAction\b|runningAction|activeActionSet/;
+    const offenders = Object.entries(sources)
+      .filter(([path]) => !inAddons(path))
+      .filter(([, text]) => actionNoun.test(text))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
   it("core activity files do not name an addon activity kind", () => {
     const coreActivityFiles = ["../Activity.tsx", "../activityKinds.ts", "../activityModel.ts", "../glyphs.ts"];
     const addonKind = /action_(started|stopped|completed|crashed)|endpoint_discovered|annotations_sent|pr_merged|ActionActivity|RuntimeActivity|GitHubActivity|AgentationActivity/;
