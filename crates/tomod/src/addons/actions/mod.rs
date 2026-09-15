@@ -87,9 +87,9 @@ fn reload(daemon: &Arc<Daemon>) {
     }
 }
 
-/// The `snapshot` seam.
-pub fn snapshot(snapshot: &mut Snapshot) {
-    snapshot.actions = sets().values().cloned().collect();
+/// The `actions` field of the `subscribe` snapshot.
+pub fn snapshot() -> Vec<ActionSet> {
+    sets().values().cloned().collect()
 }
 
 /// The `pane_exited` seam. An Action pane that exits records its outcome; a non-zero exit that Tomo did not cause is a crash.

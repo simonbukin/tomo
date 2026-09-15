@@ -1,4 +1,4 @@
-import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, PullRequest, RuntimeEndpoint, UsageBucket, UsageSnapshot } from "./types";
+import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, PullRequest, RuntimeEndpoint } from "./types";
 
 /**
  * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
@@ -105,10 +105,6 @@ export function nowSignals(input: SignalInput): Signal[] {
   return [...checkpoint, ...waiting, ...crash, ...agents, ...runtime, ...warn, ...pr].slice(0, 3);
 }
 
-export function percentOf(b: UsageBucket): number | null {
-  return b.fraction_used == null ? null : Math.round(b.fraction_used * 100);
-}
-
 export const SPARK_WIDTH = 10;
 
 /** Filled and empty cells of a `[█████     ]` spark for a used fraction; null means no data. */
@@ -116,11 +112,6 @@ export function sparkCells(fraction: number | null, width = SPARK_WIDTH): { fill
   if (fraction == null) return { filled: 0, empty: width };
   const filled = Math.min(width, Math.max(0, Math.round(fraction * width)));
   return { filled, empty: width - filled };
-}
-
-export function usageSummary(s: UsageSnapshot): string {
-  const parts = s.buckets.filter((b) => b.fraction_used != null).map((b) => `${percentOf(b)}% ${b.label}`);
-  return `${s.provider} ${parts.join(" · ")}`.trim();
 }
 
 export function resetsIn(resetsAtMs: number | null, now = Date.now()): string | null {

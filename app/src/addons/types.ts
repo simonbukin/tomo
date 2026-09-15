@@ -74,8 +74,12 @@ export interface Addon {
   paneSource?: { kind: string; restart: (worktreeId: Id, sourceId: string) => void };
   /** Mounted once for the whole session. It must start no work until it has something to show. */
   mount?: ComponentType;
+  /** An item in the middle of the bottom strip, before the status slot. It renders from its own state and starts no work. */
+  bottomItem?: ComponentType;
+  /** A section after the core sections of the diagnostics report. It renders nothing when it has nothing to report. */
+  diagnosticsSection?: ComponentType;
   /** Called with each `subscribe` snapshot, before the core state changes. */
-  onSnapshot?: (snap: Snapshot) => void;
+  onSnapshot?: (snapshot: Snapshot) => void;
   /** Receives every daemon event frame except pane output. */
   onFrame?: (frame: Frame) => void;
 }

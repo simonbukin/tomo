@@ -1,9 +1,10 @@
 import { actions } from "./actions";
 import { towns } from "./towns";
 import type { Addon, GlobalView } from "./types";
+import { usage } from "./usage";
 
 /** The composition root of the GUI: every built-in addon, in render order. Core client files reach addons only through this module. */
-export const builtins: readonly Addon[] = [towns, actions];
+export const builtins: readonly Addon[] = [towns, usage, actions];
 
 export const addonViews = (): GlobalView[] => builtins.flatMap((a) => a.views ?? []);
 

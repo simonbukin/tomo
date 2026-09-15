@@ -1,65 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { Diagnostic, HookRun, IntegrationStatus, SystemStats, UsageBucket, UsageSnapshot } from "../types";
-import {
-  compactBytes,
-  countOf,
-  cpuTone,
-  formatUptime,
-  HEALTH,
-  headlineBucket,
-  hookFailures,
-  integrationText,
-  integrationTone,
-  memoryTone,
-  mergeDiagnostics,
-  microBar,
-  percentText,
-  stripMetrics,
-  stripUsage,
-  systemDetail,
-  usageIssues,
-  usageRows,
-  usageTone,
-  usedOfTotal,
-  wholePercent,
-} from "./bottomModel";
+import type { Diagnostic, HookRun, IntegrationStatus, SystemStats } from "../types";
+import { compactBytes, countOf, cpuTone, formatUptime, HEALTH, hookFailures, integrationText, integrationTone, memoryTone, mergeDiagnostics, stripMetrics, systemDetail, usedOfTotal, wholePercent } from "./bottomModel";
 
-const bucket = (label: string, fraction_used: number | null): UsageBucket => ({ label, fraction_used, resets_at_ms: null, detail: null });
-const snap = (provider: UsageSnapshot["provider"], buckets: UsageBucket[], available = true): UsageSnapshot => ({ provider, available, reason: available ? null : "not signed in", buckets, fetched_at_ms: 0 });
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 const stats = (patch: Partial<SystemStats> = {}): SystemStats => ({ at_ms: 0, cpu_percent: 12.4, memory_used_bytes: 8.4 * GB, memory_total_bytes: 32 * GB, gpu_percent: null, vram_used_bytes: null, vram_total_bytes: null, daemon_rss_bytes: 18 * MB, top_worktree: null, ...patch });
-
-describe("usage", () => {
-  it("picks the most used bucket whatever the adapter calls it", () => {
-    expect(headlineBucket(snap("claude", [bucket("anything", 0.4), bucket("other", 0.83), bucket("unknown", null)]))?.label).toBe("other");
-    expect(headlineBucket(snap("codex", [bucket("a", null)]))).toBeNull();
-    expect(headlineBucket(snap("codex", [bucket("a", 0.9)], false))).toBeNull();
-  });
-
-  it("stays quiet below 80 percent and warns at the thresholds", () => {
-    expect(usageTone(snap("claude", [bucket("a", 0.79)]))).toBe("quiet");
-    expect(usageTone(snap("claude", [bucket("a", 0.1), bucket("b", 0.8)]))).toBe("warning");
-    expect(usageTone(snap("claude", [bucket("a", 0.95), bucket("b", 0.85)]))).toBe("danger");
-    expect(usageTone(snap("claude", [bucket("a", 0.99)], false))).toBe("quiet");
-    expect(usageTone(snap("claude", [bucket("a", null)]))).toBe("quiet");
-  });
-
-  it("keeps pi out of the strip and its issues", () => {
-    const usage = [snap("claude", []), snap("pi", [], false), snap("codex", [], false)];
-    expect(stripUsage(usage).map((u) => u.provider)).toEqual(["claude", "codex"]);
-    expect(usageIssues(usage).map((u) => u.provider)).toEqual(["codex"]);
-  });
-
-  it("draws a micro-bar and a percent that never guess", () => {
-    expect(microBar(0.5)).toEqual({ on: "━━━━", off: "────" });
-    expect(microBar(null)).toEqual({ on: "", off: "────────" });
-    expect(microBar(1.4, 4)).toEqual({ on: "━━━━", off: "" });
-    expect(percentText(0.834)).toBe("83%");
-    expect(percentText(null)).toBe("—");
-    expect(percentText(1.2)).toBe("100%");
-  });
-});
 
 describe("system metrics", () => {
   it("formats pressure without false precision", () => {
@@ -113,26 +58,11 @@ describe("diagnostics", () => {
     expect(mergeDiagnostics([], [])).toEqual([]);
   });
 
-  it("labels integrations, hook failures, and usage issues", () => {
+  it("labels integrations and hook failures", () => {
     const i = (level: IntegrationStatus["level"], reason: string | null = null): IntegrationStatus => ({ kind: "claude", level, binary: null, lifecycle: true, resume: true, reason });
     expect([integrationText(i("full")), integrationText(i("process_only", "hooks missing"))]).toEqual(["healthy", "process only · hooks missing"]);
     expect([i("full"), i("partial"), i("process_only"), i("unavailable")].map(integrationTone)).toEqual(["quiet", "warning", "warning", "danger"]);
     const run = (ok: boolean): HookRun => ({ event: "worktree_created", command: "x", worktree_id: null, started_at_ms: 0, duration_ms: 1, exit_code: ok ? 0 : 1, ok, output_tail: "" });
     expect(hookFailures([run(true), run(false)])).toHaveLength(1);
-  });
-});
-
-describe("usage rows", () => {
-  it("splits the plan from model scopes and keeps pi out", () => {
-    const claude = snap("claude", [bucket("5-hour", 0.35), bucket("weekly", 0.64), { ...bucket("weekly", 0.83), scope: "fable" }]);
-    const codex = snap("codex", [bucket("weekly", 0.07), { ...bucket("weekly", 0.4), scope: "sol" }]);
-    const rows = usageRows([claude, codex, snap("pi", [bucket("x", 0.1)])]);
-    expect(rows.map((r) => r.name)).toEqual(["Claude", "Fable", "Codex", "Sol"]);
-    expect(rows.map((r) => headlineBucket(r.snapshot)?.fraction_used)).toEqual([0.64, 0.83, 0.07, 0.4]);
-  });
-
-  it("keeps one row for an unavailable provider and drops an empty plan row next to scopes", () => {
-    expect(usageRows([snap("codex", [], false)]).map((r) => r.name)).toEqual(["Codex"]);
-    expect(usageRows([snap("claude", [{ ...bucket("weekly", 0.5), scope: "fable" }])]).map((r) => r.name)).toEqual(["Fable"]);
   });
 });

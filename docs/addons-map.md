@@ -280,6 +280,15 @@ endpoint. `RuntimeList` forces a tick when the data is older than 1.5 s.
 
 ## Usage
 
+**Status after milestone 5:** extracted. `Inner.usage`, the `UsageGet` arm
+in `Daemon::handle`, the `usage::run` spawn in `main.rs`, the hard-mounted
+`UsageStrip`, the usage rows in `bottomModel.ts`, `State.usage`, and the
+Usage section in `Diagnostics.tsx` are gone from Core. `fetch_all` still
+names the providers, but now inside the addon. What stays in Core: the
+`AgentKind` key, and `AgentKind::label()` for the notice text. See
+"Milestone 5 result: Usage" in [addons.md](addons.md). The rows below are
+from before the extraction.
+
 Background work (with a subscriber only): `usage::run` wakes every 20 s. It
 fetches when the newest snapshot is at least 5 min old. A fetch runs
 `security find-generic-password`, sends a `curl` request to
