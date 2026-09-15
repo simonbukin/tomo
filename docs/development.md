@@ -13,7 +13,7 @@ crates/tomod/              daemon
   src/dispatch.rs          addon calls to their addon, every other Call to Daemon::handle (composition root)
   src/daemon.rs            state, the Core Call handler, Seams, tabs/panes, restore
   src/server.rs            socket accept loop, per-connection framing
-  src/addons/mod.rs        the static addon list, seams(), migrate(), start(), the dependency test (composition root)
+  src/addons/mod.rs        the static addon list, State (per-daemon addon state), seams(), migrate(), start(), the dependency tests (composition root)
   src/addons/towns/        Japan Towns: calls, towns table, seams, dataset and pick
   src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
   src/addons/usage/        provider usage: Claude and Codex adapters, last result, poll, usage_get, notices

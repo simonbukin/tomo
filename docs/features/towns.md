@@ -149,6 +149,7 @@ Towns joins Core at these points only:
   `tomo towns` CLI block, and `towns` in `scripts/torture/run-all.sh`.
 
 `town_history` reads Core data: activity rows, repos, and worktrees. It
-gets the pull request from a plain function, `fn(&str, &[ActivityEvent]) ->
-Option<TownPr>`, that `dispatch.rs` supplies. Towns does not import GitHub.
-Without GitHub, `dispatch.rs` passes `|_, _| None`.
+gets the pull request from a plain function, `fn(&Inner, &str,
+&[ActivityEvent]) -> Option<TownPr>`, that `dispatch.rs` supplies. Towns
+calls it while it holds the Core lock. Towns does not import GitHub.
+Without GitHub, `dispatch.rs` passes `|_, _, _| None`.

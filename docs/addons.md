@@ -111,7 +111,7 @@ where naming an addon is correct.
 
 Towns does not import GitHub. `town_history` gets the pull request from a
 plain function that `dispatch.rs` supplies (`town_pr`). Without GitHub, the
-function is `|_, _| None`.
+function is `|_, _, _| None`.
 
 ## Events and commands
 
@@ -167,7 +167,9 @@ pub fn start(daemon: &Arc<Daemon>) {
 }
 ```
 
-`main.rs` calls `Daemon::new(paths, addons::seams())`, then
+`main.rs` calls
+`Daemon::new(paths, addons::seams(), Box::new(addons::State::default()))`,
+then
 `addons::migrate(&daemon.lock().store)`, and after `restore` and the Core
 tasks, `addons::start(&daemon)`. After that, the seams do not change.
 
@@ -178,11 +180,13 @@ pub fn is_slow(call: &Call) -> bool {
 }
 
 match call {
-    Call::Subscribe => ok(Snapshot {
-        core: daemon.subscribe(client_id)?,
-        usage: usage::snapshots(),
-        actions: actions::snapshot(),
-    }),
+    Call::Subscribe => {
+        let core = daemon.subscribe(client_id)?;
+        let inner = daemon.lock();
+        let snapshot = Snapshot { core, usage: usage::snapshots(&inner), actions: actions::snapshot(&inner) };
+        drop(inner);
+        ok(snapshot)
+    }
     Call::ActionList { worktree_id } => actions::list(daemon, worktree_id),
     Call::ActionRun { worktree_id, action_id } => actions::run(daemon, &worktree_id, &action_id),
     Call::ActionStop { worktree_id, action_id } => actions::stop(daemon, &worktree_id, &action_id),
@@ -370,27 +374,104 @@ Background work that exists today and must keep its current trigger:
 - Do not join the tables of two addons without a written reason.
 - A small value can go in the existing `kv` table with the key prefix
   `<addon>.`. Do not force relational state into KV.
-- In memory, keep addon state out of `Inner`. Towns keeps no daemon state in
-  memory at all; it reads its table when a call needs it.
-- Usage keeps its last result in memory only, because a restart must start
-  empty (the first fetch compares against zero). It holds the result in a
-  `static Mutex` in `addons/usage/mod.rs`. That is process-wide state; it is
-  correct because `tomod.lock` allows one daemon per data dir. The other
-  options were worse: a field in `Inner` is a Core leak; a handle passed
-  through `server.rs` makes Core carry an addon type; the `kv` table would
-  write memory-only data to disk. If a process ever runs two daemons, pass a
-  handle instead.
-- Actions keeps the parsed `.tomo.toml` sets in memory only, in a
-  `static Mutex` in `addons/actions/mod.rs`, for the same reasons. The sets
-  come from files, so a restart reads them again. Lock order: the Core state
-  lock first, then the sets lock; never lock Core state while you hold the
-  sets lock. A reload keeps only the worktrees of its own daemon, so the Rust
-  characterization test runs its three scenarios in one test function.
-- GitHub keeps its pull request cache in a `static Mutex` in
-  `addons/github/mod.rs` for the same reasons. The cache starts empty after a
-  restart, as it did in Core.
-- If a seam needs both locks, take the Core `Inner` lock first, then the
-  addon lock. Never take the Core lock while you hold an addon lock.
+### In memory: each daemon owns its addon state
+
+`addons::State` in `crates/tomod/src/addons/mod.rs` has one field for each
+addon that keeps state in memory. Core `Inner` holds it in one opaque slot.
+The composition root fills the slot, and one pair of typed accessors reads
+it:
+
+```rust
+// crates/tomod/src/daemon.rs (Core)
+pub struct Inner { /* ... */ pub addons: Box<dyn std::any::Any + Send> }
+pub fn new(paths: Paths, seams: Seams, addons: Box<dyn std::any::Any + Send>) -> Result<Arc<Daemon>>
+
+// crates/tomod/src/addons/mod.rs (composition root)
+#[derive(Default)]
+pub struct State {
+    pub actions: actions::Sets,   // BTreeMap<Id, ActionSet>: the parsed .tomo.toml of each worktree
+    pub github: github::Cache,    // BTreeMap<Id, PrStatusResult>: the last pr_status answer
+    pub usage: usage::Last,       // Vec<UsageSnapshot>: the last result
+}
+pub fn state(inner: &Inner) -> &State
+pub fn state_mut(inner: &mut Inner) -> &mut State
+```
+
+`main.rs`, `actions/tests.rs`, and the two-daemon test pass
+`Box::new(addons::State::default())` to `Daemon::new`. The accessors
+downcast the slot. If a caller forgets to fill it, the first access panics
+with a message, so any test finds the mistake.
+
+- All three fields are memory only. A restart starts empty: the first Usage
+  fetch compares against zero, the GitHub cache starts empty as it did in
+  Core, and Actions reads `.tomo.toml` again at discovery.
+- Towns keeps no state in memory. It reads its table when a call needs it.
+- Do not keep mutable state in a `static` in an addon module.
+  `addon_modules_keep_no_mutable_static` fails on it. Immutable embedded
+  data in a `OnceLock` (the Towns dataset in `towns/model.rs`) is allowed.
+
+### Lock rules
+
+- Addon state is under the Core lock. There is one lock: `Daemon::lock`. Do
+  not add a second lock for addon state.
+- Hold the Core lock only for fast work. Do slow work with no lock held: a
+  subprocess, a network call, a file read, or an `await`. Then take the lock
+  and write the result. Core does the same for `git` and the process poll.
+  - Usage: `fetch_all` runs in `spawn_blocking` with no lock. Then
+    `usage::remember(&mut Inner, fresh)` writes the result, records the
+    diagnostics, and emits the events under the lock.
+  - GitHub: `pr_status` reads the worktree path and the cache under the
+    lock and releases it. `gh pr view` runs with no lock. Then
+    `github::remember(&mut Inner, worktree_id, result)` writes the answer,
+    records `pr_merged`, and emits `pr_changed` under the lock.
+  - Actions: `reload` reads `.tomo.toml` in each worktree with no lock, then
+    merges the sets and emits `actions_changed` under the lock.
+- A seam that gets `&mut Inner` (`pane_exited`) or `&Inner` (the `town_pr`
+  function that Towns calls with the lock held) reads the state directly.
+  It must not call `Daemon::lock` again.
+- Two slow calls can run at the same time, and the last write wins. The
+  statics had the same behavior.
+
+### Add state to a new addon
+
+1. In the addon module, name the type of its state, for example
+   `pub type Endpoints = Vec<RuntimeEndpoint>;`, or a struct that derives
+   `Default`.
+2. Add one field line to `addons::State`.
+3. Read it with `addons::state(&inner).<field>` and write it with
+   `addons::state_mut(&mut inner).<field>`, while you hold `Daemon::lock`.
+4. Keep slow work out of the lock. Put the write-back in a function that
+   takes `&mut Inner`, as `usage::remember` does, so that a test can write a
+   result without the slow work.
+5. If a client needs the state at `subscribe`, read it in the `Subscribe`
+   arm of `dispatch.rs`, under the lock that the arm takes.
+6. Add the field to `two_daemons_in_one_process_keep_their_own_addon_state`.
+
+To remove the addon, delete its field line.
+
+### Decision: the shape of addon state
+
+Before this change, Usage, GitHub, and Actions each kept a `static Mutex`,
+locked after `Daemon::lock`. The cost: the Actions milestone had to put
+three Rust scenarios into one test, because the state leaked between tests
+in one process; two daemons in one process shared state; each static added
+a second lock order; module-level mutable state is against the code rules;
+and Runtime would add a fourth static.
+
+| Option | Result |
+|---|---|
+| (a) One opaque slot in Core `Inner` (`Box<dyn Any + Send>`), filled by the composition root, with `addons::state` and `addons::state_mut` | **Chosen.** Core gets one field and one `Daemon::new` parameter, and names no addon. The state is under the Core lock, so one lock order stays. The downcast is in one place and has one concrete type. Deleting an addon deletes its field line. |
+| (b) A generic parameter, `Daemon<S>` and `Inner<S>` | Rejected. 92 lines in the Core files of `tomod` name `Daemon` or `Inner` (`daemon.rs` 74, `store.rs`, `runtime.rs`, `reopen.rs`, `moves.rs`, `events.rs`, `monitor.rs`, `settings.rs`, `system.rs`, `server.rs`, `watch.rs`, and others). Each `Seams` function pointer, `WorktreeFile::reload`, and each task entry would get `<S>`. A type alias would make Core name `addons::State`. |
+| (c) A per-daemon handle outside `Inner`, passed from `main.rs` through `server.rs` to `dispatch::handle` | Rejected. Core `server.rs` would carry an addon type or a generic, and the seams that get only `&mut Inner` (`pane_exited`) could not reach the handle. It also keeps a second lock. |
+| (c) One field for each addon in `Inner` | Rejected. Core would name each addon. |
+| (c) Keep the statics, keyed by the daemon session id | Rejected. It is still process state and a second lock, and it is a registry. |
+| A string-keyed registry, `HashMap<TypeId, Box<dyn Any>>`, or one `dyn Any` for each addon | Rejected by rule. Each is a service locator: a lookup at run time that the compiler cannot check. |
+
+Milestone 2 rejected "a generic addon state field on `Daemon`" as a service
+locator. The chosen slot is not a locator. Nothing registers into it at run
+time, and there is no lookup by key. It holds one concrete type that the
+composition root names, and one accessor downcasts to that type. It is on
+`Inner`, not on `Daemon`, so it shares the Core lock.
 - Never drop or rename a table or a column that holds user data. If the
   owner of a table changes, keep the table and move the code that reads it.
   Example: the `towns` table stayed on disk; only its `CREATE` and its
@@ -459,6 +540,17 @@ under `tomo-proto/src/addons/`. A file fails if it names a noun that another
 addon owns. The Activity kind modules of the addons that are not moved yet
 (`actions.rs`, `agentation.rs`, `runtime.rs`) must not name them either.
 
+**Rust, addon state.** `addon_modules_keep_no_mutable_static` in
+`crates/tomod/src/addons/mod.rs` reads every file under `tomod/src/addons/`.
+It fails on a `static` item whose line names `Mutex`, `RwLock`, `Atomic`,
+`Cell`, or `static mut`. A `OnceLock` of immutable data (the Towns dataset)
+passes. `two_daemons_in_one_process_keep_their_own_addon_state` builds two
+daemons in one process. It writes a Usage result, a pull request, and an
+Action set into the first daemon, and checks that the second daemon sees
+none of them. A planted `static PLANTED: std::sync::Mutex<u8>` line in
+`towns/model.rs` made the first check fail. The second check failed on the
+statics before the change (the Usage assertion, which runs first).
+
 **TypeScript.** `app/src/addons/boundary.test.ts` reads every non-test `.ts`
 and `.tsx` file under `app/src` outside `generated/` and `addons/` with
 `import.meta.glob(..., { query: "?raw" })`. It fails if a file imports an
@@ -519,6 +611,7 @@ Towns is the worked example for each step.
    Add `pub mod <name>;` and its lines to `seams()` and `migrate()` in `addons/mod.rs`.
    Add one arm for each call in `dispatch.rs`.
    Add a seam only if the addon must take part in a Core operation. Add a new `Seams` field only when no field fits, and call it at one fixed point.
+   If the addon keeps state in memory, add one field to `addons::State`. Do not use a `static`. See "Addon state".
    If a client needs the addon state at `subscribe`, add a field to `Snapshot` in `lib.rs` and fill it in the `Subscribe` arm of `dispatch.rs`.
 4. **Background work.** Write the reason in the addon doc. If there is no reason, add no background work.
    A task gets one line in `addons::start`. It must check for a subscriber or another trigger before it does work.
@@ -538,7 +631,7 @@ Towns is the worked example for each step.
 
 1. Delete `crates/tomod/src/addons/<name>/`, `crates/tomo-proto/src/addons/<name>.rs`, and `app/src/addons/<name>/`.
 2. Remove the registration lines:
-   - its lines in `seams()`, `migrate()`, and `start()` in `addons/mod.rs`
+   - its lines in `State`, `seams()`, `migrate()`, and `start()` in `addons/mod.rs`
    - its arms, its `use` line, and its field line in the `Subscribe` arm in `dispatch.rs`
    - its `mod` line, its re-export, its `Call` and `Event` variants, its `Snapshot` field, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
    - its entry in `builtins`
@@ -1028,7 +1121,7 @@ RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
 |---|---|
 | `crates/tomod/src/usage.rs` | `crates/tomod/src/addons/usage/mod.rs` (`git mv`, so the history stays) |
 | `UsageBucket`, `UsageSnapshot` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/usage.rs` |
-| `Inner.usage` | the addon's `static Mutex` (see "Addon state") |
+| `Inner.usage` | the addon's `static Mutex`; now `addons::State.usage` (see "Addon state") |
 | the `UsageGet` arm in `Daemon::handle` | `usage::get`, called from `dispatch.rs` |
 | `usage: inner.usage.clone()` in the `Subscribe` arm | `Daemon::subscribe` returns `CoreSnapshot`; `dispatch.rs` adds `usage::snapshots()` |
 | `tokio::spawn(usage::run(..))` in `main.rs` | `addons::start` |
@@ -1078,7 +1171,7 @@ added for Usage.
 | `fetch_all` names Claude and Codex | inside the addon; milestone 9 decides about provider modules |
 | the thresholds exist in Rust (`THRESHOLDS`) and TypeScript (`USAGE_WARN`, `USAGE_DANGER`) | two languages; [usage.md](usage.md) says to keep them equal |
 | `Daemon::handle` answers `subscribe` with only `CoreSnapshot` | Core stays complete without the dispatcher; no caller uses that path |
-| the process-wide `static` result | see "Addon state" |
+| ~~the process-wide `static` result~~ | resolved: `addons::State.usage` (see "Addon state") |
 
 ### Small user-visible changes
 
@@ -1208,7 +1301,7 @@ no Core operation.
 | Seam | Where | Why it is the narrowest option |
 |---|---|---|
 | `dispatch::is_slow` | `server.rs` asks it before it runs a call inline | `server.rs` is Core and must not name `Call::PrStatus`. One `matches!` in the composition root keeps the rule that a subprocess call runs in its own task. |
-| `towns::history(daemon, slug, pr: fn(&str, &[ActivityEvent]) -> Option<TownPr>)` | `dispatch.rs` passes `town_pr` | Towns needs three facts. A plain function pointer keeps both addons free of each other. Without GitHub, the root passes `\|_, _\| None`. An event, a shared table, or a client join is wider, and the CLI and the harness read `town_history` too. |
+| `towns::history(daemon, slug, pr: fn(&Inner, &str, &[ActivityEvent]) -> Option<TownPr>)` | `dispatch.rs` passes `town_pr` | Towns needs three facts. A plain function pointer keeps both addons free of each other. Without GitHub, the root passes `\|_, _, _\| None`. (The `&Inner` parameter came with the addon state change, so GitHub reads its cache under the lock that Towns holds.) An event, a shared table, or a client join is wider, and the CLI and the harness read `town_history` too. |
 | GUI `inspectorSections` | `RightSidebar.tsx` renders them after `git`; `shell/RightRail.tsx` renders the buttons and markers; `store.ts` gives the ids to `sanitizeUi` | The section had one fixed place after `git`. One insertion point keeps that order without a position field. |
 | GUI `worktreeSignals` | `signalsFor` in `Signals.tsx` gives them to `nowSignals` as `addon` | The PR signal came last. Addon signals keep that place, and the cap of three stays in one function. The signal is data (`AddonSignal`), so the left rail can print it as text. |
 | GUI `repoAvatar` | `RepoAvatar` in `Sidebar.tsx`, which the sidebar and Home render | The avatar was the only reader of `Repo.github`. One component slot, where the first addon wins, like `worktreeNameField`. |
@@ -1229,6 +1322,9 @@ Rejected options:
   core state object, so an addon change alone would not show.
 
 ### Daemon state decision
+
+**Superseded** by "Addon state": the cache is now `addons::State.github`,
+under the Core lock. The text below is the milestone 2 record.
 
 The cache is a process-wide `static Mutex` in the addon, like the Usage
 result. The lock order is `Daemon::lock` first, then the cache.
@@ -1460,7 +1556,7 @@ GUI: `topbar` (`buttons`, `marks`), `worktreeMenu`, `endpointMenu`, `paletteEntr
 
 - **`AttentionKind::Crash` is Core.** It is the attention word for "a process that a pane source started exited, and Tomo did not stop it". The owner of the source decides when to raise it. Only Actions raises it, so a shell or an agent that exits with a non-zero code raises nothing, as before. The Rust characterization test checks a shell that exits with code 1. A Core rule "every owned process that exits with a non-zero code is a crash" was rejected, because it adds crash items for ordinary shells.
 - **A closed Action pane records nothing.** `pane close`, `tab close`, and archive remove the pane before its process exits, so `on_exit` finds no pane: no `action_stopped` and no `action.exited`. This was problem 3 of milestone 0. The code does not change. A fix is not one line: three Core paths would have to record before `remove_pane`, and Core would have to know the owner of the source. `docs/actions.md` and `docs/activity.md` describe the behavior, and the Rust test pins it.
-- **The sets stay in a `static`.** See "Addon state".
+- **The sets stay in a `static`.** Superseded: the sets are now `addons::State.actions`. See "Addon state".
 - **`HookAction` stays in Core.** The runtime hooks also fill `HookEvent.action`. The first version moved the type to the Actions proto module; the deletion test plan showed that Core `runtime.rs` would not compile without the addon, so it went back to `lib.rs`.
 - **The `panes.action_id` column.** No code reads or writes it. An old database keeps it; a new database does not get it, as with `worktree_meta.town_slug`. An older daemon on a new database adds the column again with its own migration.
 
@@ -1503,7 +1599,10 @@ GUI: `topbar` (`buttons`, `marks`), `worktreeMenu`, `endpointMenu`, `paletteEntr
 The characterization tests came first (commit `978d462`) and passed on the
 code before the move:
 
-- `actions_characterization` in `addons/actions/tests.rs` runs a real daemon
+- `actions_characterization` in `addons/actions/tests.rs` (since the addon
+  state change, three tests: `list_run_reuse_stop_restart_and_exit_outcomes`,
+  `closing_an_action_pane_records_nothing_and_a_shell_exit_is_no_crash`, and
+  `a_restored_action_pane_is_a_shell_that_does_not_rerun`) runs a real daemon
   with PTYs, Git, and hook scripts through `dispatch::handle`. It checks
   the list and its defaults, the snapshot, a run with its source, the reuse
   of a live pane, stop, restart, a crash (attention item, activity, and
@@ -1575,7 +1674,8 @@ None was hit. Near:
   60; the slot types added 28 lines. So the slot code is smaller than the
   Action code that left the client core.
 - Process-wide daemon state (`static`), as in Usage and GitHub. The cost is
-  one Rust characterization test for three scenarios.
+  one Rust characterization test for three scenarios. Resolved by the addon
+  state change: see "Addon state".
 - An addon module that `addons/index.ts` loads cannot import `actions.ts` at
   module start. Two menu items use a lazy import. See "Module load".
 
