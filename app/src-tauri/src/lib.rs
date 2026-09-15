@@ -296,4 +296,11 @@ mod tests {
         assert!(script.ends_with("}window.__tomoAgentation.set(true);"));
         assert!(agentation_script(false).ends_with("set(false);"));
     }
+
+    #[test]
+    fn only_enabling_carries_the_bundle() {
+        assert!(agentation_script(true).contains(AGENTATION_JS));
+        assert!(!agentation_script(false).contains(AGENTATION_JS));
+        assert!(agentation_script(false).len() < 100);
+    }
 }
