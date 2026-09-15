@@ -595,7 +595,7 @@ impl Daemon {
         inner.hook_queue.push(ev);
     }
 
-    fn record_action(inner: &mut Inner, kind: ActivityKind, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>, verb: &str) {
+    fn record_action(inner: &mut Inner, kind: ActionActivity, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>, verb: &str) {
         let mut ev = activity::event(kind, Some(worktree_id), format!("{} {verb}", action.label));
         ev.pane_id = pane_id.map(str::to_string);
         ev.payload = json!({ "action_id": action.id, "pane_id": pane_id });
@@ -650,7 +650,7 @@ impl Daemon {
                 cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
                 cmd.spawn().map_err(|e| err(ErrorCode::Internal, format!("{}: {e}", action.command)))?;
                 Self::queue_action_event(&mut inner, "action.started", worktree_id, &action, None);
-                Self::record_action(&mut inner, ActivityKind::ActionStarted, worktree_id, &action, None, "started");
+                Self::record_action(&mut inner, ActionActivity::Started, worktree_id, &action, None, "started");
                 Ok(ActionRunResult { action, pane: None, reused: false })
             }
             ActionMode::Pane => {
@@ -669,7 +669,7 @@ impl Daemon {
                 Self::focus_pane(&mut inner, &pane_id);
                 Self::emit_pane(&mut inner, &pane_id);
                 Self::queue_action_event(&mut inner, "action.started", worktree_id, &action, Some(&pane_id));
-                Self::record_action(&mut inner, ActivityKind::ActionStarted, worktree_id, &action, Some(&pane_id), "started");
+                Self::record_action(&mut inner, ActionActivity::Started, worktree_id, &action, Some(&pane_id), "started");
                 let pane = Self::pane_view(&inner, &pane_id);
                 Ok(ActionRunResult { action, pane, reused: false })
             }
@@ -682,7 +682,7 @@ impl Daemon {
         let Some(pane_id) = Self::running_action_pane(&inner, worktree_id, action_id) else { return Ok(false) };
         Self::set_stop_intent(&mut inner, &pane_id);
         Self::queue_action_event(&mut inner, "action.exited", worktree_id, &action, Some(&pane_id));
-        Self::record_action(&mut inner, ActivityKind::ActionStopped, worktree_id, &action, Some(&pane_id), "stopped");
+        Self::record_action(&mut inner, ActionActivity::Stopped, worktree_id, &action, Some(&pane_id), "stopped");
         if let Some(pid) = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
             for child in procs::descendants(&inner.proc_rows, pid) {
                 procs::kill_tree(&inner.proc_rows, child);
@@ -884,8 +884,8 @@ impl Daemon {
             let action = Self::action_or_placeholder(&inner, &worktree_id, &aid);
             Self::queue_action_event(&mut inner, "action.exited", &worktree_id, &action, Some(pane_id));
             match (code, stop_intent) {
-                (Some(0), _) => Self::record_action(&mut inner, ActivityKind::ActionCompleted, &worktree_id, &action, Some(pane_id), "completed"),
-                (_, true) => Self::record_action(&mut inner, ActivityKind::ActionStopped, &worktree_id, &action, Some(pane_id), "stopped"),
+                (Some(0), _) => Self::record_action(&mut inner, ActionActivity::Completed, &worktree_id, &action, Some(pane_id), "completed"),
+                (_, true) => Self::record_action(&mut inner, ActionActivity::Stopped, &worktree_id, &action, Some(pane_id), "stopped"),
                 (_, false) => Self::action_crashed(&mut inner, &worktree_id, &action, pane_id, code.unwrap_or(-1)),
             }
         }
@@ -896,7 +896,7 @@ impl Daemon {
             agent.updated_at_ms = now_ms();
             let agent = agent.clone();
             Self::emit(&mut inner, Event::AgentChanged { agent: agent.clone() });
-            Self::record_agent(&mut inner, ActivityKind::AgentExited, &agent, "exited");
+            Self::record_agent(&mut inner, CoreActivity::AgentExited, &agent, "exited");
             if was_waiting {
                 Self::resolve_waiting(&mut inner, pane_id);
             }
@@ -1027,7 +1027,7 @@ impl Daemon {
             };
             inner.agents.insert(id.clone(), presence.clone());
             Self::emit(inner, Event::AgentChanged { agent: presence.clone() });
-            Self::record_agent(inner, ActivityKind::AgentStarted, &presence, "started");
+            Self::record_agent(inner, CoreActivity::AgentStarted, &presence, "started");
         }
         if let Err(e) = self.start_pty(inner, &id, command) {
             inner.panes.remove(&id);
@@ -1258,7 +1258,7 @@ impl Daemon {
         Self::emit(inner, Event::AgentChanged { agent: next.clone() });
         Self::emit_pane(inner, &report.pane_id);
         if previous.is_none() {
-            Self::record_agent(inner, ActivityKind::AgentStarted, &next, "started");
+            Self::record_agent(inner, CoreActivity::AgentStarted, &next, "started");
         }
         if previous != Some(next.state) && next.state != AgentState::Unknown {
             let name = if previous.is_none() { "agent.started".to_string() } else { format!("agent.{}", next.state.name()) };
@@ -1269,15 +1269,15 @@ impl Daemon {
         }
         if next.state == AgentState::Waiting && previous != Some(AgentState::Waiting) {
             let attention_id = Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, format!("{} is waiting for you", next.kind.label()));
-            let repeat = Self::recorded_recently(inner, ActivityKind::AgentWaiting, activity::WAITING_REPEAT_MS, |a| a.pane_id.as_deref() == Some(&report.pane_id));
+            let repeat = Self::recorded_recently(inner, CoreActivity::AgentWaiting, activity::WAITING_REPEAT_MS, |a| a.pane_id.as_deref() == Some(&report.pane_id));
             if !repeat {
-                let mut ev = Self::agent_event(ActivityKind::AgentWaiting, &next, "is waiting for you");
+                let mut ev = Self::agent_event(CoreActivity::AgentWaiting, &next, "is waiting for you");
                 ev.attention_id = attention_id;
                 Self::record(inner, ev);
             }
         }
         if next.state == AgentState::Exited && previous != Some(AgentState::Exited) {
-            Self::record_agent(inner, ActivityKind::AgentExited, &next, "exited");
+            Self::record_agent(inner, CoreActivity::AgentExited, &next, "exited");
         }
         if next.state != AgentState::Waiting && previous == Some(AgentState::Waiting) {
             Self::resolve_waiting(inner, &report.pane_id);
@@ -1347,7 +1347,7 @@ impl Daemon {
         hook.pane = Self::hook_pane(inner, pane_id);
         hook.attention = Some(item.clone());
         inner.hook_queue.push(hook);
-        let mut ev = activity::event(ActivityKind::ActionCrashed, Some(worktree_id), format!("{} crashed", action.label));
+        let mut ev = activity::event(ActionActivity::Crashed, Some(worktree_id), format!("{} crashed", action.label));
         ev.pane_id = Some(pane_id.to_string());
         ev.detail = Some(format!("exit code {exit_code}"));
         ev.payload = json!({ "action_id": action.id, "exit_code": exit_code, "pane_id": pane_id });
@@ -1355,7 +1355,7 @@ impl Daemon {
         Self::record(inner, ev);
     }
 
-    fn agent_event(kind: ActivityKind, agent: &AgentPresence, verb: &str) -> ActivityEvent {
+    fn agent_event(kind: CoreActivity, agent: &AgentPresence, verb: &str) -> ActivityEvent {
         let mut ev = activity::event(kind, Some(&agent.worktree_id), format!("{} {verb}", agent.kind.label()));
         ev.pane_id = Some(agent.pane_id.clone());
         ev.agent_kind = Some(agent.kind);
@@ -1363,7 +1363,7 @@ impl Daemon {
         ev
     }
 
-    fn record_agent(inner: &mut Inner, kind: ActivityKind, agent: &AgentPresence, verb: &str) {
+    fn record_agent(inner: &mut Inner, kind: CoreActivity, agent: &AgentPresence, verb: &str) {
         Self::record(inner, Self::agent_event(kind, agent, verb));
     }
 
@@ -1458,7 +1458,7 @@ impl Daemon {
                 let ev = events::envelope(&inner, "worktree.archived", Some(worktree_id));
                 inner.hook_queue.push(ev);
                 let title = format!("{} archived", Self::worktree_name(&inner, worktree_id));
-                let mut ev = activity::event(ActivityKind::Archived, Some(worktree_id), title);
+                let mut ev = activity::event(CoreActivity::Archived, Some(worktree_id), title);
                 ev.detail = result.checkpoint_commit.as_ref().map(|c| format!("checkpoint {}", &c[..c.len().min(7)]));
                 ev.payload = json!({ "branch": result.branch, "checkpoint_commit": result.checkpoint_commit, "head": head });
                 Self::record(&mut inner, ev);
@@ -1535,7 +1535,7 @@ impl Daemon {
         let ev = events::envelope(&inner, "worktree.restored", Some(&id));
         inner.hook_queue.push(ev);
         let title = format!("{} restored", Self::worktree_name(&inner, &id));
-        let mut ev = activity::event(ActivityKind::Restored, Some(&id), title);
+        let mut ev = activity::event(CoreActivity::Restored, Some(&id), title);
         ev.payload = json!({ "branch": branch });
         Self::record(&mut inner, ev);
         let view = inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w));
@@ -1800,7 +1800,7 @@ impl Daemon {
                     let mut ev = events::envelope(&inner, "worktree.state_changed", Some(&worktree_id));
                     ev.previous_state = previous_state.clone();
                     inner.hook_queue.push(ev);
-                    let mut ev = activity::event(ActivityKind::StateChanged, Some(&worktree_id), format!("state → {}", next.state.as_deref().unwrap_or("none")));
+                    let mut ev = activity::event(CoreActivity::StateChanged, Some(&worktree_id), format!("state → {}", next.state.as_deref().unwrap_or("none")));
                     ev.detail = Some(Self::worktree_name(&inner, &worktree_id));
                     ev.payload = json!({ "state": next.state, "previous_state": previous_state });
                     Self::record(&mut inner, ev);
@@ -2149,7 +2149,7 @@ impl Daemon {
                 let was_merged = inner.prs.get(&worktree_id).and_then(|c| c.pr.as_ref()).map_or(false, |pr| pr.state == "merged");
                 inner.prs.insert(worktree_id.clone(), result.clone());
                 if let Some(pr) = result.pr.as_ref().filter(|pr| pr.state == "merged" && !was_merged) {
-                    let mut ev = activity::event(ActivityKind::PrMerged, Some(&worktree_id), format!("PR #{} merged", pr.number));
+                    let mut ev = activity::event(GitHubActivity::PrMerged, Some(&worktree_id), format!("PR #{} merged", pr.number));
                     ev.detail = Some(pr.title.clone());
                     ev.payload = json!({ "number": pr.number, "url": pr.url });
                     Self::record(&mut inner, ev);
@@ -2250,7 +2250,11 @@ impl Daemon {
                 list.sort_by(|a, b| (&a.worktree_id, a.port, a.pid).cmp(&(&b.worktree_id, b.port, b.pid)));
                 ok(list)
             }
-            Call::ActivityList(query) => ok(self.lock().store.activity_list(&query).map_err(internal)?),
+            Call::ActivityList(query) => {
+                let inner = self.lock();
+                let waiting: Vec<Id> = inner.agents.values().filter(|a| a.state == AgentState::Waiting).map(|a| a.pane_id.clone()).collect();
+                ok(inner.store.activity_list(&query, &waiting).map_err(internal)?)
+            }
             Call::CheckpointCreate(spec) => {
                 let message = spec.message.trim().to_string();
                 if message.is_empty() {
@@ -2279,7 +2283,7 @@ impl Daemon {
                     resolved_at_ms: None,
                 };
                 Self::push_attention(&mut inner, item.clone());
-                let mut ev = activity::event(ActivityKind::CheckpointCreated, Some(&worktree_id), item.message.clone());
+                let mut ev = activity::event(CoreActivity::CheckpointCreated, Some(&worktree_id), item.message.clone());
                 ev.pane_id = pane_id.clone();
                 ev.agent_kind = item.agent_kind;
                 ev.detail = title.is_some().then_some(message);
@@ -2303,7 +2307,7 @@ impl Daemon {
                 inner.store.attention_resolve(&id, now).map_err(internal)?;
                 let item = AttentionItem { resolved_at_ms: Some(now), ..item };
                 Self::emit(&mut inner, Event::AttentionResolved { id: id.clone() });
-                let mut ev = activity::event(ActivityKind::CheckpointResolved, Some(&item.worktree_id), format!("{} resolved", item.message));
+                let mut ev = activity::event(CoreActivity::CheckpointResolved, Some(&item.worktree_id), format!("{} resolved", item.message));
                 ev.pane_id = item.pane_id.clone();
                 ev.agent_kind = item.agent_kind;
                 ev.payload = json!({ "kind": item.kind, "url": item.url });
@@ -2373,7 +2377,7 @@ impl Daemon {
                 pty.write(pasted(&text).as_bytes()).map_err(internal)?;
                 let event = ActivityEvent {
                     id: new_id(),
-                    kind: ActivityKind::AnnotationsSent,
+                    kind: AgentationActivity::AnnotationsSent.into(),
                     occurred_at_ms: now_ms(),
                     worktree_id: Some(worktree_id.clone()),
                     pane_id: Some(pane_id.clone()),

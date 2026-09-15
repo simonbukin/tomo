@@ -137,8 +137,9 @@ a small window.
 ● working    ◉ needs user    ○ idle    ✓ complete    × failed    ? unknown
 ```
 
-`agentStatus` and `activityStatus` map agent states and activity kinds onto
-it. Dense rows (sidebar, Home, tabs, checkpoint banner, signals) draw the
+`agentStatus` maps agent states onto it. `activityStatus` in
+`app/src/activityKinds.ts` maps activity kinds onto it through the kind
+registry (see [activity.md](activity.md)). Dense rows (sidebar, Home, tabs, checkpoint banner, signals) draw the
 round `.state` dot from `dotClass(status)`. Text surfaces (Activity rows,
 palette hints, the crash signal) print `GLYPH[status]`. Do not add a glyph
 or a status color for one feature.

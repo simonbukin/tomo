@@ -136,7 +136,7 @@ function RuntimePopover({ worktree: w, endpoints }: { worktree: Worktree; endpoi
 }
 
 export function CheckpointBanner({ worktree: w }: { worktree: Worktree }) {
-  const items = useStore((s) => s.attention.filter((a) => a.worktree_id === w.id && a.kind === "checkpoint" && needsMeItem(a)).sort((a, b) => b.created_at_ms - a.created_at_ms));
+  const items = useStore((s) => s.attention.filter((a) => a.worktree_id === w.id && a.kind === "checkpoint" && needsMeItem(a, Object.values(s.agents))).sort((a, b) => b.created_at_ms - a.created_at_ms));
   const pane = useStore((s) => (items[0]?.pane_id ? (s.panes[items[0].pane_id] ?? null) : null));
   const fallback = useStore((s) => httpEndpoints(endpointsOf(s, w.id))[0] ?? null);
   const item = items[0];

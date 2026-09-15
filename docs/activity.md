@@ -5,35 +5,67 @@ Activity is history. Attention is urgency.
 The activity stream is one chronological list of the events that matter to
 a person: an agent started or asked for you, an Action started, stopped,
 finished, or crashed, a port appeared, a worktree changed state, an archive,
-a restore, a failed hook, a merged pull request, a checkpoint. Attention is
-the short list of items that still need a person now. An activity event
-may point at the attention item it opened or closed; that link is what
-`--needs-me` uses.
+a restore, a failed hook, a merged pull request, notes sent to an agent, a
+checkpoint. Attention is the short list of items that still need a person
+now. An activity event may point at the attention item it opened or closed;
+that link is what `--needs-me` uses.
 
 ## What is recorded
 
-| Kind                  | When                                                        | Points at attention |
-|-----------------------|-------------------------------------------------------------|---------------------|
-| `agent_started`       | An agent is spawned, or an agent presence appears in a pane |                     |
-| `agent_waiting`       | An agent waits for you; at most once per pane per 30 s      | the waiting item    |
-| `agent_exited`        | An agent exited                                             |                     |
-| `action_started`      | `tomo action run`, restart, or a GUI button                 |                     |
-| `action_stopped`      | `tomo action stop`, restart, pane close, kill-tree, archive |                     |
-| `action_completed`    | A pane-mode Action exited with code 0                       |                     |
-| `action_crashed`      | A pane-mode Action exited with another code, unrequested    | the crash item      |
-| `endpoint_discovered` | An owned process listens on a port; once per worktree and port per 60 s | |
-| `state_changed`       | The worktree state changed; title `state → <x>`             |                     |
-| `archived`            | A worktree was archived                                     |                     |
-| `restored`            | A worktree was restored                                     |                     |
-| `hook_failed`         | A hook exited non-zero, timed out, or did not start         |                     |
-| `pr_merged`           | `tomo pr` saw the pull request state become merged          |                     |
-| `checkpoint_created`  | `tomo checkpoint`                                           | the checkpoint item |
-| `checkpoint_resolved` | `tomo checkpoint resolve`                                   | the same item       |
+| Kind                  | Owner      | When                                                        | Points at attention |
+|-----------------------|------------|-------------------------------------------------------------|---------------------|
+| `agent_started`       | core       | An agent is spawned, or an agent presence appears in a pane |                     |
+| `agent_waiting`       | core       | An agent waits for you; at most once per pane per 30 s      | the waiting item    |
+| `agent_exited`        | core       | An agent exited                                             |                     |
+| `checkpoint_created`  | core       | `tomo checkpoint`                                           | the checkpoint item |
+| `checkpoint_resolved` | core       | `tomo checkpoint resolve`                                   | the same item       |
+| `state_changed`       | core       | The worktree state changed; title `state → <x>`             |                     |
+| `archived`            | core       | A worktree was archived                                     |                     |
+| `restored`            | core       | A worktree was restored                                     |                     |
+| `hook_failed`         | core       | A hook exited non-zero, timed out, or did not start         |                     |
+| `action_started`      | actions    | `tomo action run`, restart, or a GUI button                 |                     |
+| `action_stopped`      | actions    | `tomo action stop`, restart, or `pane kill-tree`            |                     |
+| `action_completed`    | actions    | A pane-mode Action exited with code 0                       |                     |
+| `action_crashed`      | actions    | A pane-mode Action exited with another code, unrequested    | the crash item      |
+| `endpoint_discovered` | runtime    | An owned process listens on a port; once per worktree and port per 60 s | |
+| `pr_merged`           | github     | `tomo pr` saw the pull request state become merged          |                     |
+| `annotations_sent`    | agentation | `annotations_send` pasted browser notes into a live agent pane |                  |
 
 Every event has `id`, `kind`, `occurred_at_ms`, `worktree_id`, `pane_id`,
 `agent_kind`, `title`, `detail`, `payload`, and `attention_id`. `payload`
-is JSON; `action_crashed` carries `action_id`, `exit_code`, and `pane_id`
-so a client can offer Logs and Restart.
+is JSON. `action_crashed` carries `action_id`, `exit_code`, and `pane_id`,
+so a client can offer Logs and Restart. `annotations_sent` carries the
+`EvidenceBundle`, and its `detail` is the page URL.
+
+## Kinds and owners
+
+A kind is a string on the wire and in the `activity.kind` column
+(`ActivityKind` in `crates/tomo-proto/src/activity.rs`).
+
+- **Core kinds** are the enum `CoreActivity` in the same file.
+- **Addon kinds** are one enum for each addon in
+  `crates/tomo-proto/src/addons/<name>.rs`: `ActionActivity`,
+  `RuntimeActivity`, `GitHubActivity`, `AgentationActivity`. Each enum
+  implements `ActivityKinds`, so the daemon writes
+  `activity::event(ActionActivity::Crashed, ...)` and the kind string comes
+  from the serde name.
+- A new addon kind uses the string `<addon>.<name>`. The seven addon kinds in
+  the table above keep their older snake_case strings, because stored rows
+  and installed CLIs decode them.
+- The daemon keeps a kind string that it does not know. It reads back
+  unchanged, for example a row of an addon that a build omits.
+
+The GUI renders each row from a registry of kind views:
+
+- `app/src/activityKinds.ts` has the views of the core kinds as a
+  `Record<CoreActivity, ActivityKindView>`.
+- `app/src/addons/<name>/activity.ts` has the views of one addon as a
+  `Record` of its generated kind union. `app/src/addons/activity.ts` lists them.
+- A view can give a status glyph, the actor when the event has no agent, a
+  fallback "Open App" link, and row buttons.
+- A kind without a view renders as a plain row: time, agent, worktree,
+  title, detail, "Open App" when the payload has a `url`, and "Resolve" when
+  the attention item needs me.
 
 ## What is not recorded
 
@@ -45,12 +77,16 @@ live state.
 ## Crash or stop
 
 An Action pane that exits with a non-zero code is a crash unless Tomo
-itself ended it. `tomo action stop`, `restart`, `pane close`, `tab close`,
-`pane kill-tree`, and archive mark the pane with a stop intent first, so
-their exit records `action_stopped` and raises nothing. A crash keeps the
-pane open with its output, records `action_crashed`, fires the
-`action.crashed` hook, and adds an attention item of kind `crash` with the
-message `<label> exited with code <n>`.
+itself ended it. `tomo action stop`, `restart`, and `pane kill-tree` mark
+the pane with a stop intent first. The pane stays open, so its exit records
+`action_stopped` and raises nothing. A crash keeps the pane open with its
+output, records `action_crashed`, fires the `action.crashed` hook, and adds
+an attention item of kind `crash` with the message
+`<label> exited with code <n>`.
+
+`pane close`, `tab close`, and archive also mark the stop intent, but they
+remove the pane before its process exits. That exit records no activity and
+runs no `action.exited` hook.
 
 ## Needs me
 
@@ -58,10 +94,26 @@ message `<label> exited with code <n>`.
 tomo activity --needs-me
 ```
 
-Lists only the events whose attention item is still open: `resolved_at_ms`
-is null, and for a `waiting` item `viewed_at_ms` is also null. A checkpoint
-or crash stays in the list until someone resolves it. A waiting agent
-leaves the list when its pane is focused or the agent moves on.
+Lists only the events whose attention item needs me. An attention item
+needs me when both of these are true:
+
+1. `resolved_at_ms` is null.
+2. The item is not a `waiting` item, or it is a `waiting` item with
+   `viewed_at_ms` null and an agent in its pane that is still `waiting`.
+
+A checkpoint or crash stays in the list until someone resolves it, also
+after a view. A waiting agent leaves the list when its pane is focused or
+the agent moves on.
+
+This is the one definition. The daemon applies it in `Store::activity_list`
+(SQL; `ActivityList` passes the panes where an agent waits). The GUI applies
+it in `needsMeItem` (`app/src/activityModel.ts`) for the "Needs me" filter,
+the "Resolve" button, the rail count, the NOW signals, the checkpoint banner,
+and `next_attention`. The Rust store test and the TypeScript test use the
+same case table.
+
+A `tomo notify` item is a `waiting` item without an agent, so it never needs
+me. It has no activity event.
 
 ## Waiting items resolve themselves
 

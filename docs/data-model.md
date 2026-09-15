@@ -112,7 +112,7 @@ The daemon keeps the newest 200 viewed items.
 | Column           | Category | Meaning                                              |
 |------------------|----------|------------------------------------------------------|
 | `id`             | R        | Random id                                            |
-| `kind`           | R        | `ActivityKind` in snake case, e.g. `action_crashed`  |
+| `kind`           | R        | Kind string, e.g. `action_crashed`; see [activity.md](activity.md). An unknown string reads back unchanged |
 | `occurred_at_ms` | R        | Event time; indexed, orders the list newest first    |
 | `worktree_id`    | R        | Worktree, or NULL for a hook with no worktree        |
 | `pane_id`        | R        | Pane, or NULL                                        |
