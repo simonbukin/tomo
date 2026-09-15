@@ -1,4 +1,4 @@
-import { ArrowUpRight, Ellipsis, Radio, Star, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, Ellipsis, Plus, Radio, Star, TriangleAlert } from "lucide-react";
 import { endpointLabel, endpointUrl, httpEndpoints, needsMeItem } from "./activityModel";
 import { focusPane, openEndpoint, resolveCheckpoint, runWorktreeAction } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
@@ -7,41 +7,39 @@ import { GitPreview, RuntimePreview } from "./HoverPreviews";
 import { stateLabel } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
-import { endpointMenu, overflowMenu, runningActionItems } from "./menus";
+import { endpointMenu, overflowMenu, runningActionItems, spawnMenu } from "./menus";
+import { useShortcuts } from "./shortcuts";
 import { RowError } from "./RowError";
 import { endpointsOf, liveEndpointFor, runningActionIds, setState, useStore } from "./store";
 import { rpc } from "./api";
 import { useEffect } from "react";
 import { KIND_LABEL, type ActionSet, type RuntimeEndpoint, type Worktree } from "./types";
 
-/** One compact line: name, branch, state on the left; repo Actions and the overflow menu on the right. */
+/** The top-middle control plane: name, branch, state on the left; Actions, the overflow menu, and the spawn menu on the right. */
 export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
   const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   return (
-    <>
-      <div className="wt-header">
-        <span className="wt-header-name">
-          {w.name}
-          {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
+    <div className="wt-header" data-tauri-drag-region>
+      <span className="wt-header-name" data-tauri-drag-region>
+        {w.name}
+        {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
+      </span>
+      <HoverCard content={<GitPreview worktree={w} />}>
+        <span className="wt-header-branch">
+          {branch}
+          {w.git?.dirty ? " *" : ""}
         </span>
-        <HoverCard content={<GitPreview worktree={w} />}>
-          <span className="wt-header-branch">
-            {branch}
-            {w.git?.dirty ? " *" : ""}
-          </span>
-        </HoverCard>
-        {state && (
-          <span className="wt-header-state">
-            <span className="state state-none" />
-            {state}
-          </span>
-        )}
-        <RowError worktreeId={w.id} />
-        <ActionBar worktree={w} />
-      </div>
-      <CheckpointBanner worktree={w} />
-    </>
+      </HoverCard>
+      {state && (
+        <span className="wt-header-state" data-tauri-drag-region>
+          <span className="state state-none" />
+          {state}
+        </span>
+      )}
+      <RowError worktreeId={w.id} />
+      <ActionBar worktree={w} />
+    </div>
   );
 }
 
@@ -56,8 +54,9 @@ function ActionBar({ worktree: w }: { worktree: Worktree }) {
   const running = useStore((s) => runningActionIds(s, w.id));
   const endpoints = useStore((s) => endpointsOf(s, w.id));
   const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");
+  const shortcut = useShortcuts();
   return (
-    <div className="actionbar">
+    <div className="actionbar" data-tauri-drag-region>
       {topbar.map((a) => {
         const live = running.includes(a.id);
         const hint = [a.command, a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · ");
@@ -79,6 +78,14 @@ function ActionBar({ worktree: w }: { worktree: Worktree }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <MenuItems items={() => overflowMenu(w)} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<IconButton label="New tab: terminal, browser, or agent" shortcut={shortcut("new_tab")} />}>
+          <Plus className="icon" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <MenuItems items={() => spawnMenu(w.id)} />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -122,7 +129,7 @@ function RuntimePopover({ worktree: w, endpoints }: { worktree: Worktree; endpoi
   );
 }
 
-function CheckpointBanner({ worktree: w }: { worktree: Worktree }) {
+export function CheckpointBanner({ worktree: w }: { worktree: Worktree }) {
   const items = useStore((s) => s.attention.filter((a) => a.worktree_id === w.id && a.kind === "checkpoint" && needsMeItem(a)).sort((a, b) => b.created_at_ms - a.created_at_ms));
   const pane = useStore((s) => (items[0]?.pane_id ? (s.panes[items[0].pane_id] ?? null) : null));
   const fallback = useStore((s) => httpEndpoints(endpointsOf(s, w.id))[0] ?? null);

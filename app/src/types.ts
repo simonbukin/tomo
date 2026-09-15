@@ -101,6 +101,8 @@ export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" 
 
 export type SidebarMode = "open" | "minimal" | "closed";
 
+export type RightSection = "worktree" | "git" | "pr" | "processes" | "sessions" | "files";
+
 export interface UiState {
   view: "home" | "worktree" | "towns" | "activity";
   activeWorktreeId: Id | null;
@@ -110,6 +112,8 @@ export interface UiState {
   /** Open widths. Minimal and closed keep them for the next open. */
   leftWidth: number;
   rightWidth: number;
+  /** The inspector section that the right rail asked to show. */
+  rightSection: RightSection | null;
   sidebarSort: SidebarSort;
   showArchivedInSidebar: boolean;
   collapsedRepos: string[];

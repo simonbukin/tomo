@@ -10,13 +10,12 @@ import { Signals } from "./Signals";
 import { agentStatus, dotClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
-import { Mark } from "./Brand";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
-import { agentsOf, clearSelection, getState, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
+import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
@@ -29,6 +28,7 @@ export function Sidebar() {
   const attention = useStore((s) => s.attention);
   const states = useStore((s) => s.config?.states ?? []);
   const ui = useStore((s) => s.ui);
+  const needCount = useStore((s) => needsMe(s).length);
   const shortcut = useShortcuts();
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
   const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
@@ -78,9 +78,8 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
-        <Mark size={14} />
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
-        <IconButton label="Activity" shortcut={shortcut("activity")} className={`side-btn${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" /></IconButton>
+        <IconButton label={needCount ? `Activity, ${needCount} need you` : "Activity"} shortcut={shortcut("activity")} className={`side-btn side-activity${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" />{needCount > 0 && <span className="rail-count" aria-hidden>{needCount}</span>}</IconButton>
         <IconButton label="Japan map" shortcut={shortcut("towns")} className={`side-btn${ui.view === "towns" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "towns" })}><Map className="icon" /></IconButton>
         <span className="spacer" />
         <DropdownMenu>
@@ -111,39 +110,8 @@ export function Sidebar() {
           </div>
         )}
       </div>
-      <ResizeHandle side="left" />
     </aside>
   );
-}
-
-export function ResizeHandle({ side }: { side: "left" | "right" }) {
-  const onMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const start = e.clientX;
-    const app = document.querySelector<HTMLElement>(".app");
-    const startWidth = currentWidth(side);
-    let latest = startWidth;
-    document.body.classList.add("resizing-h", "no-anim");
-    const move = (ev: MouseEvent) => {
-      const delta = side === "left" ? ev.clientX - start : start - ev.clientX;
-      latest = Math.min(480, Math.max(180, startWidth + delta));
-      app?.style.setProperty(side === "left" ? "--left-w" : "--right-w", `${latest}px`);
-    };
-    const up = () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-      document.body.classList.remove("resizing-h", "no-anim");
-      setUi(side === "left" ? { leftWidth: latest } : { rightWidth: latest });
-    };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-  };
-  return <div className={`resize-handle resize-${side}`} onMouseDown={onMouseDown} />;
-}
-
-function currentWidth(side: "left" | "right"): number {
-  const el = document.querySelector<HTMLElement>(side === "left" ? ".sidebar" : ".rightbar");
-  return el?.getBoundingClientRect().width ?? 240;
 }
 
 type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: Id };
