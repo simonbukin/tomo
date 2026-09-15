@@ -1105,9 +1105,9 @@ pub struct SpawnResult {
     pub agent: Option<AgentPresence>,
 }
 
-/// What `subscribe` returns: everything a client needs to render.
+/// The Core part of the `subscribe` snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct Snapshot {
+pub struct CoreSnapshot {
     pub status: Status,
     pub config: Config,
     pub repos: Vec<Repo>,
@@ -1121,15 +1121,15 @@ pub struct Snapshot {
     pub actions: Vec<ActionSet>,
     #[serde(default)]
     pub endpoints: Vec<RuntimeEndpoint>,
-    #[serde(flatten)]
-    pub addons: AddonSnapshot,
     #[ts(type = "unknown")]
     pub ui_state: Value,
 }
 
-/// The snapshot fields that addons own. Core leaves them empty and `tomod` `dispatch.rs` fills them. On the wire they are top-level fields of `Snapshot`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-pub struct AddonSnapshot {
+/// What `subscribe` returns: everything a client needs to render. Core builds `core`, and `tomod` `dispatch.rs` adds the addon fields. On the wire every field is top level.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Snapshot {
+    #[serde(flatten)]
+    pub core: CoreSnapshot,
     #[serde(default)]
     pub usage: Vec<UsageSnapshot>,
 }
