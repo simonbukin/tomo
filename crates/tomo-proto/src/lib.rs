@@ -129,6 +129,8 @@ pub enum Call {
 
     TownList,
     TownPick,
+    /// Facts about one unlocked town: its worktree, branch, status, final commit, PR, and archive date.
+    TownHistory { slug: String },
     SessionList { worktree_id: Id, #[serde(default)] limit: Option<usize> },
     RuntimeList { #[serde(default)] worktree_id: Option<Id> },
     ActivityList(ActivityQuery),
@@ -1050,6 +1052,37 @@ pub struct TownUnlock {
     pub unlocked_at_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TownWorktreeStatus {
+    Active,
+    Archived,
+    Missing,
+    /// Tomo has no record of the worktree any more. The unlock stays.
+    Gone,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TownPr {
+    pub number: u64,
+    pub url: String,
+    pub state: String,
+}
+
+/// What `town_history` returns. Every field comes from Tomo's own records, never from a guess.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct TownHistory {
+    pub unlock: TownUnlock,
+    pub repo_name: Option<String>,
+    pub worktree_name: Option<String>,
+    pub branch: Option<String>,
+    pub status: TownWorktreeStatus,
+    /// The head of an active worktree, or the last commit of an archived one.
+    pub final_commit: Option<String>,
+    pub archived_at_ms: Option<u64>,
+    pub pr: Option<TownPr>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct FsEntry {
     pub name: String,
@@ -1144,6 +1177,7 @@ mod bindings {
         ConfigIssue::export_all(&cfg).unwrap();
         PrStatusResult::export_all(&cfg).unwrap();
         Town::export_all(&cfg).unwrap();
+        TownHistory::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
         SpawnResult::export_all(&cfg).unwrap();
         MetadataPatch::export_all(&cfg).unwrap();

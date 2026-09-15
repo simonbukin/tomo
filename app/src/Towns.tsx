@@ -1,12 +1,15 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ExternalLink, Minus, Plus, RotateCcw } from "lucide-react";
-import { IconButton } from "./components/ui";
+import { ExternalLink, Minus, Plus, RotateCcw, X } from "lucide-react";
+import { Button, IconButton, SkeletonRows } from "./components/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openWorktree } from "./actions";
+import { rpc } from "./api";
 import outline from "./data/japan-outline.json";
 import towns from "./data/japan-towns.json";
-import { useStore } from "./store";
-import type { Rarity, Town, TownUnlock } from "./types";
+import { townsProgress } from "./emptyStates";
+import { EmptyState, InlineError } from "./states";
+import { getState, setState, useStore } from "./store";
+import type { Rarity, Town, TownHistory, TownUnlock } from "./types";
 
 const ALL = towns as Town[];
 const RINGS = outline as [number, number][][];
@@ -16,6 +19,7 @@ const WIDTH = 1000;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 12;
 const HIDE_DELAY_MS = 180;
+const DRAG_THRESHOLD_PX = 3;
 
 const ringPoints = RINGS.flat();
 const minLon = Math.min(...ringPoints.map((p) => p[0])) - 0.3;
@@ -40,6 +44,8 @@ function zoomAt(v: View, factor: number, px: number, py: number): View {
   return { k, tx: px - (px - v.tx) * ratio, ty: py - (py - v.ty) * ratio };
 }
 
+const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+
 type Hover = { town: Town; unlock: TownUnlock | null; x: number; y: number };
 
 export function Towns() {
@@ -47,17 +53,24 @@ export function Towns() {
   const worktrees = useStore((s) => s.worktrees);
   const [hover, setHover] = useState<Hover | null>(null);
   const [view, setView] = useState<View>(HOME);
+  const [selected, setSelected] = useState<string | null>(() => getState().townReveal?.unlock.slug ?? null);
   const svgRef = useRef<SVGSVGElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | undefined>(undefined);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
+  const lastDragMoved = useRef(false);
   const bySlug = useMemo(() => new Map(ALL.map((t) => [t.slug, t])), []);
   const unlockBySlug = useMemo(() => new Map(unlocks.map((u) => [u.slug, u])), [unlocks]);
   const unlocked = useMemo(() => [...unlocks].sort((a, b) => b.unlocked_at_ms - a.unlocked_at_ms).flatMap((u) => (bySlug.get(u.slug) ? [{ town: bySlug.get(u.slug)!, unlock: u }] : [])), [unlocks, bySlug]);
   const counts = RARITIES.map((r) => ({ r, total: ALL.filter((t) => t.rarity === r).length, have: unlocked.filter((u) => u.town.rarity === r).length }));
+  const selectedTown = selected && unlockBySlug.has(selected) ? (bySlug.get(selected) ?? null) : null;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setHover(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setHover(null);
+      setSelected(null);
+    };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
@@ -100,12 +113,14 @@ export function Towns() {
     const d = drag.current;
     if (!d) return;
     const u = unitsPerPixel();
-    d.moved = true;
+    d.moved ||= Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > DRAG_THRESHOLD_PX;
     setView((v) => ({ ...v, tx: d.tx + (e.clientX - d.x) * u, ty: d.ty + (e.clientY - d.y) * u }));
   };
   const endDrag = () => {
+    lastDragMoved.current = drag.current?.moved ?? false;
     drag.current = null;
   };
+  const selectOnMap = (slug: string) => !lastDragMoved.current && setSelected(slug);
   const zoomCenter = (factor: number) => setView((v) => zoomAt(v, factor, WIDTH / 2, HEIGHT / 2));
   const r = (base: number) => base / view.k;
   const cardStyle = (h: Hover): React.CSSProperties => {
@@ -140,7 +155,7 @@ export function Towns() {
             {unlocked.map(({ town }) => {
               const [x, y] = project(town.lon, town.lat);
               return (
-                <g key={town.slug} className={`town-unlocked rarity-${town.rarity}`} onMouseEnter={(e) => show(town, e)} onMouseLeave={scheduleHide}>
+                <g key={town.slug} className={`town-unlocked rarity-${town.rarity}${town.slug === selected ? " town-selected" : ""}`} onMouseEnter={(e) => show(town, e)} onMouseLeave={scheduleHide} onClick={() => selectOnMap(town.slug)}>
                   <circle cx={x} cy={y} r={r(11)} className="town-ring" />
                   <circle cx={x} cy={y} r={r(6)} className="town-core" />
                 </g>
@@ -156,6 +171,7 @@ export function Towns() {
         {hover && <TownCard hover={hover} style={cardStyle(hover)} onEnter={keep} onLeave={scheduleHide} worktreeName={worktrees.find((w) => w.id === hover.unlock?.worktree_id)?.name} openWorktree={() => hover.unlock && openWorktree(hover.unlock.worktree_id)} />}
       </div>
       <div className="towns-list">
+        {selectedTown && <TownDetail key={selectedTown.slug} town={selectedTown} onClose={() => setSelected(null)} />}
         <div className="section-label">collection<span className="right">{unlocked.length} / {ALL.length}</span></div>
         <div className="rarity-row">
           {counts.map((c) => (
@@ -164,29 +180,94 @@ export function Towns() {
             </span>
           ))}
         </div>
-        {unlocked.length === 0 && <div className="towns-empty muted">Create a worktree to unlock your first town.</div>}
+        {unlocked.length === 0 && (
+          <EmptyState
+            className="compact"
+            title={townsProgress(0, ALL.length)}
+            detail="Create a worktree to discover somewhere."
+            action={<Button size="sm" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>}
+          />
+        )}
         {unlocked.map(({ town, unlock }) => {
           const w = worktrees.find((x) => x.id === unlock.worktree_id);
           return (
-            <div key={town.slug} className="town-row">
+            <div key={town.slug} className={`town-row${town.slug === selected ? " town-row-selected" : ""}`} onClick={() => setSelected(town.slug)}>
               <span className={`rarity-dot rarity-${town.rarity}`} title={town.rarity} />
               <div className="town-main">
                 <div>
-                  <button className="link town-name" onClick={() => openUrl(town.wiki).catch(() => {})}>{town.name}</button>
+                  <button className="link town-name" aria-pressed={town.slug === selected} onClick={(e) => { e.stopPropagation(); setSelected(town.slug); }}>{town.name}</button>
                   <span className="muted"> {town.ja}</span>
                 </div>
                 <div className="faint">
                   {town.pref} · {town.rarity}
-                  {w && <> · <button className="link" onClick={() => openWorktree(w.id)}>{w.name}</button></>}
-                  {" · "}{new Date(unlock.unlocked_at_ms).toLocaleDateString()}
+                  {w && <> · <button className="link" onClick={(e) => { e.stopPropagation(); openWorktree(w.id); }}>{w.name}</button></>}
+                  {" · "}{day(unlock.unlocked_at_ms)}
                 </div>
               </div>
             </div>
           );
         })}
-        <div className="faint towns-note">{ALL.length - unlockBySlug.size} towns still locked</div>
+        {unlocked.length > 0 && <div className="faint towns-note">{ALL.length - unlockBySlug.size} towns still locked</div>}
       </div>
     </div>
+  );
+}
+
+/** The factual history of one unlocked town. It keeps the last good result on screen while it refreshes. */
+function TownDetail({ town, onClose }: { town: Town; onClose: () => void }) {
+  const worktreeId = useStore((s) => s.unlocks.find((u) => u.slug === town.slug)?.worktree_id ?? null);
+  const worktreeKey = useStore((s) => {
+    const w = s.worktrees.find((x) => x.id === worktreeId);
+    return w ? `${w.archived_at_ms ?? ""}:${w.exists}:${w.head}:${w.branch ?? ""}` : "gone";
+  });
+  const [history, setHistory] = useState<TownHistory | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    rpc<TownHistory>("town_history", { slug: town.slug })
+      .then((h) => {
+        if (!live) return;
+        setHistory(h);
+        setError(null);
+      })
+      .catch((e) => live && setError((e as Error).message));
+    return () => {
+      live = false;
+    };
+  }, [town.slug, worktreeId, worktreeKey]);
+
+  const h = history;
+  const liveTree = h && (h.status === "active" || h.status === "missing");
+  return (
+    <section className="town-detail rise" aria-label={`${town.name} history`}>
+      <div className="town-detail-head">
+        <span className={`rarity-dot rarity-${town.rarity}`} />
+        <strong>{town.name}</strong>
+        <span className="muted">{town.ja}</span>
+        <IconButton label="Close town details" className="town-detail-close" onClick={onClose}><X className="icon" /></IconButton>
+      </div>
+      <div className="faint">{town.pref} · {town.kind} · {town.rarity}</div>
+      {error && <InlineError>history unavailable: {error}</InlineError>}
+      {!h && !error && <SkeletonRows count={5} className="compact" label="loading town history" />}
+      {h && (
+        <div className="town-facts">
+          <div className="kv"><label>unlocked</label><span>{day(h.unlock.unlocked_at_ms)}</span></div>
+          <div className="kv">
+            <label>worktree</label>
+            <span className="mono" title={h.worktree_name ?? undefined}>
+              {h.status === "active" ? <button className="link mono" onClick={() => openWorktree(h.unlock.worktree_id)}>{h.branch ?? h.worktree_name ?? "open"}</button> : (h.branch ?? "—")}
+            </span>
+          </div>
+          <div className="kv"><label>status</label><span>{h.status}</span></div>
+          <div className="kv"><label>{liveTree ? "head" : "final commit"}</label><span className="mono" title={h.final_commit ?? undefined}>{h.final_commit?.slice(0, 7) ?? "—"}</span></div>
+          {h.pr && <div className="kv"><label>pull request</label><span><button className="link" onClick={() => openUrl(h.pr!.url).catch(() => {})}>#{h.pr.number} {h.pr.state}</button></span></div>}
+          <div className="kv"><label>repo</label><span>{h.repo_name ?? "—"}</span></div>
+          {h.archived_at_ms != null && <div className="kv"><label>archived</label><span>{day(h.archived_at_ms)}</span></div>}
+        </div>
+      )}
+      <button className="link" onClick={() => openUrl(town.wiki).catch(() => {})}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
+    </section>
   );
 }
 
@@ -202,7 +283,7 @@ function TownCard({ hover, style, onEnter, onLeave, worktreeName, openWorktree }
       <div className="faint">{t.pref} · {t.kind} · {t.rarity}{t.population != null ? ` · ${t.population.toLocaleString()} people` : ""}</div>
       {hover.unlock && (
         <div className="faint">
-          unlocked {new Date(hover.unlock.unlocked_at_ms).toLocaleDateString()}
+          unlocked {day(hover.unlock.unlocked_at_ms)}
           {worktreeName && <> · <button className="link" onClick={openWorktree}>{worktreeName}</button></>}
         </div>
       )}

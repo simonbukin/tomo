@@ -4,7 +4,8 @@ import { rpc } from "./api";
 import { Minus, Plus } from "lucide-react";
 import { applyZoom, openWorktree, setAppearance } from "./actions";
 import { ACCENTS, type ThemeChoice } from "./appearance";
-import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Select } from "./components/ui";
+import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Select, SkeletonRows } from "./components/ui";
+import { InlineError } from "./states";
 import { notify, setState, useStore, type Dialog as DialogSpec } from "./store";
 import type { ConfigIssue, HookRun, IntegrationStatus, Repo, Town, Worktree } from "./types";
 
@@ -58,14 +59,16 @@ function AddRepo({ close }: { close: () => void }) {
   const [url, setUrl] = useState("");
   const [dest, setDest] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const add = async () => {
     setBusy(true);
+    setError(null);
     try {
       if (url.trim()) await rpc<Repo>("repo_clone", { url: url.trim(), dest: dest.trim() });
       else await rpc<Repo>("repo_add", { path: path.trim() });
       close();
     } catch (e) {
-      notify("error", (e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -85,6 +88,7 @@ function AddRepo({ close }: { close: () => void }) {
       <label>Or clone</label>
       <input className="mono" value={url} placeholder="git@github.com:org/repo.git" onChange={(e) => setUrl(e.target.value)} />
       <input className="mono" value={dest} placeholder="/destination/path" onChange={(e) => setDest(e.target.value)} />
+      {error && <InlineError>{error}</InlineError>}
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
         <Button variant="default" disabled={busy || (!path.trim() && !(url.trim() && dest.trim()))} onClick={add}>
@@ -105,6 +109,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [town, setTown] = useState<Town | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const reroll = () => rpc<Town>("town_pick").then(setTown).catch(() => setTown(null));
   useEffect(() => {
     reroll();
@@ -118,12 +123,13 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   const create = async () => {
     if (!repo || !branch.trim()) return;
     setBusy(true);
+    setError(null);
     try {
       const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, town_slug: path.trim() ? null : (town?.slug ?? null) });
       close();
       openWorktree(w.id);
     } catch (e) {
-      notify("error", (e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -163,6 +169,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
           <Button variant="link" onClick={reroll}>reroll</Button>
         </div>
       )}
+      {error && <InlineError>{error}</InlineError>}
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
         <Button variant="default" disabled={busy || !repo || !branch.trim()} onClick={create}>
@@ -173,32 +180,38 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   );
 }
 
-function useRpcList<T>(method: string, params?: Record<string, unknown>): { items: T[] | null; reload: () => void } {
+function useRpcList<T>(method: string, params?: Record<string, unknown>): { items: T[] | null; error: string | null; reload: () => void } {
   const [items, setItems] = useState<T[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const reload = () =>
     rpc<T[]>(method, params)
-      .then(setItems)
+      .then((list) => {
+        setError(null);
+        setItems(list);
+      })
       .catch((e) => {
-        notify("error", (e as Error).message);
+        setError((e as Error).message);
         setItems([]);
       });
   useEffect(() => {
     reload();
   }, [method]);
-  return { items, reload };
+  return { items, error, reload };
 }
 
 function IntegrationsDialog({ close }: { close: () => void }) {
-  const { items, reload } = useRpcList<IntegrationStatus>("integrations_status");
+  const { items, error, reload } = useRpcList<IntegrationStatus>("integrations_status");
   const [busy, setBusy] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
   const install = async () => {
     setBusy(true);
+    setInstallError(null);
     try {
       await rpc("integrations_install");
       notify("info", "hooks installed");
       reload();
     } catch (e) {
-      notify("error", (e as Error).message);
+      setInstallError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -206,8 +219,9 @@ function IntegrationsDialog({ close }: { close: () => void }) {
   return (
     <>
       <DialogTitle>integration status</DialogTitle>
+      {(error || installError) && <InlineError>{installError ?? error}</InlineError>}
       <div className="dialog-list">
-        {items === null && <div className="faint">checking…</div>}
+        {items === null && <SkeletonRows count={3} className="compact" label="checking integrations" />}
         {items?.map((i) => (
           <div key={i.kind} className="dialog-row" title={i.binary ?? "binary not found"}>
             <span className={`state state-${i.level}`} />
@@ -232,13 +246,14 @@ function IntegrationsDialog({ close }: { close: () => void }) {
 }
 
 function ConfigCheckDialog({ close }: { close: () => void }) {
-  const { items } = useRpcList<ConfigIssue>("config_check");
+  const { items, error } = useRpcList<ConfigIssue>("config_check");
   return (
     <>
       <DialogTitle>config check</DialogTitle>
+      {error && <InlineError>{error}</InlineError>}
       <div className="dialog-list">
-        {items === null && <div className="faint">checking…</div>}
-        {items?.length === 0 && <div className="muted">no issues</div>}
+        {items === null && <SkeletonRows count={3} className="compact" label="checking config" />}
+        {items?.length === 0 && !error && <div className="muted">no issues</div>}
         {items?.map((i, n) => (
           <div key={`${i.key}-${n}`} className="dialog-row">
             <span className={`state state-${i.level}`} />
@@ -257,14 +272,15 @@ function ConfigCheckDialog({ close }: { close: () => void }) {
 }
 
 function HookLogDialog({ close }: { close: () => void }) {
-  const { items } = useRpcList<HookRun>("hook_log", { limit: 20 });
+  const { items, error } = useRpcList<HookRun>("hook_log", { limit: 20 });
   const [open, setOpen] = useState<number | null>(null);
   return (
     <>
       <DialogTitle>hook log</DialogTitle>
+      {error && <InlineError>{error}</InlineError>}
       <div className="dialog-list">
-        {items === null && <div className="faint">loading…</div>}
-        {items?.length === 0 && <div className="muted">no hook runs yet</div>}
+        {items === null && <SkeletonRows count={3} className="compact" label="loading hook runs" />}
+        {items?.length === 0 && !error && <div className="muted">no hook runs yet</div>}
         {items?.map((r, n) => (
           <div key={`${r.started_at_ms}-${n}`} className="dialog-row hook-row" onClick={() => setOpen(open === n ? null : n)}>
             <span className={`state state-${r.ok ? "ok" : "fail"}`} />

@@ -1365,7 +1365,7 @@ impl Daemon {
     }
 
     async fn archive_worktree(self: &Arc<Self>, worktree_id: &str, checkpoint: CheckpointMode) -> Result<Value, RpcError> {
-        let (path, repo_path, branch, name, event) = {
+        let (path, repo_path, branch, name, event, head) = {
             let mut inner = self.lock();
             let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.clone();
             if w.is_main {
@@ -1382,7 +1382,7 @@ impl Daemon {
             let worktrees = Self::worktree_views(&inner);
             Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
             let event = events::envelope(&inner, "worktree.before_archive", Some(worktree_id));
-            (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), Self::worktree_view(&inner, &w).name, event)
+            (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), Self::worktree_view(&inner, &w).name, event, w.head.clone())
         };
         let result = self.archive_steps(worktree_id, &path, &repo_path, &branch, &name, event, checkpoint).await;
         let mut inner = self.lock();
@@ -1394,7 +1394,7 @@ impl Daemon {
                 let title = format!("{} archived", Self::worktree_name(&inner, worktree_id));
                 let mut ev = activity::event(ActivityKind::Archived, Some(worktree_id), title);
                 ev.detail = result.checkpoint_commit.as_ref().map(|c| format!("checkpoint {}", &c[..c.len().min(7)]));
-                ev.payload = json!({ "branch": result.branch, "checkpoint_commit": result.checkpoint_commit });
+                ev.payload = json!({ "branch": result.branch, "checkpoint_commit": result.checkpoint_commit, "head": head });
                 Self::record(&mut inner, ev);
                 let worktrees = Self::worktree_views(&inner);
                 Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
@@ -2300,6 +2300,15 @@ impl Daemon {
             Call::TownList => {
                 let unlocks = self.lock().store.town_unlocks().map_err(internal)?;
                 Ok(json!({ "towns": towns::all(), "unlocks": unlocks }))
+            }
+            Call::TownHistory { slug } => {
+                let inner = self.lock();
+                let unlock = inner.store.town_unlocks().map_err(internal)?.into_iter().find(|u| u.slug == slug).ok_or_else(|| err(ErrorCode::NotFound, format!("town {slug} is not unlocked")))?;
+                let events = inner.store.activity_list(&ActivityQuery { limit: Some(1000), worktree_id: Some(unlock.worktree_id.clone()), ..Default::default() }).map_err(internal)?;
+                let repo_name = inner.repos.iter().find(|r| r.id == unlock.repo_id).map(|r| r.name.clone());
+                let worktree = inner.worktrees.get(&unlock.worktree_id).map(|w| towns::WorktreeFacts { name: Self::worktree_view(&inner, w).name, branch: w.branch.clone(), head: w.head.clone(), exists: w.exists, archived_at_ms: w.archived_at_ms });
+                let pr = inner.prs.get(&unlock.worktree_id).and_then(|p| p.pr.as_ref());
+                ok(towns::history(unlock, repo_name, worktree, &events, pr))
             }
             Call::TownPick => {
                 let unlocked: HashSet<String> = self.lock().store.town_unlocks().map_err(internal)?.into_iter().map(|u| u.slug).collect();

@@ -2,7 +2,10 @@ import { ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { Wordmark } from "./Brand";
 import { useMemo, useState } from "react";
 import { openWorktree, setMetadata } from "./actions";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
+import { homeEmpty } from "./emptyStates";
+import { RowError } from "./RowError";
+import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
 import { worktreeMenu } from "./menus";
@@ -23,6 +26,7 @@ export function Home() {
   const visible = sortWorktrees(filterWorktrees(s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)), o, ctx), o.sort, ctx);
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
+  const empty = homeEmpty(s.repos.length, s.worktrees.filter((w) => !w.archived_at_ms).length, visible.length);
   const [over, setOver] = useState<string | null>(null);
   const stateIdOf = (key: string) => (key === NO_STATE ? null : orderedStates(ctx.states).find((st) => st.label === key)?.id ?? key);
   const dropTo = (key: string, e: React.DragEvent) => {
@@ -95,13 +99,14 @@ export function Home() {
         <span className="spacer" />
         <span className="faint">{visible.length} of {s.worktrees.length}</span>
       </div>
-      {s.worktrees.length === 0 && (
+      {empty === "no-repos" && (
         <div className="home-empty rise">
           <Wordmark height={28} />
-          <p>No worktrees yet.</p>
-          <button onClick={() => setState({ dialog: { kind: "add-repo" } })}>Add a repository</button>
+          <EmptyState title="No repositories yet." detail="Add a Git repository. Tomo finds its worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "add-repo" } })}>Add repository</Button>} />
         </div>
       )}
+      {empty === "no-worktrees" && <EmptyState title="No active worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>} />}
+      {empty === "no-matches" && <EmptyState title="No worktrees match." action={<Button variant="link" onClick={() => set({ query: "", filters: [] })}>clear search and filters</Button>} />}
       {o.view === "board" ? (
         <div className="board">
           {groups.map((g) => (
@@ -152,6 +157,7 @@ function Row({ w }: { w: Worktree }) {
       <span className="muted">{busy ? "archiving…" : archived ? "archived" : (state ?? "")}</span>
       <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
       <span className="agents">
+        <RowError worktreeId={w.id} />
         {!archived && <Signals worktreeId={w.id} className="signals" />}
         {w.metadata.tags.length > 0 && <span className="tag">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
       </span>
@@ -187,6 +193,7 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
       </div>
       <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>
       {!archived && <Signals worktreeId={w.id} className="card-signals" />}
+      <RowError worktreeId={w.id} />
       {g && (g.insertions > 0 || g.deletions > 0) && (
         <div className="card-foot">
           <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>

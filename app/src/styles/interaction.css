@@ -1,0 +1,63 @@
+/* Interaction pass: motion, focus, hit targets, scroll, skeletons, empty and error states.
+   Durations come from the motion block in tokens.css. The reduced-motion guard in base.css and tokens.css applies. */
+
+/* ---- hover, press, open, close */
+button, .btn { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out), transform var(--dur-press) var(--ease-out), opacity var(--dur-hover) var(--ease-out); }
+button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disabled):not(.btn-link):active { transform: scale(var(--press-scale)); }
+.wt-row, .wt-list-row, .card, .town-row, .activity-row, .file-row, .session-row { transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
+.wt-row:active, .wt-list-row:active, .town-row:active, .file-row:active { background: var(--bg-2); }
+.tab { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), box-shadow var(--dur-open) var(--ease-out); }
+.tab:active { background: var(--bg-1); }
+.seg { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.menu-item, .select-item { transition: background-color var(--dur-press) var(--ease-out), color var(--dur-press) var(--ease-out); }
+.menu-popup, .popover, .select-popup, .dialog, .dialog-backdrop { transition-timing-function: var(--ease-out); transition-duration: var(--dur-open); }
+.menu-popup[data-ending-style], .popover[data-ending-style], .select-popup[data-ending-style], .dialog[data-ending-style], .dialog-backdrop[data-ending-style], .tip[data-ending-style] { transition-duration: var(--dur-close); transition-timing-function: var(--ease-in); }
+.board-col { transition: outline-color var(--dur-hover) var(--ease-out), background-color var(--dur-hover) var(--ease-out); }
+.board-col-over { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.signal-attention, .attention-btn { animation: rise var(--dur-open) var(--ease-out) both; }
+
+/* ---- focus: a subtle Murasaki ring on every control; a clear border on the focused pane */
+:focus-visible { outline: var(--focus-ring-width) solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
+.wt-row:focus-visible, .wt-list-row:focus-visible, .town-row:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
+.pane { border-color: var(--line); transition: border-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out); }
+.pane-active { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+.split .pane:not(.pane-active) .pane-legend .chip strong { color: var(--fg-2); }
+
+/* ---- hit targets: compact visuals, at least --hit-min of clickable area */
+.btn-icon, button.link, .btn-link, .repo-toggle { position: relative; }
+.btn-icon::before, button.link::before, .btn-link::before, .repo-toggle::before { content: ""; position: absolute; inset: 50% auto auto 50%; width: max(100%, var(--hit-min)); height: max(100%, var(--hit-min)); transform: translate(-50%, -50%); }
+.seg { min-height: 22px; }
+.resize-handle { width: 8px; }
+.resize-left { right: -4px; }
+.resize-right { left: -4px; }
+.splitter::before { content: ""; position: absolute; }
+.splitter-horizontal::before { inset: 0 -2px; }
+.splitter-vertical::before { inset: -2px 0; }
+
+/* ---- scroll: lists scroll inside their panel and do not chain to the page */
+.home, .activity, .towns-list, .sidebar-scroll, .rightbar, .file-tree, .dialog-list, .menu-popup, .select-list, .hook-out { overscroll-behavior: contain; }
+.towns-list, .activity, .home { scroll-padding-bottom: var(--sp-5); }
+
+/* ---- skeletons */
+@keyframes skeleton-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.skeleton { display: block; height: 10px; border-radius: var(--radius-sm); background: var(--bg-2); animation: skeleton-pulse 1.4s ease-in-out infinite; }
+.skeleton-rows { display: flex; flex-direction: column; }
+.skeleton-row { display: flex; align-items: center; height: 30px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line); }
+.skeleton-rows.compact .skeleton-row { height: 22px; border-bottom: none; padding: 0; }
+.shell-loading { flex: 1; padding: var(--sp-3) var(--sp-4); }
+.map-loading .towns-map { align-items: stretch; }
+.map-skeleton { flex: 1; height: auto; border-radius: var(--radius-md); background: var(--bg-1); }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* ---- empty and error states */
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); padding: 64px var(--sp-4); text-align: center; color: var(--fg-2); }
+.empty-state p { margin: 0; }
+.empty-title { color: var(--fg-1); font-size: var(--fs-3); }
+.empty-detail { font-size: var(--fs-1); color: var(--fg-2); max-width: 360px; }
+.empty-state.compact { align-items: flex-start; text-align: left; padding: var(--sp-3) 0; }
+.inline-error { margin: 0; padding: var(--sp-1) var(--sp-2); border-left: 2px solid var(--hot); background: var(--hot-soft); color: var(--hot); font-size: var(--fs-1); user-select: text; word-break: break-word; }
+.row-error { background: none; border: none; padding: 0 4px; font-size: var(--fs-0); color: var(--hot); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.row-error:hover { background: var(--hot-soft); }
+
+/* ---- window chrome: drag from empty title bar space; no traffic-light inset in fullscreen */
+:root[data-fullscreen] .titlebar { padding-left: var(--sp-3); }

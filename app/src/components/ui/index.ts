@@ -25,4 +25,5 @@ export {
 export { Popover, PopoverClose, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "./popover";
 export { Select, type SelectOption, type SelectProps } from "./select";
 export { Separator } from "./separator";
+export { Skeleton, SkeletonRows, type SkeletonProps } from "./skeleton";
 export { Tooltip, TooltipProvider, type TooltipSide } from "./tooltip";

@@ -6,6 +6,7 @@ import { stateLabel } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
 import { overflowMenu, runningActionItems } from "./menus";
+import { RowError } from "./RowError";
 import { endpointsOf, liveEndpointFor, runningActionIds, setState, useStore } from "./store";
 import { rpc } from "./api";
 import { useEffect } from "react";
@@ -32,6 +33,7 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
             {state}
           </span>
         )}
+        <RowError worktreeId={w.id} />
         <ActionBar worktree={w} />
       </div>
       <CheckpointBanner worktree={w} />

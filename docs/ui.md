@@ -104,6 +104,7 @@ header only.
 | `Tooltip`, `TooltipProvider` | `tooltip.tsx` | `Tooltip` |
 | `Select` | `select.tsx` | `Select` |
 | `Separator` | `separator.tsx` | `Separator` |
+| `Skeleton`, `SkeletonRows` | `skeleton.tsx` | none |
 
 `MenuItems` renders the declarative `MenuItem[]` shape that `menus.ts`
 builds. Pass a function so the items are computed when the menu opens.
@@ -123,8 +124,71 @@ shortcuts. Murasaki `--accent` marks active state, selection, and focus only.
 Semantic colors (`--working`, `--waiting`, `--hot`, `--ins`, `--del`) keep
 their meaning everywhere.
 
-Spacing uses 4, 8, 12, 16. Radius is 3 to 6 px. Motion is 80 to 140 ms and
+Spacing uses 4, 8, 12, 16. Radius is 3 to 6 px. Motion is 80 to 150 ms and
 only for floating surfaces and small state changes.
+
+### Motion tokens
+
+The motion block at the end of `tokens.css` holds the curves and the named
+moments. It has no colors. `--dur-fast` (80 ms) and `--dur` (140 ms) stay
+the base.
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | hover, press, open |
+| `--ease-in` | `cubic-bezier(0.4, 0, 1, 1)` | close |
+| `--dur-hover` | 100 ms | background and color on hover |
+| `--dur-press` | 80 ms | the press scale (`--press-scale`, 0.97) |
+| `--dur-open` | 140 ms | menus, popovers, dialogs, attention arrival |
+| `--dur-close` | 100 ms | the same surfaces when they close |
+| `--dur-reveal` | 150 ms | the town reveal |
+| `--hit-min` | 24 px | the smallest clickable area |
+| `--focus-ring-width` | 2 px | the focus ring |
+
+Under `prefers-reduced-motion: reduce` every duration is 0 and the press
+scale is 1. The guard in `base.css` also stops every animation. No springs,
+no bounce. `styles/interaction.css` applies the tokens.
+
+## States
+
+- **Loading.** Use `Skeleton` or `SkeletonRows` from `components/ui` in the
+  place where the content will be. Never a full-screen spinner and never a
+  bare `loading…` line. Data that is already on screen stays on screen
+  while it refreshes.
+- **Empty.** Use `EmptyState` from `app/src/states.tsx`: one short sentence,
+  an optional detail, at most one action. Home shows `No repositories yet.`,
+  `No active worktrees.`, or `No worktrees match.`; Activity shows
+  `No activity yet.` or `Nothing needs you.`; Towns shows
+  `0 / 1681 municipalities unlocked.` The copy lives in `emptyStates.ts`.
+- **Error.** Show the error on the object that failed. A dialog shows
+  `InlineError` above its buttons. A failed archive, restore, or Action run
+  puts `× archive failed` on the worktree row in the sidebar, on Home, and in
+  the worktree header (`RowError`, `setRowError` in the store). Hover shows
+  the message, a click dismisses it, and the next success clears it. A toast
+  can also show, but never alone.
+
+## Focus, hit targets, and scroll
+
+- Every control shows a subtle accent ring on `:focus-visible`.
+- The focused pane has an accent border and a 1 px accent halo. The other
+  panes in a split have a quiet border and a dimmed title.
+- An icon button, a text link, and a disclosure toggle get an invisible hit
+  area of at least 24 px. The visual size stays compact. Resize handles are
+  8 px wide.
+- Lists scroll inside their panel with `overscroll-behavior: contain`. The
+  page itself never scrolls. Home rows drop the branch and diff columns
+  below 760 px, so Home has no horizontal scroll bar.
+
+## Window chrome
+
+- The title bar is a drag region (`data-tauri-drag-region`) on its empty
+  space, the title text, and the offline label. Buttons in it do not drag.
+- `useWindowChrome` in `app/src/windowChrome.ts` sets `data-fullscreen` on
+  the root in native fullscreen. The title bar then drops the 84 px
+  traffic-light inset.
+- When the window gets focus back and nothing holds focus, the active pane
+  of the active tab gets focus (`paneToRestore`). An open dialog, the
+  palette, or a focused input keeps focus.
 
 ## CSS layout
 
@@ -141,6 +205,7 @@ styles/
   palette.css   command palette
   towns.css     Japan map
   activity.css  activity feed and usage strip
+  interaction.css  motion, focus, hit targets, scroll, skeleton, empty and error states
 ```
 
 ## Torture page

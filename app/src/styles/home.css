@@ -1,6 +1,12 @@
 /* Home: dense list rows and a state board. Not project-management software. */
 
-.home { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); }
+.home { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); container-type: inline-size; }
+.home-empty .empty-state { padding: 0; }
+.card .row-error { align-self: flex-start; margin-left: 18px; }
+@container (max-width: 760px) {
+  .wt-list-row { grid-template-columns: 14px minmax(120px, 1.4fr) minmax(70px, 0.8fr) minmax(64px, 0.7fr) minmax(0, 1.6fr); }
+  .wt-list-row .branch, .wt-list-row .runtime { display: none; }
+}
 .home-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .home-search { flex: 1; min-width: 240px; display: flex; align-items: center; gap: var(--sp-2); background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0 var(--sp-2); }
 .home-search .icon { color: var(--fg-3); }

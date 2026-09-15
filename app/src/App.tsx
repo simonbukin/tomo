@@ -19,6 +19,9 @@ import { TabBar } from "./Tabs";
 import { focusTerminal } from "./terminals";
 import type { Snapshot } from "./types";
 import { WorktreeHeader } from "./WorktreeHeader";
+import { MapLoading, ShellLoading } from "./states";
+import { TownReveal } from "./TownReveal";
+import { useWindowChrome } from "./windowChrome";
 
 const Towns = lazy(() => import("./Towns").then((m) => ({ default: m.Towns })));
 const tortureRoute = import.meta.env.DEV && window.location.hash === "#ui-torture";
@@ -50,6 +53,7 @@ function Shell() {
   const notice = useStore((s) => s.notice);
   const attention = useStore((s) => needsMe(s).length);
   const config = useStore((s) => s.config);
+  useWindowChrome();
 
   useEffect(() => {
     const offFrame = onFrame(applyFrame);
@@ -127,7 +131,7 @@ function Shell() {
             <span className="state state-waiting" /> {attention} need you
           </Button>
         )}
-        {!connected && <span className="conn-bad">daemon offline</span>}
+        {!connected && <span className="conn-bad" data-tauri-drag-region>daemon offline</span>}
         {appearance.zoom !== 1 && (
           <Button variant="ghost" size="sm" className="zoom-chip" onClick={() => applyZoom("reset")}>
             {Math.round(appearance.zoom * 100)}%
@@ -150,9 +154,9 @@ function Shell() {
       </div>
       {ui.leftOpen && <Sidebar />}
       <main className="center">
-        {!loaded && <div className="center-empty muted">{connected ? "Loading…" : "Starting tomod…"}</div>}
+        {!loaded && <ShellLoading connected={connected} />}
         {loaded && !showWorktree && ui.view === "towns" && (
-          <Suspense fallback={<div className="center-empty muted">loading map…</div>}>
+          <Suspense fallback={<MapLoading />}>
             <Towns />
           </Suspense>
         )}
@@ -169,6 +173,7 @@ function Shell() {
       {ui.rightOpen && showWorktree && <RightSidebar worktree={worktree} />}
       <Palette />
       <Dialogs />
+      <TownReveal />
       {notice && (
         <div key={notice.nonce} className={`toast toast-${notice.level}`} role="status">
           {notice.message}
