@@ -1,13 +1,17 @@
+import { SortableContext } from "@dnd-kit/sortable";
 import { Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { activateTab, closeTab } from "./actions";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems } from "./components/ui";
+import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./components/ui";
+import { keepInPlace, useTabSortable } from "./LayoutDnd";
 import { openMenu } from "./MenuHost";
 import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { paneIds, useStore } from "./store";
 import type { Id, Pane, Tab } from "./types";
+
+const TAIL_LINES = 8;
 
 function leadPane(tab: Tab, panes: Record<Id, Pane>): Pane | undefined {
   const ids = paneIds(tab.layout);
@@ -15,67 +19,24 @@ function leadPane(tab: Tab, panes: Record<Id, Pane>): Pane | undefined {
   return agent ?? panes[tab.active_pane_id ?? ids[0] ?? ""];
 }
 
+type Editing = { id: Id; value: string } | null;
+
 export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const tabs = useStore((s) => s.tabs[worktreeId]) ?? [];
-  const panes = useStore((s) => s.panes);
-  const [editing, setEditing] = useState<{ id: Id; value: string } | null>(null);
+  const [editing, setEditing] = useState<Editing>(null);
 
   const commit = () => {
     if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(() => {});
     setEditing(null);
   };
 
-  const waiting = (tab: Tab) => Object.values(panes).some((p) => p.tab_id === tab.id && p.agent?.state === "waiting");
-
   return (
     <div className="tabbar" role="tablist">
-      {tabs.map((t) => {
-        const lead = leadPane(t, panes);
-        return (
-          <div
-            key={t.id}
-            role="tab"
-            aria-selected={t.is_active}
-            className={`tab${t.is_active ? " tab-active" : ""}`}
-            onMouseDown={(e) => {
-              if (e.button === 1) closeTab(t.id);
-              else if (!editing) activateTab(t.id);
-            }}
-            onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
-            onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
-          >
-            {waiting(t) ? <span className="state state-waiting" /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
-            {editing?.id === t.id ? (
-              <input
-                autoFocus
-                className="tab-edit"
-                value={editing.value}
-                onChange={(e) => setEditing({ id: t.id, value: e.target.value })}
-                onBlur={commit}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commit();
-                  if (e.key === "Escape") setEditing(null);
-                }}
-              />
-            ) : (
-              <span className="tab-title">{t.title}</span>
-            )}
-            {tabs.length > 1 && (
-              <IconButton
-                label="Close tab"
-                className="tab-close"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(t.id);
-                }}
-              >
-                <X className="icon" />
-              </IconButton>
-            )}
-          </div>
-        );
-      })}
+      <SortableContext items={tabs.map((t) => t.id)} strategy={keepInPlace}>
+        {tabs.map((t) => (
+          <TabItem key={t.id} tab={t} closable={tabs.length > 1} editing={editing} setEditing={setEditing} commit={commit} />
+        ))}
+      </SortableContext>
       <DropdownMenu>
         <DropdownMenuTrigger render={<IconButton label="New tab: terminal, browser, or agent" className="tab-new" />}>
           <Plus className="icon" />
@@ -85,5 +46,89 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; closable: boolean; editing: Editing; setEditing: (e: Editing) => void; commit: () => void }) {
+  const lead = useStore((s) => leadPane(t, s.panes));
+  const waiting = useStore((s) => paneIds(t.layout).some((id) => s.panes[id]?.agent?.state === "waiting"));
+  const isEditing = editing?.id === t.id;
+  const drag = useTabSortable(t.id, isEditing);
+  const [preview, setPreview] = useState(false);
+
+  const el = (
+    <div
+      ref={drag.ref}
+      {...drag.props}
+      role="tab"
+      aria-selected={t.is_active}
+      style={drag.style}
+      className={cx("tab", t.is_active && "tab-active", drag.className)}
+      onMouseDown={(e) => {
+        if (e.button === 1) closeTab(t.id);
+        else if (!editing) activateTab(t.id);
+      }}
+      onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
+      onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
+    >
+      {waiting ? <span className="state state-waiting" /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
+      {isEditing ? (
+        <input
+          autoFocus
+          className="tab-edit"
+          value={editing.value}
+          onChange={(e) => setEditing({ id: t.id, value: e.target.value })}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(null);
+          }}
+        />
+      ) : (
+        <span className="tab-title">{t.title}</span>
+      )}
+      {closable && (
+        <IconButton
+          label="Close tab"
+          className="tab-close"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            closeTab(t.id);
+          }}
+        >
+          <X className="icon" />
+        </IconButton>
+      )}
+    </div>
+  );
+
+  if (t.is_active || !lead || lead.kind === "browser") return el;
+  return (
+    <PreviewCard open={preview && !drag.busy} onOpenChange={setPreview}>
+      <PreviewCardTrigger render={el} />
+      <PreviewCardContent className="tab-tail">
+        <TabTail paneId={lead.id} title={t.title} />
+      </PreviewCardContent>
+    </PreviewCard>
+  );
+}
+
+function TabTail({ paneId, title }: { paneId: Id; title: string }) {
+  const [lines, setLines] = useState<string[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    rpc<string[]>("pane_tail", { pane_id: paneId, lines: TAIL_LINES })
+      .then((l) => live && setLines(l))
+      .catch(() => live && setLines([]));
+    return () => {
+      live = false;
+    };
+  }, [paneId]);
+  return (
+    <>
+      <div className="popover-title">{title}</div>
+      <pre className="tab-tail-lines">{lines === null ? "…" : lines.length ? lines.join("\n") : "no output yet"}</pre>
+    </>
   );
 }

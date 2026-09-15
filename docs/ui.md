@@ -91,6 +91,43 @@ header only.
 - The usage strip draws one `[█████░░░░░]` spark per bucket. Pi has no
   row: it runs on the Claude allowance.
 
+## Tabs, panes, and dividers
+
+- Drag a tab to reorder it. The other tabs stay in place; an accent line
+  shows where the tab lands. The strip changes at once, then the
+  `tabs_changed` snapshot from `tab_move` wins. The order persists.
+- Drag a pane by its title chip in the legend. The terminal body never
+  starts a drag, so text selection works as before. While the drag is
+  active, the pane under the pointer shows where the pane lands: the outer
+  quarter of each side splits that side (`split left`, `split right`,
+  `split up`, `split down`), the middle swaps the two panes. Escape cancels.
+- Drop a pane on another tab to add it to that tab as a right split. If
+  the pane was the last one of its tab, that empty tab closes; no process
+  stops. A tab that already holds `max_panes_per_tab` panes refuses the
+  drop. Panes never move to another worktree.
+- A drop always calls `pane_move`, which uses the same split-tree
+  functions as the commands. `LayoutDnd.tsx` holds the one drag context
+  for the tab strip and the split layout. `layoutModel.ts` holds the pure
+  helpers (drop region from the pointer, tab reorder) with unit tests.
+- Known limit: a browser pane has no drag handle and is not a drop
+  target. Its body is a native webview that does not get pointer events
+  from the Tomo window.
+- Dividers are invisible until hover. The grab area is 8 px wider than
+  the line. Double-click a divider to set that split to 50/50.
+- Rest the pointer on a background terminal tab to see the last lines of
+  its output (`pane_tail`, plain text, no terminal rendering).
+- Home board: drag a card to another state column. This only sets
+  `worktree.state`. The order inside a column stays the configured sort.
+
+Keyboard parity (palette groups `Tabs` and `Panes`, defaults in
+[data-model.md](data-model.md)): `move_tab_left`, `move_tab_right`,
+`move_pane_left/right/up/down` (swap with the neighbor in that direction),
+and `equalize_splits`.
+
+The torture page (`#ui-torture`) has a tab strip and a nested pane grid on
+local state. Use it to try every drop region, a drop on self, a cancel, and
+a small window.
+
 ## Primitives
 
 | Component | File | Base UI part |
@@ -101,6 +138,7 @@ header only.
 | `Dialog*` | `dialog.tsx` | `Dialog` |
 | `ConfirmDialog` | `confirm-dialog.tsx` | `Dialog` |
 | `Popover*` | `popover.tsx` | `Popover` |
+| `PreviewCard*` | `preview-card.tsx` | `PreviewCard` |
 | `Tooltip`, `TooltipProvider` | `tooltip.tsx` | `Tooltip` |
 | `Select` | `select.tsx` | `Select` |
 | `Separator` | `separator.tsx` | `Separator` |

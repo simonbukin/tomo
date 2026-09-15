@@ -33,6 +33,81 @@ impl Scrollback {
     pub fn snapshot(&self) -> Vec<u8> {
         self.bytes.clone()
     }
+
+    pub fn plain_tail(&self, lines: usize) -> Vec<String> {
+        plain_tail(&self.bytes, lines)
+    }
+}
+
+const TAIL_WINDOW: usize = 64 * 1024;
+
+/// The last `lines` non-empty lines as plain text. Escape sequences are removed and
+/// carriage returns and backspaces overwrite, as a terminal would show a line.
+pub fn plain_tail(bytes: &[u8], lines: usize) -> Vec<String> {
+    let window = match bytes.len().checked_sub(TAIL_WINDOW) {
+        Some(start) => bytes[start..].iter().position(|&b| b == b'\n').map_or(&[][..], |nl| &bytes[start + nl + 1..]),
+        None => bytes,
+    };
+    let text = String::from_utf8_lossy(&strip_escapes(window)).into_owned();
+    let rendered: Vec<String> = text.split('\n').map(render_line).filter(|l| !l.is_empty()).collect();
+    rendered[rendered.len().saturating_sub(lines)..].to_vec()
+}
+
+fn render_line(raw: &str) -> String {
+    let mut cells: Vec<char> = Vec::new();
+    let mut cursor = 0usize;
+    for c in raw.chars() {
+        match c {
+            '\r' => cursor = 0,
+            '\u{8}' => cursor = cursor.saturating_sub(1),
+            c if cursor < cells.len() => {
+                cells[cursor] = c;
+                cursor += 1;
+            }
+            c => {
+                cells.push(c);
+                cursor += 1;
+            }
+        }
+    }
+    cells.into_iter().collect::<String>().trim_end().to_string()
+}
+
+fn strip_escapes(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b != 0x1b {
+            if b >= 0x20 || matches!(b, b'\n' | b'\r' | b'\t' | 0x08) {
+                out.push(if b == b'\t' { b' ' } else { b });
+            }
+            i += 1;
+            continue;
+        }
+        let rest = &bytes[i + 1..];
+        let (len, replacement): (usize, &[u8]) = match rest.first() {
+            Some(b'[') => match rest.iter().skip(1).position(|c| (0x40..=0x7e).contains(c)) {
+                Some(p) => (p + 3, if rest[p + 1] == b'C' { b" " } else { b"" }),
+                None => (bytes.len() - i, b""),
+            },
+            Some(b']') | Some(b'P') | Some(b'X') | Some(b'^') | Some(b'_') => {
+                let body = &rest[1..];
+                let end = body.iter().enumerate().find_map(|(j, &c)| match c {
+                    0x07 => Some(j + 1),
+                    0x1b if body.get(j + 1) == Some(&b'\\') => Some(j + 2),
+                    _ => None,
+                });
+                (end.map_or(bytes.len() - i, |e| e + 2), b"")
+            }
+            Some(b'(') | Some(b')') | Some(b'*') | Some(b'+') => (3, b""),
+            Some(_) => (2, b""),
+            None => (1, b""),
+        };
+        out.extend_from_slice(replacement);
+        i = (i + len).min(bytes.len());
+    }
+    out
 }
 
 /// Removes escape sequences that ask the terminal to reply. Replaying them
@@ -176,6 +251,18 @@ impl PtySession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_tail_strips_escapes_and_applies_overwrites() {
+        let out = b"\x1b]0;title\x07\x1b[1;32mready\x1b[0m on http://localhost:5173\r\n\r\n50%\r100%\r\nab\x08c\r\n\x1b(Bone\x1b[2Ctwo\x1bP+q\x1b\\\r\nwatching...  \r\n";
+        assert_eq!(plain_tail(out, 8), ["ready on http://localhost:5173", "100%", "ac", "one two", "watching..."]);
+        assert_eq!(plain_tail(out, 2), ["one two", "watching..."]);
+        assert!(plain_tail(b"", 5).is_empty());
+        assert_eq!(plain_tail(b"unterminated \x1b[12", 5), ["unterminated"]);
+        let mut big = vec![b'x'; TAIL_WINDOW * 2];
+        big.extend_from_slice(b"\nlast line\n");
+        assert_eq!(plain_tail(&big, 3), ["last line"]);
+    }
 
     #[test]
     fn scrollback_keeps_recent_tail() {

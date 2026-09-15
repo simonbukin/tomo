@@ -145,7 +145,7 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | The only synchronous hook             | `Daemon::gate` (`worktree.before_archive`) |
 | Which states are valid                | `config.states`, checked in `MetadataSet` |
 | Config validation                     | `config::check`                         |
-| Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate}` |
+| Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Town naming and unlocks               | `features::towns`, `WorktreeCreate` handler |
 | What `.tomo.toml` accepts             | `features::actions::parse`              |
 | How an action runs, reuses, or stops  | `Daemon::run_action`, `Daemon::stop_action` |

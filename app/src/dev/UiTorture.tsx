@@ -1,5 +1,9 @@
+import { SortableContext } from "@dnd-kit/sortable";
 import { Bold, Ellipsis, Info, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { keepInPlace, LayoutDnd, PaneDropZone, usePaneDrag, useTabSortable } from "../LayoutDnd";
+import { movePane, reorder } from "../layoutModel";
+import type { LayoutNode } from "../types";
 import {
   Button,
   ConfirmDialog,
@@ -119,6 +123,8 @@ export function UiTorture() {
         </ContextMenuContent>
       </ContextMenu>
 
+      <LayoutTorture say={say} />
+
       <pre className="mono" style={{ margin: 0, fontSize: 11, color: "var(--fg-2)", minHeight: 120 }}>{log.join("\n") || "(events show here)"}</pre>
 
       {corner("top-left", { top: 8, left: 8 })}
@@ -139,6 +145,81 @@ export function UiTorture() {
         </DialogContent>
       </Dialog>
       <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Delete the thing?" description="This cannot be undone." confirmLabel="Delete" destructive check="also delete the backup" onConfirm={(c) => say(`confirmed, checkbox=${c}`)} />
+    </div>
+  );
+}
+
+const leaf = (pane_id: string): LayoutNode => ({ type: "leaf", pane_id });
+const INITIAL_LAYOUT: LayoutNode = {
+  type: "split", id: "s1", direction: "horizontal", ratio: 0.5,
+  first: leaf("claude"),
+  second: { type: "split", id: "s2", direction: "vertical", ratio: 0.5, first: leaf("shell"), second: { type: "split", id: "s3", direction: "horizontal", ratio: 0.5, first: leaf("app"), second: leaf("a pane with a very long name that must truncate") } },
+};
+
+/** Tab strip and pane grid on local state: drag tabs to reorder, drag a pane chip onto a pane or a tab. */
+function LayoutTorture({ say }: { say: (m: string) => void }) {
+  const [tabs, setTabs] = useState(["Claude", "shell", "App", "Sampler", "a tab with a very long title that must truncate"]);
+  const [layout, setLayout] = useState(INITIAL_LAYOUT);
+  const splits = useRef(0);
+  return (
+    <LayoutDnd
+      onTabMove={(id, position) => {
+        setTabs((t) => reorder(t, id, position));
+        say(`tab_move ${id} → ${position}`);
+      }}
+      onPaneMove={(pane, target, place) => {
+        if ("tabId" in target) return say(`pane_move ${pane} → tab ${target.tabId}`);
+        splits.current += 1;
+        setLayout((l) => movePane(l, pane, target.paneId, place, `m${splits.current}`) ?? l);
+        say(`pane_move ${pane} → ${target.paneId} ${place}`);
+      }}
+    >
+      <div style={{ border: "1px dashed var(--line-strong)", borderRadius: 4, display: "flex", flexDirection: "column", height: 380, resize: "both", overflow: "hidden", minWidth: 240, minHeight: 160 }}>
+        <div className="tabbar" role="tablist">
+          <SortableContext items={tabs} strategy={keepInPlace}>
+            {tabs.map((t, i) => <TortureTab key={t} id={t} active={i === 0} />)}
+          </SortableContext>
+          <button className="link" onClick={() => setLayout(INITIAL_LAYOUT)}>reset panes</button>
+        </div>
+        <div className="layout-root">
+          <TortureNode node={layout} />
+        </div>
+      </div>
+    </LayoutDnd>
+  );
+}
+
+function TortureTab({ id, active }: { id: string; active: boolean }) {
+  const drag = useTabSortable(id);
+  return (
+    <div ref={drag.ref} {...drag.props} role="tab" aria-selected={active} style={drag.style} className={`tab${active ? " tab-active" : ""} ${drag.className}`}>
+      <span className="tab-title">{id}</span>
+    </div>
+  );
+}
+
+function TortureNode({ node }: { node: LayoutNode }) {
+  if (node.type === "leaf") return <TorturePane id={node.pane_id} />;
+  return (
+    <div className={`split split-${node.direction}`}>
+      <div className="split-child" style={{ flexBasis: `${node.ratio * 100}%` }}><TortureNode node={node.first} /></div>
+      <div className={`splitter splitter-${node.direction}`} />
+      <div className="split-child" style={{ flexBasis: `${(1 - node.ratio) * 100}%` }}><TortureNode node={node.second} /></div>
+    </div>
+  );
+}
+
+function TorturePane({ id }: { id: string }) {
+  const drag = usePaneDrag(id, "torture", id);
+  return (
+    <div className="pane-wrap">
+      <div className="pane">
+        <div className="pane-legend">
+          <span className="chip pane-grip" ref={drag.ref} {...drag.props}><strong>{id}</strong></span>
+        </div>
+        <div className="pane-body mono">{`select this text\n${id}`}</div>
+        <PaneDropZone paneId={id} />
+      </div>
     </div>
   );
 }

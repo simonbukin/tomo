@@ -16,6 +16,7 @@ import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./Sidebar";
 import { activeTab, applyFrame, applySnapshot, getState, keyBindings, needsMe, repoName, setState, setUi, useStore } from "./store";
 import { TabBar } from "./Tabs";
+import { LayoutDnd } from "./LayoutDnd";
 import { focusTerminal } from "./terminals";
 import type { Snapshot } from "./types";
 import { WorktreeHeader } from "./WorktreeHeader";
@@ -159,11 +160,11 @@ function Shell() {
         {loaded && !showWorktree && ui.view === "activity" && <Activity />}
         {loaded && !showWorktree && ui.view !== "towns" && ui.view !== "activity" && <Home />}
         {loaded && showWorktree && (
-          <>
+          <LayoutDnd>
             <WorktreeHeader worktree={worktree} />
             <TabBar worktreeId={worktree.id} />
             {tab ? <TabLayout key={tab.id} tab={tab} /> : <div className="center-empty muted">Opening…</div>}
-          </>
+          </LayoutDnd>
         )}
       </main>
       {ui.rightOpen && showWorktree && <RightSidebar worktree={worktree} />}
