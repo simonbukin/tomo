@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
-import { activeTab, agentsOf, clearSelection, getState, needsMe, notify, paneIds, setRowError, setState, setUi } from "./store";
+import { activeTab, agentsOf, clearSelection, errorText, failToast, getState, needsMe, paneIds, recordDiagnostic, setRowError, setState, setUi, showStatus, toast } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
 
@@ -30,7 +30,7 @@ export async function openWorktree(worktreeId: Id): Promise<void> {
     const tab = r.tabs.find((t) => t.is_active) ?? r.tabs[0];
     if (tab?.active_pane_id) window.setTimeout(() => focusTerminal(tab.active_pane_id!), 50);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("Could not open worktree")(e);
   }
 }
 
@@ -60,7 +60,7 @@ export async function splitPane(direction: SplitDirection): Promise<void> {
       : await rpc<{ pane: { id: Id } }>("pane_create", { worktree_id: w.id, tab_id: null, cwd: null, command: null, title: null });
     window.setTimeout(() => focusPane(r.pane.id), 50);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("Split failed")(e);
   }
 }
 
@@ -71,7 +71,7 @@ export async function newTab(): Promise<void> {
     const tab = await rpc<Tab>("tab_create", { worktree_id: w.id, title: null });
     if (tab.active_pane_id) window.setTimeout(() => focusPane(tab.active_pane_id!), 50);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("New tab failed")(e);
   }
 }
 
@@ -89,10 +89,10 @@ export async function closePane(paneId?: Id): Promise<void> {
           body: "Processes are still running in this pane. Closing it sends a hangup to the shell and its jobs.",
           confirmLabel: "Close pane",
           destructive: true,
-          onConfirm: () => rpc("pane_close", { pane_id: id, force: true }).catch((err) => notify("error", (err as Error).message)),
+          onConfirm: () => rpc("pane_close", { pane_id: id, force: true }).catch(failToast("Close pane failed")),
         },
       });
-    } else notify("error", (e as Error).message);
+    } else failToast("Close pane failed")(e);
   }
 }
 
@@ -108,10 +108,10 @@ export async function closeTab(tabId: Id): Promise<void> {
           body: "Processes are still running in this tab. Closing it sends a hangup to every shell in it.",
           confirmLabel: "Close tab",
           destructive: true,
-          onConfirm: () => rpc("tab_close", { tab_id: tabId, force: true }).catch((err) => notify("error", (err as Error).message)),
+          onConfirm: () => rpc("tab_close", { tab_id: tabId, force: true }).catch(failToast("Close tab failed")),
         },
       });
-    } else notify("error", (e as Error).message);
+    } else failToast("Close tab failed")(e);
   }
 }
 
@@ -170,7 +170,7 @@ export interface SpawnOptions {
 export async function spawnAgent(kind: AgentKind, worktreeId?: Id, opts: SpawnOptions = {}): Promise<void> {
   const w = worktreeId ? byId(worktreeId) : currentWorktree();
   if (!w) {
-    notify("info", "Open a worktree first");
+    toast({ level: "info", title: "Open a worktree first" });
     return;
   }
   const from = !opts.newTab && w.id === currentWorktree()?.id ? focusedPaneId() : null;
@@ -179,7 +179,7 @@ export async function spawnAgent(kind: AgentKind, worktreeId?: Id, opts: SpawnOp
     if (w.id !== getState().ui.activeWorktreeId) await openWorktree(w.id);
     window.setTimeout(() => focusPane(r.pane.id), 80);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast(`Could not start ${kind}`)(e);
   }
 }
 
@@ -189,7 +189,7 @@ export async function newTerminalIn(worktreeId: Id): Promise<void> {
     await openWorktree(worktreeId);
     window.setTimeout(() => focusPane(r.pane.id), 80);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("New terminal failed")(e);
   }
 }
 
@@ -199,7 +199,7 @@ export async function newTabIn(worktreeId: Id): Promise<void> {
     await openWorktree(worktreeId);
     if (tab.active_pane_id) window.setTimeout(() => focusPane(tab.active_pane_id!), 80);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("New tab failed")(e);
   }
 }
 
@@ -210,7 +210,7 @@ export async function openBrowser(worktreeId: Id, url: string | null = null): Pr
     window.setTimeout(() => focusPane(r.pane.id), 80);
     return r.pane.id;
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("Browser failed to open")(e);
     return null;
   }
 }
@@ -227,16 +227,24 @@ export async function openInBrowser(worktreeId: Id, url: string): Promise<void> 
     if (worktreeId !== getState().ui.activeWorktreeId) await openWorktree(worktreeId);
     focusPane(live.id);
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("Browser failed to open")(e);
   }
 }
 
+/** A failed browser host call is a diagnostic. With a title, the user caused it and also sees a toast. */
+export const browserHostFailed =
+  (op: string, title?: string) =>
+  (e: unknown): void => {
+    recordDiagnostic("error", "browser", `${op}: ${errorText(e)}`);
+    if (title) toast({ level: "error", title, detail: errorText(e) });
+  };
+
 export function browserCommand(paneId: Id, command: "browser_back" | "browser_forward" | "browser_reload"): void {
-  invoke(command, { paneId }).catch((e) => notify("error", String(e)));
+  invoke(command, { paneId }).catch(browserHostFailed(command, "Browser command failed"));
 }
 
 export function openExternalUrl(url: string): void {
-  openUrl(url).catch((e) => notify("error", String(e)));
+  openUrl(url).catch(failToast("Could not open link"));
 }
 
 export function closeOtherTabs(tabId: Id): void {
@@ -253,7 +261,7 @@ const checkpointMode = (discard: boolean): CheckpointMode => (discard ? "discard
 const failOn = (worktreeId: Id, op: string) => (e: unknown) => {
   const message = (e as Error).message;
   setRowError(worktreeId, { op, message });
-  notify("error", `${op} failed: ${message}`);
+  toast({ level: "error", title: `${op} failed`, detail: message });
 };
 const clearRowError = (worktreeId: Id) => () => setRowError(worktreeId, null);
 
@@ -269,7 +277,10 @@ export function archiveWorktree(worktreeId: Id): void {
       check: DISCARD_LABEL,
       onConfirm: (discard) => {
         if (getState().ui.activeWorktreeId === worktreeId) setUi({ view: "home" });
-        rpc("worktree_archive", { worktree_id: worktreeId, checkpoint: checkpointMode(discard) }).then(clearRowError(worktreeId), failOn(worktreeId, "archive"));
+        rpc("worktree_archive", { worktree_id: worktreeId, checkpoint: checkpointMode(discard) }).then(() => {
+          setRowError(worktreeId, null);
+          showStatus(`Archived ${w.name}`);
+        }, failOn(worktreeId, "archive"));
       },
     },
   });
@@ -290,7 +301,7 @@ export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
 /** Opens a runtime endpoint in the worktree's browser surface, or externally when no worktree is known. */
 export function openEndpoint(url: string, worktreeId?: Id): void {
   if (worktreeId) void openInBrowser(worktreeId, url);
-  else openUrl(url).catch((e) => notify("error", (e as Error).message));
+  else openUrl(url).catch(failToast("Could not open link"));
 }
 
 export function resolveCheckpoint(id: Id): void {
@@ -331,19 +342,19 @@ export function toggleZoom(paneId?: Id): void {
   const id = paneId ?? focusedPaneId();
   const tab = id ? tabOfPane(id) : null;
   if (!id || !tab) return;
-  rpc("pane_zoom", { pane_id: id, tab_id: tab.id }).catch((e) => notify("error", (e as Error).message));
+  rpc("pane_zoom", { pane_id: id, tab_id: tab.id }).catch(failToast("Zoom failed"));
 }
 
 export function equalizeTab(tabId: Id): void {
-  rpc("layout_equalize", { tab_id: tabId }).catch((e) => notify("error", (e as Error).message));
+  rpc("layout_equalize", { tab_id: tabId }).catch(failToast("Layout change failed"));
 }
 
 export function rotateSplit(tabId: Id): void {
-  rpc("layout_rotate", { tab_id: tabId, split_id: null }).catch((e) => notify("error", (e as Error).message));
+  rpc("layout_rotate", { tab_id: tabId, split_id: null }).catch(failToast("Layout change failed"));
 }
 
 export function swapPanes(a: Id, b: Id): void {
-  rpc("pane_swap", { pane_a: a, pane_b: b }).catch((e) => notify("error", (e as Error).message));
+  rpc("pane_swap", { pane_a: a, pane_b: b }).catch(failToast("Layout change failed"));
 }
 
 export function bulkAddTag(ids: Id[]): void {
@@ -385,7 +396,7 @@ export function bulkArchive(ids: Id[]): void {
   const targets = ids.map(byId).filter((w): w is Worktree => !!w && !w.is_main && !w.archived_at_ms && w.exists);
   const skipped = ids.length - targets.length;
   if (!targets.length) {
-    notify("info", "Nothing to archive in the selection");
+    toast({ level: "info", title: "Nothing to archive in the selection" });
     return;
   }
   setState({
@@ -401,7 +412,8 @@ export function bulkArchive(ids: Id[]): void {
         results.forEach((r, i) => setRowError(targets[i].id, r.status === "rejected" ? { op: "archive", message: (r.reason as Error).message } : null));
         const ok = results.filter((r) => r.status === "fulfilled").length;
         clearSelection();
-        notify("info", `Archived ${ok} of ${targets.length}${skipped ? `, skipped ${skipped}` : ""}`);
+        if (ok === targets.length) showStatus(`Archived ${ok}${skipped ? `, skipped ${skipped}` : ""}`);
+        else toast({ level: "error", title: `Archived ${ok} of ${targets.length}`, detail: "the failed rows show the error" });
       },
     },
   });
@@ -410,11 +422,11 @@ export function bulkArchive(ids: Id[]): void {
 export async function bulkRestore(ids: Id[]): Promise<void> {
   const targets = ids.map(byId).filter((w): w is Worktree => !!w && !!w.archived_at_ms);
   const results = await Promise.allSettled(targets.map((w) => rpc("worktree_restore", { worktree_id: w.id })));
-  results.forEach((r, i) => {
-    setRowError(targets[i].id, r.status === "rejected" ? { op: "restore", message: (r.reason as Error).message } : null);
-    if (r.status === "rejected") notify("error", `${targets[i].name}: ${(r.reason as Error).message}`);
-  });
+  results.forEach((r, i) => setRowError(targets[i].id, r.status === "rejected" ? { op: "restore", message: errorText(r.reason) } : null));
+  const failed = targets.filter((_, i) => results[i].status === "rejected");
   clearSelection();
+  if (failed.length) toast({ level: "error", title: `Restore failed for ${failed.length} of ${targets.length}`, detail: failed.map((w) => w.name).join(", ") });
+  else if (targets.length) showStatus(`Restored ${targets.length}`);
 }
 
 export function toggleRepoCollapsed(repoId: Id): void {
@@ -441,17 +453,20 @@ export function removeRepo(repoId: Id): void {
       body: "Tomo forgets the repository. Nothing on disk changes; worktrees with open terminals stay listed until you close them.",
       confirmLabel: "Remove",
           destructive: true,
-      onConfirm: () => rpc("repo_remove", { repo_id: repoId }).catch((e) => notify("error", (e as Error).message)),
+      onConfirm: () => rpc("repo_remove", { repo_id: repoId }).catch(failToast("Remove repository failed")),
     },
   });
 }
 
 export function copyText(text: string, what = "Path"): void {
-  navigator.clipboard.writeText(text).catch(() => notify("error", `Could not copy the ${what.toLowerCase()}: clipboard unavailable`));
+  navigator.clipboard.writeText(text).then(
+    () => showStatus(`Copied ${what.toLowerCase()}`),
+    () => toast({ level: "error", title: `Could not copy the ${what.toLowerCase()}`, detail: "clipboard unavailable" }),
+  );
 }
 
 export function openExternalFor(worktreeId: Id, target: "finder" | "editor", relPath = ""): void {
-  rpc("open_external", { worktree_id: worktreeId, rel_path: relPath, target }).catch((e) => notify("error", (e as Error).message));
+  rpc("open_external", { worktree_id: worktreeId, rel_path: relPath, target }).catch(failToast("Could not open"));
 }
 
 export function renamePane(paneId: Id): void {
@@ -463,26 +478,26 @@ export function renamePane(paneId: Id): void {
       title: "Rename pane",
       initial: pane.user_title ?? "",
       placeholder: pane.title,
-      onSubmit: (value) => rpc("pane_rename", { pane_id: paneId, title: value.trim() || null }).catch((e) => notify("error", (e as Error).message)),
+      onSubmit: (value) => rpc("pane_rename", { pane_id: paneId, title: value.trim() || null }).catch(failToast("Rename failed")),
     },
   });
 }
 
 export function killPaneTree(paneId: Id): void {
-  rpc("pane_kill_tree", { pane_id: paneId }).catch((e) => notify("error", (e as Error).message));
+  rpc("pane_kill_tree", { pane_id: paneId }).catch(failToast("Kill failed"));
 }
 
 export function splitPaneById(paneId: Id, direction: SplitDirection): void {
   rpc<{ pane: { id: Id } }>("pane_split", { pane_id: paneId, direction, command: null })
     .then((r) => window.setTimeout(() => focusPane(r.pane.id), 50))
-    .catch((e) => notify("error", (e as Error).message));
+    .catch(failToast("Split failed"));
 }
 
 export async function setMetadata(worktreeId: Id, patch: Record<string, unknown>): Promise<void> {
   try {
     await rpc("metadata_set", { worktree_id: worktreeId, patch });
   } catch (e) {
-    notify("error", (e as Error).message);
+    failToast("Worktree update failed")(e);
   }
 }
 
@@ -515,7 +530,7 @@ export function renameCurrentTab(): void {
       title: "Rename tab",
       initial: tab.title,
       onSubmit: (value) => {
-        if (value.trim()) rpc("tab_rename", { tab_id: tab.id, title: value.trim() }).catch((e) => notify("error", (e as Error).message));
+        if (value.trim()) rpc("tab_rename", { tab_id: tab.id, title: value.trim() }).catch(failToast("Rename failed"));
       },
     },
   });
@@ -524,7 +539,7 @@ export function renameCurrentTab(): void {
 export function openExternal(target: "finder" | "editor", relPath = ""): void {
   const w = currentWorktree();
   if (!w) return;
-  rpc("open_external", { worktree_id: w.id, rel_path: relPath, target }).catch((e) => notify("error", (e as Error).message));
+  rpc("open_external", { worktree_id: w.id, rel_path: relPath, target }).catch(failToast("Could not open"));
 }
 
 export const actions: Action[] = [
@@ -682,11 +697,11 @@ export function runAction(id: string): void {
   const a = allActions().find((x) => x.id === id);
   if (!a) return;
   if (a.whenWorktree && !currentWorktree()) {
-    notify("info", "Open a worktree first");
+    toast({ level: "info", title: "Open a worktree first" });
     return;
   }
   if (a.when && !a.when()) return;
-  Promise.resolve(a.run()).catch((e) => notify("error", (e as Error).message));
+  Promise.resolve(a.run()).catch(failToast(`${a.label} failed`));
 }
 
 export function worktreeAgentSummary(worktreeId: Id): string {

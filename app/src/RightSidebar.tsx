@@ -8,7 +8,7 @@ import { ResizeHandle } from "./Sidebar";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
-import { formatBytes, notify, setState, useStore } from "./store";
+import { failToast, formatBytes, setState, useStore } from "./store";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { AgentSession, FsEntry, Id, PrStatusResult, ProcessInfo, Worktree } from "./types";
 
@@ -127,7 +127,7 @@ function ProcessSection({ w }: { w: Worktree }) {
     const t = window.setInterval(load, 3000);
     return () => window.clearInterval(t);
   }, [open, w.id]);
-  const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch((e) => notify("error", (e as Error).message));
+  const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch(failToast("Kill failed"));
   return (
     <section className="side-section">
       <div className="section-label">processes <button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></div>
@@ -210,7 +210,7 @@ function FilesSection({ w }: { w: Worktree }) {
     }
     setOpenDirs(next);
   };
-  const act = (target: "finder" | "editor") => rpc("open_external", { worktree_id: w.id, rel_path: selected, target }).catch((e) => notify("error", (e as Error).message));
+  const act = (target: "finder" | "editor") => rpc("open_external", { worktree_id: w.id, rel_path: selected, target }).catch(failToast("Could not open"));
   const copy = () => navigator.clipboard.writeText(selected ? `${w.path}/${selected}` : w.path).catch(() => {});
   const render = (rel: string, depth: number): React.ReactNode =>
     (dirs[rel] ?? []).map((e) => (

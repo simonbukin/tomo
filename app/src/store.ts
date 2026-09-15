@@ -2,6 +2,7 @@ import { useRef, useSyncExternalStore } from "react";
 import { rpc } from "./api";
 import { mergeActivity, needsMeItems } from "./activityModel";
 import { announceAttention } from "./attention";
+import { attentionToastKey } from "./notifyRoute";
 import { defaultUi, sanitizeUi } from "./uiState";
 import type { Diagnostic, DiagnosticLevel,
   ActionSet,
@@ -11,7 +12,6 @@ import type { Diagnostic, DiagnosticLevel,
   Config,
   ConfigIssue,
   Frame,
-  HookRun,
   Id,
   IntegrationStatus,
   Pane,
@@ -208,15 +208,12 @@ function checkHealthOnce(): void {
   if (state.healthChecked) return;
   setState({ healthChecked: true });
   rpc<IntegrationStatus[]>("integrations_status")
-    .then((list) => {
-      const degraded = list.filter((i) => i.level === "partial" || i.level === "process_only");
-      if (degraded.length) notify("warning", `${degraded.map((i) => `${i.kind}: ${i.reason ?? i.level}`).join(" · ")} — see integration status`);
-    })
+    .then((list) => list.filter((i) => i.level === "partial" || i.level === "process_only").forEach((i) => recordDiagnostic("warning", "integrations", `${i.kind}: ${i.reason ?? i.level}`)))
     .catch(() => {});
   rpc<ConfigIssue[]>("config_check")
     .then((issues) => {
       const errors = issues.filter((i) => i.level === "error");
-      if (errors.length) notify("error", `config: ${errors[0].key} — ${errors[0].message}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`);
+      if (errors.length) toast({ key: "config", level: "warning", title: "Config problem", detail: `${errors[0].key}: ${errors[0].message}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`, actions: [{ label: "Check", run: () => setState({ dialog: { kind: "config-check" } }) }] });
     })
     .catch(() => {});
 }
@@ -257,11 +254,8 @@ export function applyFrame(frame: Frame): void {
       setState((s) => ({ actions: { ...s.actions, [set.worktree_id]: set } }));
       break;
     }
-    case "hook_ran": {
-      const { run } = d as { run: HookRun };
-      if (!run.ok) notify("error", `hook failed: ${run.event} — ${run.output_tail.trim().split("\n").pop() || `exit ${run.exit_code ?? "?"}`}`);
+    case "hook_ran":
       break;
-    }
     case "metadata_changed": {
       const { worktree_id, metadata } = d as { worktree_id: Id; metadata: Worktree["metadata"] };
       setState((s) => ({ worktrees: s.worktrees.map((w) => (w.id === worktree_id ? { ...w, metadata } : w)) }));
@@ -317,6 +311,7 @@ export function applyFrame(frame: Frame): void {
     case "attention_resolved": {
       const { id } = d as { id: Id };
       setState((s) => ({ attention: s.attention.filter((a) => a.id !== id) }));
+      dismissToastKey(attentionToastKey(id));
       break;
     }
     case "endpoints_changed": {
@@ -341,7 +336,7 @@ export function applyFrame(frame: Frame): void {
       break;
     }
     case "attention_cleared":
-      setState({ attention: [] });
+      setState((s) => ({ attention: [], toasts: s.toasts.filter((t) => !t.key?.startsWith(attentionToastKey(""))) }));
       break;
     case "resources":
       setState({ resources: Object.fromEntries((d as { worktrees: WorktreeResources[] }).worktrees.map((r) => [r.worktree_id, r])) });
@@ -453,8 +448,12 @@ export interface Toast {
   actions?: ToastAction[];
   /** A toast with the same key replaces the older one instead of stacking. */
   key?: string;
+  /** Stays until the user or its owner dismisses it. */
+  sticky?: boolean;
   createdAt: number;
 }
+
+export const MAX_TOASTS = 3;
 
 export type DaemonHealth = "healthy" | "reconnecting" | "disconnected";
 
@@ -470,7 +469,7 @@ export function toast(t: Omit<Toast, "id" | "createdAt">): void {
   setState((s) => {
     const id = s.toastSeq + 1;
     const kept = t.key ? s.toasts.filter((x) => x.key !== t.key) : s.toasts;
-    return { toastSeq: id, toasts: [...kept, { ...t, id, createdAt: Date.now() }] };
+    return { toastSeq: id, toasts: [...kept, { ...t, id, createdAt: Date.now() }].slice(-MAX_TOASTS) };
   });
 }
 
@@ -478,14 +477,23 @@ export function dismissToast(id: number): void {
   setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
 }
 
-/** Something Tomo itself did or noticed on the client side, such as a reconnect. */
-export function recordDiagnostic(level: DiagnosticLevel, source: string, message: string): void {
-  setState((s) => ({ diagnostics: [...s.diagnostics, { at_ms: Date.now(), level, source, message }].slice(-DIAGNOSTICS_KEPT) }));
+export function dismissToastKey(key: string): void {
+  if (state.toasts.some((t) => t.key === key)) setState((s) => ({ toasts: s.toasts.filter((t) => t.key !== key) }));
 }
 
-/** Deprecated: use `showStatus`, `toast`, or `recordDiagnostic`. Stays until every caller moves. */
-export function notify(level: string, message: string): void {
-  toast({ level: level === "error" ? "error" : level === "warn" || level === "warning" ? "warning" : "info", title: message });
+export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** A catch handler that shows a failed explicit operation as an error toast. */
+export const failToast =
+  (title: string) =>
+  (e: unknown): void =>
+    toast({ level: "error", title, detail: errorText(e) });
+
+/** Something Tomo itself did or noticed on the client side, such as a reconnect. A repeat of the newest entry is dropped. */
+export function recordDiagnostic(level: DiagnosticLevel, source: string, message: string): void {
+  const last = state.diagnostics[state.diagnostics.length - 1];
+  if (last && last.level === level && last.source === source && last.message === message) return;
+  setState((s) => ({ diagnostics: [...s.diagnostics, { at_ms: Date.now(), level, source, message }].slice(-DIAGNOSTICS_KEPT) }));
 }
 
 export function formatBytes(b: number): string {

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { allActions, runAction, type Action } from "./actions";
 import { parseBinding } from "./keys";
 import { effectiveBindings } from "./shortcuts";
-import { notify, useStore } from "./store";
+import { recordDiagnostic, useStore } from "./store";
 
 export type Predefined = "About" | "Services" | "Hide" | "HideOthers" | "ShowAll" | "Quit" | "Undo" | "Redo" | "Cut" | "Copy" | "Paste" | "SelectAll" | "Minimize" | "Fullscreen";
 
@@ -80,6 +80,6 @@ export function useAppMenu(): void {
   const bindings = useStore((s) => s.config?.keybindings);
   useEffect(() => {
     if (!bindings || !isTauri()) return;
-    installAppMenu(menuBarSpec(allActions(), effectiveBindings(bindings)), runAction).catch((e) => notify("error", `menu bar: ${String(e)}`));
+    installAppMenu(menuBarSpec(allActions(), effectiveBindings(bindings)), runAction).catch((e) => recordDiagnostic("error", "app", `menu bar: ${String(e)}`));
   }, [bindings]);
 }

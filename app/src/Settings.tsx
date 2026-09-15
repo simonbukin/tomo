@@ -6,7 +6,7 @@ import { openConfigFile, setConfig } from "./commands/settings";
 import { Button, DialogActions, DialogTitle, IconButton, Select } from "./components/ui";
 import { describeBinding } from "./keys";
 import { bindingFromEvent, SETTINGS_SECTIONS, splitList, type SettingsSection } from "./settingsModel";
-import { notify, setState, useStore } from "./store";
+import { failToast, setState, showStatus, toast, useStore } from "./store";
 import { ACCENT_PRESETS, BASE_THEMES, THEME_LABELS, TOKENS, useResolvedTheme, type AccentPreset, type ThemeName, type Token } from "./theme";
 import type { Config, ConfigIssue, IntegrationStatus, Status } from "./types";
 
@@ -193,7 +193,7 @@ function TerminalSection({ config }: { config: Config }) {
   const whole = (key: string, label: string) => (text: string) => {
     const n = Number(text.trim());
     if (Number.isInteger(n) && n >= 0) setConfig(key, n);
-    else notify("error", `${label} must be a whole number`);
+    else toast({ level: "error", title: `${label} must be a whole number` });
   };
   return (
     <div className="settings-grid">
@@ -260,7 +260,7 @@ function AgentsSection({ config }: { config: Config }) {
         <Fragment key={name}>
           <Row label={name}>
             <div className="settings-pair">
-              <TextField label={`${name} command`} value={agent.command} onCommit={(v) => (v.trim() ? setConfig(`agents.${name}.command`, v.trim()) : notify("error", "the command can not be empty"))} />
+              <TextField label={`${name} command`} value={agent.command} onCommit={(v) => (v.trim() ? setConfig(`agents.${name}.command`, v.trim()) : toast({ level: "error", title: "The command can not be empty" }))} />
               <TextField label={`${name} arguments`} value={agent.args.join(" ")} placeholder="arguments" onCommit={(v) => saveArgs(name, agent.command, v)} />
               <Button variant="link" onClick={() => setConfig(`agents.${name}`, null)}>
                 reset
@@ -324,7 +324,7 @@ export function IntegrationStatusList() {
     rpc<IntegrationStatus[]>("integrations_status")
       .then(setItems)
       .catch((e) => {
-        notify("error", (e as Error).message);
+        failToast("Integration status failed")(e);
         setItems([]);
       });
   useEffect(() => {
@@ -334,10 +334,10 @@ export function IntegrationStatusList() {
     setBusy(true);
     try {
       await rpc("integrations_install");
-      notify("info", "hooks installed");
+      showStatus("Hooks installed");
       await load();
     } catch (e) {
-      notify("error", (e as Error).message);
+      failToast("Hook install failed")(e);
     } finally {
       setBusy(false);
     }
