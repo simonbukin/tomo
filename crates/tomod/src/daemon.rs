@@ -4,6 +4,7 @@ use crate::config::{self, Paths};
 use crate::git;
 use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
+use crate::providers;
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
 use crate::features::{editor, reopen, sessions};
@@ -250,7 +251,7 @@ impl Daemon {
     }
 
     fn write_integration_files(&self) -> Result<()> {
-        let settings = agents::claude_hooks_settings(&self.tomo_bin);
+        let settings = providers::claude::hooks_settings(&self.tomo_bin);
         std::fs::write(self.claude_settings_path(), serde_json::to_string_pretty(&settings)?)?;
         std::fs::write(self.pi_extension_path(), PI_EXTENSION_SOURCE)?;
         Ok(())
@@ -1045,11 +1046,10 @@ impl Daemon {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
-            let resume_ref = row.session_ref.clone().or_else(|| (row.agent_kind == Some(AgentKind::Codex)).then(|| "--last".to_string()));
+            let resume_ref = row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string));
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
                 (Some(kind), Some(session)) => {
-                    let cmd = inner.config.agents.get(kind.label().to_lowercase().as_str()).cloned().unwrap_or(AgentCommand { command: kind.label().to_lowercase(), args: vec![] });
-                    let plan = agents::spawn_plan(kind, &cmd, Some(session), &self.claude_settings_path(), &self.pi_extension_path(), &[]);
+                    let plan = providers::launch(&inner.config, kind, Some(session), &self.paths.integrations_dir, &[]);
                     (PaneOrigin::Resumed, Some(agents::shell_line(&plan.argv)))
                 }
                 _ => (PaneOrigin::Restored, None),
@@ -1455,13 +1455,13 @@ impl Daemon {
                 Ok(Value::Null)
             }
             Call::IntegrationsInstall => {
-                crate::integrations::install(&self.tomo_bin, PI_EXTENSION_SOURCE).map_err(internal)?;
+                providers::install(&self.tomo_bin, PI_EXTENSION_SOURCE).map_err(internal)?;
                 ok(self.integrations())
             }
             Call::IntegrationsStatus => {
                 let mut inner = self.lock();
-                let list = crate::integrations::status(&inner.config);
-                crate::integrations::record_health(&mut inner, &list);
+                let list = providers::status(&inner.config);
+                providers::record_health(&mut inner, &list);
                 ok(list)
             }
             Call::ConfigCheck => {
@@ -1881,9 +1881,7 @@ impl Daemon {
                     }
                     _ => Self::worktree_for_spawn(&inner, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
                 };
-                let key = spec.kind.label().to_lowercase();
-                let cmd = inner.config.agents.get(&key).cloned().unwrap_or(AgentCommand { command: key.clone(), args: vec![] });
-                let plan = agents::spawn_plan(spec.kind, &cmd, spec.resume.as_deref(), &self.claude_settings_path(), &self.pi_extension_path(), &spec.extra_args);
+                let plan = providers::launch(&inner.config, spec.kind, spec.resume.as_deref(), &self.paths.integrations_dir, &spec.extra_args);
                 let line = agents::shell_line(&plan.argv);
                 let tab_id = if spec.new_tab { Some(Self::create_tab(&mut inner, &worktree_id, Some(spec.kind.label().to_string())).id) } else { spec.tab_id.clone() };
                 let (tab_id, pane_id) = self.spawn_in_worktree(
@@ -1900,7 +1898,7 @@ impl Daemon {
                 ok(SpawnResult { pane: Self::pane_view(&inner, &pane_id).unwrap(), tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
             }
             Call::AgentHook { kind, pane_id, payload, at_ms } => {
-                let outcome = agents::hook_outcome(kind, &payload);
+                let outcome = providers::hook_outcome(kind, &payload);
                 let mut inner = self.lock();
                 if !inner.panes.contains_key(&pane_id) {
                     return Ok(Value::Null);
