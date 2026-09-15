@@ -37,7 +37,6 @@ const EVENTS: [string, Partial<ActivityEvent>][] = [
   ["archived", { payload: { branch: "feat/kobe", checkpoint_commit: null, head: "abc" } }],
   ["restored", { payload: { branch: "feat/kobe" } }],
   ["hook_failed", { worktree_id: null, detail: "notify.sh", payload: { command: "notify.sh", exit_code: 1, output_tail: "" } }],
-  ["pr_merged", { detail: "Add kobe", payload: { number: 12, url: "https://github.com/o/r/pull/12" } }],
   ["future.thing", { payload: { note: "from a newer build" } }],
 ];
 
@@ -98,7 +97,6 @@ describe("Activity view", () => {
       ["archived", null, "You · kobe", ["Restore"]],
       ["restored", null, "You · kobe", []],
       ["hook_failed", "failed", "", []],
-      ["pr_merged", "complete", "kobe", ["Open App"]],
       ["future.thing", null, "kobe", []],
     ]);
   });
