@@ -24,7 +24,7 @@ pub fn issues_summary(issues: &[ConfigIssue]) -> Option<String> {
 pub fn reload(daemon: &Daemon) -> Config {
     let loaded = config::load_checked(&daemon.paths.config).map(|(cfg, parse_issues)| {
         let issues = [parse_issues, config::check(&cfg)].concat();
-        let integrations = crate::integrations::status(&cfg);
+        let integrations = crate::providers::status(&cfg);
         (cfg, issues, integrations)
     });
     let mut inner = daemon.lock();
@@ -44,7 +44,7 @@ pub fn reload(daemon: &Daemon) -> Config {
     if Daemon::diagnostic_on_change(&mut inner, "config", "config", summary.clone()) && issues.iter().any(|i| i.level == IssueLevel::Error) {
         Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("config problem: {}", summary.unwrap_or_default()) });
     }
-    crate::integrations::record_health(&mut inner, &integrations);
+    crate::providers::record_health(&mut inner, &integrations);
     cfg
 }
 
