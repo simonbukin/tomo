@@ -34,7 +34,8 @@ crates/tomo-cli/           `tomo` binary
   src/client.rs            socket client, daemon autostart
   src/print.rs             human output
 app/                       Tauri client
-  src-tauri/src/lib.rs     socket bridge, `rpc` command, daemon autostart
+  src-tauri/src/lib.rs     socket bridge, `rpc` command, daemon autostart, Agentation host commands
+  src-tauri/src/browser.rs child webviews of browser panes
   src/generated/           TypeScript types generated from tomo-proto; do not edit
   src/types.ts             re-exports src/generated plus view-only types
   src/api.ts               invoke wrapper, event pump, pane output fan-out
@@ -42,6 +43,7 @@ app/                       Tauri client
   src/actions.ts           every user action; the palette and keys call these
   src/keys.ts              keybinding parse and match
   src/*.tsx                views
+  src/browser/             browser pane view, open-url calls, host call helpers, CSS
   src/addons/index.ts      the builtins list (composition root)
   src/addons/types.ts      the Addon type: the slots that addons fill
   src/addons/towns/        Japan Towns view, ceremony, create field, state, CSS, data
