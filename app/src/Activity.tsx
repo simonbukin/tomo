@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, payloadString, percentOf, resetsIn, timeLabel, shortUsageLabel, sparkCells, usageTone } from "./activityModel";
-import { focusPane, openEndpoint, openWorktree, refreshUsage, resolveCheckpoint, restartWorktreeAction, restoreWorktree } from "./actions";
+import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, payloadString, timeLabel } from "./activityModel";
+import { focusPane, openEndpoint, openWorktree, resolveCheckpoint, restartWorktreeAction, restoreWorktree } from "./actions";
 import { rpc } from "./api";
-import { Button, Popover, PopoverContent, PopoverTitle, PopoverTrigger, SkeletonRows, Tooltip } from "./components/ui";
+import { SkeletonRows } from "./components/ui";
 import { activityEmptyText, type ActivityFilter as Filter } from "./emptyStates";
 import { activityStatus, GLYPH } from "./glyphs";
 import "./styles/previews.css";
 import { ProcessIcon } from "./ProcessIcon";
 import { EmptyState } from "./states";
 import { endpointsOf, setState, useStore, type State } from "./store";
-import { KIND_LABEL, type ActivityEvent, type UsageBucket, type UsageSnapshot } from "./types";
+import { KIND_LABEL, type ActivityEvent } from "./types";
 
 const PAGE = 200;
 
@@ -52,8 +52,6 @@ export function Activity() {
             <button key={f.id} className={`seg${filter === f.id ? " seg-active" : ""}`} onClick={() => setFilter(f.id)}>{f.label}</button>
           ))}
         </span>
-        <span className="spacer" />
-        <UsageStrip />
       </div>
       {shown.length === 0 && (loading ? <SkeletonRows count={6} label="loading activity" /> : <EmptyState title={activityEmptyText(filter)} />)}
       {groupByDay(shown).map((g) => (
@@ -116,70 +114,5 @@ function EventRow({ e }: { e: ActivityEvent }) {
         {e.kind === "archived" && worktree?.archived_at_ms && <button className="link" onClick={() => restoreWorktree(worktree.id)}>Restore</button>}
       </span>
     </div>
-  );
-}
-
-function UsageStrip() {
-  const usage = useStore((s) => s.usage.filter((u) => u.provider !== "pi"));
-  if (!usage.length) return null;
-  return (
-    <span className="usage-strip">
-      {usage.map((u) => <UsageItem key={u.provider} snapshot={u} />)}
-    </span>
-  );
-}
-
-function UsageItem({ snapshot: u }: { snapshot: UsageSnapshot }) {
-  if (!u.available) {
-    return (
-      <Tooltip content={u.reason ?? "unavailable"}>
-        <span className="usage-item muted">
-          <span className="usage-provider">{u.provider}</span>
-          <span className="usage-spark">[unavailable]</span>
-        </span>
-      </Tooltip>
-    );
-  }
-  const tones = u.buckets.map(usageTone);
-  const worst = tones.includes("hot") ? "hot" : tones.includes("waiting") ? "waiting" : null;
-  return (
-    <Popover>
-      <PopoverTrigger render={<Button variant="ghost" size="sm" className={`usage-item${worst ? ` usage-${worst}` : ""}`} />}>
-        <span className="usage-provider">{u.provider}</span>
-        {u.buckets.map((b) => (
-          <Spark key={b.label} bucket={b} labelled />
-        ))}
-      </PopoverTrigger>
-      <PopoverContent align="end">
-        <PopoverTitle>{u.provider} usage</PopoverTitle>
-        {u.buckets.map((b) => {
-          const pct = percentOf(b);
-          return (
-            <div key={b.label} className="usage-row" title={b.detail ?? undefined}>
-              <span>{b.label}</span>
-              <Spark bucket={b} />
-              <span className="num">{pct == null ? "—" : `${pct}%`}</span>
-              <span className="muted">{resetsIn(b.resets_at_ms) ?? ""}</span>
-            </div>
-          );
-        })}
-        <button className="link" onClick={refreshUsage}>refresh</button>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** A text spark, `[█████░░░░░]`, tinted when the bucket nears its limit. */
-function Spark({ bucket: b, labelled = false }: { bucket: UsageBucket; labelled?: boolean }) {
-  const { filled, empty } = sparkCells(b.fraction_used);
-  const tone = usageTone(b);
-  return (
-    <span className="usage-spark" aria-label={`${b.label} ${percentOf(b) ?? "unknown"} percent used`}>
-      {labelled && <span className="usage-spark-label">{shortUsageLabel(b.label)}</span>}
-      <span className={`usage-cells${tone ? ` usage-${tone}` : ""}`}>
-        [<span className="on">{"█".repeat(filled)}</span>
-        <span className="off">{"░".repeat(empty)}</span>]
-      </span>
-    </span>
   );
 }

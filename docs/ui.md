@@ -53,8 +53,8 @@ signals, then `+12 −4` when the diff is not empty.
 `app/src/Activity.tsx` is the fourth view (`home`, `worktree`, `towns`,
 `activity`). The sidebar `History` button and the palette command
 `Activity` open it. The header holds `activity`, the filter
-(`All | Needs me | This worktree`), and the `UsageStrip` on the right. The
-list groups events by day (`today`, `yesterday`, `Mon 14 Sep`) with
+(`All | Needs me | This worktree`). Usage lives in the bottom strip, not
+here. The list groups events by day (`today`, `yesterday`, `Mon 14 Sep`) with
 `.section-label` headings and 30 px rows: time, who (agent with process
 icon, action label, `You`, or the worktree), title, detail, and text-button
 actions derived from the event kind (`Open App`, `Go to Claude`, `Logs`,
@@ -64,12 +64,6 @@ The store loads 200 events with `activity_list` when the view opens,
 prepends `activity_added` events, and keeps at most 500 in memory. `load
 more` pages with `before_ms`. Every daemon call fails soft: an empty list,
 no toast.
-
-`UsageStrip` shows one item per provider (`claude 48% 5h · 83% wk`, or
-`codex — unavailable` with the reason in a tooltip). A click opens a
-popover with one bar per bucket and a `refresh` link. Over 80 % uses
-`--waiting`, over 95 % uses `--hot`. The strip lives in the Activity
-header only.
 
 ## Sidebar order, appearance, and terminal keys
 
@@ -93,8 +87,6 @@ header only.
 - Shift+Enter in a terminal sends ESC CR instead of a bare CR, so Claude
   Code, Codex, and Pi insert a newline. The mapping is `keyOverride` in
   `appearance.ts`, with a unit test.
-- The usage strip draws one `[█████░░░░░]` spark per bucket. Pi has no
-  row: it runs on the Claude allowance.
 
 ## Tabs, panes, and dividers
 
@@ -314,6 +306,53 @@ bottom strip (three sections on the same columns)
 - Top-right: only the inspector control.
 - Zoom (Cmd `+`, `-`, `0`) shows `Zoom 110%` in the bottom status slot.
 
+## Bottom strip
+
+`app/src/shell/BottomStrip.tsx` fills the fixed bottom row. Its three
+sections sit on the shell columns (`--left-col`, `--right-col`). A section
+is never narrower than its content.
+
+```text
+? ⚙ | Claude ━━━━━━━── 83%  Codex —      ✓ Copied branch      CPU 12%  MEM 8.4G  GPU 3% | ● 0.1.3
+```
+
+- Bottom-left: `?` runs `keyboard_shortcuts`, the gear opens Settings. Both
+  are `IconButton`s with a tooltip and the shortcut. In the minimal rail the
+  two buttons fit in 48 px. When the left sidebar is closed on screen, the
+  section is gone. The strip reads the mode on screen from `shellLayout`,
+  not the saved mode.
+- Usage: one item per provider (Claude, Codex; Pi runs on the Claude
+  allowance and has no item). The item shows the bucket with the highest
+  use, whatever the adapter calls it, as a mono micro-bar and a percent.
+  Hover shows every bucket with its reset time. A click opens a larger
+  popover with a `refresh` link. A provider without data shows `—`; the
+  reason is in the preview. Tomo never guesses a value. At 80 % the percent
+  and the bar use `--waiting`, at 95 % `--hot`.
+- Status slot: `StatusSlot` sits in the center between usage and metrics.
+- System metrics: `CPU 12%  MEM 8.4G  GPU 3%` from the daemon call
+  `system_stats` and the `system_stats` event (every 5 s while a client is
+  subscribed). GPU shows only when the machine reports it. Whole percents
+  and one decimal for memory. CPU at 85 % and memory at 85 % of total use
+  `--waiting`; 95 % uses `--hot`. Hover or click shows CPU, memory used of
+  total, GPU and VRAM when present, the worktree with the most memory, and
+  the daemon's own memory. Metrics hide while the daemon is disconnected.
+- Bottom-right: the health dot and the app version (`getVersion`, else the
+  daemon version). The dot has a text label (`Daemon healthy`,
+  `Daemon reconnecting`, `Daemon disconnected`). Hover shows the daemon
+  summary. A click opens diagnostics. See [diagnostics.md](diagnostics.md).
+
+`HoverPopover` (`app/src/shell/HoverPopover.tsx`) joins a `PreviewCard` and
+a `Popover` on one trigger. The preview closes while the popover is open.
+The pure rules (headline bucket, thresholds, metric formatting, health
+labels, diagnostics merge) are in `app/src/shell/bottomModel.ts` with unit
+tests.
+
+On macOS the daemon reads GPU utilization from
+`ioreg -r -d 1 -w 0 -c IOAccelerator` (`Device Utilization %`) outside the
+state lock. VRAM shows only when the driver reports `vramUsedBytes` and
+`vramFreeBytes`; Apple silicon has unified memory and shows no VRAM. On
+other systems GPU and VRAM are absent.
+
 ## Sidebar modes
 
 Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
@@ -380,7 +419,8 @@ styles/
   terminal.css  splits and panes
   palette.css   command palette
   towns.css     Japan map
-  activity.css  activity feed and usage strip
+  activity.css  activity feed
+  bottom.css    bottom strip, its previews and popovers, diagnostics
   interaction.css  motion, focus, hit targets, scroll, skeleton, empty and error states
 ```
 

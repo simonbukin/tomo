@@ -20,6 +20,8 @@ import type { Diagnostic, DiagnosticLevel,
   Repo,
   RuntimeEndpoint,
   Snapshot,
+  Status,
+  SystemStats,
   Tab,
   TownUnlock,
   UiState,
@@ -55,6 +57,10 @@ export interface State {
   /** Client-side and daemon diagnostics, oldest first. */
   diagnostics: Diagnostic[];
   daemonHealth: DaemonHealth;
+  /** The daemon status from the last `subscribe`. */
+  daemonStatus: Status | null;
+  /** The last `system_stats` sample. */
+  system: SystemStats | null;
   paletteOpen: boolean;
   shortcutsOpen: boolean;
   dialog: Dialog | null;
@@ -80,7 +86,8 @@ export type Dialog =
   | { kind: "integrations" }
   | { kind: "config-check" }
   | { kind: "hook-log" }
-  | { kind: "settings"; section?: SettingsSection };
+  | { kind: "settings"; section?: SettingsSection }
+  | { kind: "diagnostics" };
 
 export { defaultHome } from "./uiState";
 
@@ -106,6 +113,8 @@ let state: State = {
   toastSeq: 0,
   diagnostics: [],
   daemonHealth: "reconnecting",
+  daemonStatus: null,
+  system: null,
   paletteOpen: false,
   shortcutsOpen: false,
   dialog: null,
@@ -199,6 +208,7 @@ export function applySnapshot(snap: Snapshot): void {
     actions: Object.fromEntries((snap.actions ?? []).map((a) => [a.worktree_id, a])),
     endpoints: groupEndpoints(snap.endpoints ?? []),
     usage: snap.usage ?? [],
+    daemonStatus: snap.status,
     ui,
   });
   checkHealthOnce();
@@ -365,6 +375,9 @@ export function applyFrame(frame: Frame): void {
       setState((s) => ({ diagnostics: [...s.diagnostics, diagnostic].slice(-DIAGNOSTICS_KEPT) }));
       break;
     }
+    case "system_stats":
+      setState({ system: (d as { stats: SystemStats }).stats });
+      break;
     case "pr_changed": {
       const { worktree_id, pr } = d as { worktree_id: Id; pr: PullRequest | null };
       setState((s) => ({ prs: { ...s.prs, [worktree_id]: { available: true, reason: null, pr } } }));
