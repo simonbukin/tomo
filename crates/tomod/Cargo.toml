@@ -19,5 +19,6 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 sysinfo = "0.39.6"
 notify = "8.2.0"
 toml = "1.1.6"
+toml_edit = "0.25.15"
 libc = "0.2.189"
 clap = { version = "4.6.6", features = ["derive", "env"] }

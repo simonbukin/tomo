@@ -21,7 +21,7 @@ const SEP = "-";
 const p = (predefined: Predefined): LayoutItem => ({ predefined });
 
 export const MENU_BAR_LAYOUT: { text: string; items: LayoutItem[] }[] = [
-  { text: "Tomo", items: [p("About"), SEP, "appearance", SEP, p("Services"), SEP, p("Hide"), p("HideOthers"), p("ShowAll"), SEP, p("Quit")] },
+  { text: "Tomo", items: [p("About"), SEP, "settings", SEP, p("Services"), SEP, p("Hide"), p("HideOthers"), p("ShowAll"), SEP, p("Quit")] },
   { text: "File", items: ["new_tab", "new_browser", SEP, "create_worktree", "add_repo", SEP, "close_tab", "close_other_tabs"] },
   { text: "Edit", items: [p("Undo"), p("Redo"), SEP, p("Cut"), p("Copy"), p("Paste"), p("SelectAll")] },
   { text: "View", items: ["palette", SEP, "home", "activity", "towns", "toggle_board", SEP, "toggle_left_sidebar", "toggle_right_sidebar", SEP, "zoom_in", "zoom_out", "zoom_reset", SEP, p("Minimize"), p("Fullscreen")] },

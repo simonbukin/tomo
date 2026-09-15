@@ -59,6 +59,10 @@ pub enum Call {
     Subscribe,
     ConfigGet,
     ConfigCheck,
+    /// Edits one dotted key in config.toml in place and keeps comments. A null `value` removes the key.
+    ConfigSet { key: String, value: Value },
+    /// Opens config.toml with `editor_command`, else the default text editor.
+    ConfigOpen,
     DaemonStop,
     IntegrationsInstall,
     IntegrationsStatus,
@@ -291,6 +295,7 @@ pub enum Event {
     PrChanged { worktree_id: Id, pr: Option<PullRequest> },
     HookRan { run: HookRun },
     ActionsChanged { set: ActionSet },
+    ConfigChanged { config: Config },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -482,7 +487,8 @@ pub struct Config {
     pub scrollback_lines: u32,
     pub font_family: String,
     pub font_size: u32,
-    pub theme: String,
+    #[serde(default)]
+    pub theme: ThemeConfig,
     pub max_panes_per_tab: u32,
     pub keybindings: BTreeMap<String, String>,
     pub agents: BTreeMap<String, AgentCommand>,
@@ -507,6 +513,25 @@ pub struct NotificationSettings {
 impl Default for NotificationSettings {
     fn default() -> Self {
         NotificationSettings { desktop: true, sounds: false }
+    }
+}
+
+/// `[theme]` after validation. Invalid values are already dropped and reported by `config_check`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThemeConfig {
+    /// Base theme id: `system`, `murasaki-dark`, `murasaki-light`, `paper`, or `ink`.
+    pub name: String,
+    /// Base theme for a light OS appearance when `name` is `system`.
+    pub light: String,
+    /// Base theme for a dark OS appearance when `name` is `system`.
+    pub dark: String,
+    /// Token overrides keyed by token name (`bg`, `surface`, ...). Values are `#rgb` or `#rrggbb`; `accent` also takes a preset name.
+    pub colors: BTreeMap<String, String>,
+}
+
+impl Default for ThemeConfig {
+    fn default() -> Self {
+        ThemeConfig { name: "system".into(), light: "murasaki-light".into(), dark: "murasaki-dark".into(), colors: BTreeMap::new() }
     }
 }
 
@@ -1191,6 +1216,7 @@ mod bindings {
         AgentSession::export_all(&cfg).unwrap();
         DropPlace::export_all(&cfg).unwrap();
         NotificationSettings::export_all(&cfg).unwrap();
+        ThemeConfig::export_all(&cfg).unwrap();
         ActivityEvent::export_all(&cfg).unwrap();
         ActivityQuery::export_all(&cfg).unwrap();
         CheckpointSpec::export_all(&cfg).unwrap();

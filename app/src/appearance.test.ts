@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveTheme, keyOverride, sanitizeAppearance, stepZoom, zoomKey } from "./appearance";
+import { keyOverride, sanitizeAppearance, stepZoom, zoomKey } from "./appearance";
 
 describe("stepZoom", () => {
   it("walks the steps and stops at the ends", () => {
@@ -31,17 +31,10 @@ describe("zoomKey", () => {
 });
 
 describe("sanitizeAppearance", () => {
-  it("falls back for junk and clamps ranges", () => {
-    expect(sanitizeAppearance(null)).toEqual({ theme: "system", accent: "murasaki", zoom: 1, terminalFontSize: null });
-    expect(sanitizeAppearance({ theme: "neon", accent: "sora", zoom: 9, terminalFontSize: 13.4 })).toEqual({ theme: "system", accent: "sora", zoom: 1, terminalFontSize: 13 });
-  });
-});
-
-describe("effectiveTheme", () => {
-  it("prefers the explicit choice, then the config file", () => {
-    expect(effectiveTheme("light", "dark")).toBe("light");
-    expect(effectiveTheme("system", "dark")).toBe("dark");
-    expect(effectiveTheme("system", "system")).toBe("system");
+  it("falls back for junk, clamps zoom, and drops the old theme fields", () => {
+    expect(sanitizeAppearance(null)).toEqual({ zoom: 1 });
+    expect(sanitizeAppearance({ theme: "dark", accent: "sora", zoom: 9, terminalFontSize: 13 })).toEqual({ zoom: 1 });
+    expect(sanitizeAppearance({ zoom: 1.25 })).toEqual({ zoom: 1.25 });
   });
 });
 
