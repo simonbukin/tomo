@@ -193,10 +193,10 @@ commented copy when the file is missing.
 | `worktree_parent_dir` | unset (sibling of the repository)         | Where `worktree create` puts new trees  |
 | `resource_warning_gb` | `2.0`                                     | Memory above which the sidebar shows a total |
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
-| `font_family`         | `Geist Mono Variable, Menlo, monospace`   | UI terminal font                        |
-| `font_size`           | `13`                                      | Terminal font size                      |
-| `theme`               | `system`                                  | `system`, `dark`, or `light`            |
 | `max_panes_per_tab`   | `4`                                       | Spawns without a target open a new tab once a tab holds this many panes |
+| `[theme]`             | `name = "system"`, Murasaki light and dark | Base theme, `light`/`dark` for system mode, and color overrides. See [theming.md](theming.md) |
+| `[terminal]`          | `font_family = "Geist Mono Variable, Menlo, monospace"`, `font_size = 13` | Terminal font. The older top-level `font_family`, `font_size`, and `theme = "dark"` still work |
+| `[notifications]`     | `desktop = true`, `sounds = false`        | Desktop notifications and rare sounds   |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
 | `[archive] cleanup`   | `["node_modules","target","dist",".next",".turbo",".venv","build"]` | Direct children deleted by `worktree archive`; plain names only |
@@ -207,7 +207,7 @@ Default keybindings (`mod` is ⌘):
 
 ```text
 home = "mod+h"                 palette = "mod+k"
-next_attention = "mod+shift+a"
+settings = "mod+,"             next_attention = "mod+shift+a"
 prev_worktree = "mod+shift+["  next_worktree = "mod+shift+]"
 new_terminal = "mod+d"         split_vertical = "mod+shift+d"
 new_tab = "mod+t"              close_pane = "mod+w"
@@ -218,9 +218,11 @@ zoom_pane = "mod+shift+enter"
 ```
 
 `tomo config check` validates the file: unknown hook events, duplicate
-state ids, missing programs, bad keybindings, and cleanup entries that are
-not plain names. Malformed config never stops the daemon; it logs a
-warning and uses defaults.
+state ids, missing programs, bad keybindings, cleanup entries that are
+not plain names, bad theme and terminal values, and a file that does not
+parse. Malformed config never stops the daemon; it logs a warning and uses
+defaults. The daemon reloads the file when it changes and sends
+`config_changed`. `config_set` edits one key in place and keeps comments.
 
 ## .tomo.toml
 

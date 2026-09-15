@@ -240,7 +240,7 @@ mod tests {
             scrollback_lines: 0,
             font_family: String::new(),
             font_size: 0,
-            theme: String::new(),
+            theme: Default::default(),
             max_panes_per_tab: 4,
             keybindings: Default::default(),
             agents: Default::default(),

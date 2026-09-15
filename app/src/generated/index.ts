@@ -66,6 +66,7 @@ export * from "./SplitDirection";
 export * from "./StateDef";
 export * from "./Status";
 export * from "./Tab";
+export * from "./ThemeConfig";
 export * from "./Town";
 export * from "./TownUnlock";
 export * from "./UsageBucket";
