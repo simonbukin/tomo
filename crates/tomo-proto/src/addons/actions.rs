@@ -45,13 +45,6 @@ pub struct ActionRunResult {
     pub reused: bool,
 }
 
-/// The `action` field of a hook event.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct HookAction {
-    pub id: String,
-    pub label: String,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum ActionActivity {
     #[serde(rename = "action_started")]
