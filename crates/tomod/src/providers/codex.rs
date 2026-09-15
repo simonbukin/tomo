@@ -13,7 +13,13 @@ pub static PROVIDER: Provider = Provider {
 };
 
 fn detects(p: &Program) -> bool {
-    p.name.starts_with("codex") || p.argv0.starts_with("codex")
+    is_codex(p.name) || is_codex(p.argv0)
+}
+
+/// The binary is `codex` or `codex-<target triple>`. A program whose name only
+/// starts with "codex", such as a menu bar app, is another program.
+fn is_codex(program: &str) -> bool {
+    program == "codex" || program.strip_prefix("codex-").is_some_and(|triple| triple.starts_with("aarch64-") || triple.starts_with("x86_64-"))
 }
 
 /// Codex takes the session on the command line, and it reports one only after a

@@ -12,7 +12,14 @@ pub static PROVIDER: Provider = Provider {
 };
 
 fn detects(p: &Program) -> bool {
-    p.name == "pi" || p.argv0 == "pi" || p.cmd.contains("pi-coding-agent")
+    p.name == "pi" || p.argv0 == "pi" || runs_the_pi_package(p)
+}
+
+/// Before `process.title` runs, Pi is a JavaScript runtime with the package
+/// script as its first argument. A command that only names the package, such as
+/// an editor with a file of that package, is another program.
+fn runs_the_pi_package(p: &Program) -> bool {
+    matches!(p.argv0, "node" | "bun") && p.cmd.split_whitespace().skip(1).find(|a| !a.starts_with('-')).is_some_and(|script| script.contains("pi-coding-agent"))
 }
 
 const EXTENSION_FILE: &str = "tomo-status.ts";
