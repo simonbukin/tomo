@@ -488,6 +488,18 @@ Six of the 16 variants belong to addons.
 
 ## Agent providers
 
+**Status after milestone 9:** the provider specifics live in
+`crates/tomod/src/providers/` (`mod.rs`, `claude.rs`, `codex.rs`, `pi.rs`),
+one static `Provider` table with one `match`. These **leak** rows are gone
+from Core: `detect_agent` (`procs.rs`), `inherited_env_to_remove`
+(`daemon.rs`), the spawn plan in three places, `write_integration_files`,
+`integrations()`, `install`, `status`, the session readers
+(`features/sessions.rs`, now deleted), and `default_agents` (`config.rs`).
+What stays: `AgentKind` and `agent_kind_str` (identity), the `Integrations`
+wire fields, the CLI value parsers, and the GUI names. Providers are Core
+modules, not addons. See "Milestone 9 result: agent providers" in
+[addons.md](addons.md). The line numbers below are from before the move.
+
 Background work:
 
 - `Daemon::new` writes `<data>/integrations/claude-hooks.json` and `tomo-status.ts`.

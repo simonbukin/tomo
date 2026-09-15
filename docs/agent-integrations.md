@@ -13,6 +13,24 @@ daemon socket.
 Provider allowance windows (the 5-hour and weekly limits) are a separate
 concern. See [usage.md](usage.md).
 
+## Where the provider code lives
+
+```text
+crates/tomod/src/providers/
+  mod.rs      the Provider table, fn provider(kind), and the loops over the table
+  claude.rs   claude.rs, codex.rs, and pi.rs each hold one Provider value
+  codex.rs
+  pi.rs
+```
+
+A `Provider` value gives the command flags, the resume fallback, the hook
+table, process detection, the environment markers, the file Tomo writes for
+its own starts, the install, the health gap, and the session reader. Core
+keeps `AgentKind`, presence, state, session identity, attention, and
+`agents::merge`. To add a provider, write one module, add one arm to
+`provider`, and add the variant to `AgentKind`. A missing capability does not
+compile. See "Milestone 9 result: agent providers" in [addons.md](addons.md).
+
 ## How a pane identifies itself
 
 Every shell Tomo starts carries these variables:
@@ -32,8 +50,10 @@ A hook reads `TOMO_PANE_ID`. When it is absent, the hook exits without doing
 anything. This makes the user-level hooks safe outside Tomo.
 
 The daemon removes these variables from a pane's inherited environment
-before it starts the shell: `CLAUDECODE`, every `CLAUDE_CODE_*`, every
-`TOMO_*`, every `ORCA_*`, and `CODEX_THREAD_ID`. Without this, a daemon that
+before it starts the shell: every `TOMO_*`, every `ORCA_*`, and the marker of
+each provider (`CLAUDECODE`, every `CLAUDE_CODE_*`, `CODEX_THREAD_ID`, every
+`CODEX_SANDBOX*`, and `PI_CODING_AGENT`). Each provider module names its own
+markers in `nested_env`. Without this, a daemon that
 was started from inside another agent would make every pane look like a
 nested child session; Claude, for example, then turns transcript saving off.
 
@@ -46,13 +66,13 @@ tomo hook pi
 ```
 
 The command sends `agent_hook { kind, pane_id, payload, at_ms }` to the
-daemon. The daemon maps the payload to a state with `agents::hook_outcome`
+daemon. The daemon maps the payload to a state with `providers::hook_outcome`
 and applies it with authority `lifecycle`. Errors are swallowed: a hook must
 never break the agent.
 
 ## Claude Code
 
-Spawn command (`agents::spawn_plan`):
+Spawn command (`providers::launch`, with the flags of `providers/claude.rs`):
 
 ```bash
 claude --settings <data dir>/integrations/claude-hooks.json --session-id <uuid>
@@ -165,9 +185,19 @@ rewind a newer state.
 
 ## The process heuristic
 
-Every poll, the daemon looks for a descendant of the pane shell whose name or
-command matches an agent (`claude`, `codex*`, `pi`, or a command that contains
-`pi-coding-agent`). When found, it reports authority `heuristic` with:
+Every poll, the daemon looks for a descendant of the pane shell that a
+provider recognizes (`providers::detect`, the `detects` function of each
+module):
+
+| Provider | Program name or `argv[0]` |
+|---|---|
+| Claude | `claude` |
+| Codex | `codex`, or `codex-<arch>-...` for the native binary |
+| Pi | `pi`, or a `node` or `bun` process whose first argument is a script in the `pi-coding-agent` package |
+
+A program that only mentions a provider, such as `codexbar` or an editor with
+a file of the Pi package, is not an agent. When found, the daemon reports
+authority `heuristic` with:
 
 - state `working` when the agent subtree uses more than 3% CPU;
 - no state otherwise.

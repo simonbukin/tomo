@@ -45,7 +45,7 @@ opinions.
 | PTYs, panes, scrollback | `pty.rs`, `daemon.rs` |
 | Tabs, layout, layout persistence | `layout.rs`, `moves.rs`, `features/reopen.rs` (these do not move in this refactor) |
 | Processes, ownership, provenance | `procs.rs`, `monitor.rs` |
-| Agent abstraction, presence, authority | `agents.rs` (`merge`, `AgentPresence`) |
+| Agent abstraction, presence, authority | `agents.rs` (`merge`, `AgentPresence`); the provider specifics in `providers/` |
 | Attention, checkpoints | `daemon.rs`, `store.rs` |
 | Hooks, activity recording, core activity kinds | `events.rs`, `activity.rs`; `CoreActivity` in `crates/tomo-proto/src/activity.rs` |
 | Persistence, recovery | `store.rs`, `daemon.rs` (`restore`) |
@@ -524,6 +524,8 @@ crates/tomod/src/
   main.rs                 composition root: startup, seams, migrate
   dispatch.rs             composition root: addon Call -> addon handler, the rest -> Daemon::handle
   daemon.rs store.rs ...  core (no addon names); Seams lives in daemon.rs
+  providers/mod.rs        core: the Provider table and the one match on AgentKind
+  providers/<name>.rs     core: what one agent provider needs that the others do not
   addons/mod.rs           composition root: static list, seams(), migrate(), the dependency test
   addons/<name>/mod.rs    handlers, seams, SQL, tests
   addons/<name>/model.rs  pure logic and its tests
@@ -2183,6 +2185,85 @@ event replaces a direct call, and the wire stays typed.
 | `Integrations { claude_hooks, codex_hooks, pi_extension }` | wire type; a rename is a wire change |
 | the usage capability | Usage is an addon. A usage hook in the table would make Core name `UsageSnapshot`, which `core_does_not_import_addons` forbids. `fetch_all` keeps the two provider names inside the addon. |
 | the CLI value parsers and the GUI spawn commands, labels, and icons | client code; this milestone changes the daemon only |
+
+### What moved
+
+| From | To |
+|---|---|
+| `crates/tomod/src/integrations.rs` | `crates/tomod/src/providers/mod.rs` (`git mv`, so the history stays) |
+| `agents::hook_outcome`, `claude_style_outcome`, `pi_outcome` | `providers::hook_outcome` and the `hook_outcome` field; Codex points at `claude::hook_outcome` |
+| `agents::spawn_plan` | `providers::plan` and the `flags` field. `providers::launch` also reads the command from the config, which the three call sites each did for themselves |
+| `agents::claude_hooks_settings`, `agents::codex_hooks_entries` | `claude::hooks_settings`, `codex::hooks_entries` |
+| `procs::detect_agent` | `providers::detect` and the `detects` field |
+| the provider names in `Daemon::inherited_env_to_remove` | the `nested_env` field |
+| `Daemon::claude_settings_path`, `Daemon::pi_extension_path`, `Daemon::write_integration_files`, `PI_EXTENSION_SOURCE` | `providers::write_launch_files` and the `write_launch_file` field; `pi.rs` embeds the extension |
+| `Daemon::integrations` | `providers::installed` |
+| `integrations::install` | `providers::install` and the `install` field |
+| `integrations::status`, `codex_hooks_trusted` | `providers::status` and the `gap` field; the trust check is in `codex.rs` |
+| `crates/tomod/src/features/sessions.rs` | `providers::sessions` and the `sessions` field: the file walk and the text helpers in `mod.rs`, the parsers in `claude.rs` and `codex.rs`, `no_sessions` for Pi |
+| the Codex `--last` fallback in `restore` | the `resume_without_session` field |
+| the three names in `config::default_agents` | `AgentKind::all()` |
+
+The `Provider` table has ten fields. Three defaults in `mod.rs` (`no_gap`,
+`no_launch_file`, `no_sessions`) say that a provider does not need that
+capability. `agents.rs` keeps `merge`, `STALE_MS`, `shell_quote`, and
+`shell_line`. Tests moved with their code: the provider tests are in
+`providers/mod.rs`, the Codex trust test in `codex.rs`, and the Claude
+directory test in `claude.rs`.
+
+### Bug fixes
+
+The provider fixtures found both. Each has its own commit and its test.
+
+1. **Process detection counted a program that only mentions a provider.**
+   Any program whose name started with `codex` (for example a `codexbar` menu
+   app) counted as Codex, and any command that contained `pi-coding-agent`
+   (for example `vim .../pi-coding-agent/README.md`) counted as Pi. Now Codex
+   is `codex` or `codex-<arch>-...`, and Pi is a `node` or `bun` process whose
+   first argument is a script in the package. The ignored test
+   `detect_agent_ignores_programs_that_only_mention_a_provider` now runs and
+   passes, and it also keeps a plain `codex` and a runtime flag before the
+   script working.
+2. **`PI_CODING_AGENT` and `CODEX_SANDBOX` leaked into every pane.**
+   `inherited_env_to_remove` named only the Claude, Tomo, Orca, and
+   `CODEX_THREAD_ID` markers, so a daemon that a Codex or Pi agent started
+   gave every pane the sandbox markers of its parent. The markers are now
+   `nested_env` of the provider that owns them, and
+   `nested_agent_markers_name_the_parent_agent` covers them. `providers.sh`
+   turns its two `KNOWN` lines into checks.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `AgentKind` in the wire types, `store.rs::agent_kind_str`, `AgentKind::label`, `all`, `from_str` | Core identity; a provider id is a Core fact |
+| `Integrations { claude_hooks, codex_hooks, pi_extension }`, which `providers::installed` fills by name | wire field names; a rename is a wire change |
+| the CLI value parsers `["claude", "codex", "pi"]`, `print::status`, and three help texts | client; the layout rule keeps one clap tree |
+| the GUI `spawn_claude`, `spawn_codex`, `spawn_pi`, `KIND_LABEL`, `ProcessIcon`, and the `"pi"` filter in the Usage addon | client and addon code |
+| `fetch_all` names Claude and Codex inside the Usage addon | a usage field in the Core table would make Core name `UsageSnapshot` |
+| `providers/mod.rs` names its three modules in `provider` and `installed` | the composition point; `provider` is the one `match` |
+
+### Known limitations, not changed
+
+`providers.sh` reports each of these as `KNOWN`:
+
+- Codex installs no `SessionEnd` hook, so only the process monitor sees a Codex exit.
+- `session_list` reads no Pi sessions (`pi.rs` uses `no_sessions`).
+- Restore resumes an agent that had exited before the restart.
+- Two Codex panes in one worktree both resume with `resume --last`, so the untrusted pane gets the session of the other pane.
+- A Claude or Pi session with no message has no transcript or session file, so a resume after a restart fails.
+- The Pi session reference becomes the session file only after the first message.
+
+### Stop conditions
+
+None was hit. Near: "agents need more files to understand a feature". The
+count goes the other way (6 files to 2), and each provider is one file. The
+table is not a service locator: nothing registers at run time, there is no
+lookup by key, and `provider(kind)` is one `match` that the compiler checks.
+The framework code is about 40 lines: the struct, the `match`, `table`, the
+five loops (`detect`, `marks_nested_agent`, `write_launch_files`, `install`,
+`sessions`), and three `no_*` defaults.
+
 ## Milestone 7 result: Agentation
 
 Agentation is an addon on top of Browser. Browser works without it, agents
