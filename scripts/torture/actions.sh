@@ -99,6 +99,7 @@ mode = "external"' "quick serve fail mark"
 
 o=$(run serve); S1=$(pane_field "$o" id)
 [ "$(pane_field "$o" action_id)" = serve ] && [ "$(echo "$o" | jq_ "print(d['reused'])")" = False ] && check 0 "pane action starts with action_id provenance" || check 1 "run pane" "$o"
+echo "$o" | jq_ "import sys; sys.exit(0 if d['pane']['source']=={'kind':'action','id':'serve','label':'serve'} else 1)" && check 0 "the pane source names the action kind, id, and label" || check 1 "pane source" "$o"
 o=$(run serve); S2=$(pane_field "$o" id)
 [ "$S1" = "$S2" ] && [ "$(echo "$o" | jq_ "print(d['reused'])")" = True ] && check 0 "second run reuses the live pane" || check 1 "reuse" "$S1 vs $S2 $o"
 $T action stop serve "$WT"; sleep 0.5
