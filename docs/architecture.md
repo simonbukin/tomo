@@ -202,16 +202,23 @@ endpoint from the source, so Runtime does not depend on Actions.
 A pane has a `kind`: `terminal` or `browser`. A browser pane is a row in
 `panes` with `kind = browser` and a `url`, and no PTY. The daemon owns the
 pane and the url; the Tauri process owns the page in a child webview
-labelled `browser-<pane id>`. `annotations_send` turns an `EvidenceBundle`
-into plain text, types it into an agent pane inside a bracketed paste,
-records an `annotations_sent` activity event, and runs the
-`annotation.sent` hooks. See [browser.md](browser.md).
+labelled `browser-<pane id>`. See [browser.md](browser.md).
 
 The browser code has three homes: `crates/tomod/src/features/browser.rs`
 (`browser_open`, `browser_navigate`, `create_browser_pane`),
 `app/src/browser/` (the pane view, the open-url calls, the CSS), and
 `app/src-tauri/src/browser.rs` (the child webviews). Browser stays a
 built-in pane kind and not an addon; see "Milestone 6 result: Browser" in
+[addons.md](addons.md).
+
+Agentation is an addon on top of Browser. `annotations_send`
+(`crates/tomod/src/addons/agentation/`) turns an `EvidenceBundle` into plain
+text, types it into an agent pane with the Core `Daemon::paste_to_agent`
+(one bracketed paste), records an `annotations_sent` activity event, and runs
+the `annotation.sent` hooks. Browser reaches Agentation only through the
+`browserToolbar` slot and the page-load and close hook lists in
+`app/src-tauri/src/lib.rs`. The overlay bundle loads into a page only while
+Annotate is on. See "Milestone 7 result: Agentation" in
 [addons.md](addons.md).
 
 Why the daemon owns the pane but not the page: the layout, the restore
