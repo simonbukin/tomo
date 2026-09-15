@@ -544,6 +544,15 @@ impl Daemon {
         Ok(())
     }
 
+    /// Types `text` into the live agent of a pane as one bracketed paste, then submits it. Returns the agent and the pane for a hook.
+    pub fn paste_to_agent(inner: &Inner, pane_id: &str, text: &str) -> Result<(AgentPresence, HookPane), RpcError> {
+        let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+        let agent = inner.agents.get(pane_id).filter(|a| a.state != AgentState::Exited).cloned().ok_or_else(|| err(ErrorCode::BadRequest, "pane has no live agent"))?;
+        let pty = pane.pty.clone().filter(|_| pane.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "agent pane is not live"))?;
+        pty.write(pasted(text).as_bytes()).map_err(internal)?;
+        Ok((agent, HookPane { id: pane.row.id.clone(), tab_id: pane.row.tab_id.clone(), cwd: pane.row.cwd.clone() }))
+    }
+
     pub fn hook_pane(inner: &Inner, pane_id: &str) -> Option<HookPane> {
         inner.panes.get(pane_id).map(|p| HookPane { id: p.row.id.clone(), tab_id: p.row.tab_id.clone(), cwd: p.row.cwd.clone() })
     }
@@ -2105,47 +2114,6 @@ impl Daemon {
             }
             Call::BrowserOpen { worktree_id, url, tab_id } => self.browser_open(worktree_id, url, tab_id),
             Call::BrowserNavigate { pane_id, url } => self.browser_navigate(pane_id, url),
-            Call::AnnotationsSend { pane_id, bundle } => {
-                let mut inner = self.lock();
-                let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-                let agent = inner.agents.get(&pane_id).filter(|a| a.state != AgentState::Exited).cloned().ok_or_else(|| err(ErrorCode::BadRequest, "pane has no live agent"))?;
-                let pty = pane.pty.clone().filter(|_| pane.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "agent pane is not live"))?;
-                let worktree_id = pane.row.worktree_id.clone();
-                let hook_pane = HookPane { id: pane.row.id.clone(), tab_id: pane.row.tab_id.clone(), cwd: pane.row.cwd.clone() };
-                let (name, branch) = inner
-                    .worktrees
-                    .get(&bundle.worktree_id)
-                    .or_else(|| inner.worktrees.get(&worktree_id))
-                    .map(|w| (Self::worktree_view(&inner, w).name, w.branch.clone().unwrap_or_else(|| "detached".to_string())))
-                    .unwrap_or_default();
-                let runtime = bundle
-                    .action_id
-                    .as_deref()
-                    .and_then(|a| inner.panes.values().filter(|p| p.row.worktree_id == worktree_id).find_map(|p| p.source.as_ref().filter(|s| PaneSource::action_id(Some(s)).as_deref() == Some(a))))
-                    .map(|s| s.label.clone())
-                    .or_else(|| bundle.url.clone())
-                    .unwrap_or_else(|| "-".to_string());
-                let text = evidence_text(&name, &branch, &runtime, &bundle);
-                pty.write(pasted(&text).as_bytes()).map_err(internal)?;
-                let event = ActivityEvent {
-                    id: new_id(),
-                    kind: AgentationActivity::AnnotationsSent.into(),
-                    occurred_at_ms: now_ms(),
-                    worktree_id: Some(worktree_id.clone()),
-                    pane_id: Some(pane_id.clone()),
-                    agent_kind: Some(agent.kind),
-                    title: evidence_title(&bundle, agent.kind.label()),
-                    detail: bundle.url.clone(),
-                    payload: serde_json::to_value(&bundle).unwrap_or(Value::Null),
-                    attention_id: None,
-                };
-                Self::record(&mut inner, event.clone());
-                let mut ev = events::envelope(&inner, "annotation.sent", Some(&worktree_id));
-                ev.pane = Some(hook_pane);
-                ev.agent = Some(HookAgent { kind: agent.kind, state: agent.state, session_ref: agent.session_ref.clone() });
-                inner.hook_queue.push(ev);
-                ok(event)
-            }
             Call::UiStateGet => {
                 let inner = self.lock();
                 let v = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
@@ -2158,33 +2126,6 @@ impl Daemon {
             // The composition root answers every addon call before Core sees it.
             _ => Err(err(ErrorCode::Unsupported, "no handler for this call")),
         }
-    }
-}
-
-/// The plain-text form of an evidence bundle, as typed into an agent's terminal.
-pub fn evidence_text(worktree_name: &str, branch: &str, runtime: &str, bundle: &EvidenceBundle) -> String {
-    let body = match bundle.markdown.as_deref().map(str::trim) {
-        Some(markdown) if !markdown.is_empty() => markdown.to_string(),
-        _ => bundle
-            .annotations
-            .iter()
-            .enumerate()
-            .map(|(i, a)| {
-                let selector = a.selector.as_deref().unwrap_or("-");
-                let element = a.element_text.as_deref().unwrap_or("").replace('\n', " ");
-                format!("{}. [{selector}] \"{element}\" — {}", i + 1, a.text.trim())
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-    };
-    format!("Browser feedback from Tomo\nworktree: {worktree_name} ({branch})\nruntime: {runtime}\n\n{body}\n\n{}", bundle.instruction.trim())
-}
-
-fn evidence_title(bundle: &EvidenceBundle, agent: &str) -> String {
-    match bundle.note_count {
-        Some(1) => format!("Sent 1 note → {agent}"),
-        Some(n) => format!("Sent {n} notes → {agent}"),
-        None => format!("Sent {} annotations → {agent}", bundle.annotations.len()),
     }
 }
 
@@ -2249,46 +2190,7 @@ mod tests {
     }
 
     #[test]
-    fn evidence_text_lists_annotations_in_order() {
-        let bundle = EvidenceBundle {
-            source: "browser annotation".into(),
-            worktree_id: "w".into(),
-            url: Some("http://localhost:1420/".into()),
-            action_id: None,
-            annotations: vec![
-                Annotation { text: "wrong color".into(), url: "http://localhost:1420/".into(), selector: Some("#save".into()), element_text: Some("Save".into()), rect: None },
-                Annotation { text: "cut off".into(), url: "http://localhost:1420/".into(), selector: None, element_text: None, rect: Some([1.0, 2.0, 3.0, 4.0]) },
-            ],
-            instruction: "Review and address these annotations.".into(),
-            markdown: None,
-            note_count: None,
-        };
-        let text = evidence_text("labor", "feat/x", "http://localhost:1420/", &bundle);
-        assert_eq!(
-            text,
-            "Browser feedback from Tomo\nworktree: labor (feat/x)\nruntime: http://localhost:1420/\n\n1. [#save] \"Save\" — wrong color\n2. [-] \"\" — cut off\n\nReview and address these annotations."
-        );
-        assert_eq!(evidence_title(&bundle, "Claude"), "Sent 2 annotations → Claude");
-        assert!(pasted("x").ends_with("\x1b[201~\r"));
-    }
-
-    #[test]
-    fn evidence_text_uses_the_markdown_body() {
-        let bundle = EvidenceBundle {
-            source: "browser feedback".into(),
-            worktree_id: "w".into(),
-            url: Some("http://localhost:1420/".into()),
-            action_id: None,
-            annotations: vec![],
-            instruction: "Review and address this feedback.".into(),
-            markdown: Some("## Tomo (http://localhost:1420/)\n\n1. button `main > button`\n   wrong color\n".into()),
-            note_count: Some(3),
-        };
-        let text = evidence_text("labor", "feat/x", "http://localhost:1420/", &bundle);
-        assert_eq!(
-            text,
-            "Browser feedback from Tomo\nworktree: labor (feat/x)\nruntime: http://localhost:1420/\n\n## Tomo (http://localhost:1420/)\n\n1. button `main > button`\n   wrong color\n\nReview and address this feedback."
-        );
-        assert_eq!(evidence_title(&bundle, "Claude"), "Sent 3 notes → Claude");
+    fn pasted_wraps_the_text_in_one_bracketed_paste_and_submits() {
+        assert_eq!(pasted("a\nb"), "\x1b[200~a\nb\x1b[201~\r");
     }
 }

@@ -1,6 +1,6 @@
 //! Composition root: sends each addon `Call` to its addon, and every other `Call` to Core.
 
-use crate::addons::{actions, github, towns, usage};
+use crate::addons::{actions, agentation, github, towns, usage};
 use crate::daemon::{ok, Daemon, Inner};
 use serde_json::Value;
 use std::sync::Arc;
@@ -29,6 +29,7 @@ pub async fn handle(daemon: &Arc<Daemon>, client_id: u64, call: Call) -> Result<
         Call::TownHistory { slug } => towns::history(daemon, &slug, town_pr),
         Call::PrStatus { worktree_id } => github::pr_status(daemon, worktree_id).await,
         Call::UsageGet { refresh } => usage::get(daemon, refresh).await,
+        Call::AnnotationsSend { pane_id, bundle } => agentation::send(daemon, &pane_id, &bundle),
         call => daemon.handle(client_id, call).await,
     }
 }

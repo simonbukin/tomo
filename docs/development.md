@@ -34,8 +34,9 @@ crates/tomo-cli/           `tomo` binary
   src/client.rs            socket client, daemon autostart
   src/print.rs             human output
 app/                       Tauri client
-  src-tauri/src/lib.rs     socket bridge, `rpc` command, daemon autostart, Agentation host commands
+  src-tauri/src/lib.rs     socket bridge, `rpc` command, daemon autostart, host composition root (addon modules, browser hooks)
   src-tauri/src/browser.rs child webviews of browser panes
+  src-tauri/src/agentation.rs Agentation overlay bundle, annotate flags, feedback commands
   src/generated/           TypeScript types generated from tomo-proto; do not edit
   src/types.ts             re-exports src/generated plus view-only types
   src/api.ts               invoke wrapper, event pump, pane output fan-out
@@ -50,6 +51,7 @@ app/                       Tauri client
   src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
   src/addons/usage/        usage meters, bucket popover, diagnostics section, state
   src/addons/actions/      Action topbar buttons, menu items, palette entries, shortcuts, state
+  src/addons/agentation/   browser toolbar items, page overlay source (page/), CSS
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation
 scripts/install.sh         release build and install
