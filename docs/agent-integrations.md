@@ -197,3 +197,30 @@ tab (split from the active pane), starts a login shell with the Tomo
 environment, and types the spawn command. The GUI shows the pane at once
 through the `tabs_changed` and `agent_changed` events. Add `--split` inside a
 Tomo pane to split from the calling pane instead.
+
+## Test fixtures
+
+`scripts/fixtures/fake-provider` is one Node script with three flavors. It
+drives the same daemon code paths as the real binaries, and it calls no
+model.
+
+```bash
+node scripts/fixtures/fake-provider claude|codex|pi [provider flags]
+# stdin: work N | wait | quit
+```
+
+| Flavor | Reads                                   | Sends                                  | Session file                                   |
+|--------|-----------------------------------------|----------------------------------------|------------------------------------------------|
+| claude | `--settings` hook file                  | hook JSON through each hook command    | `$HOME/.claude/projects/<cwd>/<id>.jsonl`      |
+| codex  | `$HOME/.codex/hooks.json`, trust entries in `config.toml` | hook JSON, only for trusted entries | `$HOME/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
+| pi     | the `-e` extension, loaded as TypeScript | whatever `tomo-status.ts` sends        | `$HOME/.pi/agent/sessions/--<cwd>--/<ts>_<id>.jsonl` |
+
+The fixture sets `process.title` to the flavor, as Pi does, so the process
+monitor sees `claude`, `codex`, or `pi`. A resume fails as it does in the
+installed binaries: Claude `--resume` and Pi `--session <id>` need a session
+file, and the file exists only after the first message.
+
+`scripts/torture/providers.sh` points `[agents.*]` at the fixture and sets
+`HOME` to a scratch directory. For each provider it checks spawn, state,
+attention, session identity, process detection, restart resume, reopen, and
+exit. A product limitation shows as `KNOWN` with its reason.
