@@ -707,7 +707,7 @@ impl Daemon {
     fn inherited_env_to_remove() -> Vec<String> {
         std::env::vars()
             .map(|(k, _)| k)
-            .filter(|k| k == "CLAUDECODE" || k.starts_with("CLAUDE_CODE_") || k.starts_with("TOMO_") || k.starts_with("ORCA_") || k == "CODEX_THREAD_ID")
+            .filter(|k| k.starts_with("TOMO_") || k.starts_with("ORCA_") || providers::marks_nested_agent(k))
             .collect()
     }
 

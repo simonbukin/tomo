@@ -23,6 +23,7 @@ pub struct Provider {
     pub resume_without_session: Option<&'static str>,
     pub hook_outcome: fn(&Value) -> HookOutcome,
     pub detects: fn(&Program) -> bool,
+    pub nested_env: &'static [&'static str],
 }
 
 pub fn provider(kind: AgentKind) -> &'static Provider {
@@ -52,6 +53,15 @@ fn basename(program: &str) -> &str {
 pub fn detect(name: &str, cmd: &str) -> Option<AgentKind> {
     let program = Program { name: basename(name), argv0: basename(cmd.split_whitespace().next().unwrap_or("")), cmd };
     table().into_iter().find(|p| (p.detects)(&program)).map(|p| p.kind)
+}
+
+/// True for a variable that marks the process as a child of an agent. A name
+/// that ends with `*` matches every variable with that prefix.
+pub fn marks_nested_agent(key: &str) -> bool {
+    table().into_iter().flat_map(|p| p.nested_env).any(|name| match name.strip_suffix('*') {
+        Some(prefix) => key.starts_with(prefix),
+        None => key == *name,
+    })
 }
 
 pub struct HookOutcome {
@@ -265,6 +275,16 @@ mod tests {
         assert_eq!(detect("codexbar", "codexbar"), None);
         assert_eq!(detect("codex", "codex"), Some(AgentKind::Codex), "the plain binary name still counts");
         assert_eq!(detect("node", "node --max-old-space-size=8192 /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi), "a runtime flag before the script still counts");
+    }
+
+    #[test]
+    fn nested_agent_markers_name_the_parent_agent() {
+        for key in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID"] {
+            assert!(marks_nested_agent(key), "{key}");
+        }
+        for key in ["PATH", "TOMO_PANE_ID", "CLAUDE", "PI_HOME", "EDITOR"] {
+            assert!(!marks_nested_agent(key), "{key}");
+        }
     }
 
     fn agent_plan(kind: AgentKind, command: &str, args: &[&str], resume: Option<&str>, extra: &[&str]) -> SpawnPlan {
