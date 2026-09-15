@@ -14,7 +14,7 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .menu-popup[data-ending-style], .popover[data-ending-style], .select-popup[data-ending-style], .dialog[data-ending-style], .dialog-backdrop[data-ending-style], .tip[data-ending-style] { transition-duration: var(--dur-close); transition-timing-function: var(--ease-in); }
 .board-col { transition: outline-color var(--dur-hover) var(--ease-out), background-color var(--dur-hover) var(--ease-out); }
 .board-col-over { background: color-mix(in srgb, var(--accent) 5%, transparent); }
-.signal-attention, .attention-btn { animation: rise var(--dur-open) var(--ease-out) both; }
+.signal-attention { animation: rise var(--dur-open) var(--ease-out) both; }
 
 /* ---- focus: a subtle Murasaki ring on every control; a clear border on the focused pane */
 :focus-visible { outline: var(--focus-ring-width) solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
@@ -27,9 +27,6 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .btn-icon, button.link, .btn-link, .repo-toggle { position: relative; }
 .btn-icon::before, button.link::before, .btn-link::before, .repo-toggle::before { content: ""; position: absolute; inset: 50% auto auto 50%; width: max(100%, var(--hit-min)); height: max(100%, var(--hit-min)); transform: translate(-50%, -50%); }
 .seg { min-height: 22px; }
-.resize-handle { width: 8px; }
-.resize-left { right: -4px; }
-.resize-right { left: -4px; }
 .splitter::before { content: ""; position: absolute; }
 .splitter-horizontal::before { inset: 0 -2px; }
 .splitter-vertical::before { inset: -2px 0; }
@@ -59,5 +56,3 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .row-error { background: none; border: none; padding: 0 4px; font-size: var(--fs-0); color: var(--hot); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .row-error:hover { background: var(--hot-soft); }
 
-/* ---- window chrome: drag from empty title bar space; no traffic-light inset in fullscreen */
-:root[data-fullscreen] .titlebar { padding-left: var(--sp-3); }

@@ -82,9 +82,9 @@ header only.
   keyboard sensors: HTML5 drag and drop is unreliable in the Tauri
   webview.
 - Cmd or Ctrl with `+`, `-`, and `0` zooms the whole window through the
-  webview zoom. A chip in the title bar shows a zoom other than 100 % and
-  resets it on click.
-- The Settings dialog (⌘,, the title bar button, or `Settings…` in the
+  webview zoom. The bottom status slot shows the new zoom. `Reset zoom` in
+  the View menu goes back to 100 %.
+- The Settings dialog (⌘,, the bottom strip button, or `Settings…` in the
   palette) edits `config.toml` through `config_set`: theme, accent, color
   overrides, terminal font, keybindings, agents, notifications, archive
   cleanup, and the editor. `config.toml` is the source of truth for theme
@@ -175,7 +175,7 @@ A new attention item goes through `attentionRoute` in
 | Tomo window                        | Result                                           |
 |------------------------------------|--------------------------------------------------|
 | not focused                        | desktop notification when `[notifications] desktop` is on |
-| focused, other worktree, view, or pane | the in-app indicators only (sidebar dot, tab dot, `N need you`) |
+| focused, other worktree, view, or pane | the in-app indicators only (sidebar dot or rail `◉`, tab dot, Activity count) |
 | focused on that pane or worktree   | nothing extra; a waiting item is marked seen     |
 
 Desktop notifications use `tauri-plugin-notification`. A human checkpoint
@@ -286,13 +286,82 @@ no bounce. `styles/interaction.css` applies the tokens.
   page itself never scrolls. Home rows drop the branch and diff columns
   below 760 px, so Home has no horizontal scroll bar.
 
+## Shell geometry
+
+The shell is a 3 x 3 grid (`.app` in `styles/layout.css`):
+
+```text
+top-left      | top-middle              | top-right
+left sidebar  | middle workspace        | right sidebar
+bottom strip (three sections on the same columns)
+```
+
+- The top strip (`--title-h`) and the bottom strip (`--bottom-h`) have a
+  fixed height. They are never draggable. Fullscreen keeps both.
+- `.app` sets `--left-col` and `--right-col` to the column width that is on
+  screen: 0, the rail width (48 px), or the open width. The top strip and
+  the bottom strip align their sections to these properties.
+- Top-left: the traffic-light safe area, the Tomo mark (click goes Home),
+  and the left sidebar control. This region is never narrower than
+  `--top-left-min` (144 px, 72 px in fullscreen). When the left column is
+  a rail or 0, the traffic lights do not move and no workspace UI goes
+  under them.
+- Top-middle: for a worktree, `WorktreeHeader` (name, branch, state on the
+  left; `topbar` Actions, runtime, overflow menu, and the `+` spawn menu on
+  the right). For Home, Activity, and Towns, a short view title. Nothing
+  else: usage, metrics, daemon health, and Settings live in the bottom
+  strip. The checkpoint banner stays at the top of the middle column.
+- Top-right: only the inspector control.
+- Zoom (Cmd `+`, `-`, `0`) shows `Zoom 110%` in the bottom status slot.
+
+## Sidebar modes
+
+Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
+
+| Mode | Left | Right |
+|------|------|-------|
+| open | full tree, 180 to 480 px | inspector sections |
+| minimal | 48 px rail: Home, Activity with the attention count, Towns, one mark per worktree | one icon per inspector section |
+| closed | column width 0 | column width 0 |
+
+- The sidebar control, the shortcut, the View menu, and the palette run
+  `toggle_left_sidebar` or `toggle_right_sidebar`: open, minimal, closed,
+  open. The cycle starts from the mode on screen. The palette also has
+  `left_sidebar_open`, `left_sidebar_minimal`, `left_sidebar_closed`, and
+  the same three for the right.
+- A worktree mark in the left rail is two letters of the name. `◉` means
+  an agent needs input or a checkpoint is open. `×` means an unresolved
+  crash. The accessible name says the same in words. Hover shows the name,
+  the branch, and the worktree signals (waiting agent, crash, runtime).
+- The right rail shows `*` on git when the tree is dirty, `×` on the pull
+  request when checks failed, `✓` when it merged, and `●` on processes
+  when processes run. A click opens the inspector at that section
+  (`rightSection` in UI state).
+
+## Resize and snapping
+
+- Drag a boundary between a sidebar and the middle. The handle covers the
+  body row only. It is 10 px wide over a 2 px line that shows on hover.
+- The drag snaps: under 24 px is closed, under 114 px is minimal, above
+  that the sidebar is open and resizes freely between 180 and 480 px.
+- Minimal and closed keep the open width. Open again restores it. Modes
+  and open widths persist in UI state and survive a restart.
+- When the window is too narrow for a 400 px middle, the shell shows the
+  right sidebar as minimal, then closed, then does the same to the left.
+  The saved preference does not change, so a wider window brings the
+  sidebars back.
+- The pure rules (`snapSidebar`, `shellLayout`, `cycleSidebar`) are in
+  `app/src/shell/sidebarMode.ts` with unit tests.
+
 ## Window chrome
 
-- The title bar is a drag region (`data-tauri-drag-region`) on its empty
-  space, the title text, and the offline label. Buttons in it do not drag.
+- Empty space in the top strip is a drag region (`data-tauri-drag-region`
+  on the strip, each region, the worktree header, and the view title).
+  Buttons do not drag.
 - `useWindowChrome` in `app/src/windowChrome.ts` sets `data-fullscreen` on
-  the root in native fullscreen. The title bar then drops the 84 px
-  traffic-light inset.
+  the root in native fullscreen. The top-left region then drops the 84 px
+  traffic-light inset. `useWindowWidth` gives the width for the narrow
+  window rule.
 - When the window gets focus back and nothing holds focus, the active pane
   of the active tab gets focus (`paneToRestore`). An open dialog, the
   palette, or a focused input keeps focus.
@@ -305,8 +374,8 @@ styles/
   tokens.css    variables, light and dark
   base.css      reset, typography, status dots, motion
   ui.css        primitives
-  layout.css    app grid, title bar, worktree header, tabs, inspector
-  sidebar.css   left navigation
+  layout.css    shell grid, top strip, worktree header, tabs, inspector, resize handles
+  sidebar.css   left navigation and the minimal rails
   home.css      list rows and board
   terminal.css  splits and panes
   palette.css   command palette
