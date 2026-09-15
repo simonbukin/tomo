@@ -967,6 +967,12 @@ pub struct EvidenceBundle {
     pub action_id: Option<String>,
     pub annotations: Vec<Annotation>,
     pub instruction: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub markdown: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub note_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
