@@ -244,12 +244,22 @@ then the old entries, without empty or duplicate entries. A daemon that
 starts from a terminal with a full `PATH` does not run the shell. Panes,
 Actions, hooks, and adapters inherit the new `PATH`.
 
-## Feature boundary: Towns
+## Addons
 
-Japan Towns lives in `crates/tomod/src/features/towns.rs` (dataset and
-weighted pick), the `towns` table (unlocks), and `app/src/Towns.tsx`. The
-generic runtime touches it in worktree creation and two calls. See
-[features/towns.md](features/towns.md).
+An addon is an optional opinion in its own source folder. Core never
+imports it. Towns is the first addon:
+
+- `crates/tomo-proto/src/addons/towns.rs`: wire types
+- `crates/tomod/src/addons/towns/`: calls, the `towns` table, the seams
+- `app/src/addons/towns/`: the map view, the ceremony, the create field
+
+Composition roots name the addons: `crates/tomod/src/main.rs`,
+`crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`
+in `tomo-proto`, and `app/src/addons/index.ts`. Core calls an addon only
+through `Seams`, a struct of plain function lists that `main.rs` builds one
+time. The server sends every call to `dispatch::handle`, which answers the
+addon calls and gives the other calls to `Daemon::handle`. See
+[addons.md](addons.md) and [features/towns.md](features/towns.md).
 
 ## Generated bindings
 

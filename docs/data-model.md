@@ -38,7 +38,7 @@ No table stores a branch name.
 | `first_seen_ms`  | C        | When discovery first saw the worktree                   |
 | `archived_at_ms` | C        | Set by `worktree archive`; NULL once the path exists again |
 | `archived_branch`| C        | Branch at archive time; used by `worktree restore`      |
-| `town_slug`      | —        | Unused since Phase 2; the `towns` table owns the mapping |
+| `town_slug`      | —        | Unused since Phase 2. Old databases keep the column; a new database does not get it. The `towns` table owns the mapping |
 
 Discovery inserts a row for every worktree it sees, so metadata can attach
 to it later. Deleting a row loses organization only; the worktree stays
@@ -48,12 +48,12 @@ usable.
 
 | Column           | Category | Meaning                                  |
 |------------------|----------|------------------------------------------|
-| `slug`           | A        | Town slug from `app/src/data/japan-towns.json` |
+| `slug`           | A        | Town slug from `app/src/addons/towns/data/japan-towns.json` |
 | `worktree_id`    | A        | Worktree that unlocked the town          |
 | `repo_id`        | A        | Repository of that worktree              |
 | `unlocked_at_ms` | A        | When the worktree was created            |
 
-This table is the only owner of the worktree→town mapping; `Worktree.town_slug` is derived from it. A town unlocks once. Archiving or deleting the worktree keeps the unlock; a restore at a new path moves the row to the new worktree id.
+The Towns addon (`crates/tomod/src/addons/towns`) creates this table and is the only code that queries it. The table is the only owner of the worktree→town mapping; clients read it through `town_list`. A town unlocks once. Archiving or deleting the worktree keeps the unlock. A move or a restore at a new path moves the row to the new worktree id.
 The dataset itself (1681 municipalities with coordinates, population,
 Wikipedia link, and a rarity tier from population) ships in the binary.
 

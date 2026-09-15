@@ -33,7 +33,15 @@ Paths without a prefix are in `crates/tomod/src/` (daemon), `crates/tomo-proto/s
 
 ## Towns
 
-Background work: the daemon has none of its own, but every `discover` runs a
+**Status after milestone 1:** extracted. Every **leak** row below is gone,
+except the `tomo towns` CLI block (allowed), the `town_slug` wire alias on
+`WorktreeCreate.name_hint`, the shared CSS selectors in
+`styles/interaction.css`, and the two chimes in `sounds.ts`. `discover` no
+longer reads the `towns` table. The three seams replace the create, restore,
+and rebind rows. See "Milestone 1 result: Towns" in [addons.md](addons.md).
+The line numbers below are from before the extraction.
+
+Background work (before milestone 1): the daemon has none of its own, but every `discover` runs a
 full `SELECT` on `towns`. The GUI `TownReveal` uses a timer, a `keydown`
 listener, and a WebAudio chime. The dataset loads lazily.
 

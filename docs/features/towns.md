@@ -12,7 +12,7 @@ town. Nothing in Git knows about towns.
 
 ## Data
 
-`app/src/data/japan-towns.json` holds 1681 municipalities of Japan: cities,
+`app/src/addons/towns/data/japan-towns.json` holds 1681 municipalities of Japan: cities,
 towns, and villages. The source is Wikidata (instances of city, town, and
 village of Japan with coordinates and an English Wikipedia article). Each
 entry has a slug, English and Japanese names, prefecture, kind, population,
@@ -40,8 +40,9 @@ name unless you set one.
 
 After `git worktree add` succeeds, Tomo writes one row to the `towns` table
 and emits `TownUnlocked`. A town unlocks once. Archiving, restoring, or
-deleting the worktree keeps the unlock. When a restore lands at a new path
-and therefore a new worktree id, the unlock row moves to the new id.
+deleting the worktree keeps the unlock. A worktree that gets a new id keeps
+its unlock: the row moves to the new id after a move on disk and after a
+restore into a new parent directory.
 
 ## Storage
 
@@ -55,10 +56,9 @@ towns
   unlocked_at_ms  when
 ```
 
-Generic worktree records do not carry town data. `Worktree.town_slug` in
-the protocol is derived from this table at view time. The
-`worktree_meta.town_slug` column is unused and stays only because SQLite
-cannot drop it cheaply.
+Generic worktree records do not carry town data. A client finds the town
+of a worktree in the `town_list` unlocks. Old databases keep the unused
+`worktree_meta.town_slug` column; a new database does not get it.
 
 ## CLI
 
@@ -72,7 +72,7 @@ tomo worktree create --repo <repo> --branch <name> --new [--town <slug>]
 
 The map button next to `home` opens the map. Every town is a dot in its
 rarity color at low opacity; unlocked towns are opaque with a ring. The
-landmass outline comes from `app/src/data/japan-outline.json`. Wheel zooms,
+landmass outline comes from `app/src/addons/towns/data/japan-outline.json`. Wheel zooms,
 drag pans, double-click resets. Hovering a dot shows the town, prefecture,
 rarity, population, a Wikipedia link, and for unlocked towns the worktree
 and unlock date. The collection list on the right shows counts per rarity
@@ -81,8 +81,8 @@ and every unlocked town in unlock order. With no unlocks, the list shows
 
 ## Unlock ceremony
 
-The `town_unlocked` event starts a short reveal (`app/src/TownReveal.tsx`).
-The reveal never takes focus. `ceremonyTier` in `app/src/townCeremony.ts`
+The `town_unlocked` event starts a short reveal (`app/src/addons/towns/TownReveal.tsx`).
+The reveal never takes focus. `ceremonyTier` in `app/src/addons/towns/model.ts`
 maps the rarity to a tier:
 
 | Rarity | Tier | Reveal | Sound |
@@ -123,16 +123,28 @@ history before archive, after archive, and after a daemon restart.
 
 ## Code boundary
 
+Towns is an addon. Core does not import it. See [../addons.md](../addons.md).
+
 ```text
-crates/tomod/src/features/towns.rs   dataset, find, weighted pick
-crates/tomod/src/store.rs            towns table
-app/src/Towns.tsx, app/src/towns.css map and collection view
-app/src/data/                        town and outline data
+crates/tomo-proto/src/addons/towns.rs   Town, TownUnlock, TownHistory, TownPr, TownWorktreeStatus
+crates/tomod/src/addons/towns/mod.rs    towns table, town_list / town_pick / town_history, the three seams
+crates/tomod/src/addons/towns/model.rs  dataset, weighted pick, history facts
+app/src/addons/towns/index.ts           the Addon value: view, command, create field, ceremony, hooks
+app/src/addons/towns/                   Towns.tsx, TownReveal.tsx, TownSuggest.tsx, state.ts, model.ts, towns.css, data/
 ```
 
-The generic runtime touches towns in three places only: worktree creation
-(pick and unlock), the `town_list`, `town_pick`, and `town_history` calls, and the
-`town_slug` view field. If Tomo later grows an extension host, Towns is the
-first candidate to move out: it needs custom data, two commands, a creation
-hook, and one view, which is exactly the surface an extension API must
-offer.
+Towns joins Core at these points only:
+
+- `worktree_namer` seam: picks the directory name before `git worktree add`.
+  `WorktreeCreate.name_hint` asks for one town (`--town`, or the dialog
+  suggestion). Clients from before the split send it as `town_slug`.
+- `worktree_created` seam: writes the unlock, sets the display name, and
+  emits `TownUnlocked`. It runs under the state lock inside the create call.
+- `worktree_rebound` seam: moves the unlock when a worktree gets a new id.
+- `dispatch.rs`: the `town_list`, `town_pick`, and `town_history` calls.
+- registration lines: the `Call` and `Event` variants in `tomo-proto`, the
+  `builtins` entry, the CSS import in `app/src/styles/index.css`, the
+  `tomo towns` CLI block, and `towns` in `scripts/torture/run-all.sh`.
+
+`town_history` reads Core data: activity rows, repos, worktrees, and the
+cached pull request.

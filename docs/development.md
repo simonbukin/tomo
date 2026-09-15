@@ -9,9 +9,12 @@ you edit.
 Cargo.toml                 workspace
 crates/tomo-proto/         wire types: Call, Event, entities. The contract.
 crates/tomod/              daemon
-  src/main.rs              startup, single-instance check, signal handling
-  src/daemon.rs            state, dispatch of every Call, tabs/panes, restore
+  src/main.rs              startup, single-instance check, signal handling (composition root)
+  src/dispatch.rs          addon calls to their addon, every other Call to Daemon::handle (composition root)
+  src/daemon.rs            state, the Core Call handler, Seams, tabs/panes, restore
   src/server.rs            socket accept loop, per-connection framing
+  src/addons/mod.rs        the static addon list, seams(), migrate(), the dependency test (composition root)
+  src/addons/towns/        Japan Towns: calls, towns table, seams, dataset and pick
   src/store.rs             SQLite schema and queries
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
@@ -24,7 +27,6 @@ crates/tomod/              daemon
   src/config.rs            config.toml, defaults, paths
   src/events.rs            hook envelopes, hook processes, the archive gate
   src/features/actions.rs  .tomo.toml parser for repo-defined Actions
-  src/features/towns.rs    Japan Towns dataset and pick
 crates/tomo-cli/           `tomo` binary
   src/main.rs              clap definitions and command handlers
   src/client.rs            socket client, daemon autostart
@@ -38,6 +40,9 @@ app/                       Tauri client
   src/actions.ts           every user action; the palette and keys call these
   src/keys.ts              keybinding parse and match
   src/*.tsx                views
+  src/addons/index.ts      the builtins list (composition root)
+  src/addons/types.ts      the Addon type: the slots that addons fill
+  src/addons/towns/        Japan Towns view, ceremony, create field, state, CSS, data
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation
 scripts/install.sh         release build and install
@@ -87,7 +92,9 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
    `app/src/generated/`; commit those files. Plain `cargo test` fails while
    they are stale.
 2. **Daemon.** Add a match arm in `Daemon::handle` in
-   `crates/tomod/src/daemon.rs`. Lock `self.lock()` for as short a time as
+   `crates/tomod/src/daemon.rs`. For an addon call, add the arm in
+   `crates/tomod/src/dispatch.rs` and the handler in the addon folder
+   instead (see [addons.md](addons.md)). Lock `self.lock()` for as short a time as
    possible. Do not hold the lock across `.await`. Persist through `Store`
    and emit with `Daemon::emit`. Add the call to `server::is_slow` when it
    runs Git or anything else that takes more than a few milliseconds.
@@ -138,7 +145,7 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | What a hook event means               | `agents::hook_outcome`                  |
 | Whether a weaker signal may overwrite | `agents::merge`                         |
 | What counts as owned or observed      | `procs::classify`                       |
-| How a moved worktree keeps its data   | `Daemon::discover` (gitdir rebinding)   |
+| How a moved worktree keeps its data   | `Daemon::rebind`, called from `Daemon::discover` (gitdir) and `restore_worktree` |
 | Which pane gets auto-closed on exit   | `Daemon::on_exit` (exit code 0 only)    |
 | Default keybindings                   | `config::default_keybindings`           |
 | Which hooks run for an event          | `events::matching_hooks`, `Daemon::dispatch` |
@@ -146,7 +153,8 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Which states are valid                | `config.states`, checked in `MetadataSet` |
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
-| Town naming and unlocks               | `features::towns`, `WorktreeCreate` handler |
+| Town naming and unlocks               | `addons::towns::{name_worktree, unlock, rebind}`, joined through `Seams` |
+| Which addons exist and where they join Core | `addons::seams`, `dispatch::handle`, `app/src/addons/index.ts` |
 | What `.tomo.toml` accepts             | `features::actions::parse`              |
 | How an action runs, reuses, or stops  | `Daemon::run_action`, `Daemon::stop_action` |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
