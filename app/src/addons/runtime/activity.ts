@@ -4,10 +4,7 @@ import type { ActivityEvent, RuntimeActivity } from "../../generated";
 import type { State } from "../../store";
 import type { ActivityKindView } from "../types";
 
-const who = (e: ActivityEvent, s: State) => {
-  const actionId = payloadString(e, "action_id");
-  return (e.worktree_id ? s.actions[e.worktree_id]?.actions : undefined)?.find((a) => a.id === actionId)?.label ?? payloadString(e, "label") ?? actionId ?? "action";
-};
+const who = (e: ActivityEvent, s: State) => (e.pane_id ? s.panes[e.pane_id]?.source?.label : undefined) ?? payloadString(e, "label") ?? payloadString(e, "action_id") ?? "action";
 
 export const runtimeActivity: Record<RuntimeActivity, ActivityKindView> = {
   endpoint_discovered: { who, url: (e, s) => appUrl(e, s) },

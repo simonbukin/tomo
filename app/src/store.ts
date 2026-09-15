@@ -6,7 +6,6 @@ import { attentionToastKey } from "./notifyRoute";
 import { addonViews, builtins } from "./addons";
 import { defaultUi, sanitizeUi } from "./uiState";
 import type { Diagnostic, DiagnosticLevel,
-  ActionSet,
   ActivityEvent,
   AgentPresence,
   AttentionItem,
@@ -34,7 +33,6 @@ import type { QueryContext } from "./homeQuery";
 
 export interface State {
   connected: boolean;
-  actions: Record<Id, ActionSet>;
   loaded: boolean;
   config: Config | null;
   repos: Repo[];
@@ -90,7 +88,6 @@ export { defaultHome } from "./uiState";
 
 let state: State = {
   connected: false,
-  actions: {},
   loaded: false,
   config: null,
   repos: [],
@@ -189,7 +186,7 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
 
 export function applySnapshot(snap: Snapshot): void {
   const ui = sanitizeUi(snap.ui_state, snap.worktrees.map((w) => w.id), addonViews().map((v) => v.id));
-  builtins.forEach((a) => a.onSnapshot?.());
+  builtins.forEach((a) => a.onSnapshot?.(snap));
   setState({
     loaded: true,
     config: snap.config,
@@ -200,7 +197,6 @@ export function applySnapshot(snap: Snapshot): void {
     agents: Object.fromEntries(snap.agents.map((a) => [a.pane_id, a])),
     attention: snap.attention,
     resources: Object.fromEntries(snap.resources.map((r) => [r.worktree_id, r])),
-    actions: Object.fromEntries((snap.actions ?? []).map((a) => [a.worktree_id, a])),
     endpoints: groupEndpoints(snap.endpoints ?? []),
     usage: snap.usage ?? [],
     daemonStatus: snap.status,
@@ -252,11 +248,6 @@ export function applyFrame(frame: Frame): void {
     case "config_changed":
       setState({ config: (d as { config: Config }).config });
       break;
-    case "actions_changed": {
-      const { set } = d as { set: ActionSet };
-      setState((s) => ({ actions: { ...s.actions, [set.worktree_id]: set } }));
-      break;
-    }
     case "hook_ran":
       break;
     case "metadata_changed": {
@@ -384,20 +375,9 @@ export function activeTab(s: State, worktreeId: Id | null): Tab | null {
   return tabs.find((t) => t.is_active) ?? tabs[0] ?? null;
 }
 
-export function activeActionSet(s: State): ActionSet | null {
-  return s.ui.view === "worktree" && s.ui.activeWorktreeId ? s.actions[s.ui.activeWorktreeId] ?? null : null;
-}
-
-export function runningActionIds(s: State, worktreeId: Id): string[] {
-  return Object.values(s.panes)
-    .filter((p) => p.worktree_id === worktreeId && p.action_id && p.live && p.exit_code == null)
-    .map((p) => p.action_id!)
-    .sort();
-}
-
 export function keyBindings(s: State): Record<string, string> {
-  const shortcuts = (activeActionSet(s)?.actions ?? []).filter((a) => a.shortcut).map((a) => [`action:${a.id}`, a.shortcut!]);
-  return { ...(s.config?.keybindings ?? {}), ...Object.fromEntries(shortcuts) };
+  const bound = builtins.flatMap((a) => a.shortcuts?.(s) ?? []).map((c) => [c.id, c.binding]);
+  return { ...(s.config?.keybindings ?? {}), ...Object.fromEntries(bound) };
 }
 
 export function needsMe(s: State): AttentionItem[] {
@@ -408,10 +388,6 @@ export const unviewedAttention = needsMe;
 
 export function endpointsOf(s: State, worktreeId: Id): RuntimeEndpoint[] {
   return s.endpoints[worktreeId] ?? [];
-}
-
-export function liveEndpointFor(s: State, worktreeId: Id, actionId: string): RuntimeEndpoint | null {
-  return endpointsOf(s, worktreeId).find((e) => e.action_id === actionId && e.protocol !== "tcp") ?? null;
 }
 
 export function queryContext(s: State): QueryContext {

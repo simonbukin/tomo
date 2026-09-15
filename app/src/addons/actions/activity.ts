@@ -1,14 +1,13 @@
-import { restartWorktreeAction } from "../../actions";
 import { goToPane } from "../../activityKinds";
 import { payloadString } from "../../activityModel";
 import type { ActionActivity, ActivityEvent } from "../../generated";
-import type { State } from "../../store";
 import type { ActivityKindView, ActivityRowAction } from "../types";
+import { restartWorktreeAction } from "./commands";
+import { actionSet } from "./state";
 
 const actionId = (e: ActivityEvent) => payloadString(e, "action_id");
 
-const who = (e: ActivityEvent, s: State) =>
-  (e.worktree_id ? s.actions[e.worktree_id]?.actions : undefined)?.find((a) => a.id === actionId(e))?.label ?? payloadString(e, "label") ?? actionId(e) ?? "action";
+const who = (e: ActivityEvent) => (e.worktree_id ? actionSet(e.worktree_id)?.actions : undefined)?.find((a) => a.id === actionId(e))?.label ?? payloadString(e, "label") ?? actionId(e) ?? "action";
 
 const logs: ActivityRowAction = { label: (e, s) => (e.pane_id && s.panes[e.pane_id] ? "Logs" : null), run: (e) => goToPane(e) };
 

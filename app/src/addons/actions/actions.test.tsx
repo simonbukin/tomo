@@ -91,6 +91,16 @@ describe("actions menus", () => {
     expect(rpcCalls()).toEqual([["action_run", { worktree_id: "w1", action_id: "quick" }]]);
   });
 
+  it("a running action opens, focuses logs, restarts, stops, and copies url and port", async () => {
+    const { runningActionItems } = await import("./commands");
+    const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0 } as const;
+    const s = { ...store.getState(), endpoints: { w1: [endpoint] } };
+    const menu = runningActionItems("w1", "serve", s);
+    expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);
+    expect(labels(entry(menu, "copy").submenu!)).toEqual(["url", "port"]);
+    expect(labels(runningActionItems("w1", "other", s))).toEqual(["focus logs", "restart", "stop"]);
+  });
+
   it("offers restart and stop on an endpoint of an action", () => {
     const endpoint = { id: "e1", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0 } as const;
     const menu = endpointMenu("w1", endpoint, store.getState());
