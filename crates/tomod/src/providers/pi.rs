@@ -9,6 +9,7 @@ pub static PROVIDER: Provider = Provider {
     resume_without_session: None,
     hook_outcome,
     detects,
+    nested_env: &[],
 };
 
 fn detects(p: &Program) -> bool {
