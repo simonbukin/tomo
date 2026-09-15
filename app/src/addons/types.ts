@@ -5,7 +5,7 @@ import type { AddonSignal } from "../activityModel";
 import type { Status } from "../glyphs";
 import type { RailMarker } from "../shell/RightRail";
 import type { State } from "../store";
-import type { ActivityEvent, Frame, Id, Repo, Worktree } from "../types";
+import type { ActivityEvent, Frame, Id, Repo, Snapshot, Worktree } from "../types";
 
 /** A button on an Activity row. `label` reads the store and returns null to hide the button. `run` happens on click. */
 export interface ActivityRowAction {
@@ -71,7 +71,11 @@ export interface Addon {
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
   /** Mounted once for the whole session. It must start no work until it has something to show. */
   mount?: ComponentType;
-  /** Called after each `subscribe` snapshot. */
-  onSnapshot?: () => void;
+  /** An item in the middle of the bottom strip, before the status slot. It renders from its own state and starts no work. */
+  bottomItem?: ComponentType;
+  /** A section after the core sections of the diagnostics report. It renders nothing when it has nothing to report. */
+  diagnosticsSection?: ComponentType;
+  /** Called with each `subscribe` snapshot. */
+  onSnapshot?: (snapshot: Snapshot) => void;
   /** Receives every daemon event frame except pane output. */
   onFrame?: (frame: Frame) => void;}

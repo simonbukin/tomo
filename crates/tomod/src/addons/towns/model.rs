@@ -136,7 +136,7 @@ mod tests {
             event(CoreActivity::Restored, 60, serde_json::json!({})),
             event(CoreActivity::Archived, 90, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": "8c1fd62", "head": "old0002" })),
         ];
-        let pr = TownPr { number: 12, url: "https://github.com/o/r/pull/12".into(), state: "merged".into() };
+        let pr = TownPr { number: 12, url: "https://example.com/o/r/pull/12".into(), state: "merged".into() };
         let h = history(unlock(), None, Some(facts(Some(95))), &events, Some(pr.clone()));
         assert_eq!(h.status, TownWorktreeStatus::Archived);
         assert_eq!((h.final_commit.as_deref(), h.archived_at_ms), (Some("8c1fd62"), Some(95)));

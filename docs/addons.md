@@ -2,10 +2,13 @@
 
 Read this before you add a feature or move one. It takes a few minutes.
 
-Status: milestone 1 (Towns), the Activity kind seam, and milestone 2
-(GitHub) are done. Towns is the reference for every later extraction.
-GitHub proved the first GUI slots that core components render. See
-"Activity kind seam result" and "Milestone 2 result: GitHub".
+Status: milestone 1 (Towns), milestone 2 (GitHub), milestone 5 (Usage), and
+the Activity kind seam are done. Towns is the first addon and the reference
+for every later extraction. GitHub added the first GUI slots that core
+components render. Usage added a background task, a snapshot field, and two
+GUI slots. The procedures below are the ones that these addons proved. See
+"Activity kind seam result", "Milestone 2 result: GitHub", and "Milestone 5
+result: Usage".
 
 Related files:
 
@@ -13,6 +16,7 @@ Related files:
 - [addons-baseline.md](addons-baseline.md) has the performance numbers and the test counts before the refactor.
 - [features/towns.md](features/towns.md) describes the Towns addon.
 - [features/github.md](features/github.md) describes the GitHub addon.
+- [usage.md](usage.md) describes the Usage addon.
 
 ## The three layers
 
@@ -64,7 +68,8 @@ source code with a clean dependency boundary.
 |---|---|
 | towns | **done** (milestone 1) |
 | github | **done** (milestone 2) |
-| actions, runtime, usage, agentation | addon, not moved yet |
+| usage | **done** (milestone 5) |
+| actions, runtime, agentation | addon, not moved yet |
 | browser | study (milestone 6) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
@@ -78,9 +83,9 @@ source code with a clean dependency boundary.
    that the "Allowed addon dependencies" table lists.
 4. **Composition roots name everything.** A composition root is a file whose
    only job is to list Core and addons together. The composition roots are:
-   - `crates/tomod/src/main.rs`: startup, `addons::seams()`, `addons::migrate()`
-   - `crates/tomod/src/addons/mod.rs`: the static addon list, the seam registration, the table creation
-   - `crates/tomod/src/dispatch.rs`: the match that sends an addon `Call` to its addon
+   - `crates/tomod/src/main.rs`: startup, `addons::seams()`, `addons::migrate()`, `addons::start()`
+   - `crates/tomod/src/addons/mod.rs`: the static addon list, the seam registration, the table creation, the background tasks
+   - `crates/tomod/src/dispatch.rs`: the match that sends an addon `Call` to its addon, and the `Snapshot` that adds the addon fields to the `CoreSnapshot`
    - `crates/tomo-proto/src/lib.rs`: the `Call`, `Event`, `Snapshot`, and `HOOK_EVENTS` definitions, and the addon re-exports
    - `app/src/addons/index.ts`: the `builtins` list
    - `app/src/addons/activity.ts`: the Activity row views of addon kinds
@@ -137,6 +142,7 @@ dynamic loading, no service locator, and no dependency injection container.
 // crates/tomod/src/addons/mod.rs
 pub mod github;
 pub mod towns;
+pub mod usage;
 
 pub fn seams() -> Seams {
     Seams { worktree_namer: Some(towns::name_worktree), worktree_created: vec![towns::unlock], worktree_rebound: vec![towns::rebind] }
@@ -145,10 +151,15 @@ pub fn seams() -> Seams {
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
     towns::migrate(store)
 }
+
+pub fn start(daemon: &Arc<Daemon>) {
+    tokio::spawn(usage::run(daemon.clone()));
+}
 ```
 
-`main.rs` calls `Daemon::new(paths, addons::seams())` and then
-`addons::migrate(&daemon.lock().store)`. After that, the seams do not change.
+`main.rs` calls `Daemon::new(paths, addons::seams())`, then
+`addons::migrate(&daemon.lock().store)`, and after `restore` and the Core
+tasks, `addons::start(&daemon)`. After that, the seams do not change.
 
 ```rust
 // crates/tomod/src/dispatch.rs
@@ -157,10 +168,15 @@ pub fn is_slow(call: &Call) -> bool {
 }
 
 match call {
+    Call::Subscribe => ok(Snapshot {
+        core: daemon.subscribe(client_id)?,
+        usage: usage::snapshots(),
+    }),
     Call::TownList => towns::list(daemon),
     Call::TownPick => towns::pick(daemon),
     Call::TownHistory { slug } => towns::history(daemon, &slug, town_pr),
     Call::PrStatus { worktree_id } => github::pr_status(daemon, worktree_id).await,
+    Call::UsageGet { refresh } => usage::get(daemon, refresh).await,
     call => daemon.handle(client_id, call).await,
 }
 ```
@@ -169,7 +185,18 @@ match call {
 `dispatch::is_slow` which addon calls wait on a subprocess, and runs those
 in their own task. `Daemon::handle` has
 a `_` arm that returns `unsupported`, because the dispatcher answers the
-addon calls first. The cost: the compiler does not tell you when a new
+addon calls first.
+
+**The snapshot.** `Daemon::subscribe` marks the client subscribed and
+returns `CoreSnapshot`, which names no addon. `Snapshot` in `lib.rs` is
+`#[serde(flatten)] core: CoreSnapshot` plus one field for each addon.
+`serde` and `ts-rs` put the flattened fields at the top level, so the JSON
+and the generated TypeScript look like one flat object. The flattened
+struct must be the Core one: `ts-rs` cannot flatten an empty struct, so an
+`AddonSnapshot` would break the bindings when the last addon field goes.
+`Daemon::handle` still answers `subscribe` with the `CoreSnapshot` alone,
+for a caller that does not go through the dispatcher. No caller does that
+today. The cost: the compiler does not tell you when a new
 **Core** `Call` variant has no arm in `Daemon::handle`. The torture harness
 and the CLI tests find it at run time.
 
@@ -209,30 +236,37 @@ split.
 
 ```ts
 // app/src/addons/index.ts
-export const builtins: readonly Addon[] = [towns, github];
+export const builtins: readonly Addon[] = [towns, github, usage];
 ```
 
-The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns
-and GitHub need:
+The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns,
+GitHub, and Usage need:
 
-| Slot | Who renders it |
-|---|---|
-| `views` (global view: id, title, label, icon, lazy component, fallback) | `App.tsx` center area, `Sidebar.tsx` and `shell/LeftRail.tsx` buttons, `shell/TopStrip.tsx` title, the View menu in `appMenu.ts`, view checks in `uiState.ts` |
-| `commands` | `allActions()` in `actions.ts` (palette, shortcuts, menus, shortcut reference) |
-| `worktreeNameField` | `CreateWorktree` in `Dialogs.tsx`; it reports the `name_hint` |
-| `inspectorSections` (id, label, icon, component, rail marker) | `RightSidebar.tsx` after the `git` section, the buttons and markers in `shell/RightRail.tsx`, the section ids for `sanitizeUi` in `store.ts` |
-| `worktreeSignals` (a store selector that returns `AddonSignal[]`) | `signalsFor` in `Signals.tsx`, after the core signals; `nowSignals` keeps the cap of three |
-| `repoAvatar` (the first addon that has one wins) | `RepoAvatar` in `Sidebar.tsx`, which the sidebar and Home render |
-| `mount` | `App.tsx`, once for the session (the unlock ceremony) |
-| `onSnapshot` | `applySnapshot` in `store.ts`, after each `subscribe` |
-| `onFrame` | `applyFrame` in `store.ts`, for each daemon event |
+| Slot | Who renders it | First user |
+|---|---|---|
+| `views` (global view: id, title, label, icon, lazy component, fallback) | `App.tsx` center area, `Sidebar.tsx` and `shell/LeftRail.tsx` buttons, `shell/TopStrip.tsx` title, the View menu in `appMenu.ts`, view checks in `uiState.ts` | towns |
+| `commands` | `allActions()` in `actions.ts` (palette, shortcuts, menus, shortcut reference) | towns |
+| `worktreeNameField` | `CreateWorktree` in `Dialogs.tsx`; it reports the `name_hint` | towns |
+| `inspectorSections` (id, label, icon, component, rail marker) | `RightSidebar.tsx` after the `git` section, the buttons and markers in `shell/RightRail.tsx`, the section ids for `sanitizeUi` in `store.ts` | github |
+| `worktreeSignals` (a store selector that returns `AddonSignal[]`) | `signalsFor` in `Signals.tsx`, after the core signals; `nowSignals` keeps the cap of three | github |
+| `repoAvatar` (the first addon that has one wins) | `RepoAvatar` in `Sidebar.tsx`, which the sidebar and Home render | github |
+| `mount` | `App.tsx`, once for the session (the unlock ceremony) | towns |
+| `bottomItem` | `shell/BottomStrip.tsx`, inside `.bottom-items` at the start of the middle section, before the status slot | usage |
+| `diagnosticsSection` | `DiagnosticsReport` in `shell/Diagnostics.tsx`, after the core sections and before the compact actions | usage |
+| `onSnapshot(snapshot)` | `applySnapshot` in `store.ts`, with each `subscribe` snapshot | towns, usage |
+| `onFrame` | `applyFrame` in `store.ts`, for each daemon event | towns, github, usage |
 
-The order of `builtins` is the render order of every slot. An addon keeps
-its own state in its own module (Towns: `app/src/addons/towns/state.ts`), not
-in the core `State`. One exception: data that a slot selector reads while a
-core component renders. GitHub declares the optional key `State.prs` through
-module augmentation in `app/src/addons/github/state.ts`, and only that module
-writes it. See "Client state decision" in "Milestone 2 result: GitHub".
+The order of `builtins` is the render order of every slot. Each item gets
+the addon `id` as its React key. An addon keeps its own state in its own
+module (Towns: `app/src/addons/towns/state.ts`, Usage:
+`app/src/addons/usage/state.ts`), not in the core `State`. One exception:
+data that a slot selector reads while a core component renders. GitHub
+declares the optional key `State.prs` through module augmentation in
+`app/src/addons/github/state.ts`, and only that module writes it. See
+"Client state decision" in "Milestone 2 result: GitHub".
+
+`.bottom-items` always renders, also when it is empty, so that the status
+slot and the metrics keep their grid columns.
 
 ## Performance law
 
@@ -257,6 +291,11 @@ GitHub background work: none in the daemon. `gh` runs only inside a
 read the cache and start no work. See
 [features/github.md](features/github.md#background-work).
 
+Usage background work: one daemon task, started by `addons::start`, with the
+cadence it had in Core (see the table). The reason is in
+[usage.md](usage.md), "Polling cadence". The GUI meters start no timer and
+no request; the `refresh` link sends one `usage_get` on a click.
+
 Background work that exists today and must keep its current trigger:
 
 | Work | Trigger | Owner |
@@ -264,8 +303,8 @@ Background work that exists today and must keep its current trigger:
 | process poll | every 2 s with a subscriber, 15 s without | core `monitor.rs` |
 | `lsof` port scan | each monitor tick with candidate pids | runtime |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
-| usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage |
-| `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github (milestone 2 kept this trigger) |
+| usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
+| `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
 
@@ -280,9 +319,18 @@ Background work that exists today and must keep its current trigger:
 - A small value can go in the existing `kv` table with the key prefix
   `<addon>.`. Do not force relational state into KV.
 - In memory, keep addon state out of `Inner`. Towns keeps no daemon state in
-  memory at all; it reads its table when a call needs it. GitHub keeps its
-  cache in a `static` in `addons/github/mod.rs`, because tomod runs one
-  daemon in each process. Do not add an addon state field to `Daemon`.
+  memory at all; it reads its table when a call needs it.
+- Usage keeps its last result in memory only, because a restart must start
+  empty (the first fetch compares against zero). It holds the result in a
+  `static Mutex` in `addons/usage/mod.rs`. That is process-wide state; it is
+  correct because `tomod.lock` allows one daemon per data dir. The other
+  options were worse: a field in `Inner` is a Core leak; a handle passed
+  through `server.rs` makes Core carry an addon type; the `kv` table would
+  write memory-only data to disk. If a process ever runs two daemons, pass a
+  handle instead.
+- GitHub keeps its pull request cache in a `static Mutex` in
+  `addons/github/mod.rs` for the same reasons. The cache starts empty after a
+  restart, as it did in Core.
 - If a seam needs both locks, take the Core `Inner` lock first, then the
   addon lock. Never take the Core lock while you hold an addon lock.
 - Never drop or rename a table or a column that holds user data. If the
@@ -331,24 +379,35 @@ All checks run in the normal test commands.
 reads every `.rs` file under `crates/tomod/src` and `crates/tomo-proto/src`.
 It skips the `addons/` folders and the composition roots `main.rs`,
 `dispatch.rs`, and `tomo-proto/src/lib.rs`. It fails on `addons::`,
-`mod addons`, the word `town`, or a GitHub noun (`github`, `pullrequest`,
-`prstatus`, `pr_status`, `prchanged`, `pr_changed`, `review_decision`,
-`checks_failed`, `mergeable`), in any case. It prints the file, the line,
-and the match. When a milestone finishes an addon, add its nouns to
-`ADDON_NOUNS`. The check between two addons is not written yet, because one
-addon exists; add it with the second addon.
+`mod addons`, or a noun that an addon owns (any case), and prints the file,
+the line, and the match. `OWNED_NOUNS` lists the nouns of each finished
+addon: `town` for Towns; `github`, `pullrequest`, `prstatus`, `pr_status`,
+`prchanged`, `pr_changed`, `review_decision`, `checks_failed`, and
+`mergeable` for GitHub; `mod usage`, `crate::usage`, `.usage`, `usage:`,
+`usagesnapshot`, `usagebucket`, `usage_get`, `usageget`, `usage_changed`,
+`usagechanged`, `weekly`, `5-hour`, and `allowance` for Usage. The last three
+keep window and allowance words out of the Core agent code. When a milestone
+finishes an addon, add its nouns there.
+
+**Rust, between addons.** `an_addon_does_not_name_another_addon` reads every
+file under `tomod/src/addons/` (without the composition root `mod.rs`) and
+under `tomo-proto/src/addons/`. A file fails if it names a noun that another
+addon owns. The Activity kind modules of the addons that are not moved yet
+(`actions.rs`, `agentation.rs`, `runtime.rs`) must not name them either.
 
 **TypeScript.** `app/src/addons/boundary.test.ts` reads every non-test `.ts`
 and `.tsx` file under `app/src` outside `generated/` and `addons/` with
 `import.meta.glob(..., { query: "?raw" })`. It fails if a file imports an
 addon folder. A core file may import only `addons/index.ts` and
 `addons/types.ts`. It does not read CSS, so the `@import` line in
-`styles/index.css` is a listed registration line. The test "core client
-files do not name GitHub pull request nouns" fails on `GitHub`
-(case-sensitive), `PullRequest`, `PrStatusResult`, `review_decision`,
-`checks_failed`, `mergeable`, `pr_status`, `pr_changed`, or `prs` in a core
-client file. Lowercase `github` stays allowed for example text, such as the
-clone dialog placeholder.
+`styles/index.css` is a listed registration line. The test "an addon
+imports no other addon folder" resolves each relative import of a file in
+`addons/<name>/`, and fails if the import lands in another addon folder.
+The test "core client files do not name GitHub pull request nouns" fails on
+`GitHub` (case-sensitive), `PullRequest`, `PrStatusResult`,
+`review_decision`, `checks_failed`, `mergeable`, `pr_status`, `pr_changed`,
+or `prs` in a core client file. Lowercase `github` stays allowed for example
+text, such as the clone dialog placeholder.
 
 **Activity kinds.** `core_activity_code_does_not_name_addon_kinds` in
 `crates/tomod/src/addons/mod.rs` reads the code before `#[cfg(test)]` in
@@ -388,7 +447,9 @@ Towns is the worked example for each step.
    Add `pub mod <name>;` and its lines to `seams()` and `migrate()` in `addons/mod.rs`.
    Add one arm for each call in `dispatch.rs`.
    Add a seam only if the addon must take part in a Core operation. Add a new `Seams` field only when no field fits, and call it at one fixed point.
+   If a client needs the addon state at `subscribe`, add a field to `Snapshot` in `lib.rs` and fill it in the `Subscribe` arm of `dispatch.rs`.
 4. **Background work.** Write the reason in the addon doc. If there is no reason, add no background work.
+   A task gets one line in `addons::start`. It must check for a subscriber or another trigger before it does work.
 5. **CLI.** Add a subcommand block in `crates/tomo-cli/src/main.rs` with a `--json` branch.
 6. **GUI.** Make `app/src/addons/<name>/index.ts`, which exports one `Addon` value. Add it to `builtins`.
    Put its CSS next to it and add one `@import` line in `app/src/styles/index.css`.
@@ -397,7 +458,7 @@ Towns is the worked example for each step.
    of its generated kind union, and list it in `app/src/addons/activity.ts`.
 7. **Tests.** Put unit tests next to the code.
    For daemon behavior, add `scripts/torture/<name>.sh` and add its name to `scripts/torture/run-all.sh`.
-   Add the addon nouns to `ADDON_NOUNS`.
+   Add the addon nouns to `OWNED_NOUNS`.
 8. **Docs.** Write `docs/<name>.md` (Towns: `docs/features/towns.md`), and change the candidate table in this file.
 9. Run the gates, the deletion test, and the baseline commands.
 
@@ -405,9 +466,9 @@ Towns is the worked example for each step.
 
 1. Delete `crates/tomod/src/addons/<name>/`, `crates/tomo-proto/src/addons/<name>.rs`, and `app/src/addons/<name>/`.
 2. Remove the registration lines:
-   - its lines in `seams()` and `migrate()` in `addons/mod.rs`
-   - its arms and its `use` line in `dispatch.rs`
-   - its `mod` line, its re-export, its `Call` and `Event` variants, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
+   - its lines in `seams()`, `migrate()`, and `start()` in `addons/mod.rs`
+   - its arms, its `use` line, and its field line in the `Subscribe` arm in `dispatch.rs`
+   - its `mod` line, its re-export, its `Call` and `Event` variants, its `Snapshot` field, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
    - its entry in `builtins`
    - its entry in `app/src/addons/activity.ts`
    - its `@import` line in `app/src/styles/index.css`
@@ -458,6 +519,50 @@ expected.
 `--town` stays on `tomo worktree create` after the removal, because it only
 sets the generic `name_hint`.
 
+### Usage deletion test (milestone 5)
+
+Done with a script on a throwaway branch from commit `3a8499b` (before the
+merge of the Activity kind seam), then deleted. The removal changed 19
+files: 969 lines deleted, 5 lines added. Outside the three deleted folders
+and the regenerated `app/src/generated/UsageBucket.ts`, `UsageSnapshot.ts`,
+`Snapshot.ts`, `Event.ts`, and `index.ts`, these are the only lines that
+changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod usage;` and `tokio::spawn(usage::run(daemon.clone()));` |
+| `crates/tomod/src/dispatch.rs` | `use crate::addons::{towns, usage};` becomes `use crate::addons::towns;`; remove `usage: usage::snapshots(),` and the `Call::UsageGet` arm |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod usage;`, `pub use addons::usage::*;`, `UsageGet`, `UsageChanged`, the two lines of `Snapshot.usage`, and `UsageSnapshot::export_all` |
+| `crates/tomo-cli/src/main.rs` | remove `Cmd::Usage` and its handler (9 lines) |
+| `crates/tomo-cli/src/print.rs` | remove `resets_in` and `print::usage` (37 lines) |
+| `app/src/addons/index.ts` | remove the `usage` import; `builtins` becomes `[towns]` |
+| `scripts/torture/run-all.sh` | remove `usage` from the list |
+
+No Core file changed: not `daemon.rs`, `main.rs`, `store.ts`,
+`BottomStrip.tsx`, `Diagnostics.tsx`, or a CSS file.
+
+Result with Usage removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` | pass: 106 tests (tomod 99, tomo-proto 5, tomo_app_lib 2) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 29 files, 190 tests pass |
+| `npx vite build` | pass |
+| `scripts/torture/run-all.sh` without `usage` | PASS: 283 checks in 15 scripts; `agents.sh` 18 of 18 |
+
+The removed build has one compiler warning: the `daemon` parameter of
+`addons::start` is not used. It shows a start function that no addon uses.
+It is expected.
+
+The first try failed, and the test did its job. That try flattened an
+`AddonSnapshot` struct into `Snapshot`. Without usage the struct was empty,
+and `ts-rs` stopped with `AddonSnapshot cannot be flattened`. Commit `3a8499b`
+turned the split around (`CoreSnapshot` is flattened into `Snapshot`), and
+the second try passed. The test was not done again after the merge of the
+Activity kind seam; the merge did not change a usage registration line.
+
 ## Add a UI contribution
 
 Use an existing slot. Add a new slot only when an extraction needs it. Do not
@@ -466,7 +571,7 @@ one site from `builtins`.
 
 Slots that exist (see "Static composition, GUI"): `views`, `commands`,
 `inspectorSections`, `worktreeSignals`, `repoAvatar`, `worktreeNameField`,
-`mount`, `onSnapshot`, `onFrame`.
+`mount`, `bottomItem`, `diagnosticsSection`, `onSnapshot`, `onFrame`.
 
 Slots that later milestones will need (from the map):
 
@@ -475,8 +580,6 @@ Slots that later milestones will need (from the map):
 | inspector section | **done**: `inspectorSections` (milestone 2) | none |
 | worktree signal | **done**: `worktreeSignals` (milestone 2); runtime is the next user | the runtime signal in `activityModel.ts` `nowSignals` |
 | topbar item | actions | `WorktreeHeader.tsx` `ActionBar` |
-| bottom-strip item | usage | `shell/BottomStrip.tsx` |
-| diagnostics section | usage | `shell/Diagnostics.tsx` |
 | pane renderer | browser | `Layout.tsx`, `Tabs.tsx` |
 | browser toolbar item | agentation | `BrowserPane.tsx` |
 | activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
@@ -781,6 +884,170 @@ baseline. Idle CPU and RSS are below the limits. The main JS chunk is
 719.39 kB, below the 800 KB budget. Not measured: GUI cold launch and GUI
 RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
 
+## Milestone 5 result: Usage
+
+### What moved
+
+| From | To |
+|---|---|
+| `crates/tomod/src/usage.rs` | `crates/tomod/src/addons/usage/mod.rs` (`git mv`, so the history stays) |
+| `UsageBucket`, `UsageSnapshot` in `tomo-proto/src/lib.rs` | `crates/tomo-proto/src/addons/usage.rs` |
+| `Inner.usage` | the addon's `static Mutex` (see "Addon state") |
+| the `UsageGet` arm in `Daemon::handle` | `usage::get`, called from `dispatch.rs` |
+| `usage: inner.usage.clone()` in the `Subscribe` arm | `Daemon::subscribe` returns `CoreSnapshot`; `dispatch.rs` adds `usage::snapshots()` |
+| `tokio::spawn(usage::run(..))` in `main.rs` | `addons::start` |
+| `UsageStrip`, `UsageMeter`, `UsageBuckets`, `MicroBar` in `shell/BottomStrip.tsx` | `app/src/addons/usage/UsageStrip.tsx`, through `bottomItem` |
+| the Usage section in `shell/Diagnostics.tsx` | `UsageDiagnostics`, through `diagnosticsSection` |
+| `usageRows`, `stripUsage`, `headlineBucket`, `bucketTone`, `usageTone`, `usageIssues`, `percentText`, `microBar`, `USAGE_WARN`, `USAGE_DANGER` in `shell/bottomModel.ts` | `app/src/addons/usage/model.ts` |
+| `State.usage`, the `usage_changed` case, `usage` in `applySnapshot`, `refreshUsage` in `actions.ts` | `app/src/addons/usage/state.ts`, `index.ts`, `UsageStrip.tsx` |
+| the usage tests in `shell/bottomModel.test.ts` and `shell/BottomStrip.test.tsx` | `app/src/addons/usage/usage.test.tsx` |
+
+Removed as dead code: `usageSummary` and `percentOf` in `activityModel.ts`.
+
+### Seams
+
+| Seam | Why it is the narrowest option |
+|---|---|
+| `addons::start(&Arc<Daemon>)` | One call in `main.rs`, after the Core tasks. A field in `Seams` would be a list that Core stores but never calls. |
+| `Daemon::subscribe -> CoreSnapshot`, and `Snapshot { core, usage }` in `lib.rs` | Installed clients need one typed JSON object. The composition root builds it, so Core names no addon field. The flattened part is the Core part, because `ts-rs` cannot flatten an empty addon struct. |
+| `bottomItem?: ComponentType` | One component for each addon, keyed by the addon id, at the place where `UsageStrip` was. Usage draws all its meters in one component, so a list of items is not necessary. |
+| `diagnosticsSection?: ComponentType` | The same shape, at the place of the old Usage section. |
+| `onSnapshot(snapshot)` | The existing slot now gets the snapshot, so Usage reads `snapshot.usage`. A `usage_get` call there would start a fetch at each connect, because `usage_get` fetches when the result is empty. |
+
+The poll uses the daemon lock, `Daemon::emit`, and
+`Daemon::diagnostic_on_change`, like Towns uses `Inner`. No Core function was
+added for Usage.
+
+### Wire and schema changes
+
+- Method names, event names, and JSON field names do not change. The
+  `tomo usage` text and `--json` output do not change; `usage.sh` checks both.
+- The `subscribe` JSON has the same fields. `usage` is now the last key
+  (before, `ui_state` came after it), and the generated `Snapshot.ts` lists
+  `usage` first. The clients do not depend on key order.
+- Rust: `Snapshot` has `core: CoreSnapshot` and `usage`. Only `tomod` builds it.
+- SQLite: no change. Usage has no table.
+- CSS: `.bottom-usage` is now `.bottom-items`, with the same rules.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `Call::UsageGet`, `Event::UsageChanged`, `Snapshot.usage`, and the re-export in `lib.rs` | composition root |
+| `Cmd::Usage` in `crates/tomo-cli/src/main.rs` and `print::usage` | the layout rule keeps one clap tree |
+| the `tomo usage` help text names Pi, which is never fetched | user-visible text; not changed in a refactor |
+| `.usage-*` and `.micro-bar` rules in `styles/bottom.css` | the cascade order must not change; `.tone-*` is shared with the metrics |
+| the addon imports `sparkCells`, `resetsIn` (`activityModel.ts`), `toneOf`, `worstTone` (`shell/bottomModel.ts`), `HoverPopover`, and `KIND_LABEL` | an addon may import Core client code |
+| `UsageSnapshot.provider: AgentKind`, `AgentKind::label()` | a provider id is Core identity (milestone 9) |
+| `fetch_all` names Claude and Codex | inside the addon; milestone 9 decides about provider modules |
+| the thresholds exist in Rust (`THRESHOLDS`) and TypeScript (`USAGE_WARN`, `USAGE_DANGER`) | two languages; [usage.md](usage.md) says to keep them equal |
+| `Daemon::handle` answers `subscribe` with only `CoreSnapshot` | Core stays complete without the dispatcher; no caller uses that path |
+| the process-wide `static` result | see "Addon state" |
+
+### Small user-visible changes
+
+None expected. The bottom strip has the same DOM, except that the container
+class is `.bottom-items`. Nobody looked at the GUI (no GUI allowed); the
+render tests cover the meters, the scope rows, the dash, the popover
+buckets, the refresh link, and the diagnostics section.
+
+### Tests
+
+| Suite | Milestone 1 | Milestone 5, before the merge | Milestone 5, merged with the Activity kind seam |
+|---|---|---|---|
+| `cargo test --workspace` | 121 | 122 (tomod 115) | 130 (tomod 121, tomo-proto 7, tomo_app_lib 2) |
+| vitest | 29 files, 197 tests | 30 files, 202 tests | 31 files, 218 tests |
+| torture harness | 283 checks | 298 checks | 298 checks |
+
+New: `scripts/torture/usage.sh` (15 checks, written and green before the
+move), `polls_only_with_a_subscriber_and_a_stale_result`,
+`an_addon_does_not_name_another_addon`, the TypeScript test "an addon
+imports no other addon folder", and render tests for the scope rows, the
+dash, `usage_changed` and the snapshot, the popover and the refresh link,
+and the diagnostics section. Removed: the test of the dead `usageSummary`.
+
+### Performance
+
+Measured on 2026-09-15 with the commands in
+[addons-baseline.md](addons-baseline.md), release build, data dirs
+`/tmp/tomo-addons-usage-*`. The owner used the machine during the runs.
+Another agent built in parallel during some of them.
+
+One difference from the baseline: the bench daemon ran with
+`TOMO_USAGE_MOCK` pointing at a file with a far `fetched_at_ms`, so that it
+did not read the keychain or call the network. The subscribed windows
+therefore had no usage fetch. In the baseline, one real fetch (`security`,
+`curl`, `codex app-server`) could fall in the first subscribed window.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 5, before the merge | Milestone 5, merged |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.83 ms | 7.81 ms |
+| of which `subscribe` | 0.51 ms | 0.41 ms | 0.41 ms |
+| of which `pane_attach` | 7.14 ms | 7.42 ms | 7.41 ms |
+| Worktree switch | 0.14 ms | 0.10 ms | 0.10 ms |
+| Worktree switch with attach | 9.26 ms | 7.87 ms | 7.61 ms |
+| Refresh | 164.31 ms | 133.87 ms | 124.40 ms |
+| Process poll, fresh | 23.41 ms | 20.79 ms | 12.30 ms |
+| Process poll, cached | 0.63 ms | 0.53 ms | 0.39 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Before the merge (runs) | Merged (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.12 % (0.12, 0.13, 0.12) | **0.13 %** (0.12, 0.13, 0.13) |
+| Idle CPU, one subscriber | 1.05 % | not measured | **0.77 %** (0.78, 0.77, 0.68) |
+| RSS at window end, no subscriber | 14.6 MB | 14.6 MB (14.6, 14.6, 14.6) | **14.5 MB** (14.5, 14.5, 14.5) |
+| RSS at window end, subscribed | 14.6 MB | not measured | **14.7 MB** (14.7, 15.1, 13.2) |
+
+The merge came in between the two sets, so the subscribed windows ran only
+on the merged tree.
+
+`scripts/perf.sh` (merged tree, 3 runs, median):
+
+| Step | Baseline file | Milestone 1 | Milestone 5 (runs) |
+|---|---|---|---|
+| socket ready | 8.1 ms | 106.4 ms | 99.1 ms (120.9, 99.1, 9.4) |
+| hello (error reply) | 41.7 ms | 46.6 ms | 34.0 ms |
+| subscribe | 1.4 ms | 1.8 ms | 0.7 ms |
+| worktrees visible after launch | 224.8 ms | 321.3 ms | 214.4 ms |
+| summaries done after launch | 437.9 ms | 546.5 ms | 382.9 ms |
+| `worktree_refresh` | 175.7 ms | 206.3 ms | 155.1 ms |
+| `ps` fresh | 8.7 ms | 10.7 ms | 7.4 ms |
+| `ps` cached | 0.3 ms | 0.3 ms | 0.3 ms |
+| `worktree_list` | 0.2 ms | 0.2 ms | 0.2 ms |
+| idle CPU, 20 s subscribed | 0.5 % | 0.5 % | 0.4 % |
+| RSS | 16 MB | 15 MB | 17 MB |
+
+`socket ready` has the same spread as in milestone 1: the third run was
+9.4 ms. Milestone 1 found that the base commit gives the same slow first
+runs on this machine.
+
+Soak (`scripts/soak/busy.sh 300`, debug daemon, merged tree, 2 runs; no
+usage mock, as in the baseline):
+
+| Metric | Baseline | Run 1 | Run 2 |
+|---|---|---|---|
+| Result | PASS | PASS (22.5 MB at 60 s, 21.9 MB at the end) | PASS (20.7 MB at 60 s, 20.5 MB at the end) |
+| tomod RSS min, max, last | 20, 23, 20 MB | 21, 28, 21 MB | 19, 28, 20 MB |
+| tomod CPU max | 10.3 % | 9 % | 12 % |
+| `tomo ps --json` min..max | 31..90 ms | 27..244 ms | 26..346 ms |
+| `tomo worktree list --json` min..max | 26..53 ms | 24..48 ms | 23..318 ms |
+| Events | 429 | 426 | 397 |
+
+Gate: pass, with one number at the limit. No round trip is more than 1 ms
+and 20 % slower (reattach is 0.15 ms slower). Idle CPU is 0.13 % without and
+0.77 % with a subscriber. Idle RSS is below 18 MB. Both soaks pass, but
+their maximum RSS is 28 MB, which is the limit and 5 MB above the baseline.
+The RSS goes back to 20 MB, so it is a peak, not growth. The cause is not
+found: milestone 1 did not run the soak, the soak runs on the tree that
+includes the Activity kind seam, and the usage addon adds only one small
+`Vec` of snapshots. The CLI peaks in run 2 (346 ms, 318 ms) came while
+another agent built; the last samples were 40 ms and 26 ms. Measure the
+soak again at the next milestone on a quiet machine. GUI cold launch and GUI
+RSS: not measured (no GUI allowed).
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
@@ -789,7 +1056,7 @@ RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
 | github | **done** | none in Core; see "Milestone 2 result: GitHub" |
 | actions | addon | `Pane.action_id` and `panes.action_id`, `on_exit` action branch, `AttentionKind::Crash`, `HookEvent.action`, the `ActionActivity` call sites in `daemon.rs` |
 | runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, `RuntimeEndpoint.action_id` filled from `inner.actions`, the `RuntimeActivity` call site in `runtime.rs` |
-| usage | addon | `Inner.usage`, `Snapshot.usage`, hard-mounted `UsageStrip`, `fetch_all` names the providers |
+| usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | study (milestone 6) | `PaneKind`, `Pane.url`, `create_browser_pane` in `daemon.rs`, `Layout.tsx` switch |
 | agentation | addon on browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
 | activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
@@ -877,20 +1144,12 @@ Narrowest seam: a monitor tick seam `fn(&Arc<Daemon>)` after `poll_once`, called
 
 ### 5. Usage
 
-Risks:
-
-- `Snapshot.usage` is part of the wire snapshot.
-- The thresholds exist two times (`usage.rs` and `bottomModel.ts`).
-- `stripUsage` filters `provider !== "pi"` in UI code.
-- No torture script uses `TOMO_USAGE_MOCK`. Add one before the move, because a real fetch uses the user's credentials.
-
-Narrowest seam:
-
-- a start function in `addons::start`
-- a public `Daemon::has_subscriber()`
-- `Snapshot.usage` filled in the composition root
-- a bottom-strip slot
-- a diagnostics section slot
+Done. See "Milestone 5 result: Usage". Built as planned: `addons::start`,
+`Snapshot.usage` filled in the composition root, a bottom-strip slot, a
+diagnostics section slot, and `scripts/torture/usage.sh` with
+`TOMO_USAGE_MOCK` before the move. Not built: `Daemon::has_subscriber()`.
+The poll reads `inner.clients` in one line, as `monitor.rs` and `system.rs`
+do. A shared helper for the three is a Core refactor for another change.
 
 ### 6. Browser (study)
 
@@ -958,6 +1217,6 @@ Do this milestone only if milestones 1 to 9 leave an obvious library edge.
 1. **Fixed in milestone 1.** Restore lost the town unlock move.
 2. **Fixed in milestone 1.** A worktree move lost the `towns` and `activity` rows.
 3. **Open.** `action_stopped` on pane close. `docs/activity.md` says that pane close and archive record `action_stopped`. `remove_pane` removes the pane before `hangup`, so `on_exit` returns early, and no activity or `action.exited` hook runs. The Activity kind seam changed `docs/activity.md` to describe what the code does. The code is not changed; the Actions milestone decides.
-4. **Partly fixed.** Stale docs. The Activity kind seam fixed two: `docs/activity.md` lists `annotations_sent`, and `docs/architecture.md` gives the measured main bundle size. Open: `docs/usage.md` does not describe `scope`. `README.md` puts usage in the Activity header.
+4. **Fixed.** Stale docs. The Activity kind seam fixed two: `docs/activity.md` lists `annotations_sent`, and `docs/architecture.md` gives the measured main bundle size. Milestone 5 fixed the other two: `docs/usage.md` describes `scope`, and `README.md` puts usage in the bottom strip.
 5. **Open.** `scripts/perf.sh` sends `hello` with `protocol: 1` and subscribes before discovery ends.
-6. **Open.** Dead code. `townBySlug` (`app/src/addons/towns/Towns.tsx`) has no importer. `usageSummary` has only a test caller.
+6. **Partly fixed in milestone 5.** Dead code. `usageSummary` and `percentOf` are removed. Still open: `townBySlug` (`app/src/addons/towns/Towns.tsx`) has no importer.

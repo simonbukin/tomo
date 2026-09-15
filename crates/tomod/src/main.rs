@@ -19,7 +19,6 @@ mod runtime;
 mod server;
 mod settings;
 mod store;
-mod usage;
 mod watch;
 
 use anyhow::{Context, Result};
@@ -83,7 +82,7 @@ async fn run(args: Args) -> Result<()> {
         });
     }
     tokio::spawn(monitor::run(daemon.clone()));
-    tokio::spawn(usage::run(daemon.clone()));
+    addons::start(&daemon);
     tokio::spawn(system::run(daemon.clone()));
     tokio::spawn(watch::run(daemon.clone()));
     tokio::spawn(settings::watch(daemon.clone()));

@@ -320,7 +320,8 @@ bottom strip (three sections on the same columns)
 
 `app/src/shell/BottomStrip.tsx` fills the fixed bottom row. Its three
 sections sit on the shell columns (`--left-col`, `--right-col`). A section
-is never narrower than its content.
+is never narrower than its content. The middle section starts with
+`.bottom-items`: the `bottomItem` of each addon, in `builtins` order.
 
 ```text
 ? ⚙ | Claude ━━━━━━━── 83%  Codex —      ✓ Copied branch      CPU 12%  MEM 8.4G  GPU 3% | ● 0.1.3
@@ -331,8 +332,9 @@ is never narrower than its content.
   two buttons fit in 48 px. When the left sidebar is closed on screen, the
   section is gone. The strip reads the mode on screen from `shellLayout`,
   not the saved mode.
-- Usage: one item for each plan and one for each model scope that the
-  adapter reports (`Claude`, `Fable`, `Codex`, `Sol`). A bucket's `scope`
+- Usage (the usage addon, `app/src/addons/usage/`, see
+  [usage.md](usage.md)): one item for each plan and one for each model
+  scope that the adapter reports (`Claude`, `Fable`, `Codex`, `Sol`). A bucket's `scope`
   field names the model; a bucket without a scope counts for the whole
   plan. Pi runs on the Claude allowance and has no item. Each item shows its
   bucket with the highest use as a mono micro-bar and a percent.

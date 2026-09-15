@@ -13,9 +13,10 @@ crates/tomod/              daemon
   src/dispatch.rs          addon calls to their addon, every other Call to Daemon::handle (composition root)
   src/daemon.rs            state, the Core Call handler, Seams, tabs/panes, restore
   src/server.rs            socket accept loop, per-connection framing
-  src/addons/mod.rs        the static addon list, seams(), migrate(), the dependency test (composition root)
+  src/addons/mod.rs        the static addon list, seams(), migrate(), start(), the dependency test (composition root)
   src/addons/towns/        Japan Towns: calls, towns table, seams, dataset and pick
   src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
+  src/addons/usage/        provider usage: Claude and Codex adapters, last result, poll, usage_get, notices
   src/store.rs             SQLite schema and queries
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
@@ -45,6 +46,7 @@ app/                       Tauri client
   src/addons/types.ts      the Addon type: the slots that addons fill
   src/addons/towns/        Japan Towns view, ceremony, create field, state, CSS, data
   src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
+  src/addons/usage/        usage meters, bucket popover, diagnostics section, state
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation
 scripts/install.sh         release build and install
@@ -156,8 +158,9 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Town naming and unlocks               | `addons::towns::{name_worktree, unlock, rebind}`, joined through `Seams` |
-| Which addons exist and where they join Core | `addons::seams`, `dispatch::handle`, `app/src/addons/index.ts` |
+| Which addons exist and where they join Core | `addons::seams`, `addons::start`, `dispatch::handle`, `app/src/addons/index.ts` |
 | When `gh` runs, and when `pr_changed` and `pr_merged` fire | `addons::github::model::{fresh, update}` |
+| When usage fetches and what it warns about | `addons::usage::{get, run, crossings}` |
 | What `.tomo.toml` accepts             | `features::actions::parse`              |
 | How an action runs, reuses, or stops  | `Daemon::run_action`, `Daemon::stop_action` |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
