@@ -2231,6 +2231,7 @@ impl Daemon {
                 let inner = self.lock();
                 ok(inner.diagnostics.iter().rev().take(limit.map_or(DIAGNOSTICS_KEPT, |n| n as usize)).cloned().collect::<Vec<_>>())
             }
+            Call::SystemStats => ok(crate::system::fresh(self).await),
             Call::UsageGet { refresh } => {
                 if refresh || self.lock().usage.is_empty() {
                     crate::usage::refresh(self).await;

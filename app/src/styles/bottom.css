@@ -1,0 +1,63 @@
+/* Bottom strip: three sections on the shell columns. A section is never narrower than its content, so health and version always show. */
+.bottom-strip {
+  display: grid;
+  grid-template-columns: minmax(max-content, var(--left-col)) minmax(0, 1fr) minmax(max-content, var(--right-col));
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: var(--fs-0);
+  line-height: 1;
+  transition: grid-template-columns var(--dur) var(--ease-out);
+}
+.bottom-strip[data-left="closed"] { grid-template-columns: minmax(0, 1fr) minmax(max-content, var(--right-col)); }
+
+.bottom-left { display: flex; align-items: center; gap: 2px; padding: 0 var(--sp-2); border-right: 1px solid var(--line); min-width: 0; }
+.bottom-strip[data-left="minimal"] .bottom-left { justify-content: center; gap: 0; padding: 0; }
+.bottom-left .btn-icon { width: 22px; height: 22px; }
+.bottom-left .icon { width: 13px; height: 13px; }
+
+.bottom-middle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content) minmax(0, 1fr); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); min-width: 0; }
+.bottom-usage { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; overflow: hidden; }
+.bottom-status { display: flex; justify-content: center; min-width: 0; overflow: hidden; white-space: nowrap; }
+.bottom-metrics { display: flex; justify-content: flex-end; min-width: 0; overflow: hidden; }
+.bottom-right { display: flex; align-items: center; justify-content: flex-end; padding: 0 var(--sp-2); border-left: 1px solid var(--line); }
+
+.bottom-item { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 var(--sp-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--fg-2); font: inherit; white-space: nowrap; cursor: default; }
+.bottom-item:hover, .bottom-item[data-popup-open] { background: var(--bg-2); color: var(--fg-1); }
+.bottom-item .num, .bottom-pop .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.usage-name { color: var(--fg-1); }
+.micro-bar { font-family: var(--mono); letter-spacing: -1px; white-space: pre; }
+.micro-bar .on { color: var(--fg-2); }
+.micro-bar .off { color: var(--line-strong); }
+
+.metrics { gap: var(--sp-3); }
+.metric { display: inline-flex; gap: 4px; }
+.metric-label { color: var(--fg-3); }
+.metric .num { color: var(--fg-1); }
+
+.health .mono { color: var(--fg-2); }
+
+.tone-warning .num, .tone-warning .micro-bar .on { color: var(--waiting); }
+.tone-danger .num, .tone-danger .micro-bar .on { color: var(--hot); }
+.usage-meter.tone-danger .usage-name { color: var(--hot); }
+
+/* Previews and popovers opened from the strip. */
+.bottom-pop { min-width: 190px; max-width: 360px; font-size: var(--fs-1); line-height: 1.35; }
+.bottom-pop-title { margin: 0 0 var(--sp-1); font-size: var(--fs-1); font-weight: 600; color: var(--fg); }
+.bottom-pop-label { margin-top: var(--sp-2); color: var(--fg-3); font-size: var(--fs-0); }
+.kv-list { display: grid; gap: 2px; }
+.kv-line { display: grid; grid-template-columns: minmax(64px, auto) auto; column-gap: var(--sp-3); align-items: baseline; }
+.kv-key { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-buckets { display: grid; gap: 2px; }
+.usage-bucket { display: grid; grid-template-columns: minmax(56px, auto) auto 34px auto; column-gap: var(--sp-2); align-items: baseline; }
+.usage-bucket .num { text-align: right; }
+.bottom-pop .link { margin-top: var(--sp-1); justify-self: start; }
+
+.diagnostics { display: grid; gap: 2px; }
+.diagnostics-popover { width: 340px; }
+.diag-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 18px; }
+.diag-message { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diag-actions { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
+.diagnostics-dialog { display: grid; gap: var(--sp-2); max-height: 60vh; overflow: auto; overscroll-behavior: contain; font-size: var(--fs-1); }

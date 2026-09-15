@@ -4,6 +4,7 @@ import { rpc } from "./api";
 import { openWorktree } from "./actions";
 import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, SkeletonRows } from "./components/ui";
 import { IntegrationStatusList, Settings } from "./Settings";
+import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
 import type { ConfigIssue, HookRun, Repo, Town, Worktree } from "./types";
@@ -30,6 +31,7 @@ export function Dialogs() {
         {shown.kind === "config-check" && <ConfigCheckDialog close={close} />}
         {shown.kind === "hook-log" && <HookLogDialog close={close} />}
         {shown.kind === "settings" && <Settings close={close} section={shown.section} />}
+        {shown.kind === "diagnostics" && <DiagnosticsDialog close={close} />}
       </DialogContent>
     </Dialog>
   );

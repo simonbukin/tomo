@@ -155,7 +155,7 @@ function Shell() {
       <ShortcutReference />
       <Dialogs />
       <TownReveal />
-      <BottomStrip />
+      <BottomStrip left={layout.left} />
       <ToastDock />
     </div>
   );

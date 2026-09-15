@@ -10,6 +10,7 @@ mod integrations;
 mod layout;
 mod login_env;
 mod monitor;
+mod system;
 mod moves;
 mod procs;
 mod pty;
@@ -81,6 +82,7 @@ async fn run(args: Args) -> Result<()> {
     }
     tokio::spawn(monitor::run(daemon.clone()));
     tokio::spawn(usage::run(daemon.clone()));
+    tokio::spawn(system::run(daemon.clone()));
     tokio::spawn(watch::run(daemon.clone()));
     tokio::spawn(settings::watch(daemon.clone()));
 
