@@ -118,11 +118,11 @@ describe("Activity view", () => {
     expect(titles()).toEqual(EVENTS.map(([kind]) => kind).filter((k) => k !== "hook_failed"));
   });
 
-  it("drops a waiting row from Needs me once its agent moves on, but that row still offers Resolve", async () => {
+  it("drops a waiting row from Needs me and its Resolve button once its agent moves on", async () => {
     setState({ agents: { p1: agent("working") } });
     const user = userEvent.setup();
     await show();
-    expect(describeRow("agent_waiting")[3]).toEqual(["Go to Claude", "Resolve"]);
+    expect(describeRow("agent_waiting")[3]).toEqual(["Go to Claude"]);
     await user.click(screen.getByRole("button", { name: "Needs me" }));
     expect(titles()).toEqual(["checkpoint_created", "action_crashed"]);
   });

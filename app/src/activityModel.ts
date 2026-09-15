@@ -1,18 +1,19 @@
 import type { ActionDef, ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, PullRequest, RuntimeEndpoint, UsageBucket, UsageSnapshot } from "./types";
 
 /**
- * An item still asks for the human. A waiting item only counts while its agent is still waiting:
- * once the agent moves on, the user already answered it.
+ * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
+ * unviewed, and an agent in its pane must still wait: once the agent moves on, the user already answered it.
+ * `Store::activity_list` in the daemon applies the same rule to `tomo activity --needs-me`.
  */
-export function needsMeItem(a: AttentionItem, agents?: AgentPresence[]): boolean {
+export function needsMeItem(a: AttentionItem, agents: AgentPresence[]): boolean {
   if (a.resolved_at_ms != null) return false;
   if (a.kind !== "waiting") return true;
   if (a.viewed_at_ms != null) return false;
-  return !agents || agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
+  return agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
 }
 
 /** Unresolved items, least recently viewed first, so `next_attention` cycles through them. */
-export function needsMeItems(list: AttentionItem[], agents?: AgentPresence[]): AttentionItem[] {
+export function needsMeItems(list: AttentionItem[], agents: AgentPresence[]): AttentionItem[] {
   return list.filter((a) => needsMeItem(a, agents)).sort((a, b) => (a.viewed_at_ms ?? 0) - (b.viewed_at_ms ?? 0) || a.created_at_ms - b.created_at_ms);
 }
 

@@ -72,7 +72,7 @@ function EventRow({ e }: { e: ActivityEvent }) {
   const worktreeName = useStore((s) => s.worktrees.find((w) => w.id === e.worktree_id)?.name ?? null);
   const url = useStore((s) => payloadString(e, "url") ?? view.url?.(e, s) ?? null);
   const labels = useStore((s) => (view.actions ?? []).map((a) => a.label(e, s)));
-  const open = useStore((s) => !!e.attention_id && s.attention.some((a) => a.id === e.attention_id && needsMeItem(a)));
+  const open = useStore((s) => !!e.attention_id && s.attention.some((a) => a.id === e.attention_id && needsMeItem(a, Object.values(s.agents))));
   const line = [who, worktreeName].filter(Boolean).join(" · ");
   const status = view.status ?? null;
   return (
