@@ -46,6 +46,14 @@ export interface WorktreeNameFieldProps {
   onHint: (hint: string | null) => void;
 }
 
+/** A browser toolbar item of one pane. `url` is the page on screen; the item resets its own page state when it changes. `setCovering(true)` hides the page while the item shows a floating surface over it. */
+export interface BrowserToolbarProps {
+  paneId: Id;
+  worktreeId: Id;
+  url: string;
+  setCovering: (covering: boolean) => void;
+}
+
 export interface TopbarProps {
   worktree: Worktree;
 }
@@ -82,6 +90,8 @@ export interface Addon {
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
   /** The worktree top bar. `buttons` render before the editor button; `marks` render after it, before the runtime and overflow buttons. */
   topbar?: { buttons?: ComponentType<TopbarProps>; marks?: ComponentType<TopbarProps> };
+  /** Controls in the browser pane toolbar, after the url field and before open-external. */
+  browserToolbar?: ComponentType<BrowserToolbarProps>;
   /** Items at the top of the worktree overflow menu. The menu adds a separator after a list that is not empty. */
   worktreeMenu?: (w: Worktree, s: State) => MenuItem[];
   /** Items after "focus logs" in the menu of one runtime endpoint. */
