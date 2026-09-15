@@ -66,7 +66,7 @@ tab_close "$(pane_field "$A" tab_id)"; sleep 0.3
 NA=$(reopen | jq_ "print(d['active_pane_id'])")
 wait_for "[ \"\$(agent_field $NA state)\" = idle ]" 20
 [ "$(agent_field "$NA" kind)" = claude ] && [ "$(agent_field "$NA" session_ref)" = "$SID" ] && check 0 "agent tab resumes session $SID" || check 1 "agent resume" "$(agent_field "$NA" kind) $(agent_field "$NA" session_ref)"
-case "$($RPC attach "$NA" 2)" in *"--resume $SID"*) check 0 "the resume command line ran in a shell";; *) check 1 "resume line";; esac
+case "$($RPC attach "$NA" 2)" in *"fake-agent session $SID"*) check 0 "the resume command line reached the agent";; *) check 1 "resume line";; esac
 
 # 5. an Action tab comes back as a shell with the Action label; the command does not run
 printf '[[actions]]\nid = "serve"\nlabel = "Serve"\ncommand = "touch marker-serve; sleep 30"\n' > "$R/.tomo.toml"
