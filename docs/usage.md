@@ -15,6 +15,9 @@ source to `UsageBucket { label, fraction_used, resets_at_ms, detail }`.
 
 ## Sources
 
+The daemon reads Claude and Codex. Pi has no snapshot: Pi runs on Claude's
+allowance, so the Claude snapshot shows its use.
+
 ### Claude
 
 Claude Code stores an OAuth token in the macOS keychain (service
@@ -61,11 +64,6 @@ Reasons: `no Codex login` when `~/.codex/auth.json` is absent; `codex is
 not installed` when the binary is not on `PATH`; `codex app-server did not
 answer` after the timeout; `codex app-server: <message>` for a JSON-RPC
 error.
-
-### Pi
-
-Pi has no allowance. The snapshot is always `available: false` with reason
-`Pi has no usage limits`.
 
 ## Mock source
 

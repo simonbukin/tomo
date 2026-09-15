@@ -223,6 +223,20 @@ trusted), `process_only` (binary found, no hooks installed), or
 `unavailable` (binary not on PATH), with a reason. The GUI shows the same
 list from the palette.
 
+## Login PATH
+
+A daemon that the installed app starts gets the bare launchd `PATH`
+(`/usr/bin:/bin:/usr/sbin:/sbin`). Then `codex`, `gh`, `pnpm`, and other
+tools are not found. At start, before the runtime makes any thread,
+`login_env::apply` examines `PATH`. If `PATH` has neither
+`/opt/homebrew/bin` nor `/usr/local/bin`, or does not have
+`$HOME/.local/bin`, the daemon runs `$SHELL -l -i -c` once to print the
+login `PATH` between two markers. The shell gets two seconds, then the
+daemon kills its process group. The new `PATH` is the login entries first,
+then the old entries, without empty or duplicate entries. A daemon that
+starts from a terminal with a full `PATH` does not run the shell. Panes,
+Actions, hooks, and adapters inherit the new `PATH`.
+
 ## Feature boundary: Towns
 
 Japan Towns lives in `crates/tomod/src/features/towns.rs` (dataset and

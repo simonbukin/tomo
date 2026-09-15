@@ -275,7 +275,7 @@ pub fn fetch_all() -> Vec<UsageSnapshot> {
             }
         };
     }
-    vec![fetch_claude(now), fetch_codex(now), unavailable(AgentKind::Pi, "Pi has no usage limits", now)]
+    vec![fetch_claude(now), fetch_codex(now)]
 }
 
 fn same_data(a: &UsageSnapshot, b: &UsageSnapshot) -> bool {
@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn mock_file_parses_a_snapshot_list() {
         let text = br#"[{"provider":"claude","available":true,"reason":null,"buckets":[{"label":"5-hour","fraction_used":0.5,"resets_at_ms":1,"detail":null}],"fetched_at_ms":2},
-                        {"provider":"pi","available":false,"reason":"Pi has no usage limits","buckets":[],"fetched_at_ms":2}]"#;
+                        {"provider":"codex","available":false,"reason":"no Codex login","buckets":[],"fetched_at_ms":2}]"#;
         let list = parse_mock(text).unwrap();
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].provider, AgentKind::Claude);
