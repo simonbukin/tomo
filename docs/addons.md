@@ -2,14 +2,17 @@
 
 Read this before you add a feature or move one. It takes a few minutes.
 
-Status: milestone 1 is done. Towns is the first addon and the reference for
-every later extraction. The procedures below are the ones that Towns proved.
+Status: milestones 1 and 5 are done. Towns is the first addon and the
+reference for every later extraction. Usage is the second addon; it added a
+background task, a snapshot field, and two GUI slots. The procedures below
+are the ones that Towns and Usage proved.
 
 Related files:
 
 - [addons-map.md](addons-map.md) shows how each candidate touches every layer.
 - [addons-baseline.md](addons-baseline.md) has the performance numbers and the test counts before the refactor.
 - [features/towns.md](features/towns.md) describes the Towns addon.
+- [usage.md](usage.md) describes the Usage addon.
 
 ## The three layers
 
@@ -60,7 +63,8 @@ source code with a clean dependency boundary.
 | Candidate | Status |
 |---|---|
 | towns | **done** (milestone 1) |
-| github, actions, runtime, usage, agentation | addon, not moved yet |
+| usage | **done** (milestone 5) |
+| github, actions, runtime, agentation | addon, not moved yet |
 | browser | study (milestone 6) |
 | activity projections | partial |
 | agent providers | evaluate last |
@@ -74,9 +78,9 @@ source code with a clean dependency boundary.
    that the "Allowed addon dependencies" table lists.
 4. **Composition roots name everything.** A composition root is a file whose
    only job is to list Core and addons together. The composition roots are:
-   - `crates/tomod/src/main.rs`: startup, `addons::seams()`, `addons::migrate()`
-   - `crates/tomod/src/addons/mod.rs`: the static addon list, the seam registration, the table creation
-   - `crates/tomod/src/dispatch.rs`: the match that sends an addon `Call` to its addon
+   - `crates/tomod/src/main.rs`: startup, `addons::seams()`, `addons::migrate()`, `addons::start()`
+   - `crates/tomod/src/addons/mod.rs`: the static addon list, the seam registration, the table creation, the background tasks
+   - `crates/tomod/src/dispatch.rs`: the match that sends an addon `Call` to its addon, and the `Snapshot` that adds the addon fields to the `CoreSnapshot`
    - `crates/tomo-proto/src/lib.rs`: the `Call`, `Event`, `Snapshot`, and `HOOK_EVENTS` definitions, and the addon re-exports
    - `app/src/addons/index.ts`: the `builtins` list
    - one `@import` line for each addon in `app/src/styles/index.css`
@@ -131,6 +135,7 @@ dynamic loading, no service locator, and no dependency injection container.
 ```rust
 // crates/tomod/src/addons/mod.rs
 pub mod towns;
+pub mod usage;
 
 pub fn seams() -> Seams {
     Seams { worktree_namer: Some(towns::name_worktree), worktree_created: vec![towns::unlock], worktree_rebound: vec![towns::rebind] }
@@ -139,24 +144,45 @@ pub fn seams() -> Seams {
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
     towns::migrate(store)
 }
+
+pub fn start(daemon: &Arc<Daemon>) {
+    tokio::spawn(usage::run(daemon.clone()));
+}
 ```
 
-`main.rs` calls `Daemon::new(paths, addons::seams())` and then
-`addons::migrate(&daemon.lock().store)`. After that, the seams do not change.
+`main.rs` calls `Daemon::new(paths, addons::seams())`, then
+`addons::migrate(&daemon.lock().store)`, and after `restore` and the Core
+tasks, `addons::start(&daemon)`. After that, the seams do not change.
 
 ```rust
 // crates/tomod/src/dispatch.rs
 match call {
+    Call::Subscribe => ok(Snapshot {
+        core: daemon.subscribe(client_id)?,
+        usage: usage::snapshots(),
+    }),
     Call::TownList => towns::list(daemon),
     Call::TownPick => towns::pick(daemon),
     Call::TownHistory { slug } => towns::history(daemon, &slug),
+    Call::UsageGet { refresh } => usage::get(daemon, refresh).await,
     call => daemon.handle(client_id, call).await,
 }
 ```
 
 `server.rs` sends every request to `dispatch::handle`. `Daemon::handle` has
 a `_` arm that returns `unsupported`, because the dispatcher answers the
-addon calls first. The cost: the compiler does not tell you when a new
+addon calls first.
+
+**The snapshot.** `Daemon::subscribe` marks the client subscribed and
+returns `CoreSnapshot`, which names no addon. `Snapshot` in `lib.rs` is
+`#[serde(flatten)] core: CoreSnapshot` plus one field for each addon.
+`serde` and `ts-rs` put the flattened fields at the top level, so the JSON
+and the generated TypeScript look like one flat object. The flattened
+struct must be the Core one: `ts-rs` cannot flatten an empty struct, so an
+`AddonSnapshot` would break the bindings when the last addon field goes.
+`Daemon::handle` still answers `subscribe` with the `CoreSnapshot` alone,
+for a caller that does not go through the dispatcher. No caller does that
+today. The cost: the compiler does not tell you when a new
 **Core** `Call` variant has no arm in `Daemon::handle`. The torture harness
 and the CLI tests find it at run time.
 
@@ -196,24 +222,30 @@ split.
 
 ```ts
 // app/src/addons/index.ts
-export const builtins: readonly Addon[] = [towns];
+export const builtins: readonly Addon[] = [towns, usage];
 ```
 
 The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns
-needs:
+and Usage need:
 
-| Slot | Who renders it |
-|---|---|
-| `views` (global view: id, title, label, icon, lazy component, fallback) | `App.tsx` center area, `Sidebar.tsx` and `shell/LeftRail.tsx` buttons, `shell/TopStrip.tsx` title, the View menu in `appMenu.ts`, view checks in `uiState.ts` |
-| `commands` | `allActions()` in `actions.ts` (palette, shortcuts, menus, shortcut reference) |
-| `worktreeNameField` | `CreateWorktree` in `Dialogs.tsx`; it reports the `name_hint` |
-| `mount` | `App.tsx`, once for the session (the unlock ceremony) |
-| `onSnapshot` | `applySnapshot` in `store.ts`, after each `subscribe` |
-| `onFrame` | `applyFrame` in `store.ts`, for each daemon event |
+| Slot | Who renders it | First user |
+|---|---|---|
+| `views` (global view: id, title, label, icon, lazy component, fallback) | `App.tsx` center area, `Sidebar.tsx` and `shell/LeftRail.tsx` buttons, `shell/TopStrip.tsx` title, the View menu in `appMenu.ts`, view checks in `uiState.ts` | towns |
+| `commands` | `allActions()` in `actions.ts` (palette, shortcuts, menus, shortcut reference) | towns |
+| `worktreeNameField` | `CreateWorktree` in `Dialogs.tsx`; it reports the `name_hint` | towns |
+| `mount` | `App.tsx`, once for the session (the unlock ceremony) | towns |
+| `bottomItem` | `shell/BottomStrip.tsx`, inside `.bottom-items` at the start of the middle section, before the status slot | usage |
+| `diagnosticsSection` | `DiagnosticsReport` in `shell/Diagnostics.tsx`, after the core sections and before the compact actions | usage |
+| `onSnapshot(snapshot)` | `applySnapshot` in `store.ts`, with each `subscribe` snapshot | towns, usage |
+| `onFrame` | `applyFrame` in `store.ts`, for each daemon event | towns, usage |
 
-The order of `builtins` is the render order of every slot. An addon keeps
-its own state in its own module (Towns: `app/src/addons/towns/state.ts`), not
-in the core `State`.
+The order of `builtins` is the render order of every slot. Each item gets
+the addon `id` as its React key. An addon keeps its own state in its own
+module (Towns: `app/src/addons/towns/state.ts`, Usage:
+`app/src/addons/usage/state.ts`), not in the core `State`.
+
+`.bottom-items` always renders, also when it is empty, so that the status
+slot and the metrics keep their grid columns.
 
 ## Performance law
 
@@ -233,6 +265,11 @@ create, a move, or a restore. The GUI ceremony stays mounted, but it renders
 nothing and starts no timer until a `town_unlocked` event arrives. The map
 view and the town dataset load lazily.
 
+Usage background work: one daemon task, started by `addons::start`, with the
+cadence it had in Core (see the table). The reason is in
+[usage.md](usage.md), "Polling cadence". The GUI meters start no timer and
+no request; the `refresh` link sends one `usage_get` on a click.
+
 Background work that exists today and must keep its current trigger:
 
 | Work | Trigger | Owner |
@@ -240,7 +277,7 @@ Background work that exists today and must keep its current trigger:
 | process poll | every 2 s with a subscriber, 15 s without | core `monitor.rs` |
 | `lsof` port scan | each monitor tick with candidate pids | runtime |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
-| usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage |
+| usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
 | `gh pr view` | each `pr_status` call; the inspector polls every 120 s while it is open | github |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
@@ -257,6 +294,14 @@ Background work that exists today and must keep its current trigger:
   `<addon>.`. Do not force relational state into KV.
 - In memory, keep addon state out of `Inner`. Towns keeps no daemon state in
   memory at all; it reads its table when a call needs it.
+- Usage keeps its last result in memory only, because a restart must start
+  empty (the first fetch compares against zero). It holds the result in a
+  `static Mutex` in `addons/usage/mod.rs`. That is process-wide state; it is
+  correct because `tomod.lock` allows one daemon per data dir. The other
+  options were worse: a field in `Inner` is a Core leak; a handle passed
+  through `server.rs` makes Core carry an addon type; the `kv` table would
+  write memory-only data to disk. If a process ever runs two daemons, pass a
+  handle instead.
 - If a seam needs both locks, take the Core `Inner` lock first, then the
   addon lock. Never take the Core lock while you hold an addon lock.
 - Never drop or rename a table or a column that holds user data. If the
@@ -335,7 +380,9 @@ Towns is the worked example for each step.
    Add `pub mod <name>;` and its lines to `seams()` and `migrate()` in `addons/mod.rs`.
    Add one arm for each call in `dispatch.rs`.
    Add a seam only if the addon must take part in a Core operation. Add a new `Seams` field only when no field fits, and call it at one fixed point.
+   If a client needs the addon state at `subscribe`, add a field to `Snapshot` in `lib.rs` and fill it in the `Subscribe` arm of `dispatch.rs`.
 4. **Background work.** Write the reason in the addon doc. If there is no reason, add no background work.
+   A task gets one line in `addons::start`. It must check for a subscriber or another trigger before it does work.
 5. **CLI.** Add a subcommand block in `crates/tomo-cli/src/main.rs` with a `--json` branch.
 6. **GUI.** Make `app/src/addons/<name>/index.ts`, which exports one `Addon` value. Add it to `builtins`.
    Put its CSS next to it and add one `@import` line in `app/src/styles/index.css`.
@@ -350,9 +397,9 @@ Towns is the worked example for each step.
 
 1. Delete `crates/tomod/src/addons/<name>/`, `crates/tomo-proto/src/addons/<name>.rs`, and `app/src/addons/<name>/`.
 2. Remove the registration lines:
-   - its lines in `seams()` and `migrate()` in `addons/mod.rs`
-   - its arms and its `use` line in `dispatch.rs`
-   - its `mod` line, its re-export, its `Call` and `Event` variants, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
+   - its lines in `seams()`, `migrate()`, and `start()` in `addons/mod.rs`
+   - its arms, its `use` line, and its field line in the `Subscribe` arm in `dispatch.rs`
+   - its `mod` line, its re-export, its `Call` and `Event` variants, its `Snapshot` field, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
    - its entry in `builtins`
    - its `@import` line in `app/src/styles/index.css`
    - its CLI subcommand block and printer
@@ -408,7 +455,8 @@ add a slot "for later". Add the slot to the `Addon` type, then render it at
 one site from `builtins`.
 
 Slots that exist (see "Static composition, GUI"): `views`, `commands`,
-`worktreeNameField`, `mount`, `onSnapshot`, `onFrame`.
+`worktreeNameField`, `mount`, `bottomItem`, `diagnosticsSection`,
+`onSnapshot`, `onFrame`.
 
 Slots that later milestones will need (from the map):
 
@@ -417,8 +465,6 @@ Slots that later milestones will need (from the map):
 | inspector section | github | `RightSidebar.tsx`, `RightRail.tsx`, `uiState.ts` |
 | worktree signal | github, runtime | `activityModel.ts` `nowSignals`, `Signals.tsx`, `LeftRail.tsx` |
 | topbar item | actions | `WorktreeHeader.tsx` `ActionBar` |
-| bottom-strip item | usage | `shell/BottomStrip.tsx` |
-| diagnostics section | usage | `shell/Diagnostics.tsx` |
 | pane renderer | browser | `Layout.tsx`, `Tabs.tsx` |
 | browser toolbar item | agentation | `BrowserPane.tsx` |
 | activity row renderer | actions, runtime, github, agentation | `Activity.tsx` `whoOf`, `EventRow`; `glyphs.ts` `ACTIVITY` |
@@ -575,7 +621,7 @@ addon.
 | github | addon | `Repo.github` computed in core `repo_view`, `Inner.prs`, `ActivityKind::PrMerged`, `TownHistory.pr` |
 | actions | addon | `Pane.action_id` and `panes.action_id`, `on_exit` action branch, `AttentionKind::Crash`, `HookEvent.action`, four `ActivityKind::Action*` |
 | runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, `RuntimeEndpoint.action_id` filled from `inner.actions`, `ENDPOINT_REPEAT_MS` in `activity.rs` |
-| usage | addon | `Inner.usage`, `Snapshot.usage`, hard-mounted `UsageStrip`, `fetch_all` names the providers |
+| usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | study (milestone 6) | `PaneKind`, `Pane.url`, `create_browser_pane` in `daemon.rs`, `Layout.tsx` switch |
 | agentation | addon on browser | `AnnotationsSend` arm, `ActivityKind::AnnotationsSent`, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
 | activity projections | partial | closed `ActivityKind` with 8 feature nouns, unknown kind decodes as `HookFailed`, two different "Needs Me" definitions |
@@ -666,20 +712,12 @@ Narrowest seam: a monitor tick seam `fn(&Arc<Daemon>)` after `poll_once`, called
 
 ### 5. Usage
 
-Risks:
-
-- `Snapshot.usage` is part of the wire snapshot.
-- The thresholds exist two times (`usage.rs` and `bottomModel.ts`).
-- `stripUsage` filters `provider !== "pi"` in UI code.
-- No torture script uses `TOMO_USAGE_MOCK`. Add one before the move, because a real fetch uses the user's credentials.
-
-Narrowest seam:
-
-- a start function in `addons::start`
-- a public `Daemon::has_subscriber()`
-- `Snapshot.usage` filled in the composition root
-- a bottom-strip slot
-- a diagnostics section slot
+Done. See "Milestone 5 result: Usage". Built as planned: `addons::start`,
+`Snapshot.usage` filled in the composition root, a bottom-strip slot, a
+diagnostics section slot, and `scripts/torture/usage.sh` with
+`TOMO_USAGE_MOCK` before the move. Not built: `Daemon::has_subscriber()`.
+The poll reads `inner.clients` in one line, as `monitor.rs` and `system.rs`
+do. A shared helper for the three is a Core refactor for another change.
 
 ### 6. Browser (study)
 
@@ -749,6 +787,6 @@ Do this milestone only if milestones 1 to 9 leave an obvious library edge.
 1. **Fixed in milestone 1.** Restore lost the town unlock move.
 2. **Fixed in milestone 1.** A worktree move lost the `towns` and `activity` rows.
 3. **Open.** `action_stopped` on pane close. `docs/activity.md` says that pane close and archive record `action_stopped`. `remove_pane` removes the pane before `hangup`, so `on_exit` returns early, and no activity or `action.exited` hook runs.
-4. **Open.** Stale docs. `docs/usage.md` does not describe `scope`. `docs/activity.md` omits `annotations_sent`. `docs/architecture.md` gives an old main bundle size. `README.md` puts usage in the Activity header.
+4. **Partly fixed in milestone 5.** Stale docs. `docs/usage.md` now describes `scope`, and `README.md` puts usage in the bottom strip. Still open: `docs/activity.md` omits `annotations_sent`, and `docs/architecture.md` gives an old main bundle size.
 5. **Open.** `scripts/perf.sh` sends `hello` with `protocol: 1` and subscribes before discovery ends.
-6. **Open.** Dead code. `townBySlug` (`app/src/addons/towns/Towns.tsx`) has no importer. `usageSummary` has only a test caller.
+6. **Partly fixed in milestone 5.** Dead code. `usageSummary` and `percentOf` are removed. Still open: `townBySlug` (`app/src/addons/towns/Towns.tsx`) has no importer.
