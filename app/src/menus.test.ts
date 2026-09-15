@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { MenuEntry, MenuItem } from "./components/ui";
-import { editorName, endpointMenu, paneMenu, tabMenu, toggledTag, worktreeMenu } from "./menus";
+import { editorName, paneMenu, tabMenu, toggledTag, worktreeMenu } from "./menus";
 import { getState, type State } from "./store";
-import type { Pane, RuntimeEndpoint, Tab, Worktree } from "./types";
+import type { Pane, Tab, Worktree } from "./types";
 
 const labels = (items: MenuItem[]) => items.map((it) => ("separator" in it ? "—" : it.label));
 const entry = (items: MenuItem[], label: string) => items.find((it): it is MenuEntry => !("separator" in it) && it.label === label)!;
@@ -14,7 +14,6 @@ const tabs = [
   { id: "t2", worktree_id: "w1", title: "two", position: 1, is_active: false, active_pane_id: "p3", layout: leaf("p3") },
 ] as unknown as Tab[];
 const pane = (id: string, tab_id: string, extra: Partial<Pane> = {}) => ({ id, tab_id, worktree_id: "w1", title: id, cwd: `/src/aogashima/${id}`, agent: null, kind: "terminal", url: null, ...extra }) as unknown as Pane;
-const endpoint = (extra: Partial<RuntimeEndpoint>) => ({ id: "e1", worktree_id: "w1", pane_id: "p2", action_id: "app", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, ...extra }) as RuntimeEndpoint;
 
 const base = getState();
 const state = {
@@ -26,7 +25,6 @@ const state = {
     p2: pane("p2", "t1"),
     p3: pane("p3", "t2"),
   },
-  endpoints: { w1: [endpoint({})] },
   config: { keybindings: { new_terminal: "mod+d", close_pane: "mod+w" }, editor_command: ["zed", "{path}"], states: [] },
   ui: { ...base.ui, view: "worktree", activeWorktreeId: "w1" },
 } as unknown as State;
@@ -75,15 +73,6 @@ describe("pane menu", () => {
   it("disables send to when the worktree has one tab", () => {
     const single = { ...state, tabs: { w1: [tabs[0]] } } as State;
     expect(entry(paneMenu("p1", single), "send to").disabled).toBe(true);
-  });
-});
-
-describe("runtime menus", () => {
-  it("an endpoint row menu disables open for tcp and keeps the port copy", () => {
-    const menu = endpointMenu("w1", endpoint({ protocol: "tcp", action_id: null }), state);
-    expect(labels(menu)).toEqual(["open", "focus logs", "—", "copy"]);
-    expect(entry(menu, "open").disabled).toBe(true);
-    expect(labels(entry(menu, "copy").submenu!)).toEqual(["port"]);
   });
 });
 

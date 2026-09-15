@@ -51,6 +51,25 @@ describe("addon boundary", () => {
     expect(coreActivityFiles.filter((path) => addonKind.test(sources[path]!))).toEqual([]);
   });
 
+  it("core client files do not name a runtime endpoint noun", () => {
+    const runtimeNoun = /RuntimeEndpoint|RuntimeProtocol|RuntimeActivity|RuntimePreview|endpoints_changed|["'`]runtime_list["'`]|endpointsOf|endpointUrl|httpEndpoints|endpointLabel|\bendpoints\b/;
+    const offenders = Object.entries(sources)
+      .filter(([path]) => !inAddons(path))
+      .flatMap(([path, text]) => text.split("\n").flatMap((line, i) => (runtimeNoun.test(line) ? [`${path}:${i + 1}: ${line.trim()}`] : [])));
+    expect(offenders).toEqual([]);
+  });
+
+  it("the Runtime and the Actions addon do not name each other", () => {
+    const inFolder = (path: string, folder: string) => path.startsWith(`./${folder}/`) || path.includes(`/addons/${folder}/`);
+    const actionNoun = /\bAction(Def|Set|RunResult|Mode|Show|Activity|Buttons|Warning)\b|["'`]action_(list|run|stop|restart)["'`]|actions_changed|runningAction|WorktreeAction\b|SOURCE_KIND/;
+    const runtimeNoun = /RuntimeEndpoint|RuntimePreview|EndpointMark|endpointsOf|endpointUrl|httpEndpoints|endpointLabel|\bendpoints\b/;
+    const offenders = Object.entries(sources).flatMap(([path, text]) => {
+      const noun = inFolder(path, "runtime") ? actionNoun : inFolder(path, "actions") ? runtimeNoun : null;
+      return noun ? text.split("\n").flatMap((line, i) => (noun.test(line) ? [`${path}:${i + 1}: ${line.trim()}`] : [])) : [];
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it("core client files do not name Agentation", () => {
     const agentationNoun = /agentation|annotat|EvidenceBundle|browser_feedback|browser:\/\/feedback/i;
     const offenders = Object.entries(sources)

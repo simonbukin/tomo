@@ -1,11 +1,11 @@
-import { endpointUrl, httpEndpoints } from "../../activityModel";
 import { rpc } from "../../api";
 import type { MenuItem } from "../../components/ui";
 import type { ActionDef, ActionRunResult } from "../../generated";
 import { describeBinding } from "../../keys";
 import type { PaletteEntry } from "../../paletteModel";
-import { endpointsOf, getState, setRowError, toast, type State } from "../../store";
-import type { Id, RuntimeEndpoint, Worktree } from "../../types";
+import { getState, setRowError, toast, type State } from "../../store";
+import type { Id, Worktree } from "../../types";
+import { sourceMenu } from "../index";
 import type { BoundCommand } from "../types";
 import { actionSet } from "./state";
 
@@ -13,9 +13,6 @@ import { actionSet } from "./state";
 export const SOURCE_KIND = "action";
 
 const sep: MenuItem = { separator: true };
-
-// The store loads this module through addons/index.ts, and actions.ts loads the store: a lazy import keeps that cycle out of module start.
-const withActions = (run: (a: typeof import("../../actions")) => unknown) => () => void import("../../actions").then(run);
 
 const done = (worktreeId: Id) => () => setRowError(worktreeId, null);
 
@@ -45,27 +42,14 @@ export function runningActionIds(s: State, worktreeId: Id): string[] {
     .sort();
 }
 
-export function liveEndpointFor(s: State, worktreeId: Id, actionId: string): RuntimeEndpoint | null {
-  return endpointsOf(s, worktreeId).find((e) => e.action_id === actionId && e.protocol !== "tcp") ?? null;
-}
-
-function copyEndpoints(list: RuntimeEndpoint[]): MenuItem {
-  const many = list.length > 1;
-  const entries = list.flatMap((e) => [
-    ["URL", endpointUrl(e), many ? `url :${e.port}` : "url"],
-    ["Port", String(e.port), many ? `port :${e.port}` : "port"],
-  ]);
-  return { label: "copy", disabled: entries.length === 0, submenu: entries.map(([what, value, label]) => ({ label, run: withActions((a) => a.copyText(value, what)) })) };
-}
-
 export function runningActionItems(worktreeId: Id, actionId: string, s: State = getState()): MenuItem[] {
-  const open = httpEndpoints(endpointsOf(s, worktreeId).filter((e) => e.action_id === actionId));
+  const { first, last } = sourceMenu(worktreeId, { kind: SOURCE_KIND, id: actionId }, s);
   return [
-    ...open.map((e) => ({ label: open.length > 1 ? `open :${e.port}` : "open", run: withActions((a) => a.openEndpoint(endpointUrl(e), worktreeId)) })),
+    ...first,
     { label: "focus logs", run: () => runWorktreeAction(worktreeId, actionId) },
     { label: "restart", run: () => restartWorktreeAction(worktreeId, actionId) },
     { label: "stop", danger: true, run: () => stopWorktreeAction(worktreeId, actionId) },
-    ...(open.length ? [sep, copyEndpoints(open)] : []),
+    ...(last.length ? [sep, ...last] : []),
   ];
 }
 
@@ -78,15 +62,6 @@ export function worktreeItems(w: Worktree, s: State): MenuItem[] {
       const shortcut = a.shortcut ? describeBinding(a.shortcut) : undefined;
       return running.includes(a.id) ? { label: a.label, shortcut, submenu: runningActionItems(w.id, a.id, s) } : { label: a.label, shortcut, run: () => runWorktreeAction(w.id, a.id) };
     });
-}
-
-export function endpointItems(worktreeId: Id, e: RuntimeEndpoint): MenuItem[] {
-  const actionId = e.action_id;
-  if (!actionId) return [];
-  return [
-    { label: "restart", run: () => restartWorktreeAction(worktreeId, actionId) },
-    { label: "stop", danger: true, run: () => stopWorktreeAction(worktreeId, actionId) },
-  ];
 }
 
 export function paletteEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {

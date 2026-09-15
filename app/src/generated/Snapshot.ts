@@ -18,4 +18,4 @@ import type { WorktreeResources } from "./WorktreeResources";
 /**
  * What `subscribe` returns: everything a client needs to render. Core builds `core`, and `tomod` `dispatch.rs` adds the addon fields. On the wire every field is top level.
  */
-export type Snapshot = { usage: Array<UsageSnapshot>, actions: Array<ActionSet>, status: Status, config: Config, repos: Array<Repo>, worktrees: Array<Worktree>, tabs: Array<Tab>, panes: Array<Pane>, agents: Array<AgentPresence>, attention: Array<AttentionItem>, resources: Array<WorktreeResources>, endpoints: Array<RuntimeEndpoint>, ui_state: unknown, };
+export type Snapshot = { usage: Array<UsageSnapshot>, actions: Array<ActionSet>, endpoints: Array<RuntimeEndpoint>, status: Status, config: Config, repos: Array<Repo>, worktrees: Array<Worktree>, tabs: Array<Tab>, panes: Array<Pane>, agents: Array<AgentPresence>, attention: Array<AttentionItem>, resources: Array<WorktreeResources>, ui_state: unknown, };

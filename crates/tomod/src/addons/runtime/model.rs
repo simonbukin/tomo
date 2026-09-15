@@ -1,26 +1,13 @@
-//! Runtime endpoints: listening TCP sockets owned by pane process trees.
-//!
-//! Attribution goes pid → pane (the pane whose PTY root is an ancestor) →
-//! Action. A port number is never evidence; a process outside every pane
-//! tree is never reported.
+//! The pure rules of Runtime: `lsof` text, hosts, idle shells, the restart grace, and the HTTP probe of one socket.
 
-use crate::activity;
-use crate::daemon::{Daemon, Inner};
-use crate::events;
-use crate::monitor;
-use crate::procs;
-use serde_json::json;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::Arc;
 use std::time::Duration;
 use tomo_proto::*;
 
 /// A port that vanishes and returns within this window (a restart) makes no event.
 pub const REMOVAL_GRACE_MS: u64 = 5_000;
-/// One `endpoint_discovered` activity per worktree and port in this window.
-pub const ENDPOINT_REPEAT_MS: u64 = 60_000;
 const PROBE_TIMEOUT: Duration = Duration::from_millis(400);
 const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
 
@@ -59,67 +46,9 @@ pub fn parse_lsof(text: &str) -> Vec<Listener> {
     out
 }
 
-/// One `lsof` call for the given pids; none when there is nothing to ask about.
-pub fn listeners(pids: &[u32]) -> Result<Vec<Listener>, String> {
-    if pids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let list = pids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
-    std::process::Command::new("lsof")
-        .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", &list, "-F", "pn"])
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .map(|o| parse_lsof(&String::from_utf8_lossy(&o.stdout)))
-        .map_err(|e| format!("lsof: {e}"))
-}
-
 pub fn is_shell(name: &str) -> bool {
     let base = name.trim_start_matches('-').rsplit('/').next().unwrap_or(name);
     SHELLS.contains(&base)
-}
-
-fn owned(inner: &Inner) -> Vec<ProcessInfo> {
-    monitor::classify_all(inner).into_iter().filter(|p| p.ownership == Ownership::Owned).collect()
-}
-
-fn program_of(inner: &Inner, pid: u32) -> Option<String> {
-    inner.proc_rows.iter().find(|r| r.pid == pid).map(procs::program_name)
-}
-
-/// Every owned process except an idle pane shell, which cannot listen. A pane
-/// root is judged by the program it runs now, because a shell that exec'd an
-/// Action keeps its pid.
-pub fn candidate_pids(inner: &Inner) -> Vec<u32> {
-    owned(inner).into_iter().filter(|p| p.depth > 0 || !program_of(inner, p.pid).map_or(true, |n| is_shell(&n))).map(|p| p.pid).collect()
-}
-
-pub fn observe(inner: &Inner, listeners: &[Listener], now: u64) -> Vec<RuntimeEndpoint> {
-    let by_pid: HashMap<u32, ProcessInfo> = owned(inner).into_iter().map(|p| (p.pid, p)).collect();
-    listeners
-        .iter()
-        .filter_map(|l| {
-            let p = by_pid.get(&l.pid)?;
-            let pane_id = p.pane_id.clone()?;
-            let worktree_id = p.worktree_id.clone()?;
-            let source = inner.panes.get(&pane_id).and_then(|p| p.source.as_ref());
-            let action_id = PaneSource::action_id(source);
-            let label = source.map(|s| s.label.clone());
-            Some(RuntimeEndpoint {
-                id: format!("{}:{}", l.pid, l.port),
-                worktree_id,
-                pane_id: Some(pane_id),
-                action_id,
-                pid: l.pid,
-                process: program_of(inner, l.pid).unwrap_or_else(|| p.name.clone()),
-                protocol: RuntimeProtocol::Tcp,
-                host: normalise_host(&l.host),
-                port: l.port,
-                label,
-                discovered_at_ms: now,
-            })
-        })
-        .collect()
 }
 
 #[derive(Debug, Default)]
@@ -186,78 +115,12 @@ pub fn probe(host: &str, port: u16) -> RuntimeProtocol {
     RuntimeProtocol::Tcp
 }
 
-impl Daemon {
-    pub fn emit_endpoints(inner: &mut Inner, worktree_id: &str) {
-        let endpoints = inner.endpoints.iter().filter(|e| e.worktree_id == worktree_id).cloned().collect();
-        Self::emit(inner, Event::EndpointsChanged { worktree_id: worktree_id.to_string(), endpoints });
-    }
-
-    fn queue_endpoint_event(inner: &mut Inner, name: &str, e: &RuntimeEndpoint) {
-        let mut ev = events::envelope(inner, name, Some(&e.worktree_id));
-        ev.pane = e.pane_id.as_deref().and_then(|p| Self::hook_pane(inner, p));
-        ev.action = e.action_id.as_ref().map(|id| HookAction { id: id.clone(), label: e.label.clone().unwrap_or_else(|| id.clone()) });
-        inner.hook_queue.push(ev);
-    }
-
-    /// Runs `lsof` with no lock held, then merges the result. Call after a process poll.
-    pub fn scan_endpoints(self: &Arc<Self>) {
-        let pids = candidate_pids(&self.lock());
-        let scanned = listeners(&pids);
-        let mut inner = self.lock();
-        Self::diagnostic_on_change(&mut inner, "runtime", "port scan", scanned.as_ref().err().cloned());
-        let Ok(found) = scanned else { return };
-        let now = now_ms();
-        let observed = observe(&inner, &found, now);
-        let r = reconcile(&inner.endpoints, &inner.endpoint_gone_ms, observed, now);
-        inner.endpoints = r.endpoints;
-        inner.endpoint_gone_ms = r.gone_ms;
-        inner.endpoints_at_ms = now;
-        let changed: BTreeSet<Id> = r.added.iter().chain(&r.removed).chain(&r.restarted).map(|e| e.worktree_id.clone()).collect();
-        for e in &r.added {
-            Self::queue_endpoint_event(&mut inner, "runtime.endpoint_discovered", e);
-            let repeat = Self::recorded_recently(&inner, RuntimeActivity::EndpointDiscovered, ENDPOINT_REPEAT_MS, |a| a.worktree_id == Some(e.worktree_id.clone()) && a.payload["port"] == e.port);
-            if !repeat {
-                let mut ev = activity::event(RuntimeActivity::EndpointDiscovered, Some(&e.worktree_id), format!("{} listens on {}", e.label.clone().unwrap_or_else(|| e.process.clone()), e.port));
-                ev.pane_id = e.pane_id.clone();
-                ev.detail = Some(format!("{}:{}", e.host, e.port));
-                ev.payload = json!({ "port": e.port, "host": e.host, "pid": e.pid, "action_id": e.action_id, "endpoint_id": e.id });
-                Self::record(&mut inner, ev);
-            }
-        }
-        for e in &r.removed {
-            Self::queue_endpoint_event(&mut inner, "runtime.endpoint_removed", e);
-        }
-        for wt in &changed {
-            Self::emit_endpoints(&mut inner, wt);
-        }
-        drop(inner);
-        for e in r.added.iter().chain(&r.restarted) {
-            self.probe_endpoint(e.id.clone(), e.host.clone(), e.port);
-        }
-    }
-
-    fn probe_endpoint(self: &Arc<Self>, id: Id, host: String, port: u16) {
-        let daemon = self.clone();
-        self.rt.spawn(async move {
-            let protocol = tokio::task::spawn_blocking(move || probe(&host, port)).await.unwrap_or(RuntimeProtocol::Tcp);
-            let mut inner = daemon.lock();
-            let Some(e) = inner.endpoints.iter_mut().find(|e| e.id == id) else { return };
-            if e.protocol == protocol {
-                return;
-            }
-            e.protocol = protocol;
-            let worktree_id = e.worktree_id.clone();
-            Daemon::emit_endpoints(&mut inner, &worktree_id);
-        });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn ep(pid: u32, port: u16, wt: &str) -> RuntimeEndpoint {
-        RuntimeEndpoint { id: format!("{pid}:{port}"), worktree_id: wt.into(), pane_id: Some("p".into()), action_id: None, pid, process: "node".into(), protocol: RuntimeProtocol::Tcp, host: "localhost".into(), port, label: None, discovered_at_ms: 0 }
+        RuntimeEndpoint { id: format!("{pid}:{port}"), worktree_id: wt.into(), pane_id: Some("p".into()), action_id: None, pid, process: "node".into(), protocol: RuntimeProtocol::Tcp, host: "localhost".into(), port, label: None, discovered_at_ms: 0, source: None }
     }
 
     #[test]
