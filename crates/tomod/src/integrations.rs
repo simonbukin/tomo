@@ -103,6 +103,14 @@ fn codex_hooks_trusted(home: &Path) -> Option<bool> {
 }
 
 /// Health of each agent integration, from what is actually installed on this machine.
+/// An installed agent that works only in part is a diagnostic. A missing binary is not a problem.
+pub fn record_health(inner: &mut crate::daemon::Inner, list: &[IntegrationStatus]) {
+    for s in list {
+        let problem = matches!(s.level, IntegrationLevel::Partial | IntegrationLevel::ProcessOnly).then(|| s.reason.clone().unwrap_or_else(|| "partial integration".to_string()));
+        crate::daemon::Daemon::diagnostic_on_change(inner, "integrations", &s.kind.label().to_lowercase(), problem);
+    }
+}
+
 pub fn status(config: &tomo_proto::Config) -> Vec<IntegrationStatus> {
     let home = dirs::home_dir().unwrap_or_default();
     AgentKind::all()

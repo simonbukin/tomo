@@ -88,6 +88,8 @@ pub struct Inner {
     pub endpoints_at_ms: u64,
     pub closed_tabs: Vec<reopen::ClosedTab>,
     pub diagnostics: std::collections::VecDeque<Diagnostic>,
+    /// The current problem per `source:subject`, so a repeated poll records a diagnostic only on a change.
+    pub problems: HashMap<String, String>,
 }
 
 pub struct Daemon {
@@ -108,6 +110,16 @@ pub fn err(code: ErrorCode, msg: impl Into<String>) -> RpcError {
 
 fn internal(e: anyhow::Error) -> RpcError {
     err(ErrorCode::Internal, e.to_string())
+}
+
+/// The diagnostic for a problem that goes from `before` to `after`. `None` means no problem.
+pub fn problem_change(subject: &str, before: Option<&str>, after: Option<&str>) -> Option<(DiagnosticLevel, String)> {
+    match (before, after) {
+        (b, a) if b == a => None,
+        (_, Some(p)) => Some((DiagnosticLevel::Warning, format!("{subject}: {p}"))),
+        (Some(_), None) => Some((DiagnosticLevel::Info, format!("{subject}: ok again"))),
+        (None, None) => None,
+    }
 }
 
 pub(crate) fn new_id() -> Id {
@@ -178,6 +190,7 @@ impl Daemon {
                 endpoints_at_ms: 0,
                 closed_tabs: Vec::new(),
                 diagnostics: std::collections::VecDeque::new(),
+                problems: HashMap::new(),
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
@@ -238,6 +251,20 @@ impl Daemon {
         }
         inner.diagnostics.push_back(diagnostic.clone());
         Self::emit(inner, Event::Diagnostic { diagnostic });
+    }
+
+    /// Records a diagnostic only when a subsystem problem appears, changes, or clears.
+    /// Returns true when a new or different problem appeared.
+    pub fn diagnostic_on_change(inner: &mut Inner, source: &str, subject: &str, problem: Option<String>) -> bool {
+        let key = format!("{source}:{subject}");
+        let change = problem_change(subject, inner.problems.get(&key).map(String::as_str), problem.as_deref());
+        match problem {
+            Some(p) => inner.problems.insert(key, p),
+            None => inner.problems.remove(&key),
+        };
+        let Some((level, message)) = change else { return false };
+        Self::diagnostic(inner, level, source, message);
+        level == DiagnosticLevel::Warning
     }
 
     pub(crate) fn emit_tabs(inner: &mut Inner, worktree_id: &str) {
@@ -524,10 +551,9 @@ impl Daemon {
             if !changed {
                 continue;
             }
-            let new_error = set.error.clone().filter(|e| previous.and_then(|p| p.error.as_ref()) != Some(e));
-            if let Some(e) = new_error {
-                let name = inner.worktrees.get(&set.worktree_id).map(|w| Self::worktree_view(&inner, w).name).unwrap_or_default();
-                Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{name}: {e}") });
+            let name = inner.worktrees.get(&set.worktree_id).map(|w| Self::worktree_view(&inner, w).name).unwrap_or_default();
+            if Self::diagnostic_on_change(&mut inner, "config", &format!("{name} .tomo.toml"), set.error.clone()) {
+                Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{name}: {}", set.error.as_deref().unwrap_or_default()) });
             }
             inner.actions.insert(set.worktree_id.clone(), set.clone());
             Self::emit(&mut inner, Event::ActionsChanged { set });
@@ -1382,7 +1408,7 @@ impl Daemon {
     }
 
     async fn archive_worktree(self: &Arc<Self>, worktree_id: &str, checkpoint: CheckpointMode) -> Result<Value, RpcError> {
-        let (path, repo_path, branch, name, event, head) = {
+        let (path, repo_path, branch, event, head) = {
             let mut inner = self.lock();
             let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.clone();
             if w.is_main {
@@ -1399,9 +1425,9 @@ impl Daemon {
             let worktrees = Self::worktree_views(&inner);
             Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
             let event = events::envelope(&inner, "worktree.before_archive", Some(worktree_id));
-            (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), Self::worktree_view(&inner, &w).name, event, w.head.clone())
+            (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), event, w.head.clone())
         };
-        let result = self.archive_steps(worktree_id, &path, &repo_path, &branch, &name, event, checkpoint).await;
+        let result = self.archive_steps(worktree_id, &path, &repo_path, &branch, event, checkpoint).await;
         let mut inner = self.lock();
         inner.archiving.remove(worktree_id);
         match result {
@@ -1427,7 +1453,7 @@ impl Daemon {
         }
     }
 
-    async fn archive_steps(self: &Arc<Self>, worktree_id: &str, path: &Path, repo_path: &Path, branch: &str, name: &str, event: HookEvent, checkpoint: CheckpointMode) -> Result<ArchiveResult, RpcError> {
+    async fn archive_steps(self: &Arc<Self>, worktree_id: &str, path: &Path, repo_path: &Path, branch: &str, event: HookEvent, checkpoint: CheckpointMode) -> Result<ArchiveResult, RpcError> {
         if let Err(run) = self.gate(event).await {
             return Err(err(ErrorCode::Aborted, format!("before_archive hook refused ({}): {}", run.command, run.output_tail.lines().last().unwrap_or(""))));
         }
@@ -1441,17 +1467,12 @@ impl Daemon {
         let removed = tokio::task::spawn_blocking(move || Self::remove_cleanup_dirs(&dir, &cleanup)).await.unwrap_or_default();
         git::worktree_remove(repo_path, path).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
         {
-            let mut inner = self.lock();
+            let inner = self.lock();
             let Some(w) = inner.worktrees.get(worktree_id).cloned() else { return Err(err(ErrorCode::NotFound, "worktree not found")) };
             let mut row = Self::meta_row_of(&inner, &w, w.metadata.clone());
             row.archived_at_ms = Some(now_ms());
             row.archived_branch = (!branch.is_empty()).then(|| branch.to_string());
             inner.store.meta_upsert(&row).map_err(internal)?;
-            let what = match &checkpoint_commit {
-                Some(c) => format!("checkpoint {}", &c[..c.len().min(7)]),
-                None => "clean".to_string(),
-            };
-            Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Info, message: format!("archived {name} ({what}, {} build dirs removed)", removed.len()) });
         }
         self.discover(Summaries::Cached).await.map_err(internal)?;
         Ok(ArchiveResult { worktree_id: worktree_id.to_string(), branch: (!branch.is_empty()).then(|| branch.to_string()), checkpoint_commit, cleanup_removed: removed })
@@ -1561,7 +1582,12 @@ impl Daemon {
                 crate::integrations::install(&self.tomo_bin, PI_EXTENSION_SOURCE).map_err(internal)?;
                 ok(self.integrations())
             }
-            Call::IntegrationsStatus => ok(crate::integrations::status(&self.lock().config)),
+            Call::IntegrationsStatus => {
+                let mut inner = self.lock();
+                let list = crate::integrations::status(&inner.config);
+                crate::integrations::record_health(&mut inner, &list);
+                ok(list)
+            }
             Call::ConfigCheck => {
                 let (cfg, parse_issues) = config::load_checked(&self.paths.config).map_err(internal)?;
                 ok([parse_issues, config::check(&cfg)].concat())
@@ -2470,6 +2496,15 @@ async fn futures_summaries(found: &[(Repo, Vec<git::WorktreeEntry>, PathBuf)]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn problem_change_records_only_appear_change_and_clear() {
+        assert_eq!(problem_change("usage", None, None), None);
+        assert_eq!(problem_change("usage", Some("no token"), Some("no token")), None);
+        assert_eq!(problem_change("usage", None, Some("no token")), Some((DiagnosticLevel::Warning, "usage: no token".into())));
+        assert_eq!(problem_change("usage", Some("no token"), Some("timeout")), Some((DiagnosticLevel::Warning, "usage: timeout".into())));
+        assert_eq!(problem_change("usage", Some("timeout"), None), Some((DiagnosticLevel::Info, "usage: ok again".into())));
+    }
 
     #[test]
     fn evidence_text_lists_annotations_in_order() {

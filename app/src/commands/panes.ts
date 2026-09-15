@@ -6,7 +6,7 @@ import { activeTab, failToast, getState, paneIds, setState } from "../store";
 import { neighbor } from "../terminals";
 import type { Id, Tab } from "../types";
 
-const fail = (e: unknown) => failToast("Move failed")(e);
+const fail = failToast("Move failed");
 
 /** Reorders at once, then the daemon's `tabs_changed` snapshot wins. A failed call puts the old order back. */
 export function moveTab(tabId: Id, position: number): void {

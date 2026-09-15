@@ -6,20 +6,45 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
-use tomo_proto::{Config, ErrorCode, Event, RpcError};
+use tomo_proto::{Config, ConfigIssue, DiagnosticLevel, ErrorCode, Event, IssueLevel, NoticeLevel, RpcError};
 
 fn rpc_err(code: ErrorCode, message: impl Into<String>) -> RpcError {
     RpcError { code, message: message.into() }
 }
 
+/// The first issue plus a count, or `None` when the config has no issues.
+pub fn issues_summary(issues: &[ConfigIssue]) -> Option<String> {
+    let first = issues.first()?;
+    let more = if issues.len() > 1 { format!(" (+{} more)", issues.len() - 1) } else { String::new() };
+    Some(format!("{}: {}{more}", first.key, first.message))
+}
+
 /// Loads config.toml into the daemon and pushes `config_changed` when the result differs.
+/// A reload and each change in the config problems are diagnostics. A new error is also a notice.
 pub fn reload(daemon: &Daemon) -> Config {
-    let Ok(cfg) = config::load(&daemon.paths.config) else { return daemon.lock().config.clone() };
+    let loaded = config::load_checked(&daemon.paths.config).map(|(cfg, parse_issues)| {
+        let issues = [parse_issues, config::check(&cfg)].concat();
+        let integrations = crate::integrations::status(&cfg);
+        (cfg, issues, integrations)
+    });
     let mut inner = daemon.lock();
+    let (cfg, issues, integrations) = match loaded {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            Daemon::diagnostic_on_change(&mut inner, "config", "config", Some(e.to_string()));
+            return inner.config.clone();
+        }
+    };
     if serde_json::to_value(&inner.config).ok() != serde_json::to_value(&cfg).ok() {
         inner.config = cfg.clone();
+        Daemon::diagnostic(&mut inner, DiagnosticLevel::Info, "config", "config reloaded");
         Daemon::emit(&mut inner, Event::ConfigChanged { config: cfg.clone() });
     }
+    let summary = issues_summary(&issues);
+    if Daemon::diagnostic_on_change(&mut inner, "config", "config", summary.clone()) && issues.iter().any(|i| i.level == IssueLevel::Error) {
+        Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("config problem: {}", summary.unwrap_or_default()) });
+    }
+    crate::integrations::record_health(&mut inner, &integrations);
     cfg
 }
 
@@ -91,6 +116,7 @@ fn watched_dirs(config_path: &Path) -> Vec<PathBuf> {
 
 /// Reloads config.toml when the file changes on disk, so theme and font edits apply without a restart.
 pub async fn watch(daemon: Arc<Daemon>) {
+    reload(&daemon);
     let names: Vec<std::ffi::OsString> = [Some(daemon.paths.config.clone()), std::fs::canonicalize(&daemon.paths.config).ok()]
         .into_iter()
         .flatten()
@@ -123,6 +149,14 @@ pub async fn watch(daemon: Arc<Daemon>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn issues_summary_names_the_first_issue_and_counts_the_rest() {
+        let issue = |key: &str| ConfigIssue { level: IssueLevel::Error, key: key.into(), message: "bad".into() };
+        assert_eq!(issues_summary(&[]), None);
+        assert_eq!(issues_summary(&[issue("theme")]).as_deref(), Some("theme: bad"));
+        assert_eq!(issues_summary(&[issue("theme"), issue("shell"), issue("states")]).as_deref(), Some("theme: bad (+2 more)"));
+    }
 
     #[test]
     fn editor_argv_substitutes_or_appends_the_path() {
