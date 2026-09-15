@@ -1042,6 +1042,10 @@ pub struct UsageBucket {
     pub fraction_used: Option<f64>,
     pub resets_at_ms: Option<u64>,
     pub detail: Option<String>,
+    /// The model this bucket limits, such as `fable`. None for the whole plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

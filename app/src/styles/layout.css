@@ -108,3 +108,4 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 .tab-active .proc-icon { color: var(--fg-1); }
 
 .bottom-strip { grid-area: bottom; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: 0 var(--sp-2); border-top: 1px solid var(--line); background: var(--bg); color: var(--fg-2); font-size: var(--fs-1); }
+.tabbar .tab-new { position: sticky; right: 0; flex: none; align-self: center; margin-left: 2px; background: var(--bg); }

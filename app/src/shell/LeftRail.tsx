@@ -1,12 +1,14 @@
 import { History, House, Map } from "lucide-react";
+import { Fragment } from "react";
 import type { Signal } from "../activityModel";
 import { needsMeItem } from "../activityModel";
 import { openWorktree } from "../actions";
-import { HoverCard, IconButton } from "../components/ui";
-import { GLYPH } from "../glyphs";
+import { IconButton, Tooltip } from "../components/ui";
+import { agentStatus, dotClass, GLYPH } from "../glyphs";
 import { sortWorktrees } from "../homeQuery";
 import { byManualOrder } from "../order";
 import { useShortcuts } from "../shortcuts";
+import { summarizeState } from "../Sidebar";
 import { signalsFor } from "../Signals";
 import { agentsOf, formatBytes, needsMe, queryContext, setUi, useStore, visibleRepos, type State } from "../store";
 import { KIND_LABEL, type Worktree } from "../types";
@@ -18,11 +20,6 @@ export function railWorktrees(s: State): Worktree[] {
   const live = s.worktrees.filter((w) => !w.archived_at_ms);
   return ordered.flatMap((r) => sortWorktrees(live.filter((w) => w.repo_id === r.id), s.ui.sidebarSort, ctx, s.ui.manualOrder[r.id] ?? []));
 }
-
-export const identityMark = (name: string): string => {
-  const letters = [...name.replace(/[^\p{L}\p{N}]/gu, "")];
-  return letters.length ? `${letters[0].toUpperCase()}${(letters[1] ?? "").toLowerCase()}` : "?";
-};
 
 export function signalText(signal: Signal): string {
   switch (signal.kind) {
@@ -51,20 +48,23 @@ export function LeftRail() {
   const current = (v: State["ui"]["view"]) => (view === v ? "page" : undefined);
   return (
     <nav className="rail rail-left" aria-label="Sidebar">
-      <IconButton label="Home" shortcut={shortcut("home")} tooltipSide="right" className="rail-btn" aria-current={current("home")} onClick={() => setUi({ view: "home" })}>
+      <IconButton label="Home" shortcut={shortcut("home")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("home")} onClick={() => setUi({ view: "home" })}>
         <House className="icon" />
       </IconButton>
-      <IconButton label={count ? `Activity, ${count} need you` : "Activity"} shortcut={shortcut("activity")} tooltipSide="right" className="rail-btn" aria-current={current("activity")} onClick={() => setUi({ view: "activity" })}>
+      <IconButton label={count ? `Activity, ${count} need you` : "Activity"} shortcut={shortcut("activity")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("activity")} onClick={() => setUi({ view: "activity" })}>
         <History className="icon" />
         {count > 0 && <span className="rail-count" aria-hidden>{count}</span>}
       </IconButton>
-      <IconButton label="Japan map" shortcut={shortcut("towns")} tooltipSide="right" className="rail-btn" aria-current={current("towns")} onClick={() => setUi({ view: "towns" })}>
+      <IconButton label="Japan map" shortcut={shortcut("towns")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("towns")} onClick={() => setUi({ view: "towns" })}>
         <Map className="icon" />
       </IconButton>
       <div className="rail-sep" />
       <div className="rail-scroll">
-        {worktrees.map((w) => (
-          <RailWorktree key={w.id} w={w} active={w.id === activeId} />
+        {worktrees.map((w, i) => (
+          <Fragment key={w.id}>
+            {i > 0 && worktrees[i - 1].repo_id !== w.repo_id && <div className="rail-sep" />}
+            <RailWorktree w={w} active={w.id === activeId} />
+          </Fragment>
         ))}
       </div>
     </nav>
@@ -74,15 +74,15 @@ export function LeftRail() {
 function RailWorktree({ w, active }: { w: Worktree; active: boolean }) {
   const needs = useStore((s) => agentsOf(s, w.id).some((a) => a.state === "waiting") || s.attention.some((a) => a.worktree_id === w.id && a.kind !== "crash" && needsMeItem(a, Object.values(s.agents))));
   const crashed = useStore((s) => s.attention.some((a) => a.worktree_id === w.id && a.kind === "crash" && needsMeItem(a, Object.values(s.agents))));
+  const agentState = useStore((s) => summarizeState(agentsOf(s, w.id), false));
   const label = [w.name, needs && "needs input", crashed && "crashed"].filter(Boolean).join(", ");
-  const marker = needs ? "needs" : crashed ? "failed" : null;
+  const status = needs ? "needs" : crashed ? "failed" : agentStatus(agentState);
   return (
-    <HoverCard side="right" content={<RailPreview w={w} />}>
+    <Tooltip side="right" delay={0} content={<RailPreview w={w} />}>
       <button type="button" className="rail-wt" aria-label={label} aria-current={active ? "page" : undefined} onClick={() => openWorktree(w.id)}>
-        {identityMark(w.name)}
-        {marker && <span className={`rail-marker glyph-${marker}`} aria-hidden>{GLYPH[marker]}</span>}
+        <span className={dotClass(status)} aria-hidden />
       </button>
-    </HoverCard>
+    </Tooltip>
   );
 }
 

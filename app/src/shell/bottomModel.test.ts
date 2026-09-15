@@ -18,6 +18,7 @@ import {
   stripUsage,
   systemDetail,
   usageIssues,
+  usageRows,
   usageTone,
   usedOfTotal,
   wholePercent,
@@ -118,5 +119,20 @@ describe("diagnostics", () => {
     expect([i("full"), i("partial"), i("process_only"), i("unavailable")].map(integrationTone)).toEqual(["quiet", "warning", "warning", "danger"]);
     const run = (ok: boolean): HookRun => ({ event: "worktree_created", command: "x", worktree_id: null, started_at_ms: 0, duration_ms: 1, exit_code: ok ? 0 : 1, ok, output_tail: "" });
     expect(hookFailures([run(true), run(false)])).toHaveLength(1);
+  });
+});
+
+describe("usage rows", () => {
+  it("splits the plan from model scopes and keeps pi out", () => {
+    const claude = snap("claude", [bucket("5-hour", 0.35), bucket("weekly", 0.64), { ...bucket("weekly", 0.83), scope: "fable" }]);
+    const codex = snap("codex", [bucket("weekly", 0.07), { ...bucket("weekly", 0.4), scope: "sol" }]);
+    const rows = usageRows([claude, codex, snap("pi", [bucket("x", 0.1)])]);
+    expect(rows.map((r) => r.name)).toEqual(["Claude", "Fable", "Codex", "Sol"]);
+    expect(rows.map((r) => headlineBucket(r.snapshot)?.fraction_used)).toEqual([0.64, 0.83, 0.07, 0.4]);
+  });
+
+  it("keeps one row for an unavailable provider and drops an empty plan row next to scopes", () => {
+    expect(usageRows([snap("codex", [], false)]).map((r) => r.name)).toEqual(["Codex"]);
+    expect(usageRows([snap("claude", [{ ...bucket("weekly", 0.5), scope: "fable" }])]).map((r) => r.name)).toEqual(["Fable"]);
   });
 });

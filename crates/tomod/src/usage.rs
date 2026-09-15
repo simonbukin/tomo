@@ -60,29 +60,26 @@ pub fn parse_claude_token(bytes: &[u8]) -> Option<String> {
     serde_json::from_slice::<Value>(bytes).ok()?.pointer("/claudeAiOauth/accessToken")?.as_str().filter(|s| !s.is_empty()).map(String::from)
 }
 
-fn claude_limit_label(limit: &Value) -> String {
+fn claude_limit_label(limit: &Value) -> (String, Option<String>) {
     let kind = limit.get("kind").and_then(Value::as_str).unwrap_or("limit");
     match kind {
-        "session" => "5-hour".to_string(),
-        "weekly_all" => "weekly".to_string(),
-        "weekly_scoped" => {
-            let scope = limit.pointer("/scope/model/display_name").and_then(Value::as_str).unwrap_or("scoped");
-            format!("weekly ({})", scope.to_lowercase())
-        }
-        other => other.replace('_', " "),
+        "session" => ("5-hour".to_string(), None),
+        "weekly_all" => ("weekly".to_string(), None),
+        "weekly_scoped" => ("weekly".to_string(), Some(limit.pointer("/scope/model/display_name").and_then(Value::as_str).unwrap_or("scoped").to_lowercase())),
+        other => (other.replace('_', " "), None),
     }
 }
 
-fn claude_window_label(key: &str) -> Option<String> {
+fn claude_window_label(key: &str) -> Option<(String, Option<String>)> {
     match key {
-        "five_hour" => Some("5-hour".to_string()),
-        "seven_day" => Some("weekly".to_string()),
-        _ => key.strip_prefix("seven_day_").map(|scope| format!("weekly ({})", scope.replace('_', " "))),
+        "five_hour" => Some(("5-hour".to_string(), None)),
+        "seven_day" => Some(("weekly".to_string(), None)),
+        _ => key.strip_prefix("seven_day_").map(|scope| ("weekly".to_string(), Some(scope.replace('_', " ")))),
     }
 }
 
-fn claude_bucket(label: String, percent: Option<f64>, resets_at: Option<&str>, detail: Option<String>) -> UsageBucket {
-    UsageBucket { label, fraction_used: percent.map(|p| p / 100.0), resets_at_ms: resets_at.and_then(rfc3339_to_ms), detail }
+fn claude_bucket(label: String, scope: Option<String>, percent: Option<f64>, resets_at: Option<&str>, detail: Option<String>) -> UsageBucket {
+    UsageBucket { label, fraction_used: percent.map(|p| p / 100.0), resets_at_ms: resets_at.and_then(rfc3339_to_ms), detail, scope }
 }
 
 fn claude_buckets(body: &Value) -> Vec<UsageBucket> {
@@ -93,7 +90,8 @@ fn claude_buckets(body: &Value) -> Vec<UsageBucket> {
         .flatten()
         .map(|limit| {
             let severity = limit.get("severity").and_then(Value::as_str).filter(|s| *s != "normal").map(String::from);
-            claude_bucket(claude_limit_label(limit), limit.get("percent").and_then(Value::as_f64), limit.get("resets_at").and_then(Value::as_str), severity)
+            let (label, scope) = claude_limit_label(limit);
+            claude_bucket(label, scope, limit.get("percent").and_then(Value::as_f64), limit.get("resets_at").and_then(Value::as_str), severity)
         })
         .collect();
     if !from_limits.is_empty() {
@@ -103,9 +101,9 @@ fn claude_buckets(body: &Value) -> Vec<UsageBucket> {
         .into_iter()
         .flatten()
         .filter_map(|(key, window)| {
-            let label = claude_window_label(key)?;
+            let (label, scope) = claude_window_label(key)?;
             let utilization = window.get("utilization")?.as_f64()?;
-            Some(claude_bucket(label, Some(utilization), window.get("resets_at").and_then(Value::as_str), None))
+            Some(claude_bucket(label, scope, Some(utilization), window.get("resets_at").and_then(Value::as_str), None))
         })
         .collect()
 }
@@ -183,12 +181,12 @@ fn codex_buckets(result: &Value) -> Vec<UsageBucket> {
         .iter()
         .flat_map(|(id, snapshot)| {
             let name = snapshot.get("limitName").and_then(Value::as_str).map(String::from).unwrap_or_else(|| id.clone());
+            let scope = (several && id != "codex").then(|| name.to_lowercase());
             ["primary", "secondary"].into_iter().filter_map(move |position| {
                 let window = snapshot.get(position)?;
                 let percent = window.get("usedPercent")?.as_f64()?;
                 let base = codex_window_label(window, position);
-                let label = if several { format!("{base} ({name})") } else { base };
-                Some(UsageBucket { label, fraction_used: Some(percent / 100.0), resets_at_ms: window.get("resetsAt").and_then(Value::as_u64).map(|s| s * 1000), detail: None })
+                Some(UsageBucket { label: base, fraction_used: Some(percent / 100.0), resets_at_ms: window.get("resetsAt").and_then(Value::as_u64).map(|s| s * 1000), detail: None, scope: scope.clone() })
             })
         })
         .collect()
@@ -286,11 +284,11 @@ pub fn same(a: &[UsageSnapshot], b: &[UsageSnapshot]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(x, y)| same_data(x, y))
 }
 
-fn fraction_of(list: &[UsageSnapshot], provider: AgentKind, label: &str) -> f64 {
+fn fraction_of(list: &[UsageSnapshot], provider: AgentKind, bucket: &UsageBucket) -> f64 {
     list.iter()
         .filter(|s| s.provider == provider)
         .flat_map(|s| &s.buckets)
-        .find(|b| b.label == label)
+        .find(|b| b.label == bucket.label && b.scope == bucket.scope)
         .and_then(|b| b.fraction_used)
         .unwrap_or(0.0)
 }
@@ -301,9 +299,9 @@ pub fn crossings(before: &[UsageSnapshot], after: &[UsageSnapshot]) -> Vec<Strin
         .flat_map(|s| s.buckets.iter().map(move |b| (s.provider, b)))
         .filter_map(|(provider, bucket)| {
             let now = bucket.fraction_used?;
-            let was = fraction_of(before, provider, &bucket.label);
+            let was = fraction_of(before, provider, bucket);
             let crossed = THRESHOLDS.iter().any(|t| was < *t && now >= *t);
-            crossed.then(|| format!("{} {} allowance {}%", provider.label(), bucket.label, (now * 100.0).round() as u64))
+            crossed.then(|| format!("{} {}{} allowance {}%", provider.label(), bucket.scope.as_deref().map(|s| format!("{s} ")).unwrap_or_default(), bucket.label, (now * 100.0).round() as u64))
         })
         .collect()
 }
@@ -352,7 +350,7 @@ mod tests {
     const NOW: u64 = 1_700_000_000_000;
 
     fn bucket(label: &str, fraction: f64) -> UsageBucket {
-        UsageBucket { label: label.into(), fraction_used: Some(fraction), resets_at_ms: None, detail: None }
+        UsageBucket { label: label.into(), fraction_used: Some(fraction), resets_at_ms: None, detail: None, scope: None }
     }
 
     fn snapshot(provider: AgentKind, buckets: Vec<UsageBucket>) -> UsageSnapshot {
@@ -381,7 +379,7 @@ mod tests {
         let body = br#"{"limits":[{"kind":"session","percent":36,"severity":"normal","resets_at":"2026-09-14T23:50:00Z"}]}"#;
         let s = parse_claude(body, NOW);
         assert!(s.available);
-        assert_eq!(s.buckets, vec![UsageBucket { label: "5-hour".into(), fraction_used: Some(0.36), resets_at_ms: Some(1_789_429_800_000), detail: None }]);
+        assert_eq!(s.buckets, vec![UsageBucket { label: "5-hour".into(), fraction_used: Some(0.36), resets_at_ms: Some(1_789_429_800_000), detail: None, scope: None }]);
     }
 
     #[test]
@@ -393,7 +391,8 @@ mod tests {
         ]}"#;
         let s = parse_claude(body, NOW);
         let labels: Vec<&str> = s.buckets.iter().map(|b| b.label.as_str()).collect();
-        assert_eq!(labels, vec!["5-hour", "weekly", "weekly (fable)"]);
+        assert_eq!(labels, vec!["5-hour", "weekly", "weekly"]);
+        assert_eq!(s.buckets.iter().map(|b| b.scope.as_deref()).collect::<Vec<_>>(), vec![None, None, Some("fable")]);
         assert_eq!(s.buckets[2].detail.as_deref(), Some("warning"));
         assert_eq!(s.buckets[1].fraction_used, Some(0.47));
     }
@@ -404,8 +403,9 @@ mod tests {
         let s = parse_claude(body, NOW);
         let mut labels: Vec<&str> = s.buckets.iter().map(|b| b.label.as_str()).collect();
         labels.sort();
-        assert_eq!(labels, vec!["5-hour", "weekly", "weekly (opus)"]);
-        let weekly = s.buckets.iter().find(|b| b.label == "weekly").unwrap();
+        assert_eq!(labels, vec!["5-hour", "weekly", "weekly"]);
+        assert!(s.buckets.iter().any(|b| b.scope.as_deref() == Some("opus")));
+        let weekly = s.buckets.iter().find(|b| b.label == "weekly" && b.scope.is_none()).unwrap();
         assert_eq!(weekly.resets_at_ms, None);
     }
 
@@ -437,19 +437,20 @@ mod tests {
         let s = parse_codex(line, NOW);
         assert!(s.available);
         assert_eq!(s.buckets.len(), 2);
-        assert_eq!(s.buckets[0], UsageBucket { label: "5-hour".into(), fraction_used: Some(0.0), resets_at_ms: Some(1_789_440_999_000), detail: None });
+        assert_eq!(s.buckets[0], UsageBucket { label: "5-hour".into(), fraction_used: Some(0.0), resets_at_ms: Some(1_789_440_999_000), detail: None, scope: None });
         assert_eq!(s.buckets[1].label, "weekly");
         assert_eq!(s.buckets[1].fraction_used, Some(0.06));
     }
 
     #[test]
-    fn codex_several_limit_ids_get_a_suffix() {
+    fn codex_several_limit_ids_get_a_scope() {
         let line = br#"{"id":2,"result":{"rateLimits":{},"rateLimitsByLimitId":{
             "codex":{"primary":{"usedPercent":1,"windowDurationMins":300}},
             "other":{"limitName":"Other","primary":{"usedPercent":2,"windowDurationMins":1440}}}}}"#;
         let s = parse_codex(line, NOW);
         let labels: Vec<&str> = s.buckets.iter().map(|b| b.label.as_str()).collect();
-        assert_eq!(labels, vec!["5-hour (codex)", "1-day (Other)"]);
+        assert_eq!(labels, vec!["5-hour", "1-day"]);
+        assert_eq!(s.buckets.iter().map(|b| b.scope.as_deref()).collect::<Vec<_>>(), vec![None, Some("other")]);
     }
 
     #[test]
@@ -485,7 +486,7 @@ mod tests {
 
     #[test]
     fn first_sight_above_threshold_fires_and_unknown_fraction_is_silent() {
-        let after = vec![snapshot(AgentKind::Codex, vec![bucket("5-hour", 0.90), UsageBucket { label: "weekly".into(), fraction_used: None, resets_at_ms: None, detail: None }])];
+        let after = vec![snapshot(AgentKind::Codex, vec![bucket("5-hour", 0.90), UsageBucket { label: "weekly".into(), fraction_used: None, resets_at_ms: None, detail: None, scope: None }])];
         assert_eq!(crossings(&[], &after), vec!["Codex 5-hour allowance 90%"]);
     }
 

@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Men
 import { openMenu } from "./MenuHost";
 import { browserMenu, isLastPane } from "./menus";
 import { useShortcuts } from "./shortcuts";
-import { agentsOf, failToast, showStatus, useStore } from "./store";
+import { agentsOf, failToast, getState, showStatus, useStore } from "./store";
 import { KIND_LABEL, type EvidenceBundle, type Id } from "./types";
 
 type BrowserState = { pane_id: Id; url?: string; title?: string; loading?: boolean };
@@ -35,9 +35,11 @@ function hostOf(url: string): string {
   }
 }
 
+/** Child webviews take window points, but CSS pixels grow and shrink with the webview zoom. */
 function boundsOf(el: HTMLElement): Bounds {
   const r = el.getBoundingClientRect();
-  return { x: r.left, y: r.top, width: r.width, height: r.height };
+  const zoom = getState().ui.appearance.zoom;
+  return { x: r.left * zoom, y: r.top * zoom, width: r.width * zoom, height: r.height * zoom };
 }
 
 const sameBounds = (a: Bounds | null, b: Bounds) => !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
@@ -78,9 +80,11 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     const initial = boundsOf(host);
     lastBounds.current = initial;
     invoke("browser_create", { paneId, url: urlRef.current, ...initial }).catch(browserHostFailed("browser_create", "Browser failed to open"));
-    const observer = new ResizeObserver(pushBounds);
-    observer.observe(host);
-    window.addEventListener("resize", pushBounds);
+    // A sidebar or header change moves the pane without resizing it, which a ResizeObserver never reports.
+    let frame = requestAnimationFrame(function follow() {
+      pushBounds();
+      frame = requestAnimationFrame(follow);
+    });
     const offState = listen<BrowserState>("browser://state", (e) => {
       const st = e.payload;
       if (st.pane_id !== paneId) return;
@@ -99,17 +103,12 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
       if (kind === "submit") setMenuOpen(true);
     });
     return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", pushBounds);
+      cancelAnimationFrame(frame);
       offState.then((off) => off());
       offFeedback.then((off) => off());
       invoke("browser_close", { paneId }).catch(browserHostFailed("browser_close"));
     };
   }, [paneId]);
-
-  useEffect(() => {
-    pushBounds();
-  });
 
   const sendOpen = menuOpen && feedback.count > 0;
   useEffect(() => {

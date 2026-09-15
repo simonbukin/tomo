@@ -1,12 +1,12 @@
 import { SortableContext } from "@dnd-kit/sortable";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { activateTab, closeTab } from "./actions";
-import { cx, IconButton, PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./components/ui";
+import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./components/ui";
 import { keepInPlace, useTabSortable } from "./LayoutDnd";
 import { openMenu } from "./MenuHost";
-import { tabMenu } from "./menus";
+import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { useShortcuts } from "./shortcuts";
 import { dotClass } from "./glyphs";
@@ -26,6 +26,7 @@ type Editing = { id: Id; value: string } | null;
 export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const tabs = useStore((s) => s.tabs[worktreeId]) ?? [];
   const [editing, setEditing] = useState<Editing>(null);
+  const shortcut = useShortcuts();
 
   const commit = () => {
     if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(() => {});
@@ -39,6 +40,14 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
           <TabItem key={t.id} tab={t} closable={tabs.length > 1} editing={editing} setEditing={setEditing} commit={commit} />
         ))}
       </SortableContext>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<IconButton label="New tab or split" shortcut={shortcut("new_tab")} className="tab-new" />}>
+          <Plus className="icon" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <MenuItems items={() => spawnMenu(worktreeId)} />
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

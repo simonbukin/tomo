@@ -90,6 +90,10 @@ no toast.
 
 ## Tabs, panes, and dividers
 
+- The `+` after the last tab opens a new tab (terminal, browser, claude,
+  codex, pi) or splits the focused pane of the current tab (`split right`,
+  `split down`, `split with` a browser or an agent). Each pane header also
+  has split right and split down buttons.
 - Drag a tab to reorder it. The other tabs stay in place; an accent line
   shows where the tab lands. The strip changes at once, then the
   `tabs_changed` snapshot from `tab_move` wins. The order persists.
@@ -301,8 +305,9 @@ bottom strip (three sections on the same columns)
   a rail or 0, the traffic lights do not move and no workspace UI goes
   under them.
 - Top-middle: for a worktree, `WorktreeHeader` (name, branch, state on the
-  left; `topbar` Actions, runtime, overflow menu, and the `+` spawn menu on
-  the right). For Home, Activity, and Towns, a short view title. Nothing
+  left; `topbar` Actions, the editor button (`Zed` from `editor_command`),
+  runtime, and the overflow menu on the right). The `+` menu sits after the
+  last tab. For Home, Activity, and Towns, a short view title. Nothing
   else: usage, metrics, daemon health, and Settings live in the bottom
   strip. The checkpoint banner stays at the top of the middle column.
 - Top-right: only the inspector control.
@@ -323,9 +328,11 @@ is never narrower than its content.
   two buttons fit in 48 px. When the left sidebar is closed on screen, the
   section is gone. The strip reads the mode on screen from `shellLayout`,
   not the saved mode.
-- Usage: one item per provider (Claude, Codex; Pi runs on the Claude
-  allowance and has no item). The item shows the bucket with the highest
-  use, whatever the adapter calls it, as a mono micro-bar and a percent.
+- Usage: one item for each plan and one for each model scope that the
+  adapter reports (`Claude`, `Fable`, `Codex`, `Sol`). A bucket's `scope`
+  field names the model; a bucket without a scope counts for the whole
+  plan. Pi runs on the Claude allowance and has no item. Each item shows its
+  bucket with the highest use as a mono micro-bar and a percent.
   Hover shows every bucket with its reset time. A click opens a larger
   popover with a `refresh` link. A provider without data shows `—`; the
   reason is in the preview. Tomo never guesses a value. At 80 % the percent
@@ -370,10 +377,12 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
   open. The cycle starts from the mode on screen. The palette also has
   `left_sidebar_open`, `left_sidebar_minimal`, `left_sidebar_closed`, and
   the same three for the right.
-- A worktree mark in the left rail is two letters of the name. `◉` means
-  an agent needs input or a checkpoint is open. `×` means an unresolved
-  crash. The accessible name says the same in words. Hover shows the name,
-  the branch, and the worktree signals (waiting agent, crash, runtime).
+- A worktree in the left rail is one status dot from the shared vocabulary:
+  waiting (an agent needs input or a checkpoint is open), failed (an
+  unresolved crash), else the agent state. A thin line separates repos. The
+  accessible name says the state in words. The tooltip opens with no delay
+  and shows the name, the branch, and the worktree signals, so a sweep over
+  the rail reads at once.
 - The right rail shows `*` on git when the tree is dirty, `×` on the pull
   request when checks failed, `✓` when it merged, and `●` on processes
   when processes run. A click opens the inspector at that section

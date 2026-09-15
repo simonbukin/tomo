@@ -7,8 +7,8 @@ import { openSettings } from "../commands/settings";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
 import { formatBytes, setState, useStore } from "../store";
-import { KIND_LABEL, type SidebarMode, type SystemStats, type UsageSnapshot } from "../types";
-import { bucketTone, headlineBucket, microBar, percentText, stripMetrics, stripUsage, systemDetail, usageTone } from "./bottomModel";
+import type { SidebarMode, SystemStats, UsageSnapshot } from "../types";
+import { bucketTone, headlineBucket, microBar, percentText, stripMetrics, systemDetail, usageRows, usageTone } from "./bottomModel";
 import { HealthArea } from "./Diagnostics";
 import { HoverPopover } from "./HoverPopover";
 import { StatusSlot } from "./StatusSlot";
@@ -60,19 +60,18 @@ function MicroBar({ fraction, width }: { fraction: number | null; width?: number
 }
 
 function UsageStrip() {
-  const usage = useStore((s) => stripUsage(s.usage));
+  const usage = useStore((s) => s.usage);
   return (
     <div className="bottom-usage">
-      {usage.map((u) => (
-        <UsageMeter key={u.provider} snapshot={u} />
+      {usageRows(usage).map((row) => (
+        <UsageMeter key={row.key} name={row.name} snapshot={row.snapshot} />
       ))}
     </div>
   );
 }
 
-function UsageMeter({ snapshot: u }: { snapshot: UsageSnapshot }) {
+function UsageMeter({ name, snapshot: u }: { name: string; snapshot: UsageSnapshot }) {
   const head = headlineBucket(u);
-  const name = KIND_LABEL[u.provider];
   return (
     <HoverPopover
       title={name}

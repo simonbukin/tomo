@@ -213,14 +213,23 @@ export function isLastPane(paneId: Id, s: State = getState()): boolean {
   return tabs.length <= 1 && tabs.every((t) => paneIds(t.layout).length <= 1);
 }
 
+/** New tabs first, then splits of the focused pane in the current tab. */
 export function spawnMenu(worktreeId: Id, s: State = getState()): MenuItem[] {
+  const tab = activeTab(s, worktreeId);
+  const pane = tab?.active_pane_id ?? null;
+  const agents = ["claude", "codex", "pi"] as const;
   return [
     { label: "terminal", shortcut: shortcutIn(s, "new_tab"), run: () => newTabIn(worktreeId) },
     { label: "browser", shortcut: shortcutIn(s, "new_browser"), run: () => openBrowser(worktreeId) },
+    ...agents.map((kind): MenuItem => ({ label: kind, run: () => spawnAgent(kind, worktreeId, { newTab: true }) })),
     sep,
-    { label: "claude", run: () => spawnAgent("claude", worktreeId, { newTab: true }) },
-    { label: "codex", run: () => spawnAgent("codex", worktreeId, { newTab: true }) },
-    { label: "pi", run: () => spawnAgent("pi", worktreeId, { newTab: true }) },
+    { label: "split right", shortcut: shortcutIn(s, "new_terminal"), disabled: !pane, run: () => splitPaneById(pane!, "horizontal") },
+    { label: "split down", shortcut: shortcutIn(s, "split_vertical"), disabled: !pane, run: () => splitPaneById(pane!, "vertical") },
+    {
+      label: "split with",
+      disabled: !pane,
+      submenu: [{ label: "browser", run: () => openBrowser(worktreeId, null, tab!.id) }, ...agents.map((kind): MenuItem => ({ label: kind, run: () => spawnAgent(kind, worktreeId) }))],
+    },
   ];
 }
 
