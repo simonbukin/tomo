@@ -1,4 +1,4 @@
-/* Activity: one dense feed grouped by day, with the usage strip in the header. */
+/* Activity: one dense feed grouped by day. */
 
 .activity { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); font-size: var(--fs-1); }
 .activity-bar { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); min-height: 26px; }
@@ -18,26 +18,3 @@
 .activity-actions { display: inline-flex; gap: var(--sp-3); }
 .activity-more { margin-top: var(--sp-2); }
 
-/* ---- usage */
-.usage-strip { display: inline-flex; align-items: center; gap: var(--sp-3); white-space: nowrap; overflow: hidden; }
-.usage-item { font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
-.usage-waiting { color: var(--waiting); }
-.usage-hot { color: var(--hot); }
-.usage-row { display: grid; grid-template-columns: 48px 60px 40px auto; align-items: center; column-gap: var(--sp-2); min-height: 22px; }
-.usage-row .num { text-align: right; font-variant-numeric: tabular-nums; }
-.usage-bar { height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
-.usage-fill { display: block; height: 100%; background: var(--fg-2); }
-.usage-fill.usage-waiting { background: var(--waiting); }
-.usage-fill.usage-hot { background: var(--hot); }
-
-/* ---- usage sparks: [█████     ] */
-.usage-item { display: inline-flex; align-items: center; gap: var(--sp-2); }
-.usage-provider { color: var(--fg-1); }
-.usage-spark { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); white-space: pre; }
-.usage-spark-label { color: var(--fg-3); }
-.usage-cells { letter-spacing: -0.5px; }
-.usage-cells .on { color: var(--fg-1); }
-.usage-cells .off { color: var(--line-strong); }
-.usage-cells.usage-waiting .on { color: var(--waiting); }
-.usage-cells.usage-hot .on { color: var(--hot); }
-.usage-row { grid-template-columns: 70px auto 36px auto; }

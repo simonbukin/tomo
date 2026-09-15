@@ -108,11 +108,6 @@ export function percentOf(b: UsageBucket): number | null {
   return b.fraction_used == null ? null : Math.round(b.fraction_used * 100);
 }
 
-export function usageTone(b: UsageBucket): "hot" | "waiting" | null {
-  const pct = percentOf(b);
-  return pct == null ? null : pct > 95 ? "hot" : pct > 80 ? "waiting" : null;
-}
-
 export const SPARK_WIDTH = 10;
 
 /** Filled and empty cells of a `[█████     ]` spark for a used fraction; null means no data. */
@@ -120,15 +115,6 @@ export function sparkCells(fraction: number | null, width = SPARK_WIDTH): { fill
   if (fraction == null) return { filled: 0, empty: width };
   const filled = Math.min(width, Math.max(0, Math.round(fraction * width)));
   return { filled, empty: width - filled };
-}
-
-/** A short bucket label for the strip: "5-hour" → "5h", "weekly (fable)" → "wk fable". */
-export function shortUsageLabel(label: string): string {
-  return label
-    .replace(/^(\d+)-hour\b/, "$1h")
-    .replace(/^weekly\b/, "wk")
-    .replace(/[()]/g, "")
-    .trim();
 }
 
 export function usageSummary(s: UsageSnapshot): string {

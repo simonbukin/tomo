@@ -149,6 +149,8 @@ pub enum Call {
     UsageGet { #[serde(default)] refresh: bool },
     /// Recent diagnostics, newest first: what Tomo itself did or noticed.
     DiagnosticsList { #[serde(default)] limit: Option<u32> },
+    /// Machine pressure now: CPU, memory, optional GPU, the daemon's own memory, and the heaviest worktree.
+    SystemStats,
     BrowserOpen { worktree_id: Id, #[serde(default)] url: Option<String>, #[serde(default)] tab_id: Option<Id> },
     BrowserNavigate { pane_id: Id, url: String },
     AnnotationsSend { pane_id: Id, bundle: EvidenceBundle },
@@ -305,6 +307,8 @@ pub enum Event {
     ActionsChanged { set: ActionSet },
     ConfigChanged { config: Config },
     Diagnostic { diagnostic: Diagnostic },
+    /// Pushed every few seconds while a client is subscribed.
+    SystemStats { stats: SystemStats },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -331,6 +335,23 @@ pub enum DiagnosticLevel {
     Info,
     Warning,
     Error,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct SystemStats {
+    pub at_ms: u64,
+    /// All cores together, 0 to 100.
+    pub cpu_percent: f32,
+    pub memory_used_bytes: u64,
+    pub memory_total_bytes: u64,
+    /// None when the machine does not report GPU utilization.
+    pub gpu_percent: Option<f32>,
+    /// None on unified memory or when the driver does not report it.
+    pub vram_used_bytes: Option<u64>,
+    pub vram_total_bytes: Option<u64>,
+    pub daemon_rss_bytes: u64,
+    /// The worktree with the most resident memory, if any worktree has processes.
+    pub top_worktree: Option<WorktreeResources>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1254,6 +1275,7 @@ mod bindings {
         CheckpointMode::export_all(&cfg).unwrap();
         Diagnostic::export_all(&cfg).unwrap();
         DiagnosticLevel::export_all(&cfg).unwrap();
+        SystemStats::export_all(&cfg).unwrap();
         let mut names: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|e| e.ok())
