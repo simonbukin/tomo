@@ -1,13 +1,20 @@
-use super::{claude, Provider};
+use super::{claude, Program, Provider};
 use crate::agents::shell_quote;
 use serde_json::{Map, Value};
 use std::path::Path;
+use tomo_proto::AgentKind;
 
 pub static PROVIDER: Provider = Provider {
+    kind: AgentKind::Codex,
     flags,
     resume_without_session: Some("--last"),
     hook_outcome: claude::hook_outcome,
+    detects,
 };
+
+fn detects(p: &Program) -> bool {
+    p.name.starts_with("codex") || p.argv0.starts_with("codex")
+}
 
 /// Codex takes the session on the command line, and it reports one only after a
 /// trusted hook runs. A pane without a session resumes the newest one in its directory.

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
-use tomo_proto::{AgentKind, Id, Ownership, ProcessInfo, WorktreeResources};
+use tomo_proto::{Id, Ownership, ProcessInfo, WorktreeResources};
 
 #[derive(Debug, Clone)]
 pub struct ProcRow {
@@ -188,22 +188,6 @@ pub fn aggregate(infos: &[ProcessInfo]) -> Vec<WorktreeResources> {
     out
 }
 
-pub fn detect_agent(name: &str, cmd: &str) -> Option<AgentKind> {
-    let base = name.rsplit('/').next().unwrap_or(name);
-    let first = cmd.split_whitespace().next().unwrap_or("");
-    let first_base = first.rsplit('/').next().unwrap_or(first);
-    if base == "claude" || first_base == "claude" {
-        return Some(AgentKind::Claude);
-    }
-    if base.starts_with("codex") || first_base.starts_with("codex") {
-        return Some(AgentKind::Codex);
-    }
-    if base == "pi" || first_base == "pi" || cmd.contains("pi-coding-agent") {
-        return Some(AgentKind::Pi);
-    }
-    None
-}
-
 pub fn kill_tree(rows: &[ProcRow], root: u32) {
     let mut pids = descendants(rows, root);
     pids.push(root);
@@ -243,33 +227,6 @@ mod tests {
         let agg = aggregate(&infos);
         assert_eq!(agg[0].rss_bytes, 1065);
         assert_eq!(agg[0].process_count, 5);
-    }
-
-    #[test]
-    fn detects_agents_by_name_or_command() {
-        assert_eq!(detect_agent("claude", ""), Some(AgentKind::Claude));
-        assert_eq!(detect_agent("codex-aarch64-apple-darwin", ""), Some(AgentKind::Codex));
-        assert_eq!(detect_agent("node", "node /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi));
-        assert_eq!(detect_agent("zsh", "-zsh"), None);
-    }
-
-    #[test]
-    fn detect_agent_reads_argv0_and_misses_launcher_paths() {
-        assert_eq!(detect_agent("2.1.273", "claude --settings /d/claude-hooks.json --session-id s"), Some(AgentKind::Claude), "a versioned native binary is found by argv[0]");
-        assert_eq!(detect_agent("node", "/Users/me/.local/bin/claude --resume s"), Some(AgentKind::Claude));
-        assert_eq!(detect_agent("codex-aarch64-apple-darwin", "/x/codex-aarch64-apple-darwin resume abc"), Some(AgentKind::Codex));
-        assert_eq!(detect_agent("node", "node /opt/homebrew/bin/codex resume abc"), None, "an npm shim is found only through its native child");
-        assert_eq!(detect_agent("node", "pi"), Some(AgentKind::Pi), "process.title rewrites argv[0] to pi");
-        assert_eq!(detect_agent("node", "node /opt/homebrew/bin/pi -e /d/tomo-status.ts --session-id s"), None, "before process.title runs, the npm symlink path hides pi");
-        assert_eq!(detect_agent("claude-trace", "claude-trace"), None);
-        assert_eq!(detect_agent("pip", "pip install x"), None);
-    }
-
-    #[test]
-    #[ignore = "bug: detect_agent matches any program named codex* and any command that mentions pi-coding-agent (procs.rs detect_agent)"]
-    fn detect_agent_ignores_programs_that_only_mention_a_provider() {
-        assert_eq!(detect_agent("vim", "vim /src/pi-coding-agent/README.md"), None);
-        assert_eq!(detect_agent("codexbar", "codexbar"), None);
     }
 
     fn row_at(pid: u32, ppid: u32, name: &str, cwd: Option<&str>, rss: u64) -> ProcRow {
