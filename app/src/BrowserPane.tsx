@@ -177,7 +177,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
           <IconButton label="Back" onClick={() => browserCommand(paneId, "browser_back")}>
             <ArrowLeft className="icon" />
           </IconButton>
-          <IconButton label="Forward" onClick={() => browserCommand(paneId, "browser_forward")}>
+          <IconButton label="Forward" className="browser-forward" onClick={() => browserCommand(paneId, "browser_forward")}>
             <ArrowRight className="icon" />
           </IconButton>
           <IconButton label="Reload" onClick={() => browserCommand(paneId, "browser_reload")}>
