@@ -1,20 +1,18 @@
-import { rpc } from "../api";
 import { browserCommand, closeOtherTabs, currentWorktree, equalizeTab, focusedPaneId, openBrowser, rotateSplit, type Action } from "../actions";
-import { activeTab, getState, notify, setState } from "../store";
+import { activeTab, getState, setState } from "../store";
 import type { Id } from "../types";
-
-const fail = (e: unknown) => notify("error", (e as Error).message);
+import { movePane, moveTab as moveTabTo } from "./panes";
 
 export function moveTab(tabId: Id, delta: number): void {
   const tabs = Object.values(getState().tabs).find((list) => list.some((t) => t.id === tabId)) ?? [];
   const from = tabs.findIndex((t) => t.id === tabId);
   const to = from + delta;
   if (from < 0 || to < 0 || to >= tabs.length) return;
-  rpc("tab_move", { tab_id: tabId, position: to }).catch(fail);
+  moveTabTo(tabId, to);
 }
 
 export function sendPaneToTab(paneId: Id, tabId: Id): void {
-  rpc("pane_move", { pane_id: paneId, target_pane_id: null, tab_id: tabId, place: "right" }).catch(fail);
+  movePane(paneId, { tabId }, "right");
 }
 
 const withTab = (run: (tabId: Id) => void) => () => {

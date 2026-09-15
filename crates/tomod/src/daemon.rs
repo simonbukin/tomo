@@ -1797,8 +1797,26 @@ impl Daemon {
                 Self::emit_tabs(&mut inner, &tab.worktree_id);
                 ok(Self::tab_view(&inner, &tab))
             }
-            Call::TabMove { .. } => Err(err(ErrorCode::Unsupported, "tab_move: not implemented yet")),
-            Call::PaneMove { .. } => Err(err(ErrorCode::Unsupported, "pane_move: not implemented yet")),
+            Call::TabMove { tab_id, position } => {
+                let mut inner = self.lock();
+                let worktree_id = crate::moves::move_tab(&mut inner, &tab_id, position)?;
+                Self::emit_tabs(&mut inner, &worktree_id);
+                ok(Self::tabs_of(&inner, &worktree_id))
+            }
+            Call::PaneMove { pane_id, target_pane_id, tab_id, place } => {
+                let mut inner = self.lock();
+                let moved = crate::moves::move_pane(&mut inner, &pane_id, target_pane_id.as_deref(), tab_id.as_deref(), place)?;
+                Self::emit_tabs(&mut inner, &moved.worktree_id);
+                for p in &moved.panes {
+                    Self::emit_pane(&mut inner, p);
+                }
+                ok(Self::tabs_of(&inner, &moved.worktree_id))
+            }
+            Call::PaneTail { pane_id, lines } => {
+                let inner = self.lock();
+                let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+                ok(pane.scrollback.plain_tail(lines.unwrap_or(8).clamp(1, 200) as usize))
+            }
             Call::TabActivate { tab_id } => {
                 let mut inner = self.lock();
                 let worktree_id = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.worktree_id.clone();
@@ -1825,6 +1843,7 @@ impl Daemon {
                 tab.layout = layout::resize(&tab.layout, &split_id, ratio);
                 let tab = tab.clone();
                 inner.store.tab_upsert(&tab).map_err(internal)?;
+                Self::emit_tabs(&mut inner, &tab.worktree_id);
                 Ok(Value::Null)
             }
 

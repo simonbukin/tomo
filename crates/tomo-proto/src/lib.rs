@@ -108,6 +108,8 @@ pub enum Call {
     PaneAttach { pane_id: Id },
     PaneDetach { pane_id: Id },
     PaneKillTree { pane_id: Id },
+    /// The last `lines` (default 8, at most 200) non-empty lines of pane output as plain text.
+    PaneTail { pane_id: Id, #[serde(default)] lines: Option<u32> },
 
     AgentList { worktree_id: Option<Id> },
     AgentSpawn(AgentSpawn),

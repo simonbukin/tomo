@@ -235,6 +235,13 @@ pub fn default_keybindings() -> BTreeMap<String, String> {
         ("next_tab", "mod+shift+right"),
         ("prev_tab", "mod+shift+left"),
         ("zoom_pane", "mod+shift+enter"),
+        ("move_tab_left", "mod+alt+shift+left"),
+        ("move_tab_right", "mod+alt+shift+right"),
+        ("move_pane_left", "mod+ctrl+alt+left"),
+        ("move_pane_right", "mod+ctrl+alt+right"),
+        ("move_pane_up", "mod+ctrl+alt+up"),
+        ("move_pane_down", "mod+ctrl+alt+down"),
+        ("equalize_panes", "mod+alt+e"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))

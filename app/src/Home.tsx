@@ -1,6 +1,7 @@
 import { ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { Wordmark } from "./Brand";
-import { useMemo, useState } from "react";
+import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { useMemo, useState, type ReactNode } from "react";
 import { openWorktree, setMetadata } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { homeEmpty } from "./emptyStates";
@@ -27,14 +28,15 @@ export function Home() {
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
   const empty = homeEmpty(s.repos.length, s.worktrees.filter((w) => !w.archived_at_ms).length, visible.length);
-  const [over, setOver] = useState<string | null>(null);
   const stateIdOf = (key: string) => (key === NO_STATE ? null : orderedStates(ctx.states).find((st) => st.label === key)?.id ?? key);
-  const dropTo = (key: string, e: React.DragEvent) => {
-    e.preventDefault();
-    setOver(null);
-    const id = e.dataTransfer.getData("text/plain");
-    const w = s.worktrees.find((x) => x.id === id);
-    if (w && w.metadata.state !== stateIdOf(key)) setMetadata(id, { state: stateIdOf(key) });
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const [dragged, setDragged] = useState<Worktree | null>(null);
+  const onDragStart = ({ active }: DragStartEvent) => setDragged(s.worktrees.find((w) => w.id === active.id) ?? null);
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    setDragged(null);
+    const key = over?.data.current?.key as string | undefined;
+    const w = s.worktrees.find((x) => x.id === active.id);
+    if (w && key !== undefined && w.metadata.state !== stateIdOf(key)) setMetadata(w.id, { state: stateIdOf(key) });
   };
 
   const addFilter = (f: Filter) => set({ filters: o.filters.some((x) => x.kind === f.kind && x.value === f.value) ? o.filters : [...o.filters, f] });
@@ -108,20 +110,23 @@ export function Home() {
       {empty === "no-worktrees" && <EmptyState title="No active worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>} />}
       {empty === "no-matches" && <EmptyState title="No worktrees match." action={<Button variant="link" onClick={() => set({ query: "", filters: [] })}>clear search and filters</Button>} />}
       {o.view === "board" ? (
-        <div className="board">
-          {groups.map((g) => (
-            <section
-              key={g.key || "all"}
-              className={`board-col${over === g.key ? " board-col-over" : ""}`}
-              onDragOver={(e) => { if (o.group === "state") { e.preventDefault(); setOver(g.key); } }}
-              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null); }}
-              onDrop={(e) => o.group === "state" && dropTo(g.key, e)}
-            >
-              <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key || "all"}<span className="right">{g.items.length}</span></div>
-              <div className="board-cards">{g.items.map((w) => <Card key={w.id} w={w} draggable={o.group === "state"} />)}</div>
-            </section>
-          ))}
-        </div>
+        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragged(null)}>
+          <div className="board">
+            {groups.map((g) => (
+              <BoardColumn key={g.key || "all"} groupKey={g.key} droppable={o.group === "state"}>
+                <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key || "all"}<span className="right">{g.items.length}</span></div>
+                <div className="board-cards">{g.items.map((w) => <Card key={w.id} w={w} draggable={o.group === "state"} />)}</div>
+              </BoardColumn>
+            ))}
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {dragged && (
+              <div className="card card-overlay">
+                <div className="card-title"><span className="state state-none" /><span className="name">{dragged.name}</span></div>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
       ) : (
         groups.map((g) => (
           <section key={g.key || "all"} className="home-group">
@@ -168,6 +173,16 @@ function Row({ w }: { w: Worktree }) {
   );
 }
 
+/** A drop between columns only sets `worktree.state`. Order inside a column stays the configured sort. */
+function BoardColumn({ groupKey, droppable, children }: { groupKey: string; droppable: boolean; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `col:${groupKey}`, data: { key: groupKey }, disabled: !droppable });
+  return (
+    <section ref={setNodeRef} className={`board-col${isOver ? " board-col-over" : ""}`}>
+      {children}
+    </section>
+  );
+}
+
 function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
@@ -178,11 +193,13 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const busy = w.archiving;
   const sub = [w.metadata.project ?? repo, busy ? "archiving…" : archived ? "archived" : state].filter(Boolean).join(" · ");
   const summary = summarizeState(agents, attention);
+  const drag = useDraggable({ id: w.id, disabled: !draggable || archived || busy });
   return (
     <div
-      className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}`}
-      draggable={draggable && !archived && !busy}
-      onDragStart={(e) => e.dataTransfer.setData("text/plain", w.id)}
+      ref={drag.setNodeRef}
+      {...drag.attributes}
+      {...drag.listeners}
+      className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}${drag.isDragging ? " card-dragging" : ""}`}
       onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
       title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}

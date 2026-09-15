@@ -18,6 +18,7 @@ import { IconButton } from "./components/ui";
 import { isLastPane, paneMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { useShortcuts } from "./shortcuts";
+import { PaneDropZone, usePaneDrag } from "./LayoutDnd";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -148,11 +149,12 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   const lastPane = useStore(() => isLastPane(paneId));
   const shortcut = useShortcuts();
+  const drag = usePaneDrag(paneId, pane?.tab_id ?? "", title);
   return (
     <div className="pane-wrap">
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
       <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
-        <span className="chip">
+        <span className="chip pane-grip" ref={drag.ref} {...drag.props}>
           <span className={`state ${stateClass}`} />
           <ProcessIcon agent={agent?.kind} cmd={pane?.process_cmd} />
           <strong>{title}</strong>
@@ -167,6 +169,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
       </div>
       <div className="pane-body" ref={hostRef} />
+      <PaneDropZone paneId={paneId} />
     </div>
     </div>
   );
