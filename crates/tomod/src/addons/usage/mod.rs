@@ -1,8 +1,11 @@
-use crate::daemon::Daemon;
+//! Provider usage: reads the allowance of each provider, keeps the last result, and warns when a bucket crosses a threshold.
+//! It owns no table and no Core state. See docs/usage.md.
+
+use crate::daemon::{ok, Daemon};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tomo_proto::*;
 
@@ -11,6 +14,14 @@ const REQUEST_TIMEOUT_SECS: u64 = 8;
 const POLL_INTERVAL_MS: u64 = 5 * 60 * 1000;
 const POLL_TICK: Duration = Duration::from_secs(20);
 pub const THRESHOLDS: [f64; 2] = [0.80, 0.95];
+
+// ponytail: one result per process, because tomod.lock allows one daemon per data dir. Pass a handle if a process ever runs two daemons.
+// Lock order: take this after the Core lock, never before it.
+static LAST: Mutex<Vec<UsageSnapshot>> = Mutex::new(Vec::new());
+
+fn last() -> MutexGuard<'static, Vec<UsageSnapshot>> {
+    LAST.lock().unwrap_or_else(|p| p.into_inner())
+}
 
 fn unavailable(provider: AgentKind, reason: impl Into<String>, now: u64) -> UsageSnapshot {
     UsageSnapshot { provider, available: false, reason: Some(reason.into()), buckets: Vec::new(), fetched_at_ms: now }
@@ -310,34 +321,47 @@ fn newest_fetch_ms(list: &[UsageSnapshot]) -> u64 {
     list.iter().map(|s| s.fetched_at_ms).max().unwrap_or(0)
 }
 
-pub async fn refresh(daemon: &Arc<Daemon>) {
+fn due(subscribed: bool, newest_fetch_ms: u64, now: u64) -> bool {
+    subscribed && now.saturating_sub(newest_fetch_ms) >= POLL_INTERVAL_MS
+}
+
+/// The last result, for the `subscribe` snapshot.
+pub fn snapshots() -> Vec<UsageSnapshot> {
+    last().clone()
+}
+
+async fn refresh(daemon: &Arc<Daemon>) {
     let fresh = tokio::task::spawn_blocking(fetch_all).await.unwrap_or_default();
     let mut inner = daemon.lock();
-    let notices = crossings(&inner.usage, &fresh);
-    let changed = !same(&inner.usage, &fresh);
+    let before = std::mem::replace(&mut *last(), fresh.clone());
     for s in &fresh {
         let problem = (!s.available).then(|| s.reason.clone().unwrap_or_else(|| "unavailable".to_string()));
         Daemon::diagnostic_on_change(&mut inner, "usage", &format!("{} usage", s.provider.label().to_lowercase()), problem);
     }
-    inner.usage = fresh;
-    if changed {
-        let snapshots = inner.usage.clone();
-        Daemon::emit(&mut inner, Event::UsageChanged { snapshots });
+    if !same(&before, &fresh) {
+        Daemon::emit(&mut inner, Event::UsageChanged { snapshots: fresh.clone() });
     }
-    for message in notices {
+    for message in crossings(&before, &fresh) {
         Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message });
     }
 }
 
+/// `usage_get`: fetches at once when `force` is set or when there is no result yet.
+pub async fn get(daemon: &Arc<Daemon>, force: bool) -> Result<Value, RpcError> {
+    let empty = last().is_empty();
+    if force || empty {
+        refresh(daemon).await;
+    }
+    ok(snapshots())
+}
+
+/// The background poll. It fetches only while a client is subscribed and the last result is older than five minutes.
 pub async fn run(daemon: Arc<Daemon>) {
     loop {
         tokio::time::sleep(POLL_TICK).await;
-        let due = {
-            let inner = daemon.lock();
-            let subscribed = inner.clients.values().any(|c| c.subscribed);
-            subscribed && now_ms().saturating_sub(newest_fetch_ms(&inner.usage)) >= POLL_INTERVAL_MS
-        };
-        if due {
+        let subscribed = daemon.lock().clients.values().any(|c| c.subscribed);
+        let newest = newest_fetch_ms(&last());
+        if due(subscribed, newest, now_ms()) {
             refresh(&daemon).await;
         }
     }
@@ -488,6 +512,15 @@ mod tests {
     fn first_sight_above_threshold_fires_and_unknown_fraction_is_silent() {
         let after = vec![snapshot(AgentKind::Codex, vec![bucket("5-hour", 0.90), UsageBucket { label: "weekly".into(), fraction_used: None, resets_at_ms: None, detail: None, scope: None }])];
         assert_eq!(crossings(&[], &after), vec!["Codex 5-hour allowance 90%"]);
+    }
+
+    #[test]
+    fn polls_only_with_a_subscriber_and_a_stale_result() {
+        let stale = NOW - POLL_INTERVAL_MS;
+        assert!(due(true, stale, NOW));
+        assert!(due(true, 0, NOW));
+        assert!(!due(false, stale, NOW));
+        assert!(!due(true, stale + 1, NOW));
     }
 
     #[test]

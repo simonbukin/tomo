@@ -1121,10 +1121,17 @@ pub struct Snapshot {
     pub actions: Vec<ActionSet>,
     #[serde(default)]
     pub endpoints: Vec<RuntimeEndpoint>,
-    #[serde(default)]
-    pub usage: Vec<UsageSnapshot>,
+    #[serde(flatten)]
+    pub addons: AddonSnapshot,
     #[ts(type = "unknown")]
     pub ui_state: Value,
+}
+
+/// The snapshot fields that addons own. Core leaves them empty and `tomod` `dispatch.rs` fills them. On the wire they are top-level fields of `Snapshot`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct AddonSnapshot {
+    #[serde(default)]
+    pub usage: Vec<UsageSnapshot>,
 }
 
 pub fn now_ms() -> u64 {
