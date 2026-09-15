@@ -5,6 +5,7 @@
 @import "./sidebar.css";
 @import "./home.css";
 @import "./terminal.css";
+@import "../browser/browser.css";
 @import "./palette.css";
 @import "../addons/towns/towns.css";
 @import "./activity.css";

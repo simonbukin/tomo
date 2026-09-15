@@ -1,6 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Pane, Tab } from "./types";
+import type { Pane, Tab } from "../types";
 
 const handlers: Record<string, (e: { payload: unknown }) => void> = {};
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
@@ -11,16 +11,17 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
-vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn(() => Promise.resolve({ pane: { id: "b2" } })) }));
+vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../api")>()), rpc: vi.fn(() => Promise.resolve({ pane: { id: "b2" } })) }));
 
 const { invoke } = await import("@tauri-apps/api/core");
 const { openUrl } = await import("@tauri-apps/plugin-opener");
-const { rpc } = await import("./api");
-const { BrowserPane, normalizeUrl } = await import("./BrowserPane");
-const { TabLayout } = await import("./Layout");
-const { openEndpoint, openInBrowser } = await import("./actions");
-const { browserMenu } = await import("./menus");
-const store = await import("./store");
+const { rpc } = await import("../api");
+const { BrowserPane } = await import("./BrowserPane");
+const { normalizeUrl, openInBrowser } = await import("./browser");
+const { TabLayout } = await import("../Layout");
+const { openEndpoint } = await import("../actions");
+const { browserMenu } = await import("../menus");
+const store = await import("../store");
 
 const browser = { id: "b1", tab_id: "t1", worktree_id: "w1", title: "", user_title: null, live: true, pid: null, agent: null, kind: "browser", url: "http://localhost:1420/" } as unknown as Pane;
 const tab = { id: "t1", worktree_id: "w1", title: "Browser", position: 0, is_active: true, active_pane_id: "b1", layout: { type: "leaf", pane_id: "b1" } } as unknown as Tab;

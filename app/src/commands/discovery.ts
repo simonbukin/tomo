@@ -1,4 +1,5 @@
-import { browserCommand, closeOtherTabs, currentWorktree, equalizeTab, focusedPaneId, openBrowser, rotateSplit, type Action } from "../actions";
+import { closeOtherTabs, currentWorktree, equalizeTab, focusedPaneId, rotateSplit, type Action } from "../actions";
+import { browserCommand, openBrowser } from "../browser/browser";
 import { activeTab, getState, setState } from "../store";
 import type { Id } from "../types";
 import { movePane, moveTab as moveTabTo } from "./panes";
