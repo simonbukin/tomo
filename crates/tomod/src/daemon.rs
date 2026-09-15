@@ -7,7 +7,7 @@ use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::providers;
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::{editor, reopen, sessions};
+use crate::features::{editor, reopen};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -2015,7 +2015,7 @@ impl Daemon {
             Call::SessionList { worktree_id, limit } => {
                 let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
                 let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;
-                let list = tokio::task::spawn_blocking(move || sessions::list(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+                let list = tokio::task::spawn_blocking(move || providers::sessions(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 ok(list)
             }
             Call::DiagnosticsList { limit } => {

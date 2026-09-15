@@ -3,7 +3,7 @@ use crate::agents::shell_quote;
 use anyhow::Result;
 use serde_json::{Map, Value};
 use std::path::Path;
-use tomo_proto::{AgentKind, IntegrationLevel};
+use tomo_proto::{AgentKind, AgentSession, IntegrationLevel};
 
 pub static PROVIDER: Provider = Provider {
     kind: AgentKind::Codex,
@@ -16,7 +16,48 @@ pub static PROVIDER: Provider = Provider {
     install,
     installed,
     gap,
+    sessions,
 };
+
+/// Codex keeps `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, with the cwd in
+/// the first line. The newest 300 files are enough for one worktree.
+fn sessions(home: &Path, cwd: &Path) -> Vec<AgentSession> {
+    let mut recent = super::jsonl_files(&home.join(".codex").join("sessions"), 3);
+    recent.sort_by_key(|p| std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()));
+    recent.iter().take(300).filter_map(|p| parse_session(p, cwd)).collect()
+}
+
+fn text_of(content: &Value) -> Option<String> {
+    content.as_array()?.iter().find_map(|p| (p.get("type")?.as_str()? == "input_text").then(|| p.get("text")?.as_str().map(str::to_string))?)
+}
+
+/// Parses one rollout file. `None` when its cwd is not `cwd`.
+pub fn parse_session(path: &Path, cwd: &Path) -> Option<AgentSession> {
+    let lines = super::read_head(path);
+    let meta: Value = serde_json::from_str(lines.first()?).ok()?;
+    let payload = meta.get("payload")?;
+    if Path::new(payload.get("cwd")?.as_str()?) != cwd {
+        return None;
+    }
+    let id = payload.get("id").and_then(Value::as_str)?.to_string();
+    let mut title = None;
+    let mut turns = 0u32;
+    for line in lines.iter().skip(1) {
+        let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
+        let p = v.get("payload");
+        let kind = v.get("type").and_then(Value::as_str);
+        let user_message = kind == Some("event_msg") && p.and_then(|p| p.get("type")).and_then(Value::as_str) == Some("user_message");
+        let user_item = kind == Some("response_item") && p.and_then(|p| p.get("role")).and_then(Value::as_str) == Some("user");
+        if user_message || user_item {
+            turns += 1;
+            if title.is_none() {
+                let text = if user_message { p.and_then(|p| p.get("message")).and_then(Value::as_str).map(str::to_string) } else { p.and_then(|p| p.get("content")).and_then(text_of) };
+                title = text.filter(|t| super::is_prompt(t)).map(|t| super::clip(&t));
+            }
+        }
+    }
+    Some(AgentSession { kind: AgentKind::Codex, id, title, branch: None, updated_at_ms: super::modified_at_ms(path)?, turns, path: path.to_path_buf() })
+}
 
 const HOOKS_FILE: &str = ".codex/hooks.json";
 

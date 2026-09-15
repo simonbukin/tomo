@@ -3,7 +3,7 @@ use crate::agents::shell_quote;
 use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tomo_proto::{AgentKind, AgentState};
+use tomo_proto::{AgentKind, AgentSession, AgentState};
 
 pub static PROVIDER: Provider = Provider {
     kind: AgentKind::Claude,
@@ -16,7 +16,58 @@ pub static PROVIDER: Provider = Provider {
     install,
     installed,
     gap: super::no_gap,
+    sessions,
 };
+
+/// Claude Code keeps `~/.claude/projects/<encoded cwd>/<session id>.jsonl`.
+/// It encodes a cwd by a replacement of every `/` (and `.`) with `-`.
+pub fn project_dir(home: &Path, cwd: &Path) -> PathBuf {
+    let encoded: String = cwd.to_string_lossy().chars().map(|c| if c == '/' || c == '.' { '-' } else { c }).collect();
+    home.join(".claude").join("projects").join(encoded)
+}
+
+fn sessions(home: &Path, cwd: &Path) -> Vec<AgentSession> {
+    super::jsonl_files(&project_dir(home, cwd), 0).iter().filter_map(|p| parse_session(p)).collect()
+}
+
+fn text_of(content: &Value) -> Option<String> {
+    match content {
+        Value::String(s) => Some(s.clone()),
+        Value::Array(parts) => parts.iter().find_map(|p| (p.get("type")?.as_str()? == "text").then(|| p.get("text")?.as_str().map(str::to_string))?),
+        _ => None,
+    }
+}
+
+/// Parses one session file. `None` when it holds no user turn.
+pub fn parse_session(path: &Path) -> Option<AgentSession> {
+    let id = path.file_stem()?.to_string_lossy().into_owned();
+    let lines = super::read_head(path);
+    let mut title = None;
+    let mut first_prompt = None;
+    let mut branch = None;
+    let mut turns = 0u32;
+    for line in &lines {
+        let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
+        match v.get("type").and_then(Value::as_str) {
+            Some("ai-title") => title = v.get("aiTitle").and_then(Value::as_str).map(str::to_string),
+            Some("user") => {
+                turns += 1;
+                if branch.is_none() {
+                    branch = v.get("gitBranch").and_then(Value::as_str).filter(|b| *b != "HEAD").map(str::to_string);
+                }
+                if first_prompt.is_none() {
+                    first_prompt = v.get("message").and_then(|m| m.get("content")).and_then(text_of).filter(|t| super::is_prompt(t)).map(|t| super::clip(&t));
+                }
+            }
+            Some("assistant") => turns += 1,
+            _ => {}
+        }
+    }
+    if turns == 0 {
+        return None;
+    }
+    Some(AgentSession { kind: AgentKind::Claude, id, title: title.or(first_prompt), branch, updated_at_ms: super::modified_at_ms(path)?, turns, path: path.to_path_buf() })
+}
 
 fn write_launch_file(launch_dir: &Path, tomo_bin: &Path) -> Result<()> {
     std::fs::write(settings_path(launch_dir), serde_json::to_string_pretty(&hooks_settings(tomo_bin))?)?;
@@ -72,6 +123,17 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
         _ => None,
     };
     HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claude_dir_encoding_matches_claude_code() {
+        assert_eq!(project_dir(Path::new("/h"), Path::new("/Users/me/Projects/tomo")), PathBuf::from("/h/.claude/projects/-Users-me-Projects-tomo"));
+        assert_eq!(project_dir(Path::new("/h"), Path::new("/a/b.c")), PathBuf::from("/h/.claude/projects/-a-b-c"));
+    }
 }
 
 pub fn hooks_settings(tomo_bin: &Path) -> Value {
