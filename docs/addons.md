@@ -1492,6 +1492,93 @@ GUI: `topbar` (`buttons`, `marks`), `worktreeMenu`, `endpointMenu`, `paletteEntr
 - An `endpoint_discovered` Activity row takes its name from the pane source. When the pane is gone, the row shows the payload `action_id`, not the label.
 - "open" and "copy" in the submenu of a running Action load `actions.ts` lazily, one microtask later.
 
+### Tests
+
+| Suite | Before milestone 3 (master `5360fab`) | Milestone 3 on `5360fab` | Milestone 3 merged with milestone 2 (`b769d5d`) |
+|---|---|---|---|
+| `cargo test --workspace` | 130 | 131 (tomod 122) | 134 (tomod 125, tomo-proto 7, tomo_app_lib 2) |
+| vitest | 31 files, 218 tests | 32 files, 227 tests | 33 files, 241 tests |
+| torture harness | 298 checks in 16 scripts | 299 checks (`actions.sh` 24 → 25) | 318 checks in 17 scripts, 1 known (in `github.sh`) |
+
+The characterization tests came first (commit `978d462`) and passed on the
+code before the move:
+
+- `actions_characterization` in `addons/actions/tests.rs` runs a real daemon
+  with PTYs, Git, and hook scripts through `dispatch::handle`. It checks
+  the list and its defaults, the snapshot, a run with its source, the reuse
+  of a live pane, stop, restart, a crash (attention item, activity, and
+  `action.crashed`), an exit with 0, an external run, an unknown id, a pane
+  close that records nothing, a shell exit that is no crash, and a restore
+  that does not run the command again.
+- `app/src/addons/actions/actions.test.tsx` renders the topbar (order, dot,
+  warning), a click and a right click, the snapshot, the overflow menu, the
+  endpoint menu, the running Action submenu, the palette entries, the
+  shortcut binding, the shortcut reference, and the crash toast with Restart.
+
+Also new: the `source` check in `actions.sh`, the Action nouns in
+`OWNED_NOUNS`, and the TypeScript Action noun test. Moved: the 3 parser
+tests (with `model.rs`) and the 2 running Action menu tests from
+`menus.test.ts` (now 1 test). Changed: the store activity test and the glyph
+test use core kinds, so that they do not name Actions. No test was removed.
+
+### Performance
+
+Measured on 2026-09-15 with the commands in
+[addons-baseline.md](addons-baseline.md), release build, data dir
+`/tmp/tomo-addons-actions-bench`, on commit `d1b0879` (milestone 3 merged with
+milestone 5, before the merge of milestone 2). The merge of milestone 2
+changed no Action code path. As in milestone 5, `TOMO_USAGE_MOCK` pointed at
+a file with a far `fetched_at_ms`, so no window called the network. Other
+agents built in parallel, and the owner used the machine.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 5, merged | Milestone 3 |
+|---|---|---|---|
+| Reattach | 7.66 ms | 7.81 ms | 7.76 ms |
+| of which `subscribe` | 0.51 ms | 0.41 ms | 0.39 ms |
+| of which `pane_attach` | 7.14 ms | 7.41 ms | 7.40 ms |
+| Worktree switch | 0.14 ms | 0.10 ms | 0.08 ms |
+| Worktree switch with attach | 9.26 ms | 7.61 ms | 7.53 ms |
+| Refresh | 164.31 ms | 124.40 ms | 128.08 ms (trials 162.84, 128.08, 123.84) |
+| Process poll, fresh | 23.41 ms | 12.30 ms | 19.00 ms |
+| Process poll, cached | 0.63 ms | 0.39 ms | 0.55 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 5, merged | Milestone 3 (runs) |
+|---|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.13 % | **0.12 %** (0.12, 0.13, 0.12) |
+| Idle CPU, one subscriber | 1.05 % | 0.77 % | **1.00 %** (1.00, 0.92, 1.03) |
+| RSS at window end, no subscriber | 14.6 MB | 14.5 MB | **11.9 MB** (39.6, 10.3, 11.9) |
+| RSS at window end, subscribed | 14.6 MB | 14.7 MB | **13.3 MB** (13.0, 13.4, 13.3) |
+
+The first idle window started directly after the `ops` run, as in the
+baseline, and the memory went back in the next window. The subscribed CPU
+is higher than in milestone 5 and lower than the baseline. The change adds
+no timer and no work on a monitor tick: the reload runs only at a discovery
+and at a watcher change, as before. The fresh process poll is between the
+baseline and milestone 5, and the change does not touch the poll.
+
+Gate: pass. No round trip is more than 1 ms and 20 % slower than the
+baseline (reattach is 0.10 ms slower). Idle CPU is 0.12 % without and 1.00 %
+with a subscriber. Idle RSS is below 18 MB. The main JS chunk is 721.44 kB
+after both merges (720.03 kB at the GUI commit), below the 800 KB budget.
+Not measured: GUI cold launch and GUI RSS (no GUI allowed). Not run:
+`scripts/perf.sh` and the soak.
+
+### Stop conditions
+
+None was hit. Near:
+
+- Six GUI slots. The move removed 192 lines from core client files and added
+  60; the slot types added 28 lines. So the slot code is smaller than the
+  Action code that left the client core.
+- Process-wide daemon state (`static`), as in Usage and GitHub. The cost is
+  one Rust characterization test for three scenarios.
+- An addon module that `addons/index.ts` loads cannot import `actions.ts` at
+  module start. Two menu items use a lazy import. See "Module load".
+
 ## Candidates
 
 | Candidate | Verdict | Top leaks today (see the map) |
