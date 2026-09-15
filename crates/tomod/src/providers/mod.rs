@@ -260,10 +260,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "bug: detect matches any program named codex* and any command that mentions pi-coding-agent"]
     fn detect_agent_ignores_programs_that_only_mention_a_provider() {
         assert_eq!(detect("vim", "vim /src/pi-coding-agent/README.md"), None);
         assert_eq!(detect("codexbar", "codexbar"), None);
+        assert_eq!(detect("codex", "codex"), Some(AgentKind::Codex), "the plain binary name still counts");
+        assert_eq!(detect("node", "node --max-old-space-size=8192 /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi), "a runtime flag before the script still counts");
     }
 
     fn agent_plan(kind: AgentKind, command: &str, args: &[&str], resume: Option<&str>, extra: &[&str]) -> SpawnPlan {
