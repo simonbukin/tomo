@@ -78,7 +78,6 @@ pub struct Inner {
     pub prs: HashMap<Id, PrStatusResult>,
     pub archiving: HashSet<Id>,
     pub hook_queue: Vec<HookEvent>,
-    pub town_by_worktree: HashMap<Id, String>,
     pub actions: HashMap<Id, ActionSet>,
     pub discovered_once: bool,
     pub last_full_poll_ms: u64,
@@ -180,7 +179,6 @@ impl Daemon {
                 prs: HashMap::new(),
                 archiving: HashSet::new(),
                 hook_queue: Vec::new(),
-                town_by_worktree: HashMap::new(),
                 actions: HashMap::new(),
                 discovered_once: false,
                 last_full_poll_ms: 0,
@@ -312,7 +310,6 @@ impl Daemon {
             first_seen_ms: w.first_seen_ms,
             archived_at_ms: w.archived_at_ms,
             archiving: inner.archiving.contains(&w.id),
-            town_slug: inner.town_by_worktree.get(&w.id).cloned(),
             tab_count,
             pane_count,
         }
@@ -519,7 +516,6 @@ impl Daemon {
         let fresh: Vec<Id> = if inner.discovered_once { next.keys().filter(|id| !inner.worktrees.contains_key(*id)).cloned().collect() } else { Vec::new() };
         inner.worktrees = next;
         inner.discovered_once = true;
-        inner.town_by_worktree = inner.store.town_unlocks().unwrap_or_default().into_iter().map(|u| (u.worktree_id, u.slug)).collect();
         for id in fresh {
             let ev = events::envelope(&inner, "worktree.discovered", Some(&id));
             inner.hook_queue.push(ev);
@@ -1682,7 +1678,7 @@ impl Daemon {
                     (repo.path.clone(), inner.config.worktree_parent_dir.clone(), unlocked)
                 };
                 let parent = parent_dir.unwrap_or_else(|| repo_path.parent().unwrap_or(&repo_path).to_path_buf());
-                let town = match (&spec.path, &spec.town_slug) {
+                let town = match (&spec.path, &spec.name_hint) {
                     (Some(_), _) => None,
                     (None, Some(slug)) => Some(towns::find(slug).filter(|t| !unlocked.contains(&t.slug)).ok_or_else(|| err(ErrorCode::BadRequest, format!("town {slug} is unknown or already unlocked")))?),
                     (None, None) => Some(towns::pick(&unlocked).ok_or_else(|| err(ErrorCode::Conflict, "every town is unlocked; pass a path"))?),
@@ -1701,7 +1697,6 @@ impl Daemon {
                     let mut inner = self.lock();
                     let unlock = TownUnlock { slug: t.slug.clone(), worktree_id: id.clone(), repo_id: spec.repo_id.clone(), unlocked_at_ms: now_ms() };
                     inner.store.town_unlock(&unlock).map_err(internal)?;
-                    inner.town_by_worktree.insert(id.clone(), t.slug.clone());
                     if let Some(w) = inner.worktrees.get_mut(&id) {
                         if w.metadata.display_name.is_none() {
                             w.metadata.display_name = Some(t.name.clone());

@@ -6,8 +6,10 @@ set -u
 daemon_fresh
 R=$(new_repo); $T repo add "$R" >/dev/null
 
-read -r W P S < <($T worktree create --repo "$R" --branch feat/town --new --json | jq_ "print(d[0]['id'], d[0]['path'], d[0]['town_slug'])")
-[ "$S" != None ] && check 0 "new worktree gets a town" || check 1 "town assigned" "$S"
+slug_of() { $T towns list --unlocked --json | jq_ "print(next((r['town']['slug'] for r in d if r['unlock']['worktree_id']=='$1'), None))"; }
+read -r W P < <($T worktree create --repo "$R" --branch feat/town --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
+S=$(slug_of "$W")
+[ "$S" != None ] && [ "$(basename "$P")" = "$S" ] && check 0 "new worktree gets a town" || check 1 "town assigned" "$S $P"
 
 hist() { $RPC call town_history "{\"slug\":\"$S\"}"; }
 has() { echo "$1" | jq_ "import sys; sys.exit(0 if $2 else 1)"; }
@@ -34,7 +36,6 @@ has "$o" "d['status']=='archived' and d['final_commit']=='$C'" && check 0 "histo
 o=$($RPC call town_history '{"slug":"no-such-town"}' 2>&1); rc=$?
 [ $rc != 0 ] && case "$o" in *not_found*|*"not unlocked"*) check 0 "a locked town has no history";; *) check 1 "locked town" "$o";; esac || check 1 "locked town" "rc=0 $o"
 
-slug_of() { $T towns list --unlocked --json | jq_ "print(next((r['town']['slug'] for r in d if r['unlock']['worktree_id']=='$1'), None))"; }
 name_of() { $T worktree list --json | jq_ "print(next((w['name'] for w in d if w['id']=='$1'), None))"; }
 town_name() { $T towns list --unlocked --json | jq_ "print(next((r['town']['name'] for r in d if r['town']['slug']=='$1'), None))"; }
 parent_dir() { printf 'worktree_parent_dir = "%s"\n' "$1" > "$TOMO_DATA_DIR/config.toml"; daemon_restart; }

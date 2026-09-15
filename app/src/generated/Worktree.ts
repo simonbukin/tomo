@@ -5,4 +5,4 @@
 import type { GitSummary } from "./GitSummary";
 import type { WorktreeMetadata } from "./WorktreeMetadata";
 
-export type Worktree = { id: string, repo_id: string, path: string, name: string, branch: string | null, head: string, detached: boolean, is_main: boolean, exists: boolean, git: GitSummary | null, metadata: WorktreeMetadata, last_active_ms: number | null, first_seen_ms: number | null, archived_at_ms: number | null, archiving: boolean, town_slug: string | null, tab_count: number, pane_count: number, };
+export type Worktree = { id: string, repo_id: string, path: string, name: string, branch: string | null, head: string, detached: boolean, is_main: boolean, exists: boolean, git: GitSummary | null, metadata: WorktreeMetadata, last_active_ms: number | null, first_seen_ms: number | null, archived_at_ms: number | null, archiving: boolean, tab_count: number, pane_count: number, };
