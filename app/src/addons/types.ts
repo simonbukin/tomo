@@ -1,11 +1,13 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { Action } from "../actions";
+import type { AddonSignal } from "../activityModel";
 import type { MenuItem } from "../components/ui";
 import type { Status } from "../glyphs";
 import type { PaletteEntry } from "../paletteModel";
+import type { RailMarker } from "../shell/RightRail";
 import type { State } from "../store";
-import type { ActivityEvent, Frame, Id, RuntimeEndpoint, Snapshot, Worktree } from "../types";
+import type { ActivityEvent, Frame, Id, Repo, RuntimeEndpoint, Snapshot, Worktree } from "../types";
 
 /** A button on an Activity row. `label` reads the store and returns null to hide the button. `run` happens on click. */
 export interface ActivityRowAction {
@@ -53,11 +55,29 @@ export interface BoundCommand extends Action {
   binding: string;
 }
 
+/** A right inspector section. Addon sections come after `git` and before `processes`, in `builtins` order. */
+export interface InspectorSection {
+  /** The `data-section` of the rendered section and the `ui.rightSection` value. It must not change. */
+  id: string;
+  /** The right rail button label. */
+  label: string;
+  icon: LucideIcon;
+  /** Rendered only while the inspector is open on a worktree. */
+  component: ComponentType<{ worktree: Worktree }>;
+  /** The right rail marker for exceptional state. It reads the store and starts no work. */
+  marker?: (s: State, w: Worktree) => RailMarker | null;
+}
+
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */
 export interface Addon {
   id: string;
   views?: readonly GlobalView[];
   commands?: readonly Action[];
+  inspectorSections?: readonly InspectorSection[];
+  /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
+  worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
+  /** The small image before a repo name in the sidebar and on Home. The first addon that has one wins. */
+  repoAvatar?: ComponentType<{ repo: Repo; size: number }>;
   /** A field in the create-worktree dialog. The first addon that has one wins, like the daemon's one worktree namer. */
   worktreeNameField?: ComponentType<WorktreeNameFieldProps>;
   /** The worktree top bar. `buttons` render before the editor button; `marks` render after it, before the runtime and overflow buttons. */

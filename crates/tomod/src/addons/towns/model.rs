@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
-use tomo_proto::{ActivityEvent, ActivityKind, CoreActivity, GitHubActivity, PullRequest, Town, TownHistory, TownPr, TownUnlock, TownWorktreeStatus};
+use tomo_proto::{ActivityEvent, ActivityKind, CoreActivity, Town, TownHistory, TownPr, TownUnlock, TownWorktreeStatus};
 
 const DATA: &str = include_str!("../../../../../app/src/addons/towns/data/japan-towns.json");
 const WEIGHTS: [(&str, u32); 5] = [("common", 55), ("uncommon", 25), ("rare", 13), ("epic", 5), ("legendary", 2)];
@@ -54,8 +54,8 @@ fn payload_str(e: &ActivityEvent, key: &str) -> Option<String> {
     e.payload.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
-/// `events` are the activity events of the unlocking worktree; `pr` is the cached pull request, if any.
-pub fn history(unlock: TownUnlock, repo_name: Option<String>, worktree: Option<WorktreeFacts>, events: &[ActivityEvent], pr: Option<&PullRequest>) -> TownHistory {
+/// `events` are the activity events of the unlocking worktree; `pr` is its pull request, if one is known.
+pub fn history(unlock: TownUnlock, repo_name: Option<String>, worktree: Option<WorktreeFacts>, events: &[ActivityEvent], pr: Option<TownPr>) -> TownHistory {
     let archive = newest(events, CoreActivity::Archived);
     let status = match &worktree {
         None => TownWorktreeStatus::Gone,
@@ -73,10 +73,6 @@ pub fn history(unlock: TownUnlock, repo_name: Option<String>, worktree: Option<W
         TownWorktreeStatus::Gone => archive.map(|e| e.occurred_at_ms),
         _ => None,
     };
-    let pr = pr.map(|p| TownPr { number: p.number, url: p.url.clone(), state: p.state.clone() }).or_else(|| {
-        let e = newest(events, GitHubActivity::PrMerged)?;
-        Some(TownPr { number: e.payload.get("number")?.as_u64()?, url: payload_str(e, "url")?, state: "merged".into() })
-    });
     TownHistory {
         branch: worktree.as_ref().and_then(|w| w.branch.clone()).or_else(|| archive.and_then(|e| payload_str(e, "branch"))),
         worktree_name: worktree.map(|w| w.name),
@@ -139,12 +135,12 @@ mod tests {
             event(CoreActivity::Archived, 50, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": null, "head": "old0001" })),
             event(CoreActivity::Restored, 60, serde_json::json!({})),
             event(CoreActivity::Archived, 90, serde_json::json!({ "branch": "feat/labor", "checkpoint_commit": "8c1fd62", "head": "old0002" })),
-            event(GitHubActivity::PrMerged, 70, serde_json::json!({ "number": 12, "url": "https://github.com/o/r/pull/12" })),
         ];
-        let h = history(unlock(), None, Some(facts(Some(95))), &events, None);
+        let pr = TownPr { number: 12, url: "https://example.com/o/r/pull/12".into(), state: "merged".into() };
+        let h = history(unlock(), None, Some(facts(Some(95))), &events, Some(pr.clone()));
         assert_eq!(h.status, TownWorktreeStatus::Archived);
         assert_eq!((h.final_commit.as_deref(), h.archived_at_ms), (Some("8c1fd62"), Some(95)));
-        assert_eq!(h.pr, Some(TownPr { number: 12, url: "https://github.com/o/r/pull/12".into(), state: "merged".into() }));
+        assert_eq!(h.pr, Some(pr));
     }
 
     #[test]
@@ -153,13 +149,5 @@ mod tests {
         let h = history(unlock(), None, None, &events, None);
         assert_eq!(h.status, TownWorktreeStatus::Gone);
         assert_eq!((h.branch.as_deref(), h.final_commit.as_deref(), h.archived_at_ms, h.worktree_name), (Some("feat/clean"), Some("head777"), Some(50), None));
-    }
-
-    #[test]
-    fn a_cached_pull_request_wins_over_the_merge_event() {
-        let pr = PullRequest { number: 3, title: "t".into(), url: "u".into(), state: "open".into(), draft: false, review_decision: None, mergeable: None, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 };
-        let events = [event(GitHubActivity::PrMerged, 70, serde_json::json!({ "number": 12, "url": "x" }))];
-        let h = history(unlock(), None, Some(facts(None)), &events, Some(&pr));
-        assert_eq!(h.pr.map(|p| (p.number, p.state)), Some((3, "open".to_string())));
     }
 }

@@ -2,6 +2,7 @@
 //! Core never imports this module. Only `main.rs` and `dispatch.rs` do.
 
 pub mod actions;
+pub mod github;
 pub mod towns;
 pub mod usage;
 
@@ -34,8 +35,9 @@ mod tests {
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
-    const OWNED_NOUNS: [(&str, &[&str]); 3] = [
+    const OWNED_NOUNS: [(&str, &[&str]); 4] = [
         ("towns", &["town"]),
+        ("github", &["github", "pullrequest", "prstatus", "pr_status", "prchanged", "pr_changed", "review_decision", "checks_failed", "mergeable"]),
         ("usage", &["mod usage", "crate::usage", ".usage", "usage:", "usagesnapshot", "usagebucket", "usage_get", "usageget", "usage_changed", "usagechanged", "weekly", "5-hour", "allowance"]),
         (
             "actions",

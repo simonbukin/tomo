@@ -40,7 +40,9 @@ keeps at most three, in this order:
 3. active agents (`● Claude`, with the process icon)
 4. the primary HTTP runtime (`App ↗ :3000`)
 5. memory over `resource_warning_bytes` (`⚠ 4.8 GB`)
-6. a merged pull request or failed checks
+6. addon signals from the `worktreeSignals` slot, in `builtins` order. The
+   GitHub addon adds a merged pull request (`merged`) or failed checks
+   (`checks failed`) that the session already knows
 
 A healthy quiet worktree shows at most `Claude ●` and `App ↗`. The dots
 and colors are the shared status vocabulary from `base.css`. No new colors,

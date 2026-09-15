@@ -15,6 +15,7 @@ crates/tomod/              daemon
   src/server.rs            socket accept loop, per-connection framing
   src/addons/mod.rs        the static addon list, seams(), migrate(), start(), the dependency test (composition root)
   src/addons/towns/        Japan Towns: calls, towns table, seams, dataset and pick
+  src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
   src/addons/usage/        provider usage: Claude and Codex adapters, last result, poll, usage_get, notices
   src/addons/actions/      repo Actions: .tomo.toml parser, calls, reload and pane exit seams
   src/store.rs             SQLite schema and queries
@@ -44,6 +45,7 @@ app/                       Tauri client
   src/addons/index.ts      the builtins list (composition root)
   src/addons/types.ts      the Addon type: the slots that addons fill
   src/addons/towns/        Japan Towns view, ceremony, create field, state, CSS, data
+  src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
   src/addons/usage/        usage meters, bucket popover, diagnostics section, state
   src/addons/actions/      Action topbar buttons, menu items, palette entries, shortcuts, state
 integrations/pi/           Pi extension source, embedded into tomod
@@ -158,6 +160,7 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Town naming and unlocks               | `addons::towns::{name_worktree, unlock, rebind}`, joined through `Seams` |
 | Which addons exist and where they join Core | `addons::seams`, `addons::start`, `dispatch::handle`, `app/src/addons/index.ts` |
+| When `gh` runs, and when `pr_changed` and `pr_merged` fire | `addons::github::model::{fresh, update}` |
 | When usage fetches and what it warns about | `addons::usage::{get, run, crossings}` |
 | What `.tomo.toml` accepts             | `addons::actions::model::parse`         |
 | How an action runs, reuses, or stops  | `addons::actions::{run, stop, restart}` |
