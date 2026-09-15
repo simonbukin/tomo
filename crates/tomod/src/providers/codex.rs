@@ -10,7 +10,7 @@ pub static PROVIDER: Provider = Provider {
     resume_without_session: Some("--last"),
     hook_outcome: claude::hook_outcome,
     detects,
-    nested_env: &["CODEX_THREAD_ID"],
+    nested_env: &["CODEX_THREAD_ID", "CODEX_SANDBOX*"],
 };
 
 fn detects(p: &Program) -> bool {
