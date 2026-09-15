@@ -131,8 +131,15 @@ impl Fixture {
     }
 }
 
+// The Action sets are per process, and a reload keeps only the worktrees of its own daemon, so the scenarios share one test.
 #[tokio::test(flavor = "multi_thread")]
-async fn actions_list_run_reuse_stop_restart_and_exit_outcomes() {
+async fn actions_characterization() {
+    list_run_reuse_stop_restart_and_exit_outcomes().await;
+    closing_an_action_pane_records_nothing_and_a_shell_exit_is_no_crash().await;
+    a_restored_action_pane_is_a_shell_that_does_not_rerun().await;
+}
+
+async fn list_run_reuse_stop_restart_and_exit_outcomes() {
     let f = fixture("run").await;
     let set: ActionSet = serde_json::from_value(call(&f.daemon, Call::ActionList { worktree_id: f.worktree_id.clone() }).await.unwrap()).unwrap();
     assert_eq!(set.actions.iter().map(|a| (a.id.as_str(), a.label.as_str(), a.mode, a.show)).collect::<Vec<_>>(), [
@@ -193,7 +200,6 @@ async fn actions_list_run_reuse_stop_restart_and_exit_outcomes() {
     f.finish();
 }
 
-#[tokio::test(flavor = "multi_thread")]
 async fn closing_an_action_pane_records_nothing_and_a_shell_exit_is_no_crash() {
     let f = fixture("close").await;
     let pane = f.run("serve").await.unwrap().pane.unwrap();
@@ -209,7 +215,6 @@ async fn closing_an_action_pane_records_nothing_and_a_shell_exit_is_no_crash() {
     f.finish();
 }
 
-#[tokio::test(flavor = "multi_thread")]
 async fn a_restored_action_pane_is_a_shell_that_does_not_rerun() {
     let f = fixture("restore").await;
     let pane = f.run("serve").await.unwrap().pane.unwrap();

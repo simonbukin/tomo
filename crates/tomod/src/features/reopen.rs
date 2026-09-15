@@ -2,8 +2,8 @@
 //!
 //! The stack lives in daemon memory only. At close time the daemon knows the
 //! cwd, the agent session, and the browser URL of every pane, so it records
-//! them here. A reopen builds new panes from the record; it never reruns an
-//! Action command.
+//! them here. A reopen builds new panes from the record; it never reruns the
+//! command that a pane source started.
 
 use crate::daemon::{Daemon, Inner};
 use crate::agents;
@@ -18,7 +18,7 @@ pub const LIMIT: usize = 10;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClosedPane {
-    /// A shell, or an Action pane: an Action comes back as a shell in its cwd with its label.
+    /// A shell, or a pane that a source started: it comes back as a shell in its cwd with its title.
     Terminal { cwd: PathBuf, title: Option<String> },
     Agent { cwd: PathBuf, title: Option<String>, kind: AgentKind, session_ref: String },
     Browser { cwd: PathBuf, url: String },

@@ -8,7 +8,14 @@ use crate::daemon::Seams;
 use crate::store::Store;
 
 pub fn seams() -> Seams {
-    Seams { worktree_namer: Some(towns::name_worktree), worktree_created: vec![towns::unlock], worktree_rebound: vec![towns::rebind] }
+    Seams {
+        worktree_namer: Some(towns::name_worktree),
+        worktree_created: vec![towns::unlock],
+        worktree_rebound: vec![towns::rebind],
+        worktree_files: vec![actions::FILE],
+        pane_exited: vec![actions::exited],
+        snapshot: vec![actions::snapshot],
+    }
 }
 
 pub fn migrate(store: &Store) -> anyhow::Result<()> {

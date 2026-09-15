@@ -1,19 +1,19 @@
-use crate::daemon::{Daemon, Summaries};
+use crate::daemon::{Daemon, Summaries, WorktreeFile};
 use notify::{RecursiveMode, Watcher};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Clone, Copy, PartialEq)]
 enum Change {
     Git,
-    Actions,
+    /// The index of the changed file in `Seams::worktree_files`.
+    File(usize),
 }
 
-fn classify(event: &notify::Event) -> Option<Change> {
-    if event.paths.iter().any(|p| p.file_name().map_or(false, |n| n == crate::features::actions::FILE_NAME)) {
-        return Some(Change::Actions);
+fn classify(files: &[WorktreeFile], event: &notify::Event) -> Option<Change> {
+    if let Some(i) = event.paths.iter().find_map(|p| files.iter().position(|f| p.file_name().is_some_and(|n| n == f.name))) {
+        return Some(Change::File(i));
     }
     event
         .paths
@@ -27,8 +27,9 @@ fn classify(event: &notify::Event) -> Option<Change> {
 
 pub async fn run(daemon: Arc<Daemon>) {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Change>();
+    let files = daemon.seams.worktree_files.clone();
     let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if let Some(change) = res.ok().as_ref().and_then(classify) {
+        if let Some(change) = res.ok().as_ref().and_then(|e| classify(&files, e)) {
             let _ = tx.send(change);
         }
     }) {
@@ -56,21 +57,24 @@ pub async fn run(daemon: Arc<Daemon>) {
         tokio::select! {
             _ = ticker.tick() => {}
             _ = daemon.repos_changed.notified() => {}
-            _ = daemon.refresh.notified() => { debounce(&mut rx).await; let _ = daemon.discover(Summaries::All).await; }
+            _ = daemon.refresh.notified() => { drain(&mut rx).await; let _ = daemon.discover(Summaries::All).await; }
             Some(change) = rx.recv() => {
-                let git = debounce(&mut rx).await || change == Change::Git;
-                if git { let _ = daemon.discover(Summaries::Cached).await; } else { daemon.reload_actions(); }
+                let burst: Vec<Change> = std::iter::once(change).chain(drain(&mut rx).await).collect();
+                let files: BTreeSet<usize> = burst.iter().filter_map(|c| match c { Change::File(i) => Some(*i), Change::Git => None }).collect();
+                if burst.iter().any(|c| matches!(c, Change::Git)) {
+                    let _ = daemon.discover(Summaries::Cached).await;
+                } else {
+                    for i in files {
+                        (daemon.seams.worktree_files[i].reload)(&daemon);
+                    }
+                }
             }
         }
     }
 }
 
-/// Drains the burst; returns true when any git change was in it.
-async fn debounce(rx: &mut tokio::sync::mpsc::UnboundedReceiver<Change>) -> bool {
+/// Waits out a burst of changes and returns the rest of it.
+async fn drain(rx: &mut tokio::sync::mpsc::UnboundedReceiver<Change>) -> Vec<Change> {
     tokio::time::sleep(Duration::from_millis(400)).await;
-    let mut git = false;
-    while let Ok(c) = rx.try_recv() {
-        git |= c == Change::Git;
-    }
-    git
+    std::iter::from_fn(|| rx.try_recv().ok()).collect()
 }
