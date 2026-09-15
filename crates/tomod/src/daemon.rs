@@ -1795,6 +1795,8 @@ impl Daemon {
                 Self::emit_tabs(&mut inner, &tab.worktree_id);
                 ok(Self::tab_view(&inner, &tab))
             }
+            Call::TabMove { .. } => Err(err(ErrorCode::Unsupported, "tab_move: not implemented yet")),
+            Call::PaneMove { .. } => Err(err(ErrorCode::Unsupported, "pane_move: not implemented yet")),
             Call::TabActivate { tab_id } => {
                 let mut inner = self.lock();
                 let worktree_id = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.worktree_id.clone();

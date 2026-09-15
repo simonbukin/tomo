@@ -247,6 +247,7 @@ mod tests {
             archive_cleanup: vec![],
             states: vec![],
             hooks,
+            notifications: Default::default(),
         }
     }
 
