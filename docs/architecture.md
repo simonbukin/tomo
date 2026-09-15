@@ -280,7 +280,11 @@ time. `addons::start` starts the background tasks of addons. The server
 sends every call to `dispatch::handle`, which answers the addon calls and
 gives the other calls to `Daemon::handle`. For `subscribe`, `dispatch.rs`
 puts the `CoreSnapshot` from `Daemon::subscribe` into `Snapshot` and adds
-the addon fields. The GUI renders addon parts only through the slots of the
+the addon fields. Each daemon owns the in-memory state of its addons:
+`Inner.addons` is one opaque slot that the composition root fills with
+`addons::State`, and `addons::state` and `addons::state_mut` read it while
+the caller holds the Core lock. Core never looks inside the slot, and no
+addon keeps a mutable `static`. The GUI renders addon parts only through the slots of the
 `Addon` type in `app/src/addons/types.ts`. Core keeps the Git facts that
 GitHub reads: `Repo.remote_url` and `Worktree.branch`. See
 [addons.md](addons.md), [features/towns.md](features/towns.md),
