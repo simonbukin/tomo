@@ -6,7 +6,7 @@ const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", 
 const agent = (state: AgentPresence["state"], kind: AgentPresence["kind"] = "claude"): AgentPresence => ({ pane_id: `p-${kind}`, worktree_id: "w", kind, state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null });
 const endpoint = (extra: Partial<RuntimeEndpoint> = {}): RuntimeEndpoint => ({ id: "e", worktree_id: "w", pane_id: null, action_id: "dev", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, ...extra });
 const event = (id: string, occurred_at_ms: number): ActivityEvent => ({ id, kind: "agent_started", occurred_at_ms, worktree_id: "w", pane_id: null, agent_kind: "claude", title: "t", detail: null, payload: null, attention_id: null });
-const quiet: SignalInput = { attention: [], agents: [], endpoints: [], actions: [], rssBytes: null, warnBytes: 1000, pr: null };
+const quiet: SignalInput = { attention: [], agents: [], endpoints: [], actions: [], rssBytes: null, warnBytes: 1000, addon: [] };
 
 describe("needsMeItems", () => {
   it("keeps unresolved checkpoints and crashes even after a view, drops viewed waiting items", () => {
@@ -96,11 +96,13 @@ describe("nowSignals", () => {
     expect(needsMeItem(stale, [agent("waiting")])).toBe(true);
     expect(nowSignals({ ...quiet, agents: [agent("working")], attention: [stale] })).toEqual([{ kind: "agent", agent: "claude", state: "working" }]);
   });
-  it("warns on memory only at the threshold, and reports a merged pr", () => {
+  it("warns on memory only at the threshold, and puts addon signals last", () => {
     expect(nowSignals({ ...quiet, rssBytes: 999 })).toEqual([]);
     expect(nowSignals({ ...quiet, rssBytes: 1000 })).toEqual([{ kind: "warn", bytes: 1000 }]);
-    const pr = { number: 1, title: "t", url: "u", state: "merged", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 0 };
-    expect(nowSignals({ ...quiet, pr })).toEqual([{ kind: "pr", text: "merged", tone: "merged" }]);
+    const note = { kind: "addon", text: "note", glyph: "✓", className: "signal-note", dot: "state-ok" } as const;
+    expect(nowSignals({ ...quiet, rssBytes: 1000, addon: [note] })).toEqual([{ kind: "warn", bytes: 1000 }, note]);
+    expect(nowSignals({ ...quiet, agents: [agent("working"), agent("idle", "codex")], rssBytes: 1000, addon: [note] })).toHaveLength(3);
+    expect(nowSignals({ ...quiet, agents: [agent("working"), agent("idle", "codex")], rssBytes: 1000, addon: [note] })).not.toContainEqual(note);
   });
 });
 

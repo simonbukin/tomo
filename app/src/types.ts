@@ -48,8 +48,6 @@ export type {
   PaneCreate,
   PaneKind,
   PaneOrigin,
-  PrStatusResult,
-  PullRequest,
   Repo,
   RpcError,
   RuntimeEndpoint,
@@ -95,7 +93,10 @@ export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" 
 
 export type SidebarMode = "open" | "minimal" | "closed";
 
-export type RightSection = "worktree" | "git" | "pr" | "processes" | "sessions" | "files";
+export type CoreSection = "worktree" | "git" | "processes" | "sessions" | "files";
+
+/** A core inspector section, or the id of an addon inspector section. */
+export type RightSection = CoreSection | (string & {});
 
 export interface UiState {
   /** A core view, or the id of an addon view. */
