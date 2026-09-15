@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentPresence, Pane, Tab } from "../types";
+import type { AgentPresence, Pane, Tab } from "../../types";
 
 const handlers: Record<string, (e: { payload: unknown }) => void> = {};
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
@@ -11,12 +11,12 @@ vi.mock("@tauri-apps/api/event", () => ({
     return Promise.resolve(() => {});
   }),
 }));
-vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
+vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
 
 const { invoke } = await import("@tauri-apps/api/core");
-const { rpc } = await import("../api");
-const { BrowserPane } = await import("../browser/BrowserPane");
-const store = await import("../store");
+const { rpc } = await import("../../api");
+const { BrowserPane } = await import("../../browser/BrowserPane");
+const store = await import("../../store");
 
 const browser = { id: "b1", tab_id: "t1", worktree_id: "w1", title: "", user_title: null, live: true, pid: null, agent: null, kind: "browser", url: "http://localhost:1420/" } as unknown as Pane;
 const tab = { id: "t1", worktree_id: "w1", title: "Browser", position: 0, is_active: true, active_pane_id: "b1", layout: { type: "leaf", pane_id: "b1" } } as unknown as Tab;
@@ -75,7 +75,7 @@ describe("Agentation in a browser pane", () => {
     report({ count: 2, markdown: "## notes" });
     await user.click(screen.getByRole("button", { name: "Copy feedback" }));
     report({ kind: "copy", count: 2, markdown: "page markdown" });
-    expect(writeText.mock.calls).toEqual([["## notes"], ["page markdown"]]);
+    await vi.waitFor(() => expect(writeText.mock.calls).toEqual([["## notes"], ["page markdown"]]));
   });
 
   it("sends the feedback to a live agent of its worktree, then clears the page", async () => {
