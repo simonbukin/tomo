@@ -1,7 +1,8 @@
 import { useRef, useSyncExternalStore } from "react";
 import { rpc } from "./api";
-import { defaultAppearance, sanitizeAppearance } from "./appearance";
-import { mergeActivity, needsMeItems, truncate } from "./activityModel";
+import { mergeActivity, needsMeItems } from "./activityModel";
+import { announceAttention } from "./attention";
+import { defaultUi, sanitizeUi } from "./uiState";
 import type {
   ActionSet,
   ActivityEvent,
@@ -10,7 +11,6 @@ import type {
   Config,
   ConfigIssue,
   Frame,
-  HomeOptions,
   HookRun,
   Id,
   IntegrationStatus,
@@ -70,9 +70,7 @@ export type Dialog =
   | { kind: "hook-log" }
   | { kind: "appearance" };
 
-export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
-
-const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftOpen: true, rightOpen: true, leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance };
+export { defaultHome } from "./uiState";
 
 let state: State = {
   connected: false,
@@ -166,34 +164,8 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
   return out;
 }
 
-const oneOf = <T extends string>(allowed: readonly T[], value: unknown, fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
-
-function stringLists(value: unknown): Record<string, Id[]> {
-  if (!value || typeof value !== "object") return {};
-  return Object.fromEntries(Object.entries(value).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, (v as unknown[]).filter((x): x is string => typeof x === "string")]));
-}
-
 export function applySnapshot(snap: Snapshot): void {
-  const saved = (snap.ui_state ?? {}) as Partial<UiState>;
-  const savedHome = (saved.home ?? {}) as Partial<HomeOptions>;
-  const ui: UiState = {
-    ...defaultUi,
-    ...saved,
-    sidebarSort: oneOf(["name", "recent", "created", "attention", "state", "manual"], saved.sidebarSort, defaultUi.sidebarSort),
-    manualOrder: stringLists(saved.manualOrder),
-    repoOrder: Array.isArray(saved.repoOrder) ? saved.repoOrder.filter((x): x is string => typeof x === "string") : [],
-    appearance: sanitizeAppearance(saved.appearance),
-    collapsedRepos: Array.isArray(saved.collapsedRepos) ? saved.collapsedRepos : [],
-    hiddenRepos: Array.isArray(saved.hiddenRepos) ? saved.hiddenRepos : [],
-    home: {
-      ...defaultHome,
-      ...savedHome,
-      sort: oneOf(["state", "recent", "created", "name"], savedHome.sort, defaultHome.sort),
-      group: oneOf(["state", "repo", "project", "none"], savedHome.group, defaultHome.group),
-      filters: Array.isArray(savedHome.filters) ? savedHome.filters.filter((f) => f.kind !== ("priority" as string)) : [],
-    },
-  };
-  if (ui.view === "worktree" && !snap.worktrees.some((w) => w.id === ui.activeWorktreeId)) ui.view = "home";
+  const ui = sanitizeUi(snap.ui_state, snap.worktrees.map((w) => w.id));
   rpc<{ unlocks: TownUnlock[] }>("town_list").then((r) => setState({ unlocks: r.unlocks ?? [] })).catch(() => {});
   setState({
     loaded: true,
@@ -317,7 +289,7 @@ export function applyFrame(frame: Frame): void {
     case "attention_added": {
       const { item } = d as { item: AttentionItem };
       setState((s) => ({ attention: [...s.attention.filter((a) => a.id !== item.id), item] }));
-      if (item.kind === "checkpoint") notify("info", `review requested: ${truncate(item.message)}`);
+      void announceAttention(item);
       break;
     }
     case "attention_resolved": {

@@ -3,6 +3,8 @@ import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, pay
 import { focusPane, openEndpoint, openWorktree, refreshUsage, resolveCheckpoint, restartWorktreeAction, restoreWorktree } from "./actions";
 import { rpc } from "./api";
 import { Button, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
+import { activityStatus, GLYPH } from "./glyphs";
+import "./styles/previews.css";
 import { ProcessIcon } from "./ProcessIcon";
 import { endpointsOf, setState, useStore, type State } from "./store";
 import { KIND_LABEL, type ActivityEvent, type UsageBucket, type UsageSnapshot } from "./types";
@@ -89,10 +91,12 @@ function EventRow({ e }: { e: ActivityEvent }) {
     if (pane) window.setTimeout(() => focusPane(pane.id), 80);
   };
   const line = [who.text, worktree?.name].filter(Boolean).join(" · ");
+  const status = activityStatus(e.kind);
   return (
     <div className="activity-row">
       <span className="activity-time mono">{timeLabel(e.occurred_at_ms)}</span>
       <span className="activity-who">
+        {status && <span className={`glyph glyph-${status}`} aria-label={status}>{GLYPH[status]}</span>}
         {who.agent && <ProcessIcon agent={who.agent} size={11} />}
         {line}
       </span>

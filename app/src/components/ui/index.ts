@@ -22,6 +22,7 @@ export {
   type MenuItem,
   type MenuSide,
 } from "./menu";
+export { HoverCard, type HoverCardSide } from "./preview-card";
 export { Popover, PopoverClose, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "./popover";
 export { Select, type SelectOption, type SelectProps } from "./select";
 export { Separator } from "./separator";

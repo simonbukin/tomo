@@ -2,8 +2,6 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
 import { applyZoom, closePane, focusPane, runAction } from "./actions";
@@ -11,6 +9,7 @@ import { effectiveTheme, keyOverride, zoomKey } from "./appearance";
 import { findAction } from "./keys";
 import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
+import { listenFileDrop, registerTerminalLinks } from "./terminalHooks";
 import { X } from "lucide-react";
 import { openMenu } from "./MenuHost";
 import { IconButton } from "./components/ui";
@@ -54,8 +53,9 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     term.loadAddon(fit);
     term.loadAddon(new Unicode11Addon());
     term.unicode.activeVersion = "11";
-    term.loadAddon(new WebLinksAddon((_e, uri) => openUrl(uri).catch(() => {})));
     term.open(host);
+    const links = registerTerminalLinks(term, paneId);
+    const stopFileDrop = listenFileDrop(host, paneId);
     try {
       const webgl = new WebglAddon();
       webgl.onContextLoss(() => webgl.dispose());
@@ -129,6 +129,8 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
     return () => {
       host.removeEventListener("mousedown", onFocus);
+      links.dispose();
+      stopFileDrop();
       observer.disconnect();
       cancelAnimationFrame(raf);
       window.clearTimeout(settle);

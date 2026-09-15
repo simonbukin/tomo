@@ -149,10 +149,7 @@ export function focusDirection(dir: "left" | "right" | "up" | "down"): void {
 export async function nextAttention(): Promise<void> {
   const s = getState();
   const item = needsMe(s)[0];
-  if (!item) {
-    notify("info", "Nothing needs attention");
-    return;
-  }
+  if (!item) return;
   if (item.pane_id && s.panes[item.pane_id]) {
     await openWorktree(item.worktree_id);
     await focusPane(item.pane_id);
@@ -308,7 +305,6 @@ export function restoreWorktree(worktreeId: Id): void {
 
 export async function bulkMetadata(ids: Id[], patch: Record<string, unknown>): Promise<void> {
   await Promise.allSettled(ids.map((id) => setMetadata(id, patch)));
-  notify("info", `Updated ${ids.length} worktrees`);
 }
 
 export function setWorktreeState(worktreeId: Id, state: string | null): Promise<void> {
@@ -354,7 +350,6 @@ export function bulkAddTag(ids: Id[]): void {
           const w = byId(id);
           if (w && !w.metadata.tags.includes(tag)) await setMetadata(id, { tags: [...w.metadata.tags, tag] });
         }
-        notify("info", `Tagged ${ids.length} worktrees`);
       },
     },
   });
@@ -406,9 +401,7 @@ export async function bulkRestore(ids: Id[]): Promise<void> {
   const targets = ids.map(byId).filter((w): w is Worktree => !!w && !!w.archived_at_ms);
   const results = await Promise.allSettled(targets.map((w) => rpc("worktree_restore", { worktree_id: w.id })));
   results.forEach((r, i) => r.status === "rejected" && notify("error", `${targets[i].name}: ${(r.reason as Error).message}`));
-  const ok = results.filter((r) => r.status === "fulfilled").length;
   clearSelection();
-  notify("info", `Restored ${ok} of ${targets.length}`);
 }
 
 export function toggleRepoCollapsed(repoId: Id): void {
@@ -441,7 +434,7 @@ export function removeRepo(repoId: Id): void {
 }
 
 export function copyText(text: string, what = "Path"): void {
-  navigator.clipboard.writeText(text).then(() => notify("info", `${what} copied`)).catch(() => notify("error", "Clipboard unavailable"));
+  navigator.clipboard.writeText(text).catch(() => notify("error", `Could not copy the ${what.toLowerCase()}: clipboard unavailable`));
 }
 
 export function openExternalFor(worktreeId: Id, target: "finder" | "editor", relPath = ""): void {
@@ -562,7 +555,7 @@ export const actions: Action[] = [
   { id: "set_tags", label: "Set worktree tags…", run: () => promptMetadata("tags"), whenWorktree: true },
   { id: "open_editor", label: "Open worktree in editor", run: () => openExternal("editor"), whenWorktree: true },
   { id: "reveal_finder", label: "Reveal worktree in Finder", run: () => openExternal("finder"), whenWorktree: true },
-  { id: "copy_path", label: "Copy worktree path", run: () => navigator.clipboard.writeText(currentWorktree()?.path ?? "").then(() => notify("info", "Path copied")), whenWorktree: true },
+  { id: "copy_path", label: "Copy worktree path", run: () => copyText(currentWorktree()?.path ?? ""), whenWorktree: true },
   { id: "clear_attention", label: "Clear all attention items", run: () => rpc("attention_clear").then(() => undefined) },
   { id: "archive_worktree", label: "Archive worktree…", run: () => archiveWorktree(currentWorktree()!.id), whenWorktree: true },
   { id: "restore_worktree", label: "Restore worktree", run: () => restoreWorktree(currentWorktree()!.id), whenWorktree: true, when: () => !!currentWorktree()?.archived_at_ms },

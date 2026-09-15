@@ -23,6 +23,9 @@
     "core:window:allow-start-dragging",
     "opener:default",
     "dialog:default",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+    "notification:allow-notify",
     "core:webview:allow-set-webview-zoom"
   ]
 }
