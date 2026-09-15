@@ -433,6 +433,7 @@ styles/
   sidebar.css   left navigation and the minimal rails
   home.css      list rows and board
   terminal.css  splits and panes
+  ../browser/browser.css  browser pane toolbar and host box
   palette.css   command palette
   towns.css     Japan map
   activity.css  activity feed
