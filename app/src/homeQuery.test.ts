@@ -5,7 +5,7 @@ import type { AgentPresence, Worktree } from "./types";
 function wt(id: string, extra: Partial<Worktree> = {}): Worktree {
   return {
     id, repo_id: "r1", path: `/w/${id}`, name: id, branch: "main", head: "abc", detached: false, is_main: false, exists: true, git: null,
-    metadata: { display_name: null, project: null, state: null, tags: [] }, last_active_ms: null, first_seen_ms: null, archived_at_ms: null, archiving: false, town_slug: null, tab_count: 0, pane_count: 0, ...extra,
+    metadata: { display_name: null, project: null, state: null, tags: [] }, last_active_ms: null, first_seen_ms: null, archived_at_ms: null, archiving: false, tab_count: 0, pane_count: 0, ...extra,
   };
 }
 const agent = (worktree_id: string, state: AgentPresence["state"]): AgentPresence => ({ pane_id: `p-${worktree_id}`, worktree_id, kind: "claude", state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null });

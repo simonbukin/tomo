@@ -126,7 +126,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
     setBusy(true);
     setError(null);
     try {
-      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, town_slug: path.trim() ? null : (town?.slug ?? null) });
+      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, name_hint: path.trim() ? null : (town?.slug ?? null) });
       close();
       openWorktree(w.id);
     } catch (e) {

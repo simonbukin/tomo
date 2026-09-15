@@ -67,8 +67,7 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
         let missing = if w.archived_at_ms.is_some() { " (archived)" } else if w.exists { "" } else { " (missing)" };
         let project = w.metadata.project.as_deref().map(|p| format!(" [{p}]")).unwrap_or_default();
         println!("{}  {} / {}{}{}{}  {}{}{}", w.id, repo, w.name, project, prio, tags, branch, dirty, missing);
-        let town = w.town_slug.as_deref().map(|t| format!("  town {t}")).unwrap_or_default();
-        println!("    {}{}", w.path.display(), town);
+        println!("    {}", w.path.display());
         for a in agents.iter().filter(|a| a.worktree_id == w.id) {
             println!("    {} {:<7} {:?}", a.state.glyph(), a.kind.label(), a.state);
         }

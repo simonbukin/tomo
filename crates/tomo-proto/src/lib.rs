@@ -226,8 +226,9 @@ pub struct WorktreeCreate {
     pub new_branch: bool,
     pub start_ref: Option<String>,
     pub path: Option<PathBuf>,
-    #[serde(default)]
-    pub town_slug: Option<String>,
+    /// A hint for the worktree namer when `path` is empty. Clients before the addon split send it as `town_slug`.
+    #[serde(default, alias = "town_slug")]
+    pub name_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -638,8 +639,6 @@ pub struct Worktree {
     pub archived_at_ms: Option<u64>,
     #[serde(default)]
     pub archiving: bool,
-    #[serde(default)]
-    pub town_slug: Option<String>,
     pub tab_count: usize,
     pub pane_count: usize,
 }
@@ -1226,6 +1225,13 @@ mod tests {
         assert_eq!(out.project, None);
         assert_eq!(out.state.as_deref(), Some("merged"));
         assert_eq!(out.tags, vec!["x".to_string()]);
+    }
+
+    #[test]
+    fn worktree_create_accepts_the_old_town_slug_field() {
+        let old: WorktreeCreate = serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"town_slug":"aogashima"}"#).unwrap();
+        let new: WorktreeCreate = serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"name_hint":"aogashima"}"#).unwrap();
+        assert_eq!((old.name_hint.as_deref(), new.name_hint.as_deref()), (Some("aogashima"), Some("aogashima")));
     }
 
     #[test]

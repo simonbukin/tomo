@@ -487,7 +487,7 @@ async fn run() -> Result<()> {
         }
         Cmd::Worktree(WorktreeCmd::Create { repo, branch, new, from, path, town }) => {
             let repo_id = resolve_repo_id(&c, &repo).await?;
-            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch, new_branch: new, start_ref: from, path, town_slug: town })).await?;
+            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch, new_branch: new, start_ref: from, path, name_hint: town })).await?;
             let repos: Vec<Repo> = c.call(Call::RepoList).await?;
             print::worktrees(&[w], &repos, &[], json);
         }
