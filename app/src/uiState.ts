@@ -1,14 +1,15 @@
 import { defaultAppearance, sanitizeAppearance } from "./appearance";
-import type { Filter, FilterKind, HomeOptions, Id, SidebarMode, SidebarSort, UiState } from "./types";
+import type { Filter, FilterKind, HomeOptions, Id, RightSection, SidebarMode, SidebarSort, UiState } from "./types";
 
 export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
-export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
+export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
 
 const MODES: readonly SidebarMode[] = ["open", "minimal", "closed"];
+export const RIGHT_SECTIONS: readonly RightSection[] = ["worktree", "git", "pr", "processes", "sessions", "files"];
 const VIEWS: readonly UiState["view"][] = ["home", "worktree", "towns", "activity"];
 const SORTS: readonly SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
 const FILTER_KINDS: readonly FilterKind[] = ["state", "repo", "project", "tag", "agent", "archived", "attention"];
@@ -57,6 +58,7 @@ export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[]): UiState 
     rightMode: sidebarMode(s.rightMode, rightOpen),
     leftWidth: width(s.leftWidth, defaultUi.leftWidth),
     rightWidth: width(s.rightWidth, defaultUi.rightWidth),
+    rightSection: RIGHT_SECTIONS.includes(s.rightSection as RightSection) ? (s.rightSection as RightSection) : null,
     sidebarSort: oneOf(SORTS, s.sidebarSort, defaultUi.sidebarSort),
     showArchivedInSidebar: bool(s.showArchivedInSidebar, defaultUi.showArchivedInSidebar),
     collapsedRepos: strings(s.collapsedRepos),
