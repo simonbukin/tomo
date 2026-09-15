@@ -22,7 +22,7 @@ Paths without a prefix are in `crates/tomod/src/` (daemon), `crates/tomo-proto/s
 | towns | core metadata | the create path sets `metadata.display_name` and calls `meta_upsert` |
 | runtime | actions | **Removed in milestone 3.** `observe` reads the Core `PaneSource` of the pane: `RuntimeEndpoint.action_id` comes from `PaneSource::action_id`, and `label` from the source label. `HookAction` and `HookEvent.action` are Core hook envelope types. `endpointLabel(e)` reads only the endpoint. The runtime Activity view reads the pane source label. Before: `observe` read `row.action_id` and `inner.actions` (runtime.rs:95-120), and the GUI read `State.actions` |
 | actions | runtime | GUI only, inside the Actions addon: the topbar endpoint arrow (`liveEndpointFor`), `runningActionItems`, and the `endpointMenu` slot read `RuntimeEndpoint.action_id` and the core client `State.endpoints`. Milestone 4 decides the owner of `State.endpoints` |
-| agentation | browser | Tauri `browser_create` re-injects the script on page load (src-tauri lib.rs:229-231); `browser_close` clears `AnnotatePanes` (lib.rs:278); all UI is inside `BrowserPane.tsx`; the `browser://feedback` event |
+| agentation | browser | **Changed in milestone 7.** Browser calls the `BROWSER_PAGE_LOADED` and `BROWSER_CLOSED` lists in `app/src-tauri/src/lib.rs` and renders the `browserToolbar` slot; Agentation calls `browser_webview` and listens to `browser://feedback`. Browser code names no Agentation. Before: the re-inject in `browser_create`, the flag removal in `browser_close`, and all UI in `BrowserPane.tsx` |
 | agentation | actions | **Changed in milestone 3.** `AnnotationsSend` takes the runtime line from the source label of a running pane with that Action id (before: `action_def(bundle.action_id)`, daemon.rs:2364-2371); `EvidenceBundle.action_id` stays |
 | agentation | agents | live agent check in `inner.agents`, PTY write, `agentsOf`, `KIND_LABEL` |
 | usage | agent providers | `UsageSnapshot.provider: AgentKind`; `fetch_all` names `fetch_claude`, `fetch_codex` (usage.rs:265-277); `bottomModel.ts:15` filters `"pi"` |
@@ -388,6 +388,14 @@ The webview closes when the pane unmounts.
 - Docs: `browser.md`, `architecture.md`, `cli.md`, `keyboard.md`, `ui.md`, `diagnostics.md`, `notifications.md`, `state-and-recovery.md`, `README.md`.
 
 ## Agentation
+
+**Status after milestone 7:** moved. The types are in
+`tomo-proto/src/addons/agentation.rs`, the handler in
+`tomod/src/addons/agentation/`, the toolbar and the page source in
+`app/src/addons/agentation/`, and the host part in
+`app/src-tauri/src/agentation.rs`. See "Milestone 7 result: Agentation" in
+[addons.md](addons.md). The table below is the map from milestone 0; its line
+numbers are old.
 
 Background work: one in-page React root for each annotated webview. It is
 injected again on each page load while annotation is on. Notes live in

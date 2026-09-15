@@ -51,6 +51,14 @@ describe("addon boundary", () => {
     expect(coreActivityFiles.filter((path) => addonKind.test(sources[path]!))).toEqual([]);
   });
 
+  it("core client files do not name Agentation", () => {
+    const agentationNoun = /agentation|annotat|EvidenceBundle|browser_feedback|browser:\/\/feedback/i;
+    const offenders = Object.entries(sources)
+      .filter(([path]) => !inAddons(path))
+      .flatMap(([path, text]) => text.split("\n").flatMap((line, i) => (agentationNoun.test(line) ? [`${path}:${i + 1}: ${line.trim()}`] : [])));
+    expect(offenders).toEqual([]);
+  });
+
   it("core client files do not name GitHub pull request nouns", () => {
     const githubNoun = /GitHub|PullRequest|PrStatusResult|review_decision|checks_failed|mergeable|pr_status|pr_changed|\bprs\b/;
     const offenders = Object.entries(sources)

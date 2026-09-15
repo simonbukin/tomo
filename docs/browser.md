@@ -59,12 +59,31 @@ closed when the component unmounts, so a tab switch reloads the page.
 
 Commands: `browser_create`, `browser_set_bounds`, `browser_set_visible`,
 `browser_navigate`, `browser_back`, `browser_forward`, `browser_reload`,
-`browser_close`, `browser_set_annotate`, `browser_clear_annotations`. The
-main window may call all of them. `browser_feedback` is the one command a
-page may call; the `browser` capability grants it to `browser-*` webviews
-for `http://*:*` and `https://*:*` origins.
+`browser_close` (in `app/src-tauri/src/browser.rs`), and the Agentation
+commands `browser_set_annotate`, `browser_clear_annotations` (in
+`app/src-tauri/src/agentation.rs`). The main window may call all of them.
+`browser_feedback` is the one command a page may call; the `browser`
+capability grants it to `browser-*` webviews for `http://*:*` and
+`https://*:*` origins.
+
+Browser offers three hooks, and names no addon:
+
+- the `browserToolbar` slot: `BrowserPane` renders each item after the url
+  field with `{ paneId, worktreeId, url, setCovering }`, and hides the page
+  while an item is covering it;
+- `BROWSER_PAGE_LOADED` in `app/src-tauri/src/lib.rs`: `browser_create` calls
+  each entry with the webview and the pane id when a page finishes loading;
+- `BROWSER_CLOSED` in the same file: `browser_close` calls each entry with the
+  app and the pane id.
 
 ## Feedback overlay: Agentation
+
+Agentation is an addon on top of Browser. Its code:
+`app/src/addons/agentation/` (the toolbar items and the page source in
+`page/`), `app/src-tauri/src/agentation.rs`,
+`crates/tomod/src/addons/agentation/`, and
+`crates/tomo-proto/src/addons/agentation.rs`. Browser works without it; see
+"Milestone 7 result: Agentation" in [addons.md](addons.md).
 
 The overlay is [Agentation](https://www.npmjs.com/package/agentation)
 (`agentation@3.0.2`), the feedback toolbar that other agent IDEs also
@@ -74,12 +93,12 @@ a note about it.
 
 ### The bundle
 
-`app/agentation/entry.tsx` wraps the component. `pnpm -C app
+`app/src/addons/agentation/page/entry.tsx` wraps the component. `pnpm -C app
 build:agentation` builds it with `app/vite.agentation.config.ts` into one
-minified IIFE, `app/src-tauri/agentation/agentation.js` (about 620 kB, 157
+minified IIFE, `app/src-tauri/agentation/agentation.js` (about 622 kB, 157
 kB gzip). The file is committed, because the host includes it with
 `include_str!`. Build it again after an upgrade of `agentation` or a
-change to `app/agentation/`.
+change to `app/src/addons/agentation/page/`.
 
 The bundle defines `window.__tomoAgentation = { set(enabled), clear() }`
 one time. `set(true)` mounts `<Agentation copyToClipboard={false}>` with
@@ -88,15 +107,23 @@ element. `set(false)` unmounts it.
 
 ### Injection only when on
 
-The bundle is not an initialization script, so a page that is never
-annotated does not load it. `browser_set_annotate(pane_id, enabled)`
-records the flag for the pane, then evaluates
-`if (!window.__tomoAgentation) { bundle }` and
-`window.__tomoAgentation.set(enabled)`. The guard makes a second
-evaluation skip the bundle. A navigation replaces the page, so on each
-`PageLoadEvent::Finished` the host evaluates the bundle and `set(true)`
-again for a flagged pane. `browser_close` clears the flag. Enabling also
-gives the page keyboard focus.
+The bundle is not an initialization script, and only enabling carries it.
+So a page that is never annotated does not load it, and has no
+`window.__tomoAgentation`. The toolbar calls
+`browser_set_annotate(pane_id, enabled)` only when the user turns Annotate
+on or off, never when the pane mounts. The command records the flag for the
+pane. Then:
+
+- `enabled: true` evaluates `if (!window.__tomoAgentation) { bundle }` and
+  `window.__tomoAgentation.set(true)`, and gives the page keyboard focus. The
+  guard makes a second evaluation skip the bundle.
+- `enabled: false` evaluates only
+  `window.__tomoAgentation && window.__tomoAgentation.set(false)`.
+
+A navigation replaces the page. So on each `PageLoadEvent::Finished` the
+Agentation page-load hook evaluates the bundle and `set(true)` again, only
+for a flagged pane. The Agentation close hook clears the flag in
+`browser_close`.
 
 ### The feedback command
 
@@ -108,7 +135,7 @@ markdown })`:
 
 | `kind`   | When                                   | `markdown`                                     |
 |----------|----------------------------------------|------------------------------------------------|
-| `change` | mount, and each change to the list     | `feedbackMarkdown(url, title, notes)` from `app/agentation/markdown.ts` |
+| `change` | mount, and each change to the list     | `feedbackMarkdown(url, title, notes)` from `app/src/addons/agentation/page/markdown.ts` |
 | `copy`   | the Agentation copy button             | Agentation's own markdown                      |
 | `submit` | the Agentation send button             | Agentation's own output                        |
 
@@ -126,10 +153,12 @@ backticks, the comment, and optional `selected`, `nearby`, `react`, and
 
 The toolbar is: back, forward, reload, url field, Annotate. When the page
 has notes, a count badge, `Copy feedback`, and `Send feedback to an
-agent` follow. Open-external is last. `change` updates the count and the
+agent` follow. Open-external is last. Annotate, the count, and the two
+buttons are the `browserToolbar` item of Agentation. `change` updates the count and the
 markdown. `copy` puts the markdown on the clipboard. `submit` opens the
-Send menu. A url change from the page resets the count until the page
-reports again.
+Send menu, and the page hides while it is open. A change of the pane url
+(a link in the page, Enter in the url field, or a daemon navigation) resets
+the count until the page reports again.
 
 The Send menu lists the live agents of the worktree (`Claude — working`)
 and `Copy as markdown`. The toolbar never scrolls sideways: the buttons
@@ -174,8 +203,8 @@ Without `markdown`, the body is the older list of `annotations`
 (`1. [#save] "Save" — wrong color`). `runtime` is the source label of a
 running pane in the worktree whose Action id is `action_id`, else the url. The text goes to the agent's PTY
 inside a bracketed paste (`ESC [200~ … ESC [201~`) followed by a carriage
-return, so a multi-line block arrives as one input and then submits. The
-daemon records an `annotations_sent` activity event (payload: the bundle)
+return, so a multi-line block arrives as one input and then submits
+(`Daemon::paste_to_agent`, a Core function). The Agentation addon records an `annotations_sent` activity event (payload: the bundle)
 with the title `Sent 3 notes → Claude` when `note_count` is set, else
 `Sent N annotations → Claude`. It runs the `annotation.sent` hooks. The
 GUI calls `browser_clear_annotations`, which runs
