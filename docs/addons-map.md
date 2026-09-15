@@ -21,12 +21,12 @@ Paths without a prefix are in `crates/tomod/src/` (daemon), `crates/tomo-proto/s
 | towns | activity | `towns::history` reads `ActivityKind::Archived` payload (`branch`, `checkpoint_commit`, `head`, from daemon.rs:1438-1440) and `PrMerged` payload (`number`, `url`) |
 | towns | core metadata | the create path sets `metadata.display_name` and calls `meta_upsert` |
 | runtime | actions | **Removed in milestone 3.** `observe` reads the Core `PaneSource` of the pane: `RuntimeEndpoint.action_id` comes from `PaneSource::action_id`, and `label` from the source label. `HookAction` and `HookEvent.action` are Core hook envelope types. `endpointLabel(e)` reads only the endpoint. The runtime Activity view reads the pane source label. Before: `observe` read `row.action_id` and `inner.actions` (runtime.rs:95-120), and the GUI read `State.actions` |
-| actions | runtime | GUI only, inside the Actions addon: the topbar endpoint arrow (`liveEndpointFor`), `runningActionItems`, and the `endpointMenu` slot read `RuntimeEndpoint.action_id` and the core client `State.endpoints`. Milestone 4 decides the owner of `State.endpoints` |
+| actions | runtime | **Removed in milestone 4.** Neither addon names the other. The Runtime addon owns `State.endpoints`, draws the arrow in an Action button through the `sourceMark` slot, gives that button its open and copy items through `sourceMenu`, and asks the owner of a pane source for restart and stop through `paneSource`. Before: the topbar arrow (`liveEndpointFor`), `runningActionItems`, and the `endpointMenu` slot read `RuntimeEndpoint.action_id` and the core client `State.endpoints` |
 | agentation | browser | Tauri `browser_create` re-injects the script on page load (src-tauri lib.rs:229-231); `browser_close` clears `AnnotatePanes` (lib.rs:278); all UI is inside `BrowserPane.tsx`; the `browser://feedback` event |
 | agentation | actions | **Changed in milestone 3.** `AnnotationsSend` takes the runtime line from the source label of a running pane with that Action id (before: `action_def(bundle.action_id)`, daemon.rs:2364-2371); `EvidenceBundle.action_id` stays |
 | agentation | agents | live agent check in `inner.agents`, PTY write, `agentsOf`, `KIND_LABEL` |
 | usage | agent providers | `UsageSnapshot.provider: AgentKind`; `fetch_all` names `fetch_claude`, `fetch_codex` (usage.rs:265-277); `bottomModel.ts:15` filters `"pi"` |
-| checkpoint (core) | runtime | `WorktreeHeader.tsx:141-152` `CheckpointBanner` and `Activity.tsx:84-86` use the first HTTP endpoint for "Open App" |
+| checkpoint (core) | runtime | **Removed in milestone 4.** `CheckpointBanner` and the `checkpoint_created` Activity view ask the `appUrl` slot, which returns nothing without Runtime. Before: `WorktreeHeader.tsx:141-152` and `Activity.tsx:84-86` read the first HTTP endpoint |
 | terminal (core) | browser | Cmd-click on a URL calls `openEndpoint`, which calls `openInBrowser` (`terminalHooks.ts:16`, `actions.ts:300-303`) |
 | core keys | actions | **Removed in milestone 3.** `keyBindings` and `runAction` read the `shortcuts` slot. Before: `store.ts:406-409` merged `action:<id>`, and `actions.ts:688-692` handled the `action:` prefix |
 | core attention | actions | **Changed in milestone 3.** `AttentionKind::Crash` stays a Core kind, and the Actions addon decides when to raise it. The crash toast takes its title from the pane source and gets Restart from the `paneSource` slot. Before: `attention.ts:36-39, 55-56` read `Pane.action_id` and `State.actions` |
@@ -249,6 +249,16 @@ explicit run.
 - Docs: `actions.md`, `hooks.md`, `activity.md`, `data-model.md`, `cli.md`, `browser.md`, `edge-cases.md`, `notifications.md`, `architecture.md`, `development.md`, `ui.md`, `runtime.md`.
 
 ## Runtime
+
+**Status after milestone 4:** extracted. Every **leak** row below is gone.
+`Inner.endpoints`, `endpoint_gone_ms`, `endpoints_at_ms`, `ENDPOINT_REPEAT_MS`,
+the `RuntimeList` arm, and the `scan_endpoints` call in `monitor.rs` are gone
+from Core; the monitor calls the `process_polled` seam instead.
+`Snapshot.endpoints` moved from `CoreSnapshot` to the composition root, and
+`RuntimeEndpoint` carries the Core `PaneSource` in a new `source` field. The
+GUI addon owns `State.endpoints`. See "Milestone 4 result: Runtime" in
+[addons.md](addons.md) and [runtime.md](runtime.md). The line numbers below
+are from before the extraction.
 
 Background work: each monitor tick (2 s with a subscriber, 15 s without)
 runs one `lsof` if candidate pids exist, then one probe task for each new

@@ -3,7 +3,8 @@
 Read this before you add a feature or move one. It takes a few minutes.
 
 Status: milestone 1 (Towns), milestone 2 (GitHub), milestone 3 (Actions),
-milestone 5 (Usage), and the Activity kind seam are done. Milestone 6 decided
+milestone 4 (Runtime), milestone 5 (Usage), and the Activity kind seam are
+done. Milestone 6 decided
 that Browser stays a built-in pane kind; see "Milestone 6 result: Browser".
 Each daemon owns its addon state in `addons::State`; see "Addon state" and
 "Addon state result". Towns is the first
@@ -77,7 +78,8 @@ source code with a clean dependency boundary.
 | github | **done** (milestone 2) |
 | usage | **done** (milestone 5) |
 | actions | **done** (milestone 3) |
-| runtime, agentation | addon, not moved yet |
+| runtime | **done** (milestone 4) |
+| agentation | addon, not moved yet |
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
@@ -150,6 +152,7 @@ dynamic loading, no service locator, and no dependency injection container.
 // crates/tomod/src/addons/mod.rs
 pub mod actions;
 pub mod github;
+pub mod runtime;
 pub mod towns;
 pub mod usage;
 
@@ -160,6 +163,7 @@ pub fn seams() -> Seams {
         worktree_rebound: vec![towns::rebind],
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
+        process_polled: vec![runtime::scan],
     }
 }
 
@@ -181,17 +185,18 @@ tasks, `addons::start(&daemon)`. After that, the seams do not change.
 ```rust
 // crates/tomod/src/dispatch.rs
 pub fn is_slow(call: &Call) -> bool {
-    matches!(call, Call::PrStatus { .. })
+    matches!(call, Call::PrStatus { .. } | Call::RuntimeList { .. })
 }
 
 match call {
     Call::Subscribe => {
         let core = daemon.subscribe(client_id)?;
         let inner = daemon.lock();
-        let snapshot = Snapshot { core, usage: usage::snapshots(&inner), actions: actions::snapshot(&inner) };
+        let snapshot = Snapshot { core, usage: usage::snapshots(&inner), actions: actions::snapshot(&inner), endpoints: runtime::snapshot(&inner) };
         drop(inner);
         ok(snapshot)
     }
+    Call::RuntimeList { worktree_id } => runtime::list(daemon, worktree_id).await,
     Call::ActionList { worktree_id } => actions::list(daemon, worktree_id),
     Call::ActionRun { worktree_id, action_id } => actions::run(daemon, &worktree_id, &action_id),
     Call::ActionStop { worktree_id, action_id } => actions::stop(daemon, &worktree_id, &action_id),
@@ -236,6 +241,7 @@ pub struct Seams {
     pub worktree_rebound: Vec<fn(&Store, &str, &str) -> anyhow::Result<()>>,
     pub worktree_files: Vec<WorktreeFile>,
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
+    pub process_polled: Vec<fn(&Arc<Daemon>)>,
 }
 
 pub struct CreatedWorktree { pub id: Id, pub repo_id: Id, pub name: Option<String> }
@@ -250,6 +256,7 @@ pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<P
 | `worktree_rebound` | `Daemon::rebind`, which `discover` (a move on disk) and `restore_worktree` (a restore at a new path) call | A new worktree id must move every row that keys on the old id. It gets only the store and the two ids. An error is logged; it does not stop the Core rebind. |
 | `worktree_files` | `discover`, after it releases the state lock and before it flushes the hooks; and `watch.rs`, when a watched worktree root reports a change to that file name | Actions must read `.tomo.toml` at the same two moments as before the split. One list gives both the file name and the reload, so the watcher and discovery cannot disagree. The watcher copies the names at start and runs each reload one time for a burst of changes. `reload` gets the daemon, because it reads files with no lock held and then takes the lock. |
 | `pane_exited` | `on_exit`, under the state lock, after the `pane_exited` event and before Core updates the agent and removes a pane that exited with 0 | The outcome (`action_completed`, `action_stopped`, or a crash with its attention item and hook) must go into the same lock as the exit, while the pane still exists for the `pane` field of the hook. An event would come after an exit-0 pane is gone. It gets only the facts of the exit: pane, worktree, source, exit code, and stop intent. |
+| `process_polled` | `monitor::poll_and_scan`, after the process poll releases the state lock and before the queued hooks go out | Runtime must read the fresh process table, and its `lsof` call must stay outside the lock. It is the same point where `scan_endpoints` ran before the split, so the cadence does not change: 2 s with a subscriber, 15 s without. It gets only the daemon, because the work takes and releases the lock itself. A list of plain functions, like the other seams. |
 
 Actions also calls Core functions: `spawn_in_worktree`, `pane_view`,
 `emit_pane`, `emit_tabs`, `hook_pane`, `record`, the crate-wide
@@ -271,11 +278,11 @@ split.
 
 ```ts
 // app/src/addons/index.ts
-export const builtins: readonly Addon[] = [towns, github, usage, actions];
+export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime];
 ```
 
 The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns,
-GitHub, Usage, and Actions need:
+GitHub, Usage, Actions, and Runtime need:
 
 | Slot | Who renders it | First user |
 |---|---|---|
@@ -290,7 +297,10 @@ GitHub, Usage, and Actions need:
 | `diagnosticsSection` | `DiagnosticsReport` in `shell/Diagnostics.tsx`, after the core sections and before the compact actions | usage |
 | `topbar.buttons`, `topbar.marks` | `HeaderControls` in `WorktreeHeader.tsx`: `buttons` before the editor button, `marks` after it and before the runtime and overflow buttons | actions |
 | `worktreeMenu(w, s)` | `overflowMenu` in `menus.ts`, first, with a separator after a list that is not empty | actions |
-| `endpointMenu(worktreeId, e, s)` | `endpointMenu` in `menus.ts`, after "focus logs" | actions |
+| `signalLine { className, Line }` | `SignalLine` in `Signals.tsx`, for an addon signal of that class | runtime |
+| `sourceMark` | the control of a pane source that another addon draws: the Action button in `addons/actions/Topbar.tsx`, through `sourceMarks()` | runtime |
+| `sourceMenu(worktreeId, source, s)` | the menu of a running pane source: `runningActionItems` in `addons/actions/commands.ts`, through `sourceMenu()`; `first` before "focus logs", `last` after the separator | runtime |
+| `appUrl(s, worktreeId)` | `CheckpointBanner` in `WorktreeHeader.tsx` and `appUrl` in `activityKinds.ts` (the first addon that returns a URL wins) | runtime |
 | `paletteEntries(s, w, context)` | `Palette.tsx`: the context list of the worktree on screen and the worktree sub-list, before the endpoint entries | actions |
 | `shortcuts(s)` | `keyBindings` in `store.ts`, `runAction` in `actions.ts`, and `ShortcutReference.tsx` | actions |
 | `paneSource { kind, restart }` | the crash toast in `attention.ts`: Restart calls the addon that owns the `kind` of the pane source | actions |
@@ -361,7 +371,7 @@ Background work that exists today and must keep its current trigger:
 | Work | Trigger | Owner |
 |---|---|---|
 | process poll | every 2 s with a subscriber, 15 s without | core `monitor.rs` |
-| `lsof` port scan | each monitor tick with candidate pids | runtime |
+| `lsof` port scan | each monitor tick with candidate pids, through the `process_polled` seam | runtime addon |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
 | usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
 | `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
@@ -394,9 +404,10 @@ pub fn new(paths: Paths, seams: Seams, addons: Box<dyn std::any::Any + Send>) ->
 // crates/tomod/src/addons/mod.rs (composition root)
 #[derive(Default)]
 pub struct State {
-    pub actions: actions::Sets,   // BTreeMap<Id, ActionSet>: the parsed .tomo.toml of each worktree
-    pub github: github::Cache,    // BTreeMap<Id, PrStatusResult>: the last pr_status answer
-    pub usage: usage::Last,       // Vec<UsageSnapshot>: the last result
+    pub actions: actions::Sets,      // BTreeMap<Id, ActionSet>: the parsed .tomo.toml of each worktree
+    pub github: github::Cache,       // BTreeMap<Id, PrStatusResult>: the last pr_status answer
+    pub runtime: runtime::Endpoints, // the endpoint list, the removal times, and the time of the last scan
+    pub usage: usage::Last,          // Vec<UsageSnapshot>: the last result
 }
 pub fn state(inner: &Inner) -> &State
 pub fn state_mut(inner: &mut Inner) -> &mut State
@@ -813,7 +824,7 @@ Slots that later milestones will need (from the map):
 | Slot | First user | Current hard-coded site |
 |---|---|---|
 | inspector section | **done**: `inspectorSections` (milestone 2) | none |
-| worktree signal | **done**: `worktreeSignals` (milestone 2); runtime is the next user | the runtime signal in `activityModel.ts` `nowSignals` |
+| worktree signal | **done**: `worktreeSignals` (milestone 2), with `signalLine` for a signal that draws itself (milestone 4) | none |
 | pane renderer | **not built** (milestone 6: the switch is shorter; see "Milestone 6 result: Browser") | `Layout.tsx` keeps the switch |
 | browser toolbar item | agentation (milestone 7) | `app/src/browser/BrowserPane.tsx`; see "Agentation boundary for milestone 7" |
 | activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
@@ -2041,7 +2052,7 @@ helpers, three lock-order comments, and the merged Actions test.
 | towns | **done** | none in Core; see "Coupling that stays" |
 | github | **done** | none in Core; see "Milestone 2 result: GitHub" |
 | actions | **done** | none in Core; see "Milestone 3 result: Actions" |
-| runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, the `RuntimeActivity` call site in `runtime.rs`; `RuntimeEndpoint.action_id` and `label` now come from the Core `PaneSource` |
+| runtime | **done** | none in Core; see "Milestone 4 result: Runtime" |
 | usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | **built-in pane kind** | not an addon; see "Milestone 6 result: Browser" |
 | agentation | addon on Core client Browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `app/src/browser/BrowserPane.tsx`, inject code inside Tauri `browser::browser_create`; see "Agentation boundary for milestone 7" |
@@ -2115,13 +2126,13 @@ Done. See "Milestone 3 result: Actions". Changes from the plan:
 
 ### 4. Runtime
 
-Risks:
+Done. See "Milestone 4 result: Runtime". Built as planned: the monitor tick
+seam is `process_polled`, a `Vec<fn(&Arc<Daemon>)>` that Core calls after
+`poll_once` with the lock released. Changes from the plan:
 
-- The `lsof` cost per tick. Keep the rule "no candidate pids means no `lsof`".
-- `CheckpointBanner` and `Activity.tsx` use an endpoint for "Open App".
-- `RuntimeProtocol::Https` is never produced.
-
-Narrowest seam: a monitor tick seam `fn(&Arc<Daemon>)` after `poll_once`, called with the lock released, exactly where `scan_endpoints` runs today (`monitor.rs`). Runtime reads the Core `PaneSource` from milestone 3; `observe` no longer reads `inner.actions`. See "The pane source" in "Milestone 3 result: Actions".
+- `RuntimeEndpoint` carries the Core `PaneSource` in a new `source` field, so the GUI can match an endpoint to a pane source without the Actions addon.
+- "Open App" in `CheckpointBanner` and in the Activity rows comes from the `appUrl` slot, which returns nothing without Runtime.
+- `RuntimeProtocol::Https` is still never produced.
 
 ### 5. Usage
 

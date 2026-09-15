@@ -262,7 +262,7 @@ Actions, hooks, and adapters inherit the new `PATH`.
 ## Addons
 
 An addon is an optional opinion in its own source folder. Core never
-imports it. Three addons exist:
+imports it. Five addons exist:
 
 - Towns
   - `crates/tomo-proto/src/addons/towns.rs`: wire types
@@ -280,6 +280,10 @@ imports it. Three addons exist:
   - `crates/tomo-proto/src/addons/actions.rs`: wire types
   - `crates/tomod/src/addons/actions/`: the `.tomo.toml` parser, the calls, the reload and exit seams
   - `app/src/addons/actions/`: the topbar buttons, menu items, palette entries, shortcuts, and crash restart
+- Runtime
+  - `crates/tomo-proto/src/addons/runtime.rs`: wire types
+  - `crates/tomod/src/addons/runtime/`: the `lsof` scan, the protocol probe, `runtime_list`, the monitor tick seam
+  - `app/src/addons/runtime/`: the runtime button, the endpoint menu, the NOW signal, the "Open App" link
 
 Composition roots name the addons: `crates/tomod/src/main.rs`,
 `crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`
@@ -328,9 +332,10 @@ Phase 3 adds, at the same protocol version:
 
 ## Feature boundary: runtime endpoints and activity
 
-`crates/tomod/src/runtime.rs` finds listening TCP ports with one `lsof`
-call per monitor tick, attributes each pid to the pane whose PTY root is
-its ancestor, and debounces a restart. `crates/tomod/src/activity.rs`
+`crates/tomod/src/addons/runtime/` finds listening TCP ports with one
+`lsof` call per monitor tick, attributes each pid to the pane whose PTY
+root is its ancestor, and debounces a restart. Core calls it through the
+`process_polled` seam, with the state lock released. `crates/tomod/src/activity.rs`
 holds `Daemon::record`, the one way an event enters the `activity` table.
 A kind is a plain string on the wire. Core owns the kinds in
 `CoreActivity`, and each addon owns an enum of its kinds in
