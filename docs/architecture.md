@@ -269,7 +269,7 @@ Actions, hooks, and adapters inherit the new `PATH`.
 ## Addons
 
 An addon is an optional opinion in its own source folder. Core never
-imports it. Five addons exist:
+imports it. Six addons exist:
 
 - Towns
   - `crates/tomo-proto/src/addons/towns.rs`: wire types
@@ -291,6 +291,10 @@ imports it. Five addons exist:
   - `crates/tomo-proto/src/addons/runtime.rs`: wire types
   - `crates/tomod/src/addons/runtime/`: the `lsof` scan, the protocol probe, `runtime_list`, the monitor tick seam
   - `app/src/addons/runtime/`: the runtime button, the endpoint menu, the NOW signal, the "Open App" link
+- Agentation
+  - `crates/tomo-proto/src/addons/agentation.rs`: wire types
+  - `crates/tomod/src/addons/agentation/`: the `annotations_send` handler
+  - `app/src/addons/agentation/`: the browser toolbar item, and `app/src-tauri/src/agentation.rs` for the host hooks
 
 Composition roots name the addons: `crates/tomod/src/main.rs`,
 `crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`
