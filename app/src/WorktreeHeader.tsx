@@ -5,7 +5,7 @@ import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconBut
 import { stateLabel } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
-import { overflowMenu, runningActionItems } from "./menus";
+import { endpointMenu, overflowMenu, runningActionItems } from "./menus";
 import { endpointsOf, liveEndpointFor, runningActionIds, setState, useStore } from "./store";
 import { rpc } from "./api";
 import { useEffect } from "react";
@@ -103,7 +103,7 @@ function RuntimePopover({ worktree: w, endpoints }: { worktree: Worktree; endpoi
       <PopoverContent align="end">
         <PopoverTitle>runtime</PopoverTitle>
         {endpoints.map((e) => (
-          <div key={e.id} className="runtime-row">
+          <div key={e.id} className="runtime-row" onContextMenu={(ev) => openMenu(ev, endpointMenu(w.id, e))}>
             <span className="runtime-label">{endpointLabel(e, actions)}</span>
             <span className="mono">{e.host}:{e.port}</span>
             <span className="muted">{owner(e)} · {e.pid}</span>

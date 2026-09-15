@@ -1,152 +1,150 @@
-import { Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { allActions, activateTab, archiveWorktree, newTabIn, newTerminalIn, openWorktree, restoreWorktree, runAction, runWorktreeAction, spawnAgent } from "./actions";
+import { endpointLabel, endpointUrl, httpEndpoints } from "./activityModel";
+import { activateTab, allActions, focusPane, openEndpoint, openWorktree, restartWorktreeAction, runAction, runWorktreeAction, stopWorktreeAction } from "./actions";
 import { Dialog, DialogContent } from "./components/ui";
 import { describeBinding } from "./keys";
-import { activeActionSet, repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { menuEntries, rankEntries, remembered, type PaletteEntry } from "./paletteModel";
+import { repoMenu, worktreeMenu } from "./menus";
+import { chordFor, effectiveBindings } from "./shortcuts";
+import { getState, repoName, runningActionIds, setState, setUi, useStore, visibleRepos, type State } from "./store";
+import { KIND_LABEL, type Worktree } from "./types";
 
-interface Item {
-  key: string;
-  label: string;
-  hint?: string;
-  run: () => void;
-  rank: number;
+function actionEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
+  const running = runningActionIds(s, w.id);
+  return (s.actions[w.id]?.actions ?? []).flatMap((a): PaletteEntry[] => {
+    const key = `action:${w.id}:${a.id}`;
+    const hint = [w.name, a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · ");
+    if (!running.includes(a.id)) return [{ key, label: `start ${a.label}`, hint, context, run: () => runWorktreeAction(w.id, a.id) }];
+    return [
+      { key: `${key}:logs`, label: `focus ${a.label} logs`, hint, context, run: () => runWorktreeAction(w.id, a.id) },
+      { key: `${key}:restart`, label: `restart ${a.label}`, hint, context, run: () => restartWorktreeAction(w.id, a.id) },
+      { key: `${key}:stop`, label: `stop ${a.label}`, hint, context, run: () => stopWorktreeAction(w.id, a.id) },
+    ];
+  });
 }
 
-const RECENT_KEY = "tomo.palette.recent";
-
-function recentIds(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
+function endpointEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
+  const actions = s.actions[w.id]?.actions ?? [];
+  return httpEndpoints(s.endpoints[w.id] ?? []).map((e) => ({
+    key: `endpoint:${w.id}:${e.port}`,
+    label: `open ${endpointLabel(e, actions)} :${e.port}`,
+    hint: `${w.name} · runtime`,
+    context,
+    run: () => openEndpoint(endpointUrl(e), w.id),
+  }));
 }
 
-function remember(key: string): void {
-  try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify([key, ...recentIds().filter((k) => k !== key)].slice(0, 8)));
-  } catch {}
+export function worktreeChildren(s: State, w: Worktree): PaletteEntry[] {
+  const key = `wt:${w.id}`;
+  const [open, ...rest] = menuEntries(worktreeMenu(w, s), key);
+  const extras = w.exists && !w.archived_at_ms ? [...actionEntries(s, w, false), ...endpointEntries(s, w, false)] : [];
+  return open ? [open, ...extras, ...rest] : [...extras, ...rest];
 }
 
-export function score(query: string, text: string): number {
-  const q = query.toLowerCase();
-  const t = text.toLowerCase();
-  if (!q) return 1;
-  if (t.startsWith(q)) return 100;
-  if (t.includes(q)) return 50;
-  let ti = 0;
-  let gaps = 0;
-  for (const ch of q) {
-    const idx = t.indexOf(ch, ti);
-    if (idx < 0) return 0;
-    gaps += idx - ti;
-    ti = idx + 1;
-  }
-  return Math.max(1, 30 - gaps);
+/** Every palette source: context items for the worktree on screen, then commands, agents, worktrees, and repos. */
+export function paletteEntries(s: State): PaletteEntry[] {
+  const current = s.ui.view === "worktree" ? (s.worktrees.find((w) => w.id === s.ui.activeWorktreeId) ?? null) : null;
+  const bindings = effectiveBindings(s.config?.keybindings ?? {});
+  const byWorktree = new Map(s.worktrees.map((w) => [w.id, w]));
+  const tabs: PaletteEntry[] = current
+    ? (s.tabs[current.id] ?? []).map((t) => ({ key: `tab:${t.id}`, label: `tab ${t.title}`, hint: t.is_active ? "current" : "tabs", context: true, run: () => activateTab(t.id) }))
+    : [];
+  const panes: PaletteEntry[] = current
+    ? Object.values(s.panes)
+        .filter((p) => p.worktree_id === current.id && !(p.agent && p.agent.state !== "exited"))
+        .map((p) => ({ key: `pane:${p.id}`, label: `pane ${p.user_title ?? p.title}`, hint: s.tabs[current.id]?.find((t) => t.id === p.tab_id)?.title, context: true, run: () => void focusPane(p.id) }))
+    : [];
+  const agents: PaletteEntry[] = Object.values(s.agents).flatMap((a) => {
+    const w = byWorktree.get(a.worktree_id);
+    if (!w || a.state === "exited" || !s.panes[a.pane_id]) return [];
+    const run = async () => {
+      await openWorktree(w.id);
+      await focusPane(a.pane_id);
+    };
+    return [{ key: `agent:${a.pane_id}`, label: `focus ${KIND_LABEL[a.kind]} · ${w.name}`, hint: a.state, context: w.id === current?.id, run: () => void run() }];
+  });
+  const contextual = current ? [...actionEntries(s, current, true), ...endpointEntries(s, current, true)] : [];
+  const commands: PaletteEntry[] = allActions()
+    .filter((a) => (!a.whenWorktree || !!current) && (!a.when || a.when()))
+    .map((a) => ({ key: `cmd:${a.id}`, label: a.label, hint: a.group?.toLowerCase(), shortcut: chordFor(a.id, bindings), run: () => runAction(a.id) }));
+  const worktrees: PaletteEntry[] = s.worktrees.map((w) => ({
+    key: `wt:${w.id}`,
+    label: w.name,
+    hint: [repoName(s, w.repo_id), w.metadata.project, w.branch, w.archived_at_ms ? "archived" : null].filter(Boolean).join(" · "),
+    context: w.id === current?.id,
+    children: () => worktreeChildren(getState(), w),
+  }));
+  const repos: PaletteEntry[] = visibleRepos(s).map((r) => ({ key: `repo:${r.id}`, label: r.name, hint: `repo · ${r.path}`, children: () => menuEntries(repoMenu(r, getState()), `repo:${r.id}`) }));
+  return [...tabs, ...panes, ...agents, ...contextual, ...commands, ...worktrees, ...repos];
+}
+
+interface Frame {
+  entry: PaletteEntry;
+  entries: PaletteEntry[];
 }
 
 /** Tomo's own ranking and list inside the shared Dialog shell. */
 export function Palette() {
   const open = useStore((s) => s.paletteOpen);
-  const worktrees = useStore((s) => s.worktrees);
-  const repos = useStore(visibleRepos);
-  const bindings = useStore((s) => s.config?.keybindings ?? {});
-  const current = useStore((s) => s.worktrees.find((w) => w.id === s.ui.activeWorktreeId && s.ui.view === "worktree") ?? null);
-  const tabs = useStore((s) => (current ? (s.tabs[current.id] ?? []) : []));
-  const worktreeActions = useStore((s) => activeActionSet(s)?.actions ?? []);
-  const selectionSize = useStore((s) => s.selection.size);
+  const state = useStore((s) => (s.paletteOpen ? s : null));
+  const recent = useStore((s) => s.ui.paletteRecent);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
+  const [stack, setStack] = useState<Frame[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const items = useMemo<Item[]>(() => {
-    const recent = recentIds();
-    const boost = (key: string) => (recent.includes(key) ? 20 - recent.indexOf(key) : 0);
-    const repoOf = (w: (typeof worktrees)[number]) => repoName({ repos } as never, w.repo_id);
-    const cmds: Item[] = allActions()
-      .filter((a) => (!a.whenWorktree || !!current) && (!a.when || a.when()))
-      .map((a) => ({
-        key: `cmd:${a.id}`,
-        label: a.label,
-        hint: [a.whenWorktree && current ? current.name : null, bindings[a.id] ? describeBinding(bindings[a.id]) : null].filter(Boolean).join(" · ") || undefined,
-        run: () => runAction(a.id),
-        rank: (a.whenWorktree ? 10 : 0) + boost(`cmd:${a.id}`),
-      }));
-    const acts: Item[] = current
-      ? worktreeActions.map((a) => ({
-          key: `action:${a.id}`,
-          label: `run ${a.label}`,
-          hint: ["actions", a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · "),
-          run: () => runWorktreeAction(current.id, a.id),
-          rank: 9 + boost(`action:${a.id}`),
-        }))
-      : [];
-    const tabItems: Item[] = tabs.map((t) => ({ key: `tab:${t.id}`, label: `tab: ${t.title}`, hint: t.is_active ? "current" : undefined, run: () => activateTab(t.id), rank: 8 }));
-    const ws: Item[] = worktrees.flatMap((w) => {
-      const hint = [repoOf(w), w.metadata.project, w.branch].filter(Boolean).join(" · ");
-      const archived = !!w.archived_at_ms;
-      const base = boost(`wt:${w.id}`);
-      return [
-        archived
-          ? { key: `wt:${w.id}`, label: `restore ${w.name}`, hint: `${hint} · archived`, run: () => restoreWorktree(w.id), rank: 4 + base }
-          : { key: `wt:${w.id}`, label: `open ${w.name}`, hint, run: () => openWorktree(w.id), rank: 5 + base },
-        ...(archived || !w.exists
-          ? []
-          : [
-              { key: `wt-tab:${w.id}`, label: `new tab in ${w.name}`, hint, run: () => newTabIn(w.id), rank: 1 },
-              { key: `wt-term:${w.id}`, label: `new terminal in ${w.name}`, hint, run: () => newTerminalIn(w.id), rank: 1 },
-              { key: `wt-claude:${w.id}`, label: `start claude in ${w.name}`, hint, run: () => spawnAgent("claude", w.id), rank: 1 },
-              { key: `wt-codex:${w.id}`, label: `start codex in ${w.name}`, hint, run: () => spawnAgent("codex", w.id), rank: 1 },
-              { key: `wt-pi:${w.id}`, label: `start pi in ${w.name}`, hint, run: () => spawnAgent("pi", w.id), rank: 1 },
-              ...(w.is_main ? [] : [{ key: `wt-archive:${w.id}`, label: `archive ${w.name}`, hint, run: () => archiveWorktree(w.id), rank: 0 }]),
-            ]),
-      ];
-    });
-    const rs: Item[] = repos.map((r) => ({ key: `repo:${r.id}`, label: `new worktree in ${r.name}`, hint: r.path, run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }), rank: 2 + boost(`repo:${r.id}`) }));
-    return [...tabItems, ...acts, ...cmds, ...ws, ...rs];
-  }, [worktrees, repos, bindings, current, tabs, selectionSize, worktreeActions]);
-
-  const results = useMemo(() => {
-    return items
-      .map((it) => ({ it, s: query ? Math.max(score(query, it.label), score(query, it.hint ?? "") * 0.6) : 1 }))
-      .filter((r) => r.s > 0)
-      .sort((a, b) => b.s - a.s || b.it.rank - a.it.rank || a.it.label.localeCompare(b.it.label))
-      .slice(0, 50)
-      .map((r) => r.it);
-  }, [items, query]);
+  const root = useMemo(() => (state ? paletteEntries(state) : []), [state]);
+  const top = stack[stack.length - 1];
+  const results = useMemo(() => rankEntries(top ? top.entries : root, query, top ? [] : recent).slice(0, 60), [top, root, query, recent]);
 
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setIndex(0);
-    }
+    if (!open) return;
+    setQuery("");
+    setIndex(0);
+    setStack([]);
   }, [open]);
 
-  useEffect(() => setIndex(0), [query]);
+  useEffect(() => setIndex(0), [query, stack.length]);
 
+  const remember = (key: string) => setUi({ paletteRecent: remembered(getState().ui.paletteRecent, key) });
   const close = () => setState({ paletteOpen: false });
-  const choose = (it: Item | undefined) => {
-    if (!it) return;
+  const run = (entry: PaletteEntry) => {
     close();
-    remember(it.key);
-    it.run();
+    remember(entry.key);
+    entry.run?.();
   };
+  const choose = (entry: PaletteEntry | undefined, direct = false) => {
+    if (!entry) return;
+    if (!entry.children) return run(entry);
+    const entries = entry.children();
+    if (direct && entries[0]?.run) return run(entries[0]);
+    if (!top) remember(entry.key);
+    setStack((s) => [...s, { entry, entries }]);
+    setQuery("");
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="palette" initialFocus={inputRef} aria-label="Command palette">
         <label className="palette-input">
           <Search className="icon" />
+          {stack.map((f) => (
+            <span key={f.entry.key} className="palette-crumb">
+              {f.entry.label}
+            </span>
+          ))}
           <input
             ref={inputRef}
             value={query}
-            placeholder="worktree, tab, or command"
+            aria-label="Search commands"
+            placeholder={top ? `actions for ${top.entry.label}` : "worktree, tab, agent, or command"}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") setIndex((i) => Math.min(results.length - 1, i + 1));
               else if (e.key === "ArrowUp") setIndex((i) => Math.max(0, i - 1));
-              else if (e.key === "Enter") choose(results[index]);
+              else if (e.key === "Enter") choose(results[index], e.metaKey);
+              else if (e.key === "Backspace" && query === "" && stack.length > 0) setStack((s) => s.slice(0, -1));
               else return;
               e.preventDefault();
             }}
@@ -156,14 +154,20 @@ export function Palette() {
           {results.map((it, i) => (
             <div key={it.key} role="option" aria-selected={i === index} className={`palette-item${i === index ? " palette-active" : ""}`} onMouseEnter={() => setIndex(i)} onClick={() => choose(it)}>
               <span className="palette-label">{it.label}</span>
-              {it.hint && <span className="palette-hint">{it.hint}</span>}
+              <span className="palette-side">
+                {it.hint && <span className="palette-hint">{it.hint}</span>}
+                {it.shortcut && <kbd className="kbd">{it.shortcut}</kbd>}
+                {it.children && <ChevronRight className="palette-chevron" aria-label="has actions" />}
+              </span>
             </div>
           ))}
-          {results.length === 0 && <div className="palette-item muted">No matches</div>}
+          {results.length === 0 && <div className="palette-item muted">no matches</div>}
         </div>
         <div className="palette-foot">
           <span>↑↓ move</span>
-          <span>↩ run</span>
+          <span>↩ {results[index]?.children ? "actions" : "run"}</span>
+          {results[index]?.children && <span>⌘↩ open</span>}
+          {stack.length > 0 && <span>⌫ back</span>}
           <span>esc close</span>
         </div>
       </DialogContent>

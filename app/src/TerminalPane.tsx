@@ -16,6 +16,7 @@ import { openMenu } from "./MenuHost";
 import { IconButton } from "./components/ui";
 import { isLastPane, paneMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
+import { useShortcuts } from "./shortcuts";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -156,6 +157,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const originNote = pane?.origin === "resumed" ? "resumed" : pane?.origin === "restored" ? "restored" : null;
   const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   const lastPane = useStore(() => isLastPane(paneId));
+  const shortcut = useShortcuts();
   return (
     <div className="pane-wrap">
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
@@ -171,7 +173,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
         <span className="chip right" title={pane?.cwd}>
           <span>{shortPath(pane?.cwd ?? "")}</span>
-          {!lastPane && <IconButton label="Close pane" onClick={() => closePane(paneId)}><X className="icon" /></IconButton>}
+          {!lastPane && <IconButton label="Close pane" shortcut={active ? shortcut("close_pane") : undefined} onClick={() => closePane(paneId)}><X className="icon" /></IconButton>}
         </span>
       </div>
       <div className="pane-body" ref={hostRef} />

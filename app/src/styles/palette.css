@@ -11,4 +11,10 @@
 .palette-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-hint { color: var(--fg-2); font-size: var(--fs-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 .palette-active .palette-hint { color: inherit; opacity: 0.75; }
+.palette-crumb { flex: none; font-size: var(--fs-0); color: var(--fg-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 0 5px; line-height: 16px; white-space: nowrap; }
+.palette-side { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.palette-chevron { width: 12px; height: 12px; color: var(--fg-3); }
+.palette-active .palette-chevron { color: inherit; }
+.shortcuts .palette-list { max-height: 60vh; }
+.shortcuts-group { height: 22px; padding: 0 var(--sp-3); font-size: var(--fs-0); color: var(--fg-3); }
 .palette-foot { display: flex; gap: var(--sp-4); padding: var(--sp-1) var(--sp-3); border-top: 1px solid var(--line); font-size: var(--fs-0); color: var(--fg-3); }
