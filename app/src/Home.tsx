@@ -1,4 +1,4 @@
-import { ListFilter, Search, SlidersHorizontal, X } from "lucide-react";
+import { ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { Wordmark } from "./Brand";
 import { useMemo, useState } from "react";
 import { openWorktree, setMetadata } from "./actions";
@@ -147,7 +147,7 @@ function Row({ w }: { w: Worktree }) {
       title={w.path}
     >
       <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
-      <span className="name">{w.name}</span>
+      <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       <span className="muted">{w.metadata.project ?? repo}</span>
       <span className="muted">{busy ? "archiving…" : archived ? "archived" : (state ?? "")}</span>
       <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
@@ -183,7 +183,7 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
     >
       <div className="card-title">
         <span className={`state state-${busy ? "archiving" : archived ? "none" : summary}`} />
-        <span className="name">{w.name}</span>
+        <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       </div>
       <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>
       {!archived && <Signals worktreeId={w.id} className="card-signals" />}

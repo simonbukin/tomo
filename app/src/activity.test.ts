@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayLabel, groupByDay, mergeActivity, needsMeItems, nowSignals, resetsIn, truncate, usageSummary, type SignalInput } from "./activityModel";
+import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, nowSignals, resetsIn, shortUsageLabel, sparkCells, truncate, usageSummary, type SignalInput } from "./activityModel";
 import type { ActivityEvent, AgentPresence, AttentionItem, RuntimeEndpoint } from "./types";
 
 const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", worktree_id: "w", pane_id: null, level: "attention", message: "m", created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null, ...extra });
@@ -55,22 +55,28 @@ describe("nowSignals", () => {
       { kind: "runtime", label: "App", port: 3000, url: "http://localhost:3000" },
     ]);
   });
-  it("puts attention first, then crash, and caps at three", () => {
+  it("puts a checkpoint first, then the waiting agent itself, then a crash, and caps at three", () => {
     const out = nowSignals({
       ...quiet,
-      agents: [agent("waiting"), agent("working", "codex")],
+      agents: [agent("working", "codex"), agent("waiting")],
       attention: [attention({ id: "cp", kind: "checkpoint" }), attention({ id: "cr", kind: "crash", message: "Sampler crashed" })],
       endpoints: [endpoint()],
       rssBytes: 5000,
     });
     expect(out).toEqual([
-      { kind: "attention", text: "Claude needs input" },
       { kind: "attention", text: "review requested" },
+      { kind: "agent", agent: "claude", state: "waiting" },
       { kind: "crash", text: "Sampler crashed" },
     ]);
   });
-  it("does not repeat a waiting agent as an active agent", () => {
-    expect(nowSignals({ ...quiet, agents: [agent("waiting")] })).toEqual([{ kind: "attention", text: "Claude needs input" }]);
+  it("shows a waiting agent once, as the agent line, not as a separate item", () => {
+    expect(nowSignals({ ...quiet, agents: [agent("waiting")], attention: [attention({ pane_id: "p-claude" })] })).toEqual([{ kind: "agent", agent: "claude", state: "waiting" }]);
+  });
+  it("drops a stale waiting item once the agent is no longer waiting", () => {
+    const stale = attention({ pane_id: "p-claude" });
+    expect(needsMeItem(stale, [agent("working")])).toBe(false);
+    expect(needsMeItem(stale, [agent("waiting")])).toBe(true);
+    expect(nowSignals({ ...quiet, agents: [agent("working")], attention: [stale] })).toEqual([{ kind: "agent", agent: "claude", state: "working" }]);
   });
   it("warns on memory only at the threshold, and reports a merged pr", () => {
     expect(nowSignals({ ...quiet, rssBytes: 999 })).toEqual([]);
@@ -85,6 +91,15 @@ describe("text helpers", () => {
     expect(truncate("x".repeat(80))).toHaveLength(80);
     expect(truncate("x".repeat(81))).toHaveLength(80);
     expect(truncate("x".repeat(81)).endsWith("…")).toBe(true);
+  });
+  it("draws usage sparks and shortens labels", () => {
+    expect(sparkCells(0.48)).toEqual({ filled: 5, empty: 5 });
+    expect(sparkCells(1.2)).toEqual({ filled: 10, empty: 0 });
+    expect(sparkCells(null)).toEqual({ filled: 0, empty: 10 });
+    expect(sparkCells(0.04)).toEqual({ filled: 0, empty: 10 });
+    expect(shortUsageLabel("5-hour")).toBe("5h");
+    expect(shortUsageLabel("weekly")).toBe("wk");
+    expect(shortUsageLabel("weekly (fable)")).toBe("wk fable");
   });
   it("summarizes usage buckets", () => {
     expect(usageSummary({ provider: "claude", available: true, reason: null, fetched_at_ms: 0, buckets: [{ label: "5h", fraction_used: 0.48, resets_at_ms: null, detail: null }, { label: "wk", fraction_used: 0.83, resets_at_ms: null, detail: null }] })).toBe("claude 48% 5h · 83% wk");

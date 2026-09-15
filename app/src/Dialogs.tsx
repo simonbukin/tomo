@@ -1,8 +1,10 @@
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
-import { openWorktree } from "./actions";
-import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle } from "./components/ui";
+import { Minus, Plus } from "lucide-react";
+import { applyZoom, openWorktree, setAppearance } from "./actions";
+import { ACCENTS, type ThemeChoice } from "./appearance";
+import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Select } from "./components/ui";
 import { notify, setState, useStore, type Dialog as DialogSpec } from "./store";
 import type { ConfigIssue, HookRun, IntegrationStatus, Repo, Town, Worktree } from "./types";
 
@@ -27,6 +29,7 @@ export function Dialogs() {
         {shown.kind === "integrations" && <IntegrationsDialog close={close} />}
         {shown.kind === "config-check" && <ConfigCheckDialog close={close} />}
         {shown.kind === "hook-log" && <HookLogDialog close={close} />}
+        {shown.kind === "appearance" && <AppearanceDialog close={close} />}
       </DialogContent>
     </Dialog>
   );
@@ -275,6 +278,61 @@ function HookLogDialog({ close }: { close: () => void }) {
       </div>
       <DialogActions>
         <Button onClick={close}>Close</Button>
+      </DialogActions>
+    </>
+  );
+}
+
+function AppearanceDialog({ close }: { close: () => void }) {
+  const a = useStore((s) => s.ui.appearance);
+  const configFont = useStore((s) => s.config?.font_size ?? 13);
+  const font = a.terminalFontSize ?? configFont;
+  const themes: { value: ThemeChoice; label: string }[] = [
+    { value: "system", label: "system" },
+    { value: "light", label: "light" },
+    { value: "dark", label: "dark" },
+  ];
+  return (
+    <>
+      <DialogTitle>appearance</DialogTitle>
+      <div className="appearance-grid">
+        <label>theme</label>
+        <Select<ThemeChoice> aria-label="Theme" size="sm" value={a.theme} onValueChange={(theme) => setAppearance({ theme })} options={themes} />
+        <label>accent</label>
+        <span className="swatches">
+          {ACCENTS.map((x) => (
+            <button key={x.id} className="swatch" aria-pressed={a.accent === x.id} onClick={() => setAppearance({ accent: x.id })}>
+              <span className={`swatch-dot ${x.id}`} />
+              {x.label}
+            </button>
+          ))}
+        </span>
+        <label>zoom</label>
+        <span className="stepper">
+          <IconButton label="Zoom out" onClick={() => applyZoom("out")}>
+            <Minus className="icon" />
+          </IconButton>
+          <span className="value">{Math.round(a.zoom * 100)}%</span>
+          <IconButton label="Zoom in" onClick={() => applyZoom("in")}>
+            <Plus className="icon" />
+          </IconButton>
+          {a.zoom !== 1 && <Button variant="link" onClick={() => applyZoom("reset")}>reset</Button>}
+        </span>
+        <label>terminal font</label>
+        <span className="stepper">
+          <IconButton label="Smaller terminal font" onClick={() => setAppearance({ terminalFontSize: Math.max(8, font - 1) })}>
+            <Minus className="icon" />
+          </IconButton>
+          <span className="value">{font}px</span>
+          <IconButton label="Larger terminal font" onClick={() => setAppearance({ terminalFontSize: Math.min(32, font + 1) })}>
+            <Plus className="icon" />
+          </IconButton>
+          {a.terminalFontSize != null && <Button variant="link" onClick={() => setAppearance({ terminalFontSize: null })}>use config</Button>}
+        </span>
+      </div>
+      <p className="faint">⌘ + and ⌘ − zoom the whole window; ⌘ 0 resets. Ctrl works too.</p>
+      <DialogActions>
+        <Button onClick={close}>Done</Button>
       </DialogActions>
     </>
   );

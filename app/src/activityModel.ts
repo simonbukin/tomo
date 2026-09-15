@@ -1,13 +1,19 @@
 import type { ActionDef, ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem, PullRequest, RuntimeEndpoint, UsageBucket, UsageSnapshot } from "./types";
-import { KIND_LABEL } from "./types";
 
-export function needsMeItem(a: AttentionItem): boolean {
-  return a.resolved_at_ms == null && (a.kind !== "waiting" || a.viewed_at_ms == null);
+/**
+ * An item still asks for the human. A waiting item only counts while its agent is still waiting:
+ * once the agent moves on, the user already answered it.
+ */
+export function needsMeItem(a: AttentionItem, agents?: AgentPresence[]): boolean {
+  if (a.resolved_at_ms != null) return false;
+  if (a.kind !== "waiting") return true;
+  if (a.viewed_at_ms != null) return false;
+  return !agents || agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
 }
 
 /** Unresolved items, least recently viewed first, so `next_attention` cycles through them. */
-export function needsMeItems(list: AttentionItem[]): AttentionItem[] {
-  return list.filter(needsMeItem).sort((a, b) => (a.viewed_at_ms ?? 0) - (b.viewed_at_ms ?? 0) || a.created_at_ms - b.created_at_ms);
+export function needsMeItems(list: AttentionItem[], agents?: AgentPresence[]): AttentionItem[] {
+  return list.filter((a) => needsMeItem(a, agents)).sort((a, b) => (a.viewed_at_ms ?? 0) - (b.viewed_at_ms ?? 0) || a.created_at_ms - b.created_at_ms);
 }
 
 export function truncate(text: string, max = 80): string {
@@ -86,20 +92,16 @@ export interface SignalInput {
 /** The few things worth a glance on a NOW card, in priority order, at most three. */
 export function nowSignals(input: SignalInput): Signal[] {
   const live = input.agents.filter((a) => a.state !== "exited");
-  const open = input.attention.filter(needsMeItem);
-  const waiting = live.filter((a) => a.state === "waiting").map((a) => a.kind);
-  const waitingKinds = [...new Set([...waiting, ...open.filter((a) => a.kind === "waiting" && a.agent_kind).map((a) => a.agent_kind!)])];
-  const attention: Signal[] = [
-    ...waitingKinds.map((k): Signal => ({ kind: "attention", text: `${KIND_LABEL[k]} needs input` })),
-    ...(open.some((a) => a.kind === "checkpoint") ? [{ kind: "attention", text: "review requested" } as Signal] : []),
-  ];
+  const open = input.attention.filter((a) => needsMeItem(a, input.agents));
+  const checkpoint: Signal[] = open.some((a) => a.kind === "checkpoint") ? [{ kind: "attention", text: "review requested" }] : [];
+  const waiting: Signal[] = live.filter((a) => a.state === "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
   const crash: Signal[] = open.filter((a) => a.kind === "crash").map((a) => ({ kind: "crash", text: a.message }));
   const agents: Signal[] = live.filter((a) => a.state !== "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
   const primary = httpEndpoints(input.endpoints)[0];
   const runtime: Signal[] = primary ? [{ kind: "runtime", label: endpointLabel(primary, input.actions), port: primary.port, url: endpointUrl(primary) }] : [];
   const warn: Signal[] = input.rssBytes != null && input.rssBytes >= input.warnBytes ? [{ kind: "warn", bytes: input.rssBytes }] : [];
   const pr: Signal[] = input.pr?.state === "merged" ? [{ kind: "pr", text: "merged", tone: "merged" }] : input.pr && input.pr.checks_failed > 0 ? [{ kind: "pr", text: "checks failed", tone: "failed" }] : [];
-  return [...attention, ...crash, ...agents, ...runtime, ...warn, ...pr].slice(0, 3);
+  return [...checkpoint, ...waiting, ...crash, ...agents, ...runtime, ...warn, ...pr].slice(0, 3);
 }
 
 export function percentOf(b: UsageBucket): number | null {
@@ -109,6 +111,24 @@ export function percentOf(b: UsageBucket): number | null {
 export function usageTone(b: UsageBucket): "hot" | "waiting" | null {
   const pct = percentOf(b);
   return pct == null ? null : pct > 95 ? "hot" : pct > 80 ? "waiting" : null;
+}
+
+export const SPARK_WIDTH = 10;
+
+/** Filled and empty cells of a `[█████     ]` spark for a used fraction; null means no data. */
+export function sparkCells(fraction: number | null, width = SPARK_WIDTH): { filled: number; empty: number } {
+  if (fraction == null) return { filled: 0, empty: width };
+  const filled = Math.min(width, Math.max(0, Math.round(fraction * width)));
+  return { filled, empty: width - filled };
+}
+
+/** A short bucket label for the strip: "5-hour" → "5h", "weekly (fable)" → "wk fable". */
+export function shortUsageLabel(label: string): string {
+  return label
+    .replace(/^(\d+)-hour\b/, "$1h")
+    .replace(/^weekly\b/, "wk")
+    .replace(/[()]/g, "")
+    .trim();
 }
 
 export function usageSummary(s: UsageSnapshot): string {

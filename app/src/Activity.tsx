@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, payloadString, percentOf, resetsIn, timeLabel, usageSummary, usageTone } from "./activityModel";
+import { endpointUrl, groupByDay, httpEndpoints, mergeActivity, needsMeItem, payloadString, percentOf, resetsIn, timeLabel, shortUsageLabel, sparkCells, usageTone } from "./activityModel";
 import { focusPane, openEndpoint, openWorktree, refreshUsage, resolveCheckpoint, restartWorktreeAction, restoreWorktree } from "./actions";
 import { rpc } from "./api";
 import { Button, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
 import { ProcessIcon } from "./ProcessIcon";
 import { endpointsOf, setState, useStore, type State } from "./store";
-import { KIND_LABEL, type ActivityEvent, type UsageSnapshot } from "./types";
+import { KIND_LABEL, type ActivityEvent, type UsageBucket, type UsageSnapshot } from "./types";
 
 type Filter = "all" | "needs_me" | "worktree";
 const PAGE = 200;
@@ -19,7 +19,7 @@ function load(beforeMs: number | null): Promise<ActivityEvent[]> {
 export function Activity() {
   const activity = useStore((s) => s.activity);
   const activeId = useStore((s) => (s.ui.activeWorktreeId && s.worktrees.some((w) => w.id === s.ui.activeWorktreeId) ? s.ui.activeWorktreeId : null));
-  const openIds = useStore((s) => s.attention.filter(needsMeItem).map((a) => a.id));
+  const openIds = useStore((s) => s.attention.filter((a) => needsMeItem(a, Object.values(s.agents))).map((a) => a.id));
   const [filter, setFilter] = useState<Filter>("all");
   const [more, setMore] = useState(true);
   useEffect(() => {
@@ -113,7 +113,7 @@ function EventRow({ e }: { e: ActivityEvent }) {
 }
 
 function UsageStrip() {
-  const usage = useStore((s) => s.usage);
+  const usage = useStore((s) => s.usage.filter((u) => u.provider !== "pi"));
   if (!usage.length) return null;
   return (
     <span className="usage-strip">
@@ -126,7 +126,10 @@ function UsageItem({ snapshot: u }: { snapshot: UsageSnapshot }) {
   if (!u.available) {
     return (
       <Tooltip content={u.reason ?? "unavailable"}>
-        <span className="usage-item muted">{u.provider} — unavailable</span>
+        <span className="usage-item muted">
+          <span className="usage-provider">{u.provider}</span>
+          <span className="usage-spark">[unavailable]</span>
+        </span>
       </Tooltip>
     );
   }
@@ -134,16 +137,20 @@ function UsageItem({ snapshot: u }: { snapshot: UsageSnapshot }) {
   const worst = tones.includes("hot") ? "hot" : tones.includes("waiting") ? "waiting" : null;
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="ghost" size="sm" className={`usage-item${worst ? ` usage-${worst}` : ""}`} />}>{usageSummary(u)}</PopoverTrigger>
+      <PopoverTrigger render={<Button variant="ghost" size="sm" className={`usage-item${worst ? ` usage-${worst}` : ""}`} />}>
+        <span className="usage-provider">{u.provider}</span>
+        {u.buckets.map((b) => (
+          <Spark key={b.label} bucket={b} labelled />
+        ))}
+      </PopoverTrigger>
       <PopoverContent align="end">
         <PopoverTitle>{u.provider} usage</PopoverTitle>
         {u.buckets.map((b) => {
           const pct = percentOf(b);
-          const tone = usageTone(b);
           return (
             <div key={b.label} className="usage-row" title={b.detail ?? undefined}>
               <span>{b.label}</span>
-              <span className="usage-bar"><span className={`usage-fill${tone ? ` usage-${tone}` : ""}`} style={{ width: `${pct ?? 0}%` }} /></span>
+              <Spark bucket={b} />
               <span className="num">{pct == null ? "—" : `${pct}%`}</span>
               <span className="muted">{resetsIn(b.resets_at_ms) ?? ""}</span>
             </div>
@@ -152,5 +159,20 @@ function UsageItem({ snapshot: u }: { snapshot: UsageSnapshot }) {
         <button className="link" onClick={refreshUsage}>refresh</button>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** A text spark, `[█████░░░░░]`, tinted when the bucket nears its limit. */
+function Spark({ bucket: b, labelled = false }: { bucket: UsageBucket; labelled?: boolean }) {
+  const { filled, empty } = sparkCells(b.fraction_used);
+  const tone = usageTone(b);
+  return (
+    <span className="usage-spark" aria-label={`${b.label} ${percentOf(b) ?? "unknown"} percent used`}>
+      {labelled && <span className="usage-spark-label">{shortUsageLabel(b.label)}</span>}
+      <span className={`usage-cells${tone ? ` usage-${tone}` : ""}`}>
+        [<span className="on">{"█".repeat(filled)}</span>
+        <span className="off">{"░".repeat(empty)}</span>]
+      </span>
+    </span>
   );
 }

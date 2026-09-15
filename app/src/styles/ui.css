@@ -104,3 +104,18 @@ button.link:hover, .btn-link:hover { color: var(--accent); background: none; }
 .toast { position: fixed; bottom: var(--sp-4); left: 50%; transform: translateX(-50%); background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--sp-2) var(--sp-4); z-index: 100; font-size: var(--fs-1); max-width: 70vw; box-shadow: var(--shadow-pop); animation: toast-in var(--dur) ease-out both; }
 .toast-error { border-color: var(--hot); color: var(--hot); }
 .toast-warning { border-color: var(--waiting); color: var(--waiting); }
+
+/* ---- appearance dialog */
+.appearance-grid { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; row-gap: var(--sp-3); column-gap: var(--sp-3); margin-top: var(--sp-2); }
+.appearance-grid > label { margin: 0; }
+.stepper { display: inline-flex; align-items: center; gap: var(--sp-2); font-variant-numeric: tabular-nums; }
+.stepper .value { min-width: 44px; text-align: center; font-family: var(--mono); font-size: var(--fs-1); }
+.swatches { display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; }
+.swatch { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 4px; border: 1px solid var(--line); border-radius: var(--radius); background: transparent; font-size: var(--fs-1); color: var(--fg-1); }
+.swatch:hover { border-color: var(--line-strong); background: var(--bg-1); }
+.swatch[aria-pressed="true"] { border-color: var(--accent); color: var(--fg); }
+.swatch-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.swatch-dot.murasaki { background: #7d4dff; }
+.swatch-dot.sora { background: #2f7df6; }
+.swatch-dot.sakura { background: #e0508c; }
+.swatch-dot.sumi { background: #55555f; }

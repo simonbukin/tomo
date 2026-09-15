@@ -1,4 +1,4 @@
-import { ArrowUpRight, Ellipsis, Radio, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, Ellipsis, Radio, Star, TriangleAlert } from "lucide-react";
 import { endpointLabel, endpointUrl, httpEndpoints, needsMeItem } from "./activityModel";
 import { focusPane, openEndpoint, resolveCheckpoint, runWorktreeAction } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
@@ -18,7 +18,10 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
   return (
     <>
       <div className="wt-header">
-        <span className="wt-header-name">{w.name}</span>
+        <span className="wt-header-name">
+          {w.name}
+          {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
+        </span>
         <span className="wt-header-branch" title={w.path}>
           {branch}
           {w.git?.dirty ? " *" : ""}

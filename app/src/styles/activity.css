@@ -29,3 +29,15 @@
 .usage-fill { display: block; height: 100%; background: var(--fg-2); }
 .usage-fill.usage-waiting { background: var(--waiting); }
 .usage-fill.usage-hot { background: var(--hot); }
+
+/* ---- usage sparks: [█████     ] */
+.usage-item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.usage-provider { color: var(--fg-1); }
+.usage-spark { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); white-space: pre; }
+.usage-spark-label { color: var(--fg-3); }
+.usage-cells { letter-spacing: -0.5px; }
+.usage-cells .on { color: var(--fg-1); }
+.usage-cells .off { color: var(--line-strong); }
+.usage-cells.usage-waiting .on { color: var(--waiting); }
+.usage-cells.usage-hot .on { color: var(--hot); }
+.usage-row { grid-template-columns: 70px auto 36px auto; }

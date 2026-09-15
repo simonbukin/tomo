@@ -23,6 +23,16 @@ function SignalLine({ signal }: { signal: Signal }) {
     case "crash":
       return <span className="signal signal-crash"><span className="signal-glyph">×</span>{signal.text}</span>;
     case "agent":
+      if (signal.state === "waiting") {
+        return (
+          <span className="signal agent-line is-waiting signal-attention">
+            <span className="state state-waiting" />
+            <ProcessIcon agent={signal.agent} size={11} />
+            {KIND_LABEL[signal.agent]}
+            <span className="signal-waiting-note">needs input</span>
+          </span>
+        );
+      }
       return <span className={`signal agent-line is-${signal.state}`}><span className={`state state-${signal.state}`} /><ProcessIcon agent={signal.agent} size={11} />{KIND_LABEL[signal.agent]}</span>;
     case "runtime":
       return <span className="signal signal-runtime">{signal.label} <ArrowUpRight className="icon" /> :{signal.port}</span>;

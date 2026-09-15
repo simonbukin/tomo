@@ -6,7 +6,8 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
-import { closePane, focusPane, runAction } from "./actions";
+import { applyZoom, closePane, focusPane, runAction } from "./actions";
+import { effectiveTheme, zoomKey } from "./appearance";
 import { findAction } from "./keys";
 import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
@@ -31,6 +32,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const pane = useStore((s) => s.panes[paneId]);
   const zoomed = useStore((s) => !!pane && s.zoomed[pane.tab_id] === paneId);
   const config = useStore((s) => s.config);
+  const appearance = useStore((s) => s.ui.appearance);
   const connectionNonce = useStore((s) => s.connectionNonce);
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -42,11 +44,11 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     const term = new Terminal({
       allowProposedApi: true,
       fontFamily: config.font_family,
-      fontSize: config.font_size,
+      fontSize: getState().ui.appearance.terminalFontSize ?? config.font_size,
       scrollback: config.scrollback_lines,
       cursorBlink: true,
       macOptionIsMeta: true,
-      theme: isDark(config.theme) ? DARK : LIGHT,
+      theme: isDark(effectiveTheme(getState().ui.appearance.theme, config.theme)) ? DARK : LIGHT,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -64,6 +66,19 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
+      const zoom = zoomKey(e);
+      if (zoom) {
+        e.preventDefault();
+        applyZoom(zoom);
+        return false;
+      }
+      // xterm.js sends a bare CR for Shift+Enter, the same as Enter. ESC CR is what Claude Code,
+      // Codex, and Pi read as "insert a newline", and what zsh inserts as a literal newline.
+      if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64("\x1b\r") }).catch(() => {});
+        return false;
+      }
       const action = findAction(e, keyBindings(getState()));
       if (action) {
         e.preventDefault();
@@ -129,6 +144,13 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   useEffect(() => {
     if (active) termRef.current?.focus();
   }, [active]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || !config) return;
+    term.options.fontSize = appearance.terminalFontSize ?? config.font_size;
+    term.options.theme = isDark(effectiveTheme(appearance.theme, config.theme)) ? DARK : LIGHT;
+  }, [appearance.terminalFontSize, appearance.theme, config?.font_size, config?.theme]);
 
   const agent = pane?.agent && pane.agent.state !== "exited" ? pane.agent : null;
   const title = pane?.user_title ?? (agent ? agent.kind : (oscTitle ?? pane?.title ?? ""));
