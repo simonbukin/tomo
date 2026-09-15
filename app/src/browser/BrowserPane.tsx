@@ -2,14 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowLeft, ArrowRight, Copy, ExternalLink, Globe, MessageSquarePlus, RotateCw, SendHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { rpc } from "./api";
-import { browserCommand, browserHostFailed, closePane, copyText, focusPane, openExternalUrl } from "./actions";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
-import { openMenu } from "./MenuHost";
-import { browserMenu, isLastPane } from "./menus";
-import { useShortcuts } from "./shortcuts";
-import { agentsOf, failToast, getState, showStatus, useStore } from "./store";
-import { KIND_LABEL, type EvidenceBundle, type Id } from "./types";
+import { closePane, copyText, focusPane, openExternalUrl } from "../actions";
+import { rpc } from "../api";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "../components/ui";
+import { openMenu } from "../MenuHost";
+import { browserMenu, isLastPane } from "../menus";
+import { useShortcuts } from "../shortcuts";
+import { agentsOf, failToast, getState, showStatus, useStore } from "../store";
+import { KIND_LABEL, type EvidenceBundle, type Id } from "../types";
+import { browserCommand, browserHostFailed, normalizeUrl } from "./browser";
 
 type BrowserState = { pane_id: Id; url?: string; title?: string; loading?: boolean };
 type Bounds = { x: number; y: number; width: number; height: number };
@@ -18,12 +19,6 @@ type FeedbackEvent = Feedback & { pane_id: Id; kind: "change" | "copy" | "submit
 
 const INSTRUCTION = "Review and address this feedback.";
 const NO_FEEDBACK: Feedback = { count: 0, markdown: "" };
-
-export function normalizeUrl(text: string): string {
-  const t = text.trim();
-  if (!t) return "about:blank";
-  return /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `http://${t}`;
-}
 
 const notes = (n: number) => `${n} ${n === 1 ? "note" : "notes"}`;
 
