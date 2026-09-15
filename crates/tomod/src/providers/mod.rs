@@ -311,6 +311,38 @@ mod tests {
         assert_eq!(detect("node", "node --max-old-space-size=8192 /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi), "a runtime flag before the script still counts");
     }
 
+    fn rust_files(dir: &Path) -> Vec<PathBuf> {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .flat_map(|p| if p.is_dir() { rust_files(&p) } else { vec![p] })
+            .filter(|p| p.extension().is_some_and(|x| x == "rs"))
+            .collect()
+    }
+
+    /// `store.rs` keeps the text of the enum, and the Usage addon fetches for
+    /// each provider. Every other decision by provider belongs in this folder.
+    #[test]
+    fn only_provider_modules_branch_on_a_provider() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let nouns = ["agentkind::claude", "agentkind::codex", "agentkind::pi", "hook claude", "hook codex", "claudecode", "codex_thread", "pi_coding_agent", ".claude/", ".codex/", ".pi/"];
+        let hits: Vec<String> = rust_files(&src)
+            .into_iter()
+            .filter(|p| !p.starts_with(src.join("providers")) && !p.starts_with(src.join("addons/usage")) && !p.ends_with("store.rs"))
+            .flat_map(|path| {
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                let code = text.split("#[cfg(test)]").next().unwrap_or_default().to_lowercase();
+                code.lines()
+                    .enumerate()
+                    .filter_map(|(i, line)| nouns.iter().find(|n| line.contains(**n)).map(|n| format!("{}:{}: {n}", path.display(), i + 1)))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(hits.is_empty(), "only a provider module may branch on a provider:\n{}", hits.join("\n"));
+    }
+
     #[test]
     fn nested_agent_markers_name_the_parent_agent() {
         for key in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "PI_CODING_AGENT"] {
