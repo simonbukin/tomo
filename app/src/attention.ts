@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { builtins } from "./addons";
+import { sourceOwner } from "./addons";
 import { rpc } from "./api";
 import { attentionDelivery, type AttentionActionId, type AttentionNames, type RouteContext } from "./notifyRoute";
 import { playChime } from "./sounds";
@@ -33,8 +33,6 @@ export function routeContext(s: State, focused: boolean): RouteContext {
     focusedPaneId: activeTab(s, s.ui.activeWorktreeId)?.active_pane_id ?? null,
   };
 }
-
-const sourceOwner = (kind: string) => builtins.find((a) => a.paneSource?.kind === kind)?.paneSource ?? null;
 
 function namesOf(s: State, item: AttentionItem): AttentionNames {
   const source = item.pane_id ? s.panes[item.pane_id]?.source : null;
