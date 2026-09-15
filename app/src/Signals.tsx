@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 import type { ReactElement } from "react";
 import { endpointUrl, nowSignals, type Signal } from "./activityModel";
+import { addonSignals } from "./addons";
 import { HoverCard } from "./components/ui";
 import { agentStatus, dotClass, GLYPH } from "./glyphs";
 import { AgentPreview, RuntimePreview } from "./HoverPreviews";
@@ -15,7 +16,7 @@ export function signalsFor(s: State, worktreeId: Id): Signal[] {
     endpoints: endpointsOf(s, worktreeId),
     rssBytes: s.resources[worktreeId]?.rss_bytes ?? null,
     warnBytes: s.config?.resource_warning_bytes ?? Infinity,
-    pr: s.prs[worktreeId]?.pr ?? null,
+    addon: addonSignals(s, worktreeId),
   });
 }
 
@@ -61,8 +62,8 @@ function SignalLine({ worktreeId, signal }: { worktreeId: Id; signal: Signal }) 
       );
     case "warn":
       return <span className="signal signal-warn">⚠ {formatBytes(signal.bytes)}</span>;
-    case "pr":
-      return <span className={`signal signal-pr-${signal.tone}`}><span className={`state ${signal.tone === "merged" ? "pr-merged" : "check-failed"}`} />{signal.text}</span>;
+    case "addon":
+      return <span className={`signal ${signal.className}`}><span className={`state ${signal.dot}`} />{signal.text}</span>;
   }
 }
 

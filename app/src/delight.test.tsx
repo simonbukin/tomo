@@ -46,7 +46,7 @@ describe("empty states", () => {
 
   it("Home with only archived worktrees says none are active", () => {
     const archived = { id: "w1", repo_id: "r1", path: "/r/w1", name: "w1", branch: "b", head: "h", detached: false, is_main: false, exists: false, git: null, metadata: { display_name: null, project: null, priority: null, tags: [], state: null }, last_active_ms: null, first_seen_ms: null, archived_at_ms: 5, archiving: false, tab_count: 0, pane_count: 0 } as unknown as Worktree;
-    setState({ loaded: true, repos: [{ id: "r1", path: "/r", name: "r", exists: true, remote_url: null, github: null }], worktrees: [archived] });
+    setState({ loaded: true, repos: [{ id: "r1", path: "/r", name: "r", exists: true, remote_url: null }], worktrees: [archived] });
     render(<Home />);
     expect(screen.getByText("No active worktrees.")).toBeInTheDocument();
   });

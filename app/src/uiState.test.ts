@@ -67,6 +67,11 @@ describe("sanitizeUi", () => {
     expect(sanitizeUi({}, []).rightSection).toBeNull();
   });
 
+  it("keeps an addon inspector section only while that addon is built in", () => {
+    expect(sanitizeUi({ rightSection: "notes" }, [], [], ["notes"]).rightSection).toBe("notes");
+    expect(sanitizeUi({ rightSection: "notes" }, []).rightSection).toBeNull();
+  });
+
   it("passes unknown keys through for fields added later", () => {
     expect((sanitizeUi({ futureField: { a: 1 } }, []) as unknown as Record<string, unknown>).futureField).toEqual({ a: 1 });
   });

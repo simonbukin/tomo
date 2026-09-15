@@ -34,8 +34,8 @@ export function signalText(signal: Signal): string {
       return `${signal.label} :${signal.port}`;
     case "warn":
       return `⚠ ${formatBytes(signal.bytes)}`;
-    case "pr":
-      return `${signal.tone === "failed" ? GLYPH.failed : GLYPH.complete} ${signal.text}`;
+    case "addon":
+      return `${signal.glyph} ${signal.text}`;
   }
 }
 

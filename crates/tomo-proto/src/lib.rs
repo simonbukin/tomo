@@ -587,14 +587,6 @@ pub struct Repo {
     pub exists: bool,
     #[serde(default)]
     pub remote_url: Option<String>,
-    #[serde(default)]
-    pub github: Option<GitHubRepo>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct GitHubRepo {
-    pub owner: String,
-    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1010,28 +1002,6 @@ pub struct EvidenceBundle {
     #[serde(default)]
     #[ts(optional)]
     pub note_count: Option<u32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct PullRequest {
-    pub number: u64,
-    pub title: String,
-    pub url: String,
-    pub state: String,
-    pub draft: bool,
-    pub review_decision: Option<String>,
-    pub mergeable: Option<String>,
-    pub checks_passed: u32,
-    pub checks_failed: u32,
-    pub checks_pending: u32,
-    pub fetched_at_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct PrStatusResult {
-    pub available: bool,
-    pub reason: Option<String>,
-    pub pr: Option<PullRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

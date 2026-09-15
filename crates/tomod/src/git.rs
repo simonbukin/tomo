@@ -174,20 +174,6 @@ pub async fn remote_url(repo: &Path) -> Option<String> {
     git(repo, &["remote", "get-url", "origin"]).await.ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-/// Parses `owner/name` from the common GitHub remote forms.
-pub fn github_repo(url: &str) -> Option<(String, String)> {
-    let rest = url
-        .strip_prefix("git@github.com:")
-        .or_else(|| url.strip_prefix("https://github.com/"))
-        .or_else(|| url.strip_prefix("http://github.com/"))
-        .or_else(|| url.strip_prefix("ssh://git@github.com/"))?;
-    let rest = rest.trim_end_matches('/').trim_end_matches(".git");
-    let mut parts = rest.splitn(2, '/');
-    let owner = parts.next()?.to_string();
-    let name = parts.next()?.to_string();
-    (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some((owner, name))
-}
-
 pub async fn clone(url: &str, dest: &Path) -> Result<()> {
     let out = Command::new("git").arg("clone").arg(url).arg(dest).output().await.context("run git clone")?;
     if !out.status.success() {
@@ -223,13 +209,6 @@ mod tests {
         assert!(s.dirty);
         let d = parse_status("# branch.oid abc\n# branch.head (detached)\n");
         assert!(d.detached && !d.dirty);
-    }
-
-    #[test]
-    fn parses_github_remotes() {
-        assert_eq!(github_repo("git@github.com:acme/holly.git"), Some(("acme".into(), "holly".into())));
-        assert_eq!(github_repo("https://github.com/acme/holly"), Some(("acme".into(), "holly".into())));
-        assert_eq!(github_repo("https://gitlab.com/acme/holly"), None);
     }
 
     #[test]

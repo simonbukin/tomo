@@ -1,5 +1,5 @@
 import { defaultAppearance, sanitizeAppearance } from "./appearance";
-import type { Filter, FilterKind, HomeOptions, Id, RightSection, SidebarMode, SidebarSort, UiState } from "./types";
+import type { CoreSection, Filter, FilterKind, HomeOptions, Id, SidebarMode, SidebarSort, UiState } from "./types";
 
 export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
@@ -9,7 +9,7 @@ export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
 
 const MODES: readonly SidebarMode[] = ["open", "minimal", "closed"];
-export const RIGHT_SECTIONS: readonly RightSection[] = ["worktree", "git", "pr", "processes", "sessions", "files"];
+const CORE_SECTIONS: readonly CoreSection[] = ["worktree", "git", "processes", "sessions", "files"];
 const CORE_VIEWS: readonly string[] = ["home", "worktree", "activity"];
 const SORTS: readonly SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
 const FILTER_KINDS: readonly FilterKind[] = ["state", "repo", "project", "tag", "agent", "archived", "attention"];
@@ -45,7 +45,7 @@ function sanitizeHome(v: unknown): HomeOptions {
  * UI state read back from the daemon with every known field checked. Unknown keys pass through untouched.
  * A missing active worktree keeps its id: a snapshot taken before discovery finishes must not erase it.
  */
-export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonViewIds: readonly string[] = []): UiState {
+export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonViewIds: readonly string[] = [], addonSectionIds: readonly string[] = []): UiState {
   const { leftOpen, rightOpen, ...s } = record(saved);
   const activeWorktreeId = typeof s.activeWorktreeId === "string" ? s.activeWorktreeId : null;
   const view = oneOf([...CORE_VIEWS, ...addonViewIds], s.view, defaultUi.view);
@@ -58,7 +58,7 @@ export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonView
     rightMode: sidebarMode(s.rightMode, rightOpen),
     leftWidth: width(s.leftWidth, defaultUi.leftWidth),
     rightWidth: width(s.rightWidth, defaultUi.rightWidth),
-    rightSection: RIGHT_SECTIONS.includes(s.rightSection as RightSection) ? (s.rightSection as RightSection) : null,
+    rightSection: typeof s.rightSection === "string" && [...CORE_SECTIONS, ...addonSectionIds].includes(s.rightSection) ? s.rightSection : null,
     sidebarSort: oneOf(SORTS, s.sidebarSort, defaultUi.sidebarSort),
     showArchivedInSidebar: bool(s.showArchivedInSidebar, defaultUi.showArchivedInSidebar),
     collapsedRepos: strings(s.collapsedRepos),

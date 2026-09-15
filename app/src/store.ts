@@ -3,7 +3,7 @@ import { rpc } from "./api";
 import { mergeActivity, needsMeItems } from "./activityModel";
 import { announceAttention } from "./attention";
 import { attentionToastKey } from "./notifyRoute";
-import { addonViews, builtins } from "./addons";
+import { addonViews, builtins, inspectorSections } from "./addons";
 import { defaultUi, sanitizeUi } from "./uiState";
 import type { Diagnostic, DiagnosticLevel,
   ActivityEvent,
@@ -14,8 +14,6 @@ import type { Diagnostic, DiagnosticLevel,
   Frame,
   Id,
   Pane,
-  PrStatusResult,
-  PullRequest,
   Repo,
   RuntimeEndpoint,
   Snapshot,
@@ -63,7 +61,6 @@ export interface State {
   menu: { anchor: MenuAnchor; items: MenuItem[]; nonce: number } | null;
   selection: Set<Id>;
   selectionAnchor: Id | null;
-  prs: Record<Id, PrStatusResult>;
   zoomed: Record<Id, Id>;
   healthChecked: boolean;
   rowErrors: Record<Id, RowError>;
@@ -113,7 +110,6 @@ let state: State = {
   menu: null,
   selection: new Set(),
   selectionAnchor: null,
-  prs: {},
   zoomed: {},
   healthChecked: false,
   rowErrors: {},
@@ -182,7 +178,7 @@ function groupTabs(tabs: Tab[]): Record<Id, Tab[]> {
 }
 
 export function applySnapshot(snap: Snapshot): void {
-  const ui = sanitizeUi(snap.ui_state, snap.worktrees.map((w) => w.id), addonViews().map((v) => v.id));
+  const ui = sanitizeUi(snap.ui_state, snap.worktrees.map((w) => w.id), addonViews().map((v) => v.id), inspectorSections().map((s) => s.id));
   builtins.forEach((a) => a.onSnapshot?.(snap));
   setState({
     loaded: true,
@@ -350,11 +346,6 @@ export function applyFrame(frame: Frame): void {
     case "system_stats":
       setState({ system: (d as { stats: SystemStats }).stats });
       break;
-    case "pr_changed": {
-      const { worktree_id, pr } = d as { worktree_id: Id; pr: PullRequest | null };
-      setState((s) => ({ prs: { ...s.prs, [worktree_id]: { available: true, reason: null, pr } } }));
-      break;
-    }
   }
 }
 

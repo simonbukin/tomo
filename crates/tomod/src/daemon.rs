@@ -77,7 +77,6 @@ pub struct Inner {
     pub proc_rows: Vec<ProcRow>,
     pub proc_rows_at_ms: u64,
     pub resources: Vec<WorktreeResources>,
-    pub prs: HashMap<Id, PrStatusResult>,
     pub archiving: HashSet<Id>,
     pub hook_queue: Vec<HookEvent>,
     pub discovered_once: bool,
@@ -213,7 +212,6 @@ impl Daemon {
                 proc_rows: Vec::new(),
                 proc_rows_at_ms: 0,
                 resources: Vec::new(),
-                prs: HashMap::new(),
                 archiving: HashSet::new(),
                 hook_queue: Vec::new(),
                 discovered_once: false,
@@ -1998,32 +1996,6 @@ impl Daemon {
             }
 
             Call::GitSummary { worktree_id } => ok(self.refresh_git(&worktree_id).await),
-            Call::PrStatus { worktree_id } => {
-                let (path, cached) = {
-                    let inner = self.lock();
-                    let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
-                    (w.path.clone(), inner.prs.get(&worktree_id).cloned())
-                };
-                let fresh = cached.as_ref().and_then(|c| c.pr.as_ref()).map_or(false, |pr| now_ms().saturating_sub(pr.fetched_at_ms) < 60_000);
-                if fresh {
-                    return ok(cached);
-                }
-                let result = crate::github::pr_status(&path).await;
-                let mut inner = self.lock();
-                let changed = inner.prs.get(&worktree_id).map(|c| &c.pr) != Some(&result.pr);
-                let was_merged = inner.prs.get(&worktree_id).and_then(|c| c.pr.as_ref()).map_or(false, |pr| pr.state == "merged");
-                inner.prs.insert(worktree_id.clone(), result.clone());
-                if let Some(pr) = result.pr.as_ref().filter(|pr| pr.state == "merged" && !was_merged) {
-                    let mut ev = activity::event(GitHubActivity::PrMerged, Some(&worktree_id), format!("PR #{} merged", pr.number));
-                    ev.detail = Some(pr.title.clone());
-                    ev.payload = json!({ "number": pr.number, "url": pr.url });
-                    Self::record(&mut inner, ev);
-                }
-                if changed {
-                    Self::emit(&mut inner, Event::PrChanged { worktree_id, pr: result.pr.clone() });
-                }
-                ok(result)
-            }
             Call::FsList { worktree_id, rel_path } => {
                 let root = self.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
                 let dir = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;
@@ -2310,8 +2282,7 @@ fn pasted(text: &str) -> String {
 pub async fn repo_view(id: Id, path: PathBuf) -> Repo {
     let exists = path.exists();
     let remote_url = if exists { git::remote_url(&path).await } else { None };
-    let github = remote_url.as_deref().and_then(git::github_repo).map(|(owner, name)| GitHubRepo { owner, name });
-    Repo { id, name: repo_name(&path), exists, path, remote_url, github }
+    Repo { id, name: repo_name(&path), exists, path, remote_url }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
