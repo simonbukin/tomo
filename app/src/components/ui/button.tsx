@@ -21,11 +21,13 @@ export interface IconButtonProps extends Omit<ButtonProps, "size" | "aria-label"
   /** Key chord shown after the label in the tooltip, for example `⌘T`. */
   shortcut?: string;
   tooltipSide?: TooltipSide;
+  /** Milliseconds before the tooltip opens. Rails pass 0 so a sweep over many items reads at once. */
+  tooltipDelay?: number;
   children?: ReactNode;
 }
 
 /** An icon-only control. Every one gets a tooltip and an accessible name. */
-export function IconButton({ label, shortcut, tooltipSide, variant = "ghost", ...rest }: IconButtonProps) {
+export function IconButton({ label, shortcut, tooltipSide, tooltipDelay, variant = "ghost", ...rest }: IconButtonProps) {
   const tip = shortcut ? (
     <span className="tip-row">
       {label}
@@ -35,7 +37,7 @@ export function IconButton({ label, shortcut, tooltipSide, variant = "ghost", ..
     label
   );
   return (
-    <Tooltip content={tip} side={tooltipSide}>
+    <Tooltip content={tip} side={tooltipSide} delay={tooltipDelay}>
       <Button aria-label={label} variant={variant} size="icon" {...rest} />
     </Tooltip>
   );

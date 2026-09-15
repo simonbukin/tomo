@@ -4,14 +4,14 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
-import { applyZoom, closePane, focusPane, runAction } from "./actions";
+import { applyZoom, closePane, focusPane, runAction, splitPaneById } from "./actions";
 import { keyOverride, zoomKey } from "./appearance";
 import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
 import { getState, keyBindings, useStore } from "./store";
 import { registerTerminal } from "./terminals";
 import { listenFileDrop, registerTerminalLinks } from "./terminalHooks";
-import { X } from "lucide-react";
+import { Columns2, Rows2, X } from "lucide-react";
 import { openMenu } from "./MenuHost";
 import { IconButton } from "./components/ui";
 import { isLastPane, paneMenu } from "./menus";
@@ -167,6 +167,8 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
         <span className="chip right" title={pane?.cwd}>
           <span>{shortPath(pane?.cwd ?? "")}</span>
+          <IconButton label="Split right" shortcut={active ? shortcut("new_terminal") : undefined} onClick={() => splitPaneById(paneId, "horizontal")}><Columns2 className="icon" /></IconButton>
+          <IconButton label="Split down" shortcut={active ? shortcut("split_vertical") : undefined} onClick={() => splitPaneById(paneId, "vertical")}><Rows2 className="icon" /></IconButton>
           {!lastPane && <IconButton label="Close pane" shortcut={active ? shortcut("close_pane") : undefined} onClick={() => closePane(paneId)}><X className="icon" /></IconButton>}
         </span>
       </div>

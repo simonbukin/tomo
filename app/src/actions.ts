@@ -202,9 +202,9 @@ export async function newTabIn(worktreeId: Id): Promise<void> {
   }
 }
 
-export async function openBrowser(worktreeId: Id, url: string | null = null): Promise<Id | null> {
+export async function openBrowser(worktreeId: Id, url: string | null = null, tabId: Id | null = null): Promise<Id | null> {
   try {
-    const r = await rpc<{ pane: { id: Id } }>("browser_open", { worktree_id: worktreeId, url, tab_id: null });
+    const r = await rpc<{ pane: { id: Id } }>("browser_open", { worktree_id: worktreeId, url, tab_id: tabId });
     if (worktreeId !== getState().ui.activeWorktreeId) await openWorktree(worktreeId);
     window.setTimeout(() => focusPane(r.pane.id), 80);
     return r.pane.id;

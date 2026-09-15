@@ -1,6 +1,6 @@
 import { sparkCells } from "../activityModel";
 import type { DaemonHealth } from "../store";
-import type { Diagnostic, HookRun, IntegrationStatus, SystemStats, UsageBucket, UsageSnapshot } from "../types";
+import { KIND_LABEL, type Diagnostic, type HookRun, type IntegrationStatus, type SystemStats, type UsageBucket, type UsageSnapshot } from "../types";
 
 export type Tone = "quiet" | "warning" | "danger";
 
@@ -13,6 +13,24 @@ export const USAGE_DANGER = 0.95;
 
 /** Pi runs on the Claude allowance, so it has no usage of its own. */
 export const stripUsage = (usage: UsageSnapshot[]): UsageSnapshot[] => usage.filter((u) => u.provider !== "pi");
+
+export interface UsageRow {
+  key: string;
+  name: string;
+  snapshot: UsageSnapshot;
+}
+
+const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** One row for the whole plan and one per model scope, for example Claude, Fable, Codex, Sol. */
+export function usageRows(usage: UsageSnapshot[]): UsageRow[] {
+  return stripUsage(usage).flatMap((u) => {
+    const scopes = [...new Set(u.buckets.flatMap((b) => (b.scope ? [b.scope] : [])))];
+    const plan = u.buckets.filter((b) => !b.scope);
+    const planRow: UsageRow[] = plan.length || !scopes.length ? [{ key: u.provider, name: KIND_LABEL[u.provider], snapshot: { ...u, buckets: plan } }] : [];
+    return [...planRow, ...scopes.map((scope) => ({ key: `${u.provider}:${scope}`, name: titleCase(scope), snapshot: { ...u, buckets: u.buckets.filter((b) => b.scope === scope) } }))];
+  });
+}
 
 const knownBuckets = (u: UsageSnapshot): (UsageBucket & { fraction_used: number })[] => (u.available ? u.buckets.filter((b): b is UsageBucket & { fraction_used: number } => b.fraction_used != null) : []);
 

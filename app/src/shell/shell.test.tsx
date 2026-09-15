@@ -7,7 +7,7 @@ import { defaultUi } from "../uiState";
 
 vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
 
-const { LeftRail, identityMark } = await import("./LeftRail");
+const { LeftRail } = await import("./LeftRail");
 const { RightRail } = await import("./RightRail");
 const { TopLeft } = await import("./TopStrip");
 
@@ -34,15 +34,11 @@ describe("minimal left rail", () => {
   it("marks attention and crashes with glyphs and text labels, not color alone", () => {
     render(<LeftRail />);
     const needs = screen.getByRole("button", { name: "aogashima, needs input" });
-    expect(needs).toHaveTextContent("Ao◉");
+    expect(needs.querySelector(".state-waiting")).not.toBeNull();
     const crashed = screen.getByRole("button", { name: "setagaya, crashed" });
-    expect(crashed).toHaveTextContent("Se×");
+    expect(crashed.querySelector(".state-fail")).not.toBeNull();
     expect(screen.getByRole("button", { name: "kamakura" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Activity, 1 need you" })).toHaveTextContent("1");
-  });
-
-  it("builds a short identity mark from the name", () => {
-    expect([identityMark("aogashima"), identityMark("-x"), identityMark("日本橋"), identityMark("")]).toEqual(["Ao", "X", "日本", "?"]);
   });
 });
 

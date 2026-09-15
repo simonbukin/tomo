@@ -1,13 +1,13 @@
-import { ArrowUpRight, Ellipsis, Plus, Radio, Star, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, Ellipsis, Radio, Star, TriangleAlert } from "lucide-react";
 import { endpointLabel, endpointUrl, httpEndpoints, needsMeItem } from "./activityModel";
-import { focusPane, openEndpoint, resolveCheckpoint, runWorktreeAction } from "./actions";
+import { focusPane, openEndpoint, openExternalFor, resolveCheckpoint, runWorktreeAction } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
 import { dotClass } from "./glyphs";
 import { GitPreview, RuntimePreview } from "./HoverPreviews";
 import { stateLabel } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
-import { endpointMenu, overflowMenu, runningActionItems, spawnMenu } from "./menus";
+import { editorName, endpointMenu, overflowMenu, runningActionItems } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { RowError } from "./RowError";
 import { endpointsOf, liveEndpointFor, runningActionIds, setState, useStore } from "./store";
@@ -54,7 +54,6 @@ function ActionBar({ worktree: w }: { worktree: Worktree }) {
   const running = useStore((s) => runningActionIds(s, w.id));
   const endpoints = useStore((s) => endpointsOf(s, w.id));
   const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");
-  const shortcut = useShortcuts();
   return (
     <div className="actionbar" data-tauri-drag-region>
       {topbar.map((a) => {
@@ -70,6 +69,7 @@ function ActionBar({ worktree: w }: { worktree: Worktree }) {
           </Tooltip>
         );
       })}
+      <EditorButton worktree={w} />
       {set?.error && <ActionWarning error={set.error} />}
       {endpoints.length > 0 && <RuntimePopover worktree={w} endpoints={endpoints} />}
       <DropdownMenu>
@@ -80,15 +80,21 @@ function ActionBar({ worktree: w }: { worktree: Worktree }) {
           <MenuItems items={() => overflowMenu(w)} />
         </DropdownMenuContent>
       </DropdownMenu>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<IconButton label="New tab: terminal, browser, or agent" shortcut={shortcut("new_tab")} />}>
-          <Plus className="icon" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <MenuItems items={() => spawnMenu(w.id)} />
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
+  );
+}
+
+function EditorButton({ worktree: w }: { worktree: Worktree }) {
+  const editor = useStore((s) => editorName(s.config?.editor_command));
+  const shortcut = useShortcuts();
+  const label = editor.charAt(0).toUpperCase() + editor.slice(1);
+  const key = shortcut("open_editor");
+  return (
+    <Tooltip content={<span className="tip-row">Open in {label}{key && <kbd className="tip-kbd">{key}</kbd>}</span>}>
+      <Button variant="ghost" size="sm" className="action-btn" onClick={() => openExternalFor(w.id, "editor")}>
+        {label}
+      </Button>
+    </Tooltip>
   );
 }
 
