@@ -133,6 +133,69 @@ The torture page (`#ui-torture`) has a tab strip and a nested pane grid on
 local state. Use it to try every drop region, a drop on self, a cancel, and
 a small window.
 
+## Status glyphs
+
+`app/src/glyphs.ts` holds the one status vocabulary:
+
+```text
+● working    ◉ needs user    ○ idle    ✓ complete    × failed    ? unknown
+```
+
+`agentStatus` and `activityStatus` map agent states and activity kinds onto
+it. Dense rows (sidebar, Home, tabs, checkpoint banner, signals) draw the
+round `.state` dot from `dotClass(status)`. Text surfaces (Activity rows,
+palette hints, the crash signal) print `GLYPH[status]`. Do not add a glyph
+or a status color for one feature.
+
+## Hover previews
+
+`HoverCard` (`components/ui/preview-card.tsx`, Base UI `PreviewCard`) opens
+after 500 ms on hover. `app/src/HoverPreviews.tsx` renders the content from
+data that the client already has:
+
+- agent signal: kind, state, short session id, time since the last state
+  change
+- runtime signal and the endpoint arrow on an Action button: label,
+  host:port, process and pid, time since discovery
+- worktree header branch: ahead/behind, changed and untracked files,
+  `+ins −del`, head, path
+
+Clicks inside a card do not reach the row under it.
+
+## Notifications
+
+A toast is for an error, an important background completion, a config
+problem, or the result of a destructive operation. Tomo does not toast a
+success that the UI already shows (copy, bulk tag, bulk restore, nothing to
+jump to).
+
+A new attention item goes through `attentionRoute` in
+`app/src/notifyRoute.ts`:
+
+| Tomo window                        | Result                                           |
+|------------------------------------|--------------------------------------------------|
+| not focused                        | desktop notification when `[notifications] desktop` is on |
+| focused, other worktree, view, or pane | the in-app indicators only (sidebar dot, tab dot, `N need you`) |
+| focused on that pane or worktree   | nothing extra; a waiting item is marked seen     |
+
+Desktop notifications use `tauri-plugin-notification`. A human checkpoint
+also calls `playChime("checkpoint")`, which plays only when
+`[notifications] sounds` is on.
+
+## Terminal links and file drop
+
+- Cmd-click a URL in a terminal: the worktree browser pane opens it. A plain
+  click does nothing.
+- Cmd-click `path:line` or `path:line:col`: the daemon call `open_location`
+  starts `editor_command` at that place. A relative path resolves against
+  the pane cwd. See `editor_command` in [data-model.md](data-model.md).
+- Drop Finder files on a terminal pane: Tomo types the shell-escaped
+  absolute paths, separated by spaces, through `pane_send`.
+
+The pure parts are `findLinks` and `resolvePath` in `links.ts`, and
+`shellEscape`, `dropText`, and the hit test in `fileDrop.ts`. The xterm link
+provider and the Tauri drop listener are in `terminalHooks.ts`.
+
 ## Primitives
 
 | Component | File | Base UI part |
@@ -144,6 +207,7 @@ a small window.
 | `ConfirmDialog` | `confirm-dialog.tsx` | `Dialog` |
 | `Popover*` | `popover.tsx` | `Popover` |
 | `PreviewCard*` | `preview-card.tsx` | `PreviewCard` |
+| `HoverCard` | `preview-card.tsx` | `PreviewCard` |
 | `Tooltip`, `TooltipProvider` | `tooltip.tsx` | `Tooltip` |
 | `Select` | `select.tsx` | `Select` |
 | `Separator` | `separator.tsx` | `Separator` |

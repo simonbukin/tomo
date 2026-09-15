@@ -54,7 +54,19 @@ Tabs whose panes all vanished are deleted. Layout trees that reference a
 missing pane are pruned to the panes that exist.
 
 Tomo does not relaunch arbitrary commands. Only the shell and, for the three
-supported agents, the native resume command run without user action.
+supported agents, the native resume command run without user action. A pane
+that ran an Action comes back as a plain shell in its cwd with the Action
+label. The Action command does not run again; start it from the Action bar.
+
+### Workspace in the GUI
+
+The GUI saves its UI state to the daemon (`ui_state_set`, 300 ms after the
+last change): view, active worktree, sidebar widths and open state, collapsed
+and hidden repos, sidebar order, Home options, and appearance (theme, accent,
+zoom, terminal font size). The daemon owns tab order, the active tab, layout
+trees, and split ratios. On start, `sanitizeUi` in `app/src/uiState.ts` checks
+every saved field: a width is clamped to 180–480 px, an unknown value falls
+back to its default, and a `worktree` view whose worktree is gone opens Home.
 
 ### Reboot
 
@@ -162,6 +174,29 @@ fresh shell.
 Hooks never block recovery. A failed or missing hook script logs a warning
 and a `HookRan` event; only the `before_archive` gate can stop anything, and
 it can stop only an archive.
+
+## Reopen a closed tab
+
+Cmd+Shift+T (`reopen_tab`, palette `Reopen closed tab`) calls
+`tab_reopen { worktree_id }`. The daemon keeps the 10 most recently closed
+tabs in memory. `tab_close` records a tab, and `pane_close` records a tab
+when it closes the last pane. Each press takes the newest entry of the
+current worktree. An empty stack answers `not_found`, and the GUI shows
+nothing.
+
+The record holds the title, the place in the tab bar, the layout tree with
+its ratios, the active pane, and for each pane:
+
+| Pane           | Comes back as                                                   |
+|----------------|-----------------------------------------------------------------|
+| Terminal       | A new shell in the same cwd with the same title                 |
+| Agent          | A shell that runs the native resume command for the same session |
+| Agent without a session reference | A plain shell                                |
+| Browser        | A browser pane at the same URL                                  |
+| Action         | A plain shell in its cwd with the Action label; the command does not run |
+
+The stack does not survive a daemon restart. Archive closes panes without a
+record. `scripts/torture/continuity.sh` covers these cases.
 
 ## What is not recovered
 

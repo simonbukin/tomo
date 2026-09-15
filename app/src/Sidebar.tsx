@@ -7,6 +7,7 @@ import { byManualOrder } from "./order";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
+import { agentStatus, dotClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { Mark } from "./Brand";
@@ -165,7 +166,7 @@ function RepoGroup({ repo, items, active, sortable = false }: { repo: Repo; item
         {!repo.exists && <span className="faint">missing</span>}
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
-        {collapsed && attention && <span className="state state-waiting" />}
+        {collapsed && attention && <span className={dotClass("needs")} />}
         {repo.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
       </div>
       {!collapsed && (
@@ -237,7 +238,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false }: { w:
         openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
       }}
     >
-      <span className={`state state-${busy ? "archiving" : summary}${selected ? " state-selected" : ""}`} />
+      <span className={`${busy ? "state state-archiving" : dotClass(agentStatus(summary))}${selected ? " state-selected" : ""}`} />
       <span className="wt-name-line">
         <span className="wt-name">{w.name}</span>
         {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}

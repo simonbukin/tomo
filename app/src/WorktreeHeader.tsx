@@ -1,7 +1,9 @@
 import { ArrowUpRight, Ellipsis, Radio, Star, TriangleAlert } from "lucide-react";
 import { endpointLabel, endpointUrl, httpEndpoints, needsMeItem } from "./activityModel";
 import { focusPane, openEndpoint, resolveCheckpoint, runWorktreeAction } from "./actions";
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "./components/ui";
+import { dotClass } from "./glyphs";
+import { GitPreview, RuntimePreview } from "./HoverPreviews";
 import { stateLabel } from "./homeQuery";
 import { describeBinding } from "./keys";
 import { openMenu } from "./MenuHost";
@@ -23,10 +25,12 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
           {w.name}
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
         </span>
-        <span className="wt-header-branch" title={w.path}>
-          {branch}
-          {w.git?.dirty ? " *" : ""}
-        </span>
+        <HoverCard content={<GitPreview worktree={w} />}>
+          <span className="wt-header-branch">
+            {branch}
+            {w.git?.dirty ? " *" : ""}
+          </span>
+        </HoverCard>
         {state && (
           <span className="wt-header-state">
             <span className="state state-none" />
@@ -83,13 +87,14 @@ function ActionBar({ worktree: w }: { worktree: Worktree }) {
 
 function EndpointMark({ worktreeId, actionId }: { worktreeId: string; actionId: string }) {
   const endpoint = useStore((s) => liveEndpointFor(s, worktreeId, actionId));
+  const actions = useStore((s) => s.actions[worktreeId]?.actions ?? []);
   if (!endpoint) return null;
   return (
-    <Tooltip content={endpointUrl(endpoint)}>
+    <HoverCard content={<RuntimePreview endpoint={endpoint} label={endpointLabel(endpoint, actions)} />}>
       <span className="action-live">
         <ArrowUpRight className="icon" />
       </span>
-    </Tooltip>
+    </HoverCard>
   );
 }
 
@@ -127,7 +132,7 @@ function CheckpointBanner({ worktree: w }: { worktree: Worktree }) {
   const url = item.url ?? (fallback ? endpointUrl(fallback) : null);
   return (
     <div className="checkpoint-banner">
-      <span className="state state-waiting" />
+      <span className={dotClass("needs")} />
       <span className="checkpoint-text">
         {agent}: "{item.message}"
       </span>

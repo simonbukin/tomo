@@ -91,6 +91,8 @@ pub enum Call {
     /// Moves a pane next to `target_pane_id` (`place` picks the side, `center` swaps), or into tab `tab_id`.
     PaneMove { pane_id: Id, #[serde(default)] target_pane_id: Option<Id>, #[serde(default)] tab_id: Option<Id>, place: DropPlace },
     TabActivate { tab_id: Id },
+    /// Reopens the most recently closed tab of the worktree from a bounded stack.
+    TabReopen { worktree_id: Id },
     LayoutResize { tab_id: Id, split_id: Id, ratio: f64 },
     LayoutEqualize { tab_id: Id },
     LayoutRotate { tab_id: Id, split_id: Option<Id> },
@@ -129,6 +131,8 @@ pub enum Call {
     PrStatus { worktree_id: Id },
     FsList { worktree_id: Id, rel_path: String },
     OpenExternal { worktree_id: Id, rel_path: String, target: ExternalTarget },
+    /// Opens an absolute `path` at `line` and `col` in the configured editor.
+    OpenLocation { path: PathBuf, #[serde(default)] line: Option<u32>, #[serde(default)] col: Option<u32> },
 
     UiStateGet,
     UiStateSet { state: Value },

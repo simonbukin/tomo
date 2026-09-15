@@ -9,6 +9,7 @@ import { openMenu } from "./MenuHost";
 import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { useShortcuts } from "./shortcuts";
+import { dotClass } from "./glyphs";
 import { paneIds, useStore } from "./store";
 import type { Id, Pane, Tab } from "./types";
 
@@ -74,7 +75,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
       onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
     >
-      {waiting ? <span className="state state-waiting" /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
+      {waiting ? <span className={dotClass("needs")} /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
       {isEditing ? (
         <input
           autoFocus
