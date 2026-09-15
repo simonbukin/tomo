@@ -593,13 +593,80 @@ export function stateActions(): Action[] {
   const current = currentWorktree();
   const states = orderedStates(getState().config?.states ?? []);
   return [
-    ...states.map((s) => ({ id: `state_${s.id}`, label: `state ${s.label}`, run: () => setWorktreeState(currentWorktree()!.id, s.id), whenWorktree: true, when: () => current?.metadata.state !== s.id })),
-    { id: "state_clear", label: "state clear", run: () => setWorktreeState(currentWorktree()!.id, null), whenWorktree: true, when: () => !!current?.metadata.state },
+    ...states.map((s) => ({ id: `state_${s.id}`, label: `state ${s.label}`, group: "Worktrees" as const, run: () => setWorktreeState(currentWorktree()!.id, s.id), whenWorktree: true, when: () => current?.metadata.state !== s.id })),
+    { id: "state_clear", label: "state clear", group: "Worktrees", run: () => setWorktreeState(currentWorktree()!.id, null), whenWorktree: true, when: () => !!current?.metadata.state },
   ];
 }
 
+const COMMAND_GROUPS: Record<string, CommandGroup> = {
+  home: "Navigation",
+  towns: "Navigation",
+  activity: "Navigation",
+  prev_worktree: "Navigation",
+  next_worktree: "Navigation",
+  toggle_left_sidebar: "Navigation",
+  toggle_right_sidebar: "Navigation",
+  toggle_board: "Navigation",
+  palette: "General",
+  appearance: "General",
+  zoom_in: "General",
+  zoom_out: "General",
+  zoom_reset: "General",
+  theme_system: "General",
+  theme_light: "General",
+  theme_dark: "General",
+  config_check: "General",
+  hook_log: "General",
+  new_tab: "Tabs",
+  rename_tab: "Tabs",
+  next_tab: "Tabs",
+  prev_tab: "Tabs",
+  close_tab: "Tabs",
+  new_terminal: "Panes",
+  split_vertical: "Panes",
+  close_pane: "Panes",
+  zoom_pane: "Panes",
+  focus_left: "Panes",
+  focus_right: "Panes",
+  focus_up: "Panes",
+  focus_down: "Panes",
+  kill_pane_tree: "Panes",
+  next_attention: "Agents",
+  spawn_claude: "Agents",
+  spawn_codex: "Agents",
+  spawn_pi: "Agents",
+  integrations: "Agents",
+  clear_attention: "Agents",
+  add_repo: "Worktrees",
+  create_worktree: "Worktrees",
+  refresh: "Worktrees",
+  set_display_name: "Worktrees",
+  set_project: "Worktrees",
+  set_tags: "Worktrees",
+  open_editor: "Worktrees",
+  reveal_finder: "Worktrees",
+  copy_path: "Worktrees",
+  archive_worktree: "Worktrees",
+  restore_worktree: "Worktrees",
+  refresh_git: "Worktrees",
+  new_worktree_here: "Worktrees",
+  hide_repo: "Worktrees",
+  unhide_repo: "Worktrees",
+  show_archived: "Worktrees",
+  hide_archived: "Worktrees",
+  collapse_repos: "Worktrees",
+  expand_repos: "Worktrees",
+  clear_selection: "Worktrees",
+  sort_name: "Worktrees",
+  sort_recent: "Worktrees",
+  sort_created: "Worktrees",
+  sort_attention: "Worktrees",
+  sort_state: "Worktrees",
+  sort_manual: "Worktrees",
+};
+
 export function allActions(): Action[] {
-  return [...actions, ...stateActions(), ...moduleCommands()];
+  return [...actions, ...stateActions(), ...moduleCommands()].map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
 }
 
 export function runAction(id: string): void {

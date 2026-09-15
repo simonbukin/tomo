@@ -47,6 +47,8 @@ button.link:hover, .btn-link:hover { color: var(--accent); background: none; }
 
 /* ---- tooltip */
 .tip { background: var(--fg); color: var(--bg); font-size: var(--fs-0); line-height: 1.4; padding: 3px 7px; border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); max-width: 260px; }
+.tip-row { display: inline-flex; align-items: baseline; gap: var(--sp-2); }
+.tip-kbd { font-family: var(--mono); font-size: var(--fs-0); opacity: 0.65; }
 
 /* ---- popover */
 .popover { min-width: 200px; max-width: min(420px, var(--available-width)); background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: var(--sp-3); font-size: var(--fs-1); color: var(--fg-1); outline: none; display: flex; flex-direction: column; gap: var(--sp-2); }

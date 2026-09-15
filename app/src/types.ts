@@ -110,6 +110,8 @@ export interface UiState {
   manualOrder: Record<string, Id[]>;
   repoOrder: Id[];
   appearance: Appearance;
+  /** Palette entry keys, most recent first. */
+  paletteRecent: string[];
 }
 
 export type FilterKind = "state" | "repo" | "project" | "tag" | "agent" | "archived" | "attention";

@@ -1,23 +1,53 @@
 import { endpointUrl, httpEndpoints } from "./activityModel";
-import { archiveWorktree, browserCommand, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openBrowser, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restartWorktreeAction, restoreWorktree, rotateSplit, runWorktreeAction, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, stopWorktreeAction, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, browserCommand, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, focusPane, killPaneTree, newTabIn, newTerminalIn, openBrowser, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restartWorktreeAction, restoreWorktree, rotateSplit, runWorktreeAction, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, stopWorktreeAction, swapPanes, toggleZoom } from "./actions";
+import { moveTab, sendPaneToTab } from "./commands/discovery";
 import type { MenuItem } from "./components/ui";
 import { orderedStates } from "./homeQuery";
 import { describeBinding } from "./keys";
-import { activeTab, clearSelection, endpointsOf, getState, paneIds, runningActionIds, setState } from "./store";
-import type { ActionDef, Id, Repo, Tab, Worktree } from "./types";
+import { chordFor, effectiveBindings } from "./shortcuts";
+import { activeTab, clearSelection, endpointsOf, getState, paneIds, runningActionIds, setState, type State } from "./store";
+import type { ActionDef, Id, Pane, Repo, RuntimeEndpoint, Tab, Worktree } from "./types";
 
 const sep: MenuItem = { separator: true };
 
-function stateItems(current: string | null, apply: (state: string | null) => void): MenuItem[] {
-  const states = orderedStates(getState().config?.states ?? []);
+const shortcutIn = (s: State, id: string) => chordFor(id, effectiveBindings(s.config?.keybindings ?? {}));
+
+/** `[what, value, label?]`: `what` names the value in the toast; entries without a value drop out. */
+type CopyEntry = [string, string | null | undefined, string?];
+
+function copyMenu(entries: CopyEntry[]): MenuItem {
+  const items = entries.flatMap(([what, value, label]): MenuItem[] => (value ? [{ label: label ?? what.toLowerCase(), run: () => copyText(value, what) }] : []));
+  return { label: "copy", disabled: items.length === 0, submenu: items };
+}
+
+export function editorName(command: string[] | undefined): string {
+  const bin = (command ?? []).filter((arg) => !arg.startsWith("-") && !arg.includes("{")).pop();
+  return bin?.split("/").pop() || "editor";
+}
+
+export function toggledTag(tags: string[], tag: string): string[] {
+  return tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+}
+
+function stateItems(s: State, current: string | null, apply: (state: string | null) => void): MenuItem[] {
+  const states = orderedStates(s.config?.states ?? []);
   return [
-    ...states.map((s) => ({ label: s.label, checked: current === s.id, run: () => apply(s.id) })),
-    { separator: true },
+    ...states.map((st) => ({ label: st.label, checked: current === st.id, run: () => apply(st.id) })),
+    sep,
     { label: "clear state", checked: current === null, run: () => apply(null) },
   ];
 }
 
-export function worktreeMenu(w: Worktree): MenuItem[] {
+function tagItems(s: State, w: Worktree): MenuItem[] {
+  const known = [...new Set(s.worktrees.flatMap((x) => x.metadata.tags))].sort();
+  return [
+    ...known.map((tag) => ({ label: tag, checked: w.metadata.tags.includes(tag), run: () => setMetadata(w.id, { tags: toggledTag(w.metadata.tags, tag) }) })),
+    ...(known.length ? [sep] : []),
+    { label: "edit tags…", run: () => promptMetadata("tags", w.id) },
+  ];
+}
+
+export function worktreeMenu(w: Worktree, s: State = getState()): MenuItem[] {
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const live = w.exists && !archived && !busy;
@@ -25,33 +55,85 @@ export function worktreeMenu(w: Worktree): MenuItem[] {
     { label: busy ? "archiving…" : "open", disabled: !w.exists || archived || busy, run: () => openWorktree(w.id) },
     { label: "new tab", disabled: !live, run: () => newTabIn(w.id) },
     { label: "new terminal", disabled: !live, run: () => newTerminalIn(w.id) },
-    { label: "start claude", disabled: !live, run: () => spawnAgent("claude", w.id) },
-    { label: "start codex", disabled: !live, run: () => spawnAgent("codex", w.id) },
-    { label: "start pi", disabled: !live, run: () => spawnAgent("pi", w.id) },
+    { label: "new claude", disabled: !live, run: () => spawnAgent("claude", w.id) },
+    { label: "new codex", disabled: !live, run: () => spawnAgent("codex", w.id) },
+    { label: "new pi", disabled: !live, run: () => spawnAgent("pi", w.id) },
     sep,
-    ...worktreeDetailItems(w),
+    ...worktreeDetailItems(w, s),
   ];
 }
 
-export function runningActionItems(worktreeId: Id, actionId: string): MenuItem[] {
-  const open = httpEndpoints(endpointsOf(getState(), worktreeId).filter((e) => e.action_id === actionId));
+function worktreeDetailItems(w: Worktree, s: State): MenuItem[] {
+  const archived = !!w.archived_at_ms;
+  const busy = w.archiving;
   return [
+    { label: "state", disabled: busy, submenu: stateItems(s, w.metadata.state, (state) => setMetadata(w.id, { state })) },
+    { label: "tags", disabled: busy, submenu: tagItems(s, w) },
+    { label: "set project…", disabled: busy, run: () => promptMetadata("project", w.id) },
+    { label: "rename…", disabled: busy, run: () => promptMetadata("display_name", w.id) },
+    sep,
+    { label: `open in ${editorName(s.config?.editor_command)}`, disabled: !w.exists || busy, run: () => openExternalFor(w.id, "editor") },
+    { label: "reveal in finder", disabled: !w.exists || busy, run: () => openExternalFor(w.id, "finder") },
+    copyMenu([
+      ["Path", w.path],
+      ["Branch", w.branch],
+      ["Worktree ID", w.id],
+    ]),
+    sep,
+    archived
+      ? { label: "restore", disabled: busy, run: () => restoreWorktree(w.id) }
+      : { label: "archive…", danger: true, disabled: w.is_main || busy, run: () => archiveWorktree(w.id) },
+  ];
+}
+
+function endpointCopies(list: RuntimeEndpoint[]): CopyEntry[] {
+  const many = list.length > 1;
+  return list.flatMap((e): CopyEntry[] => [
+    ["URL", endpointUrl(e), many ? `url :${e.port}` : undefined],
+    ["Port", String(e.port), many ? `port :${e.port}` : undefined],
+  ]);
+}
+
+export function runningActionItems(worktreeId: Id, actionId: string, s: State = getState()): MenuItem[] {
+  const open = httpEndpoints(endpointsOf(s, worktreeId).filter((e) => e.action_id === actionId));
+  return [
+    ...open.map((e) => ({ label: open.length > 1 ? `open :${e.port}` : "open", run: () => openEndpoint(endpointUrl(e), worktreeId) })),
     { label: "focus logs", run: () => runWorktreeAction(worktreeId, actionId) },
-    ...open.map((e) => ({ label: `open :${e.port}`, run: () => openEndpoint(endpointUrl(e), worktreeId) })),
     { label: "restart", run: () => restartWorktreeAction(worktreeId, actionId) },
     { label: "stop", danger: true, run: () => stopWorktreeAction(worktreeId, actionId) },
+    ...(open.length ? [sep, copyMenu(endpointCopies(open))] : []),
   ];
 }
 
-function actionItem(worktreeId: Id, a: ActionDef, running: boolean): MenuItem {
-  const shortcut = a.shortcut ? describeBinding(a.shortcut) : undefined;
-  return running ? { label: a.label, shortcut, submenu: runningActionItems(worktreeId, a.id) } : { label: a.label, shortcut, run: () => runWorktreeAction(worktreeId, a.id) };
+export function endpointMenu(worktreeId: Id, e: RuntimeEndpoint, s: State = getState()): MenuItem[] {
+  const url = e.protocol === "tcp" ? null : endpointUrl(e);
+  const pane = e.pane_id ? s.panes[e.pane_id] : undefined;
+  const actionId = e.action_id;
+  return [
+    { label: "open", disabled: !url, run: () => url && openEndpoint(url, worktreeId) },
+    { label: "focus logs", disabled: !pane, run: () => pane && focusPane(pane.id) },
+    ...(actionId
+      ? [
+          { label: "restart", run: () => restartWorktreeAction(worktreeId, actionId) },
+          { label: "stop", danger: true, run: () => stopWorktreeAction(worktreeId, actionId) },
+        ]
+      : []),
+    sep,
+    copyMenu([
+      ["URL", url],
+      ["Port", String(e.port)],
+    ]),
+  ];
 }
 
-export function overflowMenu(w: Worktree): MenuItem[] {
-  const s = getState();
+function actionItem(worktreeId: Id, a: ActionDef, running: boolean, s: State): MenuItem {
+  const shortcut = a.shortcut ? describeBinding(a.shortcut) : undefined;
+  return running ? { label: a.label, shortcut, submenu: runningActionItems(worktreeId, a.id, s) } : { label: a.label, shortcut, run: () => runWorktreeAction(worktreeId, a.id) };
+}
+
+export function overflowMenu(w: Worktree, s: State = getState()): MenuItem[] {
   const running = runningActionIds(s, w.id);
-  const acts = (s.actions[w.id]?.actions ?? []).filter((a) => a.show === "menu" || running.includes(a.id)).map((a) => actionItem(w.id, a, running.includes(a.id)));
+  const acts = (s.actions[w.id]?.actions ?? []).filter((a) => a.show === "menu" || running.includes(a.id)).map((a) => actionItem(w.id, a, running.includes(a.id), s));
   const loose = httpEndpoints(endpointsOf(s, w.id)).filter((e) => !e.action_id);
   const runtime: MenuItem[] = loose.length ? [{ label: "runtime", disabled: true }, ...loose.map((e) => ({ label: `open :${e.port} · ${e.process}`, run: () => openEndpoint(endpointUrl(e), w.id) }))] : [];
   const tab = activeTab(s, w.id);
@@ -61,62 +143,44 @@ export function overflowMenu(w: Worktree): MenuItem[] {
     ...(acts.length ? [sep] : []),
     ...runtime,
     ...(runtime.length ? [sep] : []),
-    { label: "split right", run: () => splitPane("horizontal") },
-    { label: "split down", run: () => splitPane("vertical") },
-    { label: "equalize panes", disabled: !multi, run: () => equalizeTab(tab!.id) },
-    { label: "rotate split", disabled: !multi, run: () => rotateSplit(tab!.id) },
+    { label: "split right", shortcut: shortcutIn(s, "new_terminal"), run: () => splitPane("horizontal") },
+    { label: "split down", shortcut: shortcutIn(s, "split_vertical"), run: () => splitPane("vertical") },
+    { label: "equalize panes", shortcut: shortcutIn(s, "equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },
+    { label: "rotate split", shortcut: shortcutIn(s, "rotate_split"), disabled: !multi, run: () => rotateSplit(tab!.id) },
     sep,
-    ...worktreeDetailItems(w),
+    ...worktreeDetailItems(w, s),
   ];
 }
 
-function worktreeDetailItems(w: Worktree): MenuItem[] {
-  const archived = !!w.archived_at_ms;
-  const busy = w.archiving;
-  return [
-    { label: "state", disabled: busy, submenu: stateItems(w.metadata.state, (state) => setMetadata(w.id, { state })) },
-    { label: "set project…", disabled: busy, run: () => promptMetadata("project", w.id) },
-    { label: "rename…", disabled: busy, run: () => promptMetadata("display_name", w.id) },
-    { label: "set tags…", disabled: busy, run: () => promptMetadata("tags", w.id) },
-    { separator: true },
-    { label: "open in editor", disabled: !w.exists || busy, run: () => openExternalFor(w.id, "editor") },
-    { label: "reveal in finder", disabled: !w.exists || busy, run: () => openExternalFor(w.id, "finder") },
-    { label: "copy path", run: () => copyText(w.path) },
-    { separator: true },
-    archived
-      ? { label: "restore", disabled: busy, run: () => restoreWorktree(w.id) }
-      : { label: "archive…", danger: true, disabled: w.is_main || busy, run: () => archiveWorktree(w.id) },
-  ];
-}
-
-export function repoMenu(r: Repo): MenuItem[] {
-  const hidden = getState().ui.hiddenRepos.includes(r.id);
+export function repoMenu(r: Repo, s: State = getState()): MenuItem[] {
+  const hidden = s.ui.hiddenRepos.includes(r.id);
   return [
     { label: "new worktree…", run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }) },
-    { separator: true },
+    sep,
     { label: "reveal in finder", run: () => revealRepo(r) },
     { label: "copy path", run: () => copyText(r.path) },
-    { separator: true },
+    sep,
     hidden ? { label: "unhide repo", run: () => setRepoHidden(r.id, false) } : { label: "hide repo", run: () => setRepoHidden(r.id, true) },
     { label: "remove repo", danger: true, run: () => removeRepo(r.id) },
   ];
 }
 
 export function bulkMenu(ids: Id[]): MenuItem[] {
-  const ws = ids.map((id) => getState().worktrees.find((w) => w.id === id)).filter((w): w is Worktree => !!w);
+  const s = getState();
+  const ws = ids.map((id) => s.worktrees.find((w) => w.id === id)).filter((w): w is Worktree => !!w);
   const anyArchived = ws.some((w) => !!w.archived_at_ms);
   const shared = ws.every((w) => w.metadata.state === ws[0]?.metadata.state) ? (ws[0]?.metadata.state ?? null) : undefined;
   return [
     { label: `${ids.length} worktrees`, disabled: true },
-    { separator: true },
-    { label: "state", submenu: stateItems(shared === undefined ? "" : shared, (state) => bulkMetadata(ids, { state })) },
+    sep,
+    { label: "state", submenu: stateItems(s, shared === undefined ? "" : shared, (state) => bulkMetadata(ids, { state })) },
     { label: "set project…", run: () => bulkPrompt("project", ids) },
     { label: "set tags…", run: () => bulkPrompt("tags", ids) },
     { label: "add tag…", run: () => bulkAddTag(ids) },
-    { separator: true },
+    sep,
     { label: "archive…", danger: true, run: () => bulkArchive(ids) },
     ...(anyArchived ? [{ label: "restore", run: () => bulkRestore(ids) } as MenuItem] : []),
-    { separator: true },
+    sep,
     { label: "clear selection", run: clearSelection },
   ];
 }
@@ -126,32 +190,33 @@ function revealRepo(r: Repo): void {
   if (main) openExternalFor(main.id, "finder");
 }
 
-export function tabMenu(t: Tab, rename: () => void): MenuItem[] {
-  const multi = paneIds(t.layout).length > 1;
+export function tabMenu(t: Tab, rename: () => void, s: State = getState()): MenuItem[] {
+  const tabs = s.tabs[t.worktree_id] ?? [];
+  const idx = tabs.findIndex((x) => x.id === t.id);
+  const key = (id: string) => (t.is_active ? shortcutIn(s, id) : undefined);
   return [
-    { label: "rename", run: rename },
-    { separator: true },
-    { label: "equalize panes", disabled: !multi, run: () => equalizeTab(t.id) },
-    { label: "rotate split", disabled: !multi, run: () => rotateSplit(t.id) },
-    { separator: true },
-    { label: "close", run: () => closeTab(t.id) },
-    { label: "close other tabs", run: () => closeOtherTabs(t.id) },
+    { label: "rename", shortcut: key("rename_tab"), run: rename },
+    sep,
+    { label: "move left", shortcut: key("move_tab_left"), disabled: idx <= 0, run: () => moveTab(t.id, -1) },
+    { label: "move right", shortcut: key("move_tab_right"), disabled: idx < 0 || idx >= tabs.length - 1, run: () => moveTab(t.id, 1) },
+    sep,
+    { label: "close", shortcut: key("close_tab"), run: () => closeTab(t.id) },
+    { label: "close others", shortcut: key("close_other_tabs"), disabled: tabs.length < 2, run: () => closeOtherTabs(t.id) },
   ];
 }
 
 /** The last pane of the last tab cannot close: the worktree view would open a new one at once. */
-export function isLastPane(paneId: Id): boolean {
-  const s = getState();
+export function isLastPane(paneId: Id, s: State = getState()): boolean {
   const pane = s.panes[paneId];
   if (!pane) return false;
   const tabs = s.tabs[pane.worktree_id] ?? [];
   return tabs.length <= 1 && tabs.every((t) => paneIds(t.layout).length <= 1);
 }
 
-export function spawnMenu(worktreeId: Id): MenuItem[] {
+export function spawnMenu(worktreeId: Id, s: State = getState()): MenuItem[] {
   return [
-    { label: "terminal", shortcut: describeBinding(getState().config?.keybindings.new_tab ?? "mod+t"), run: () => newTabIn(worktreeId) },
-    { label: "browser", run: () => openBrowser(worktreeId) },
+    { label: "terminal", shortcut: shortcutIn(s, "new_tab"), run: () => newTabIn(worktreeId) },
+    { label: "browser", shortcut: shortcutIn(s, "new_browser"), run: () => openBrowser(worktreeId) },
     sep,
     { label: "claude", run: () => spawnAgent("claude", worktreeId, { newTab: true }) },
     { label: "codex", run: () => spawnAgent("codex", worktreeId, { newTab: true }) },
@@ -159,35 +224,58 @@ export function spawnMenu(worktreeId: Id): MenuItem[] {
   ];
 }
 
-export function paneMenu(paneId: Id): MenuItem[] {
-  const s = getState();
+function sendToItem(s: State, pane: Pane | undefined): MenuItem {
+  const targets = pane ? (s.tabs[pane.worktree_id] ?? []).filter((t) => t.id !== pane.tab_id) : [];
+  return { label: "send to", disabled: targets.length === 0, submenu: targets.map((t) => ({ label: t.title, run: () => sendPaneToTab(pane!.id, t.id) })) };
+}
+
+function paneContext(s: State, paneId: Id) {
   const pane = s.panes[paneId];
-  const tab = pane ? Object.values(s.tabs).flat().find((t) => t.id === pane.tab_id) : undefined;
+  const tab = pane ? (s.tabs[pane.worktree_id] ?? []).find((t) => t.id === pane.tab_id) : undefined;
+  const focused = !!pane && !!tab?.is_active && tab.active_pane_id === paneId && s.ui.view === "worktree" && s.ui.activeWorktreeId === pane.worktree_id;
+  return { pane, tab, key: (id: string) => (focused ? shortcutIn(s, id) : undefined) };
+}
+
+export function paneMenu(paneId: Id, s: State = getState()): MenuItem[] {
+  const { pane, tab, key } = paneContext(s, paneId);
   const others = tab ? paneIds(tab.layout).filter((id) => id !== paneId) : [];
   const zoomed = tab ? s.zoomed[tab.id] === paneId : false;
+  const multi = others.length > 0;
   return [
-    { label: "split right", run: () => splitPaneById(paneId, "horizontal") },
-    { label: "split down", run: () => splitPaneById(paneId, "vertical") },
-    { label: zoomed ? "unzoom" : "zoom", disabled: !zoomed && others.length === 0, run: () => toggleZoom(paneId) },
-    { label: "swap with", disabled: others.length === 0, submenu: others.map((id) => ({ label: s.panes[id]?.title ?? id, run: () => swapPanes(paneId, id) })) },
+    { label: "split right", shortcut: key("new_terminal"), run: () => splitPaneById(paneId, "horizontal") },
+    { label: "split down", shortcut: key("split_vertical"), run: () => splitPaneById(paneId, "vertical") },
+    { label: zoomed ? "unzoom" : "zoom", shortcut: key("zoom_pane"), disabled: !zoomed && !multi, run: () => toggleZoom(paneId) },
+    { label: "equalize", shortcut: key("equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },
+    { label: "rotate", shortcut: key("rotate_split"), disabled: !multi, run: () => rotateSplit(tab!.id) },
+    { label: "swap with", disabled: !multi, submenu: others.map((id) => ({ label: s.panes[id]?.title ?? id, run: () => swapPanes(paneId, id) })) },
+    sep,
+    sendToItem(s, pane),
+    sep,
     { label: "rename pane…", run: () => renamePane(paneId) },
-    { separator: true },
+    copyMenu([
+      ["CWD", pane?.cwd],
+      ["Session ID", pane?.agent?.session_ref],
+    ]),
+    sep,
     { label: "kill process tree", danger: true, run: () => killPaneTree(paneId) },
-    { label: "close", disabled: isLastPane(paneId), run: () => closePane(paneId) },
+    { label: "close", shortcut: key("close_pane"), disabled: isLastPane(paneId, s), run: () => closePane(paneId) },
   ];
 }
 
-export function browserMenu(paneId: Id): MenuItem[] {
-  const url = getState().panes[paneId]?.url ?? "";
+export function browserMenu(paneId: Id, s: State = getState()): MenuItem[] {
+  const { pane, key } = paneContext(s, paneId);
+  const url = pane?.url ?? "";
   return [
-    { label: "back", run: () => browserCommand(paneId, "browser_back") },
-    { label: "forward", run: () => browserCommand(paneId, "browser_forward") },
-    { label: "reload", run: () => browserCommand(paneId, "browser_reload") },
+    { label: "back", shortcut: key("browser_back"), run: () => browserCommand(paneId, "browser_back") },
+    { label: "forward", shortcut: key("browser_forward"), run: () => browserCommand(paneId, "browser_forward") },
+    { label: "reload", shortcut: key("browser_reload"), run: () => browserCommand(paneId, "browser_reload") },
     sep,
     { label: "open in external browser", disabled: !url || url === "about:blank", run: () => openExternalUrl(url) },
-    { label: "copy url", disabled: !url, run: () => copyText(url, "URL") },
+    copyMenu([["URL", url]]),
     sep,
-    { label: "close", disabled: isLastPane(paneId), run: () => closePane(paneId) },
+    sendToItem(s, pane),
+    sep,
+    { label: "close", shortcut: key("close_pane"), disabled: isLastPane(paneId, s), run: () => closePane(paneId) },
   ];
 }
 
@@ -196,7 +284,7 @@ export function fileMenu(w: Worktree, relPath: string): MenuItem[] {
   return [
     { label: "open in editor", run: () => openExternalFor(w.id, "editor", relPath) },
     { label: "reveal in finder", run: () => openExternalFor(w.id, "finder", relPath) },
-    { separator: true },
+    sep,
     { label: "copy path", run: () => copyText(abs) },
     { label: "copy relative path", disabled: !relPath, run: () => copyText(relPath, "Relative path") },
   ];
