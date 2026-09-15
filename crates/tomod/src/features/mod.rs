@@ -4,4 +4,3 @@ pub mod actions;
 pub mod editor;
 pub mod reopen;
 pub mod sessions;
-pub mod towns;

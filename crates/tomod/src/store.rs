@@ -1,12 +1,11 @@
 //! SQLite persistence.
 //!
 //! Every table falls into one of three categories (PRD §25):
-//! - authoritative Tomo metadata: `repos`, `towns`, the user-set columns of `worktree_meta`
+//! - authoritative Tomo metadata: `repos`, the user-set columns of `worktree_meta`
 //! - cached external observation: `worktree_meta.path`, `.gitdir`, `.first_seen_ms`, `.archived_at_ms`, `.archived_branch`
 //! - recoverable runtime state: `tabs`, `panes`, `attention`, `activity`, `kv`
 //!
-//! `worktree_meta.town_slug` is unused since Phase 2; the `towns` table owns
-//! the worktree→town mapping. The column stays because SQLite cannot drop it cheaply.
+//! An addon creates and queries its own tables through `conn`. This module never reads them.
 //!
 //! Git remains the authority for branches and worktree existence; nothing here
 //! stores a branch name.
@@ -14,7 +13,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
-use tomo_proto::{ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, PaneKind, TownUnlock, WorktreeMetadata};
+use tomo_proto::{ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, PaneKind, WorktreeMetadata};
 
 pub struct Store {
     conn: Connection,
@@ -118,12 +117,6 @@ CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS towns (
-  slug TEXT PRIMARY KEY,
-  worktree_id TEXT NOT NULL,
-  repo_id TEXT NOT NULL,
-  unlocked_at_ms INTEGER NOT NULL
-);
 CREATE TABLE IF NOT EXISTS activity (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
@@ -139,11 +132,10 @@ CREATE TABLE IF NOT EXISTS activity (
 CREATE INDEX IF NOT EXISTS activity_occurred_at ON activity(occurred_at_ms);
 "#;
 
-const META_COLUMNS: [(&str, &str); 5] = [
+const META_COLUMNS: [(&str, &str); 4] = [
     ("first_seen_ms", "INTEGER"),
     ("archived_at_ms", "INTEGER"),
     ("archived_branch", "TEXT"),
-    ("town_slug", "TEXT"),
     ("state", "TEXT"),
 ];
 
@@ -220,6 +212,10 @@ impl Store {
         conn.execute_batch(SCHEMA)?;
         migrate(&conn)?;
         Ok(Store { conn })
+    }
+
+    pub fn conn(&self) -> &Connection {
+        &self.conn
     }
 
     pub fn repos(&self) -> Result<Vec<RepoRow>> {
@@ -301,7 +297,6 @@ impl Store {
         self.conn.execute("UPDATE panes SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
         self.conn.execute("UPDATE attention SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
         self.conn.execute("UPDATE activity SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
-        self.conn.execute("UPDATE towns SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
         Ok(())
     }
 
@@ -566,22 +561,6 @@ impl Store {
         Ok(())
     }
 
-    pub fn town_unlocks(&self) -> Result<Vec<TownUnlock>> {
-        let mut st = self.conn.prepare("SELECT slug, worktree_id, repo_id, unlocked_at_ms FROM towns ORDER BY unlocked_at_ms")?;
-        let rows = st.query_map([], |r| {
-            Ok(TownUnlock { slug: r.get(0)?, worktree_id: r.get(1)?, repo_id: r.get(2)?, unlocked_at_ms: r.get::<_, i64>(3)? as u64 })
-        })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
-    }
-
-    pub fn town_unlock(&self, u: &TownUnlock) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR IGNORE INTO towns (slug, worktree_id, repo_id, unlocked_at_ms) VALUES (?1, ?2, ?3, ?4)",
-            params![u.slug, u.worktree_id, u.repo_id, u.unlocked_at_ms as i64],
-        )?;
-        Ok(())
-    }
-
     pub fn kv_get(&self, key: &str) -> Result<Option<String>> {
         Ok(self.conn.query_row("SELECT value FROM kv WHERE key = ?1", params![key], |r| r.get(0)).optional()?)
     }
@@ -630,8 +609,6 @@ mod tests {
         migrate(&conn).unwrap();
         migrate(&conn).unwrap();
         let s = Store { conn };
-        s.town_unlock(&TownUnlock { slug: "x".into(), worktree_id: "w".into(), repo_id: "r".into(), unlocked_at_ms: 1 }).unwrap();
-        assert_eq!(s.town_unlocks().unwrap().len(), 1);
         assert!(s.meta_all().unwrap().is_empty());
     }
 
@@ -642,14 +619,6 @@ mod tests {
         s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
         let count = |w: &str| s.activity_list(&ActivityQuery { worktree_id: Some(w.into()), ..Default::default() }).unwrap().len();
         assert_eq!((count("w"), count("w2")), (0, 1));
-    }
-
-    #[test]
-    fn rebind_moves_the_town_unlock() {
-        let s = Store::open_in_memory().unwrap();
-        s.town_unlock(&TownUnlock { slug: "x".into(), worktree_id: "w".into(), repo_id: "r".into(), unlocked_at_ms: 1 }).unwrap();
-        s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
-        assert_eq!(s.town_unlocks().unwrap()[0].worktree_id, "w2");
     }
 
     fn item(id: &str, kind: AttentionKind) -> AttentionItem {

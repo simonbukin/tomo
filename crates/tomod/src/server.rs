@@ -58,11 +58,11 @@ async fn handle_conn(daemon: Arc<Daemon>, id: u64, stream: UnixStream) {
             let d = daemon.clone();
             let tx = tx.clone();
             tokio::spawn(async move {
-                let frame = to_frame(req.id, d.handle(id, req.call).await);
+                let frame = to_frame(req.id, crate::dispatch::handle(&d, id, req.call).await);
                 let _ = tx.send(serde_json::to_string(&frame).unwrap_or_default());
             });
         } else {
-            let frame = to_frame(req.id, daemon.handle(id, req.call).await);
+            let frame = to_frame(req.id, crate::dispatch::handle(&daemon, id, req.call).await);
             let _ = tx.send(serde_json::to_string(&frame).unwrap_or_default());
         }
     }

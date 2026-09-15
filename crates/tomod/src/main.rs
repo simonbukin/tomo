@@ -1,7 +1,9 @@
 mod activity;
+mod addons;
 mod agents;
 mod config;
 mod daemon;
+mod dispatch;
 mod events;
 mod features;
 mod git;
@@ -66,7 +68,8 @@ async fn run(args: Args) -> Result<()> {
     let _ = std::fs::remove_file(&paths.socket);
     let listener = UnixListener::bind(&paths.socket).with_context(|| format!("bind {}", paths.socket.display()))?;
 
-    let daemon = daemon::Daemon::new(paths)?;
+    let daemon = daemon::Daemon::new(paths, addons::seams())?;
+    addons::migrate(&daemon.lock().store)?;
     daemon.restore()?;
     tracing::info!("tomod {} listening on {}", daemon::VERSION, daemon.paths.socket.display());
 

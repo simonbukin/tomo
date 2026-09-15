@@ -6,7 +6,7 @@ use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::{actions, editor, reopen, sessions, towns};
+use crate::features::{actions, editor, reopen, sessions};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -91,6 +91,23 @@ pub struct Inner {
     pub problems: HashMap<String, String>,
 }
 
+/// Plain function lists that addons join at fixed points of Core operations. The composition root builds it once at startup.
+pub struct Seams {
+    /// Names the directory of a worktree created without a path, before `git worktree add`. An error refuses the create.
+    pub worktree_namer: Option<fn(&Store, &WorktreeCreate) -> Result<Option<String>, RpcError>>,
+    /// Runs under the state lock after `git worktree add` and discovery, before `worktree_create` returns.
+    pub worktree_created: Vec<fn(&mut Inner, &CreatedWorktree) -> Result<(), RpcError>>,
+    /// Runs under the state lock when a worktree gets a new id: a move on disk, or a restore at a new path.
+    pub worktree_rebound: Vec<fn(&Store, &str, &str) -> Result<()>>,
+}
+
+pub struct CreatedWorktree {
+    pub id: Id,
+    pub repo_id: Id,
+    /// What `worktree_namer` returned. `None` when the client gave a path or no namer exists.
+    pub name: Option<String>,
+}
+
 pub struct Daemon {
     pub paths: Paths,
     pub session_id: Id,
@@ -101,13 +118,14 @@ pub struct Daemon {
     pub refresh: tokio::sync::Notify,
     pub repos_changed: tokio::sync::Notify,
     pub rt: tokio::runtime::Handle,
+    pub seams: Seams,
 }
 
 pub fn err(code: ErrorCode, msg: impl Into<String>) -> RpcError {
     RpcError { code, message: msg.into() }
 }
 
-fn internal(e: anyhow::Error) -> RpcError {
+pub fn internal(e: anyhow::Error) -> RpcError {
     err(ErrorCode::Internal, e.to_string())
 }
 
@@ -149,12 +167,12 @@ fn locate_tomo_bin() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("tomo"))
 }
 
-fn ok<T: serde::Serialize>(v: T) -> Result<Value, RpcError> {
+pub fn ok<T: serde::Serialize>(v: T) -> Result<Value, RpcError> {
     serde_json::to_value(v).map_err(|e| err(ErrorCode::Internal, e.to_string()))
 }
 
 impl Daemon {
-    pub fn new(paths: Paths) -> Result<Arc<Self>> {
+    pub fn new(paths: Paths, seams: Seams) -> Result<Arc<Self>> {
         paths.ensure()?;
         let store = Store::open(&paths.db)?;
         let config = config::load(&paths.config)?;
@@ -194,6 +212,7 @@ impl Daemon {
             refresh: tokio::sync::Notify::new(),
             repos_changed: tokio::sync::Notify::new(),
             rt: tokio::runtime::Handle::current(),
+            seams,
             paths,
         });
         daemon.write_integration_files()?;
@@ -445,8 +464,7 @@ impl Daemon {
                 let gitdir = git::gitdir_name(&path);
                 let existing = meta_rows.iter().find(|m| m.id == id).cloned().or_else(|| {
                     let moved = meta_rows.iter().find(|m| m.repo_id == repo.id && m.gitdir.is_some() && m.gitdir == gitdir && !m.path.exists())?;
-                    inner.store.rebind_worktree(&moved.id, &id, &path).ok()?;
-                    Self::rebind_runtime(&mut inner, &moved.id, &id);
+                    self.rebind(&mut inner, &moved.id, &id, &path).ok()?;
                     Some(MetaRow { id: id.clone(), path: path.clone(), ..moved.clone() })
                 });
                 let previous = inner.worktrees.get(&id);
@@ -684,6 +702,17 @@ impl Daemon {
         for ev in queued {
             self.dispatch(ev);
         }
+    }
+
+    fn rebind(&self, inner: &mut Inner, old: &str, new: &str, path: &Path) -> Result<()> {
+        inner.store.rebind_worktree(old, new, path)?;
+        Self::rebind_runtime(inner, old, new);
+        for seam in &self.seams.worktree_rebound {
+            if let Err(e) = seam(&inner.store, old, new) {
+                tracing::warn!("rebind {old} to {new}: {e}");
+            }
+        }
+        Ok(())
     }
 
     fn rebind_runtime(inner: &mut Inner, old: &str, new: &str) {
@@ -1344,7 +1373,7 @@ impl Daemon {
         inner.worktrees.get(worktree_id).map(|w| Self::worktree_view(inner, w).name).unwrap_or_else(|| worktree_id.to_string())
     }
 
-    fn meta_row_of(inner: &Inner, w: &WorktreeState, metadata: WorktreeMetadata) -> MetaRow {
+    pub fn meta_row_of(inner: &Inner, w: &WorktreeState, metadata: WorktreeMetadata) -> MetaRow {
         let archived_branch = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == w.id).and_then(|m| m.archived_branch);
         MetaRow {
             id: w.id.clone(),
@@ -1498,9 +1527,8 @@ impl Daemon {
             let mut inner = self.lock();
             inner.store.meta_upsert(&MetaRow { archived_at_ms: None, archived_branch: None, path: path.clone(), ..row }).map_err(internal)?;
             if id != worktree_id {
-                match inner.store.rebind_worktree(worktree_id, &id, &canonical(&path)) {
-                    Ok(()) => Self::rebind_runtime(&mut inner, worktree_id, &id),
-                    Err(e) => tracing::warn!("restore {worktree_id}: rebind to {id}: {e}"),
+                if let Err(e) = self.rebind(&mut inner, worktree_id, &id, &canonical(&path)) {
+                    tracing::warn!("restore {worktree_id}: rebind to {id}: {e}");
                 }
             }
         }
@@ -1671,45 +1699,31 @@ impl Daemon {
                 ok(Self::worktree_views(&self.lock()))
             }
             Call::WorktreeCreate(spec) => {
-                let (repo_path, parent_dir, unlocked) = {
+                let (repo_path, parent_dir, name) = {
                     let inner = self.lock();
                     let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
-                    let unlocked: HashSet<String> = inner.store.town_unlocks().map_err(internal)?.into_iter().map(|u| u.slug).collect();
-                    (repo.path.clone(), inner.config.worktree_parent_dir.clone(), unlocked)
+                    let name = match (&spec.path, self.seams.worktree_namer) {
+                        (None, Some(namer)) => namer(&inner.store, &spec)?,
+                        _ => None,
+                    };
+                    (repo.path.clone(), inner.config.worktree_parent_dir.clone(), name)
                 };
                 let parent = parent_dir.unwrap_or_else(|| repo_path.parent().unwrap_or(&repo_path).to_path_buf());
-                let town = match (&spec.path, &spec.name_hint) {
-                    (Some(_), _) => None,
-                    (None, Some(slug)) => Some(towns::find(slug).filter(|t| !unlocked.contains(&t.slug)).ok_or_else(|| err(ErrorCode::BadRequest, format!("town {slug} is unknown or already unlocked")))?),
-                    (None, None) => Some(towns::pick(&unlocked).ok_or_else(|| err(ErrorCode::Conflict, "every town is unlocked; pass a path"))?),
-                };
-                let path = match (&spec.path, town) {
+                let path = match (&spec.path, &name) {
                     (Some(p), _) => config::expand_tilde(p),
-                    (None, Some(t)) => parent.join(&t.slug),
-                    (None, None) => unreachable!(),
+                    (None, Some(name)) => parent.join(name),
+                    (None, None) => parent.join(spec.branch.replace('/', "-")),
                 };
                 git::worktree_add(&repo_path, &path, &spec.branch, spec.new_branch, spec.start_ref.as_deref())
                     .await
                     .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
                 self.discover(Summaries::All).await.map_err(internal)?;
                 let id = path_id(&canonical(&path));
-                if let Some(t) = town {
-                    let mut inner = self.lock();
-                    let unlock = TownUnlock { slug: t.slug.clone(), worktree_id: id.clone(), repo_id: spec.repo_id.clone(), unlocked_at_ms: now_ms() };
-                    inner.store.town_unlock(&unlock).map_err(internal)?;
-                    if let Some(w) = inner.worktrees.get_mut(&id) {
-                        if w.metadata.display_name.is_none() {
-                            w.metadata.display_name = Some(t.name.clone());
-                        }
-                        let w = w.clone();
-                        let row = Self::meta_row_of(&inner, &w, w.metadata.clone());
-                        inner.store.meta_upsert(&row).map_err(internal)?;
-                    }
-                    Self::emit(&mut inner, Event::TownUnlocked { unlock });
-                    let worktrees = Self::worktree_views(&inner);
-                    Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
-                }
                 let mut inner = self.lock();
+                let created = CreatedWorktree { id: id.clone(), repo_id: spec.repo_id.clone(), name };
+                for seam in &self.seams.worktree_created {
+                    seam(&mut inner, &created)?;
+                }
                 let ev = events::envelope(&inner, "worktree.created", Some(&id));
                 inner.hook_queue.push(ev);
                 inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
@@ -2382,23 +2396,6 @@ impl Daemon {
                 inner.hook_queue.push(ev);
                 ok(event)
             }
-            Call::TownList => {
-                let unlocks = self.lock().store.town_unlocks().map_err(internal)?;
-                Ok(json!({ "towns": towns::all(), "unlocks": unlocks }))
-            }
-            Call::TownHistory { slug } => {
-                let inner = self.lock();
-                let unlock = inner.store.town_unlocks().map_err(internal)?.into_iter().find(|u| u.slug == slug).ok_or_else(|| err(ErrorCode::NotFound, format!("town {slug} is not unlocked")))?;
-                let events = inner.store.activity_list(&ActivityQuery { limit: Some(1000), worktree_id: Some(unlock.worktree_id.clone()), ..Default::default() }).map_err(internal)?;
-                let repo_name = inner.repos.iter().find(|r| r.id == unlock.repo_id).map(|r| r.name.clone());
-                let worktree = inner.worktrees.get(&unlock.worktree_id).map(|w| towns::WorktreeFacts { name: Self::worktree_view(&inner, w).name, branch: w.branch.clone(), head: w.head.clone(), exists: w.exists, archived_at_ms: w.archived_at_ms });
-                let pr = inner.prs.get(&unlock.worktree_id).and_then(|p| p.pr.as_ref());
-                ok(towns::history(unlock, repo_name, worktree, &events, pr))
-            }
-            Call::TownPick => {
-                let unlocked: HashSet<String> = self.lock().store.town_unlocks().map_err(internal)?.into_iter().map(|u| u.slug).collect();
-                ok(towns::pick(&unlocked).ok_or_else(|| err(ErrorCode::Conflict, "every town is unlocked"))?)
-            }
             Call::UiStateGet => {
                 let inner = self.lock();
                 let v = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
@@ -2408,6 +2405,8 @@ impl Daemon {
                 self.lock().store.kv_set("ui_state", &state.to_string()).map_err(internal)?;
                 Ok(Value::Null)
             }
+            // The composition root answers every addon call before Core sees it.
+            _ => Err(err(ErrorCode::Unsupported, "no handler for this call")),
         }
     }
 }
