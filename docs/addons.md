@@ -2,16 +2,17 @@
 
 Read this before you add a feature or move one. It takes a few minutes.
 
-Status: milestone 1 (Towns) and the Activity kind seam are done. Towns is the
-first addon and the reference for every later extraction. The procedures
-below are the ones that Towns proved. For the kind seam, see "Activity kind
-seam result".
+Status: milestone 1 (Towns), the Activity kind seam, and milestone 2
+(GitHub) are done. Towns is the reference for every later extraction.
+GitHub proved the first GUI slots that core components render. See
+"Activity kind seam result" and "Milestone 2 result: GitHub".
 
 Related files:
 
 - [addons-map.md](addons-map.md) shows how each candidate touches every layer.
 - [addons-baseline.md](addons-baseline.md) has the performance numbers and the test counts before the refactor.
 - [features/towns.md](features/towns.md) describes the Towns addon.
+- [features/github.md](features/github.md) describes the GitHub addon.
 
 ## The three layers
 
@@ -62,7 +63,8 @@ source code with a clean dependency boundary.
 | Candidate | Status |
 |---|---|
 | towns | **done** (milestone 1) |
-| github, actions, runtime, usage, agentation | addon, not moved yet |
+| github | **done** (milestone 2) |
+| actions, runtime, usage, agentation | addon, not moved yet |
 | browser | study (milestone 6) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | evaluate last |
@@ -99,9 +101,9 @@ where naming an addon is correct.
 |---|---|---|
 | agentation | browser | Agentation annotates a browser pane (not moved yet). |
 
-Towns reads the cached pull request from Core `Inner.prs` in `town_history`.
-That is Core data today. When GitHub becomes an addon (milestone 2), this
-read must go through Core data or a composition root.
+Towns does not import GitHub. `town_history` gets the pull request from a
+plain function that `dispatch.rs` supplies (`town_pr`). Without GitHub, the
+function is `|_, _| None`.
 
 ## Events and commands
 
@@ -133,6 +135,7 @@ dynamic loading, no service locator, and no dependency injection container.
 
 ```rust
 // crates/tomod/src/addons/mod.rs
+pub mod github;
 pub mod towns;
 
 pub fn seams() -> Seams {
@@ -149,15 +152,22 @@ pub fn migrate(store: &Store) -> anyhow::Result<()> {
 
 ```rust
 // crates/tomod/src/dispatch.rs
+pub fn is_slow(call: &Call) -> bool {
+    matches!(call, Call::PrStatus { .. })
+}
+
 match call {
     Call::TownList => towns::list(daemon),
     Call::TownPick => towns::pick(daemon),
-    Call::TownHistory { slug } => towns::history(daemon, &slug),
+    Call::TownHistory { slug } => towns::history(daemon, &slug, town_pr),
+    Call::PrStatus { worktree_id } => github::pr_status(daemon, worktree_id).await,
     call => daemon.handle(client_id, call).await,
 }
 ```
 
-`server.rs` sends every request to `dispatch::handle`. `Daemon::handle` has
+`server.rs` sends every request to `dispatch::handle`. It asks
+`dispatch::is_slow` which addon calls wait on a subprocess, and runs those
+in their own task. `Daemon::handle` has
 a `_` arm that returns `unsupported`, because the dispatcher answers the
 addon calls first. The cost: the compiler does not tell you when a new
 **Core** `Call` variant has no arm in `Daemon::handle`. The torture harness
@@ -199,24 +209,30 @@ split.
 
 ```ts
 // app/src/addons/index.ts
-export const builtins: readonly Addon[] = [towns];
+export const builtins: readonly Addon[] = [towns, github];
 ```
 
 The `Addon` type in `app/src/addons/types.ts` has only the slots that Towns
-needs:
+and GitHub need:
 
 | Slot | Who renders it |
 |---|---|
 | `views` (global view: id, title, label, icon, lazy component, fallback) | `App.tsx` center area, `Sidebar.tsx` and `shell/LeftRail.tsx` buttons, `shell/TopStrip.tsx` title, the View menu in `appMenu.ts`, view checks in `uiState.ts` |
 | `commands` | `allActions()` in `actions.ts` (palette, shortcuts, menus, shortcut reference) |
 | `worktreeNameField` | `CreateWorktree` in `Dialogs.tsx`; it reports the `name_hint` |
+| `inspectorSections` (id, label, icon, component, rail marker) | `RightSidebar.tsx` after the `git` section, the buttons and markers in `shell/RightRail.tsx`, the section ids for `sanitizeUi` in `store.ts` |
+| `worktreeSignals` (a store selector that returns `AddonSignal[]`) | `signalsFor` in `Signals.tsx`, after the core signals; `nowSignals` keeps the cap of three |
+| `repoAvatar` (the first addon that has one wins) | `RepoAvatar` in `Sidebar.tsx`, which the sidebar and Home render |
 | `mount` | `App.tsx`, once for the session (the unlock ceremony) |
 | `onSnapshot` | `applySnapshot` in `store.ts`, after each `subscribe` |
 | `onFrame` | `applyFrame` in `store.ts`, for each daemon event |
 
 The order of `builtins` is the render order of every slot. An addon keeps
 its own state in its own module (Towns: `app/src/addons/towns/state.ts`), not
-in the core `State`.
+in the core `State`. One exception: data that a slot selector reads while a
+core component renders. GitHub declares the optional key `State.prs` through
+module augmentation in `app/src/addons/github/state.ts`, and only that module
+writes it. See "Client state decision" in "Milestone 2 result: GitHub".
 
 ## Performance law
 
@@ -236,6 +252,11 @@ create, a move, or a restore. The GUI ceremony stays mounted, but it renders
 nothing and starts no timer until a `town_unlocked` event arrives. The map
 view and the town dataset load lazily.
 
+GitHub background work: none in the daemon. `gh` runs only inside a
+`pr_status` call. The rail marker, the NOW signals, and the town history
+read the cache and start no work. See
+[features/github.md](features/github.md#background-work).
+
 Background work that exists today and must keep its current trigger:
 
 | Work | Trigger | Owner |
@@ -244,7 +265,7 @@ Background work that exists today and must keep its current trigger:
 | `lsof` port scan | each monitor tick with candidate pids | runtime |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
 | usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage |
-| `gh pr view` | each `pr_status` call; the inspector polls every 120 s while it is open | github |
+| `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github (milestone 2 kept this trigger) |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
 
@@ -259,7 +280,9 @@ Background work that exists today and must keep its current trigger:
 - A small value can go in the existing `kv` table with the key prefix
   `<addon>.`. Do not force relational state into KV.
 - In memory, keep addon state out of `Inner`. Towns keeps no daemon state in
-  memory at all; it reads its table when a call needs it.
+  memory at all; it reads its table when a call needs it. GitHub keeps its
+  cache in a `static` in `addons/github/mod.rs`, because tomod runs one
+  daemon in each process. Do not add an addon state field to `Daemon`.
 - If a seam needs both locks, take the Core `Inner` lock first, then the
   addon lock. Never take the Core lock while you hold an addon lock.
 - Never drop or rename a table or a column that holds user data. If the
@@ -308,7 +331,9 @@ All checks run in the normal test commands.
 reads every `.rs` file under `crates/tomod/src` and `crates/tomo-proto/src`.
 It skips the `addons/` folders and the composition roots `main.rs`,
 `dispatch.rs`, and `tomo-proto/src/lib.rs`. It fails on `addons::`,
-`mod addons`, or the word `town` (any case), and prints the file, the line,
+`mod addons`, the word `town`, or a GitHub noun (`github`, `pullrequest`,
+`prstatus`, `pr_status`, `prchanged`, `pr_changed`, `review_decision`,
+`checks_failed`, `mergeable`), in any case. It prints the file, the line,
 and the match. When a milestone finishes an addon, add its nouns to
 `ADDON_NOUNS`. The check between two addons is not written yet, because one
 addon exists; add it with the second addon.
@@ -318,7 +343,12 @@ and `.tsx` file under `app/src` outside `generated/` and `addons/` with
 `import.meta.glob(..., { query: "?raw" })`. It fails if a file imports an
 addon folder. A core file may import only `addons/index.ts` and
 `addons/types.ts`. It does not read CSS, so the `@import` line in
-`styles/index.css` is a listed registration line.
+`styles/index.css` is a listed registration line. The test "core client
+files do not name GitHub pull request nouns" fails on `GitHub`
+(case-sensitive), `PullRequest`, `PrStatusResult`, `review_decision`,
+`checks_failed`, `mergeable`, `pr_status`, `pr_changed`, or `prs` in a core
+client file. Lowercase `github` stays allowed for example text, such as the
+clone dialog placeholder.
 
 **Activity kinds.** `core_activity_code_does_not_name_addon_kinds` in
 `crates/tomod/src/addons/mod.rs` reads the code before `#[cfg(test)]` in
@@ -328,13 +358,15 @@ kind string, or `endpoint_repeat`. The test "core activity files do not name
 an addon activity kind" in `boundary.test.ts` does the same for
 `Activity.tsx`, `activityKinds.ts`, `activityModel.ts`, and `glyphs.ts`.
 `daemon.rs` and `runtime.rs` still name addon kinds, because the Actions,
-Runtime, GitHub, and Agentation code is not extracted yet.
+Runtime, and Agentation code is not extracted yet.
 
 All four checks were proven. A planted core file that named `addons::towns`
 (Rust) or imported `./addons/towns` (TypeScript) made the import checks
 fail. A planted `ActionActivity::Crashed` doc line in `tomod/src/activity.rs`
 and a planted `"pr_merged"` constant in `glyphs.ts` made the activity checks
-fail.
+fail. The GitHub noun checks were proven the same way: a planted
+`// PullRequest review_decision` line in `procs.rs` and a planted
+`"pr_status"` constant in `glyphs.ts` made each check fail.
 
 **Omission check.** Milestone 1 chose a deletion test over Cargo features.
 Features would spread `#[cfg]` through Core, and the GUI and the proto crate
@@ -433,14 +465,15 @@ add a slot "for later". Add the slot to the `Addon` type, then render it at
 one site from `builtins`.
 
 Slots that exist (see "Static composition, GUI"): `views`, `commands`,
-`worktreeNameField`, `mount`, `onSnapshot`, `onFrame`.
+`inspectorSections`, `worktreeSignals`, `repoAvatar`, `worktreeNameField`,
+`mount`, `onSnapshot`, `onFrame`.
 
 Slots that later milestones will need (from the map):
 
 | Slot | First user | Current hard-coded site |
 |---|---|---|
-| inspector section | github | `RightSidebar.tsx`, `RightRail.tsx`, `uiState.ts` |
-| worktree signal | github, runtime | `activityModel.ts` `nowSignals`, `Signals.tsx`, `LeftRail.tsx` |
+| inspector section | **done**: `inspectorSections` (milestone 2) | none |
+| worktree signal | **done**: `worktreeSignals` (milestone 2); runtime is the next user | the runtime signal in `activityModel.ts` `nowSignals` |
 | topbar item | actions | `WorktreeHeader.tsx` `ActionBar` |
 | bottom-strip item | usage | `shell/BottomStrip.tsx` |
 | diagnostics section | usage | `shell/Diagnostics.tsx` |
@@ -513,7 +546,7 @@ commit for each fix:
 | the `@import` of `towns.css` in `styles/index.css` | the cascade order of the CSS must not change |
 | `.town-row`, `.towns-list`, `.towns-map` selectors in `styles/interaction.css` | shared interaction rules; moving them could change the cascade, and dead selectors do no harm |
 | `"rare"` and `"legendary"` chimes in `sounds.ts`, and the sound setting text in `Settings.tsx` | user-visible copy and a shared sound module; a later cleanup can move them |
-| `town_history` reads `Inner.prs` | GitHub is still Core; milestone 2 must resolve it |
+| ~~`town_history` reads `Inner.prs`~~ | resolved in milestone 2 |
 | `Daemon::handle` has a `_` arm | the dispatcher answers addon calls first; see "Static composition" |
 
 ### Small user-visible changes
@@ -696,10 +729,10 @@ store test and the TypeScript test use the same case table. See
 
 | Coupling | Why it stays |
 |---|---|
-| `daemon.rs` and `runtime.rs` name `ActionActivity`, `RuntimeActivity`, `GitHubActivity`, `AgentationActivity` | the Actions, Runtime, GitHub, and Agentation code is not extracted; each milestone moves its call site with its code |
+| `daemon.rs` and `runtime.rs` name `ActionActivity`, `RuntimeActivity`, `AgentationActivity` | the Actions, Runtime, and Agentation code is not extracted; each milestone moves its call site with its code (the `GitHubActivity` call site moved in milestone 2) |
 | the core `checkpoint_created` view falls back to the first HTTP endpoint (`appUrl` reads `State.endpoints`) | the existing checkpoint to runtime link in the map; milestone 4 decides |
 | the actions and runtime views read `State.actions` for the action label | Actions state is still Core client state |
-| Towns `town_history` names `GitHubActivity::PrMerged` | the existing towns to github link; milestone 2 must resolve it |
+| ~~Towns `town_history` names `GitHubActivity::PrMerged`~~ | resolved in milestone 2: `github::known_pr` reads the event |
 | `lib.rs` declares and re-exports the four kind modules | composition root |
 | the seven older addon kind strings are snake_case | stored rows and installed CLIs |
 
@@ -753,13 +786,13 @@ RSS (no GUI allowed). Not run: `scripts/perf.sh` and the soak.
 | Candidate | Verdict | Top leaks today (see the map) |
 |---|---|---|
 | towns | **done** | none in Core; see "Coupling that stays" |
-| github | addon | `Repo.github` computed in core `repo_view`, `Inner.prs`, the `GitHubActivity::PrMerged` call site in `daemon.rs`, `TownHistory.pr` |
+| github | **done** | none in Core; see "Milestone 2 result: GitHub" |
 | actions | addon | `Pane.action_id` and `panes.action_id`, `on_exit` action branch, `AttentionKind::Crash`, `HookEvent.action`, the `ActionActivity` call sites in `daemon.rs` |
 | runtime | addon | `Inner.endpoints`, `Snapshot.endpoints`, `RuntimeEndpoint.action_id` filled from `inner.actions`, the `RuntimeActivity` call site in `runtime.rs` |
 | usage | addon | `Inner.usage`, `Snapshot.usage`, hard-mounted `UsageStrip`, `fetch_all` names the providers |
 | browser | study (milestone 6) | `PaneKind`, `Pane.url`, `create_browser_pane` in `daemon.rs`, `Layout.tsx` switch |
 | agentation | addon on browser | `AnnotationsSend` arm with the `AgentationActivity` call site, `annotation.sent` hook, all UI inside `BrowserPane.tsx`, inject code inside Tauri `browser_create` |
-| activity projections | kind seam **done** | `activityModel.ts` still mixes runtime, usage, and PR helpers; see "Activity kind seam result" |
+| activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
 | agent providers | evaluate last | closed `AgentKind` in 10 types, spawn plan built in 3 places, `detect_agent` and env stripping in core |
 
 ## Migration order
@@ -805,18 +838,15 @@ get `&Store`, not `&Inner`, because Towns needs nothing else.
 
 ### 2. GitHub
 
-Risks:
+Done. See "Milestone 2 result: GitHub". Changes from the plan:
 
-- `Repo.github` is computed in core `repo_view` on every discovery, and `Sidebar.tsx` uses it for avatars.
-- `TownHistory.pr` reads `inner.prs`, which is a Towns to GitHub dependency.
-- `Inner.prs` is never cleared on archive or rebind.
-- No torture script covers GitHub.
-
-Narrowest seam: none that is transactional. The work is pull-based.
-
-- Move `github_repo` parsing to the addon. The addon computes `Repo.github` from the `Repo.remote_url` of Core.
-- For `TownHistory.pr`, let the client join the town history with `pr_status`, or let a composition root pass the PR.
-- If PR data keys on a worktree id, join `worktree_rebound`.
+- The addon does not fill `Repo.github`. The field is removed, and the GUI
+  addon reads the owner from `Repo.remote_url`. The avatar was its only reader.
+- A composition root passes the pull request to Towns. The client join was
+  rejected, because the CLI and the torture script read `town_history` too.
+- The cache does not join `worktree_rebound`. That would change behavior; see
+  "Problems found in milestone 2".
+- `scripts/torture/github.sh` covers GitHub with a fake `gh`.
 
 ### 3. Actions
 
@@ -893,7 +923,7 @@ Narrowest seam:
 Risks:
 
 - **Fixed.** "Needs Me" was defined in SQL (`store.rs`) and in `activityModel.ts` `needsMeItem`, and the two definitions differed.
-- **Open.** `activityModel.ts` mixes runtime, usage, and PR helpers.
+- **Open.** `activityModel.ts` mixes runtime and usage helpers. The PR helper moved to the GitHub addon in milestone 2.
 - **Avoided.** A string kind loses compile-time checks. Each owner has a typed enum and a typed record of views.
 
 The kind seam is done. See "Activity kind seam result". The plan above was

@@ -17,7 +17,7 @@ Paths without a prefix are in `crates/tomod/src/` (daemon), `crates/tomo-proto/s
 
 | From | To | Where |
 |---|---|---|
-| towns | github | `TownHistory.pr` / `TownPr` (lib.rs:1142-1160); `Call::TownHistory` reads `inner.prs` (daemon.rs:2396-2404); `features/towns.rs:57, 75-77` |
+| towns | github | **Resolved in milestone 2.** Before: `TownHistory.pr` / `TownPr` (lib.rs:1142-1160); `Call::TownHistory` reads `inner.prs` (daemon.rs:2396-2404); `features/towns.rs:57, 75-77`. Now `dispatch.rs` gives `town_history` a plain PR lookup; neither addon imports the other. |
 | towns | activity | `towns::history` reads `ActivityKind::Archived` payload (`branch`, `checkpoint_commit`, `head`, from daemon.rs:1438-1440) and `PrMerged` payload (`number`, `url`) |
 | towns | core metadata | the create path sets `metadata.display_name` and calls `meta_upsert` |
 | runtime | actions | `runtime.rs:95-120` `observe` reads `row.action_id` and `inner.actions` for the label; `RuntimeEndpoint.action_id`/`label`; `HookAction` in `queue_endpoint_event` (runtime.rs:192-197); GUI `endpointLabel(e, actions)`, `liveEndpointFor`, `EndpointMark` |
@@ -115,6 +115,15 @@ listener, and a WebAudio chime. The dataset loads lazily.
 - Docs: `docs/features/towns.md`, `architecture.md`, `data-model.md`, `cli.md`, `development.md`, `ui.md`, `state-and-recovery.md`, `README.md`.
 
 ## GitHub
+
+**Status after milestone 2:** extracted. Every **leak** row below is gone.
+`Repo.github` and `GitHubRepo` are removed from the wire; the GUI addon reads
+the owner from `Repo.remote_url`. `Inner.prs` is now the addon cache. The
+`PrMerged` call site, `PrSection`, the rail marker, the NOW signal, and the
+avatar moved into the addon. The `.pr-*` and `.check-*` CSS classes stay in
+the shared style files. See "Milestone 2 result: GitHub" in
+[addons.md](addons.md) and [features/github.md](features/github.md). The line
+numbers below are from before the extraction.
 
 Background work: the daemon has no poller. Each `pr_status` call starts one
 `gh pr view` process. The cache lasts 60 s only when a PR exists. The GUI
