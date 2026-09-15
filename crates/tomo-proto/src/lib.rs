@@ -147,6 +147,8 @@ pub enum Call {
     CheckpointCreate(CheckpointSpec),
     CheckpointResolve { id: Id },
     UsageGet { #[serde(default)] refresh: bool },
+    /// Recent diagnostics, newest first: what Tomo itself did or noticed.
+    DiagnosticsList { #[serde(default)] limit: Option<u32> },
     BrowserOpen { worktree_id: Id, #[serde(default)] url: Option<String>, #[serde(default)] tab_id: Option<Id> },
     BrowserNavigate { pane_id: Id, url: String },
     AnnotationsSend { pane_id: Id, bundle: EvidenceBundle },
@@ -302,11 +304,30 @@ pub enum Event {
     HookRan { run: HookRun },
     ActionsChanged { set: ActionSet },
     ConfigChanged { config: Config },
+    Diagnostic { diagnostic: Diagnostic },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum NoticeLevel {
+    Info,
+    Warning,
+    Error,
+}
+
+/// One thing Tomo itself did or noticed. Work that the user cares about goes to Activity instead.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Diagnostic {
+    pub at_ms: u64,
+    pub level: DiagnosticLevel,
+    /// Subsystem: `daemon`, `config`, `usage`, `hooks`, `runtime`, `browser`, or `integrations`.
+    pub source: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticLevel {
     Info,
     Warning,
     Error,
@@ -1231,6 +1252,8 @@ mod bindings {
         RuntimeEndpoint::export_all(&cfg).unwrap();
         ActionRunResult::export_all(&cfg).unwrap();
         CheckpointMode::export_all(&cfg).unwrap();
+        Diagnostic::export_all(&cfg).unwrap();
+        DiagnosticLevel::export_all(&cfg).unwrap();
         let mut names: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|e| e.ok())

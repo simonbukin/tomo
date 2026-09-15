@@ -14,8 +14,8 @@ describe("sanitizeUi", () => {
       ...defaultUi,
       view: "worktree",
       activeWorktreeId: "w1",
-      leftOpen: false,
-      rightOpen: true,
+      leftMode: "minimal",
+      rightMode: "closed",
       leftWidth: 300,
       rightWidth: 420,
       sidebarSort: "manual",
@@ -51,6 +51,13 @@ describe("sanitizeUi", () => {
     expect(ui.collapsedRepos).toEqual(["r1"]);
     expect(ui.manualOrder).toEqual({ r1: ["a"] });
     expect(ui.sidebarSort).toBe("name");
+  });
+
+  it("maps the old open flags onto sidebar modes and drops the flags", () => {
+    expect(sanitizeUi({ leftOpen: false, rightOpen: true }, [])).toMatchObject({ leftMode: "closed", rightMode: "open" });
+    expect(sanitizeUi({ leftMode: "wide", leftOpen: false }, []).leftMode).toBe("closed");
+    expect(sanitizeUi({ leftMode: "minimal", leftOpen: false }, []).leftMode).toBe("minimal");
+    expect("leftOpen" in sanitizeUi({ leftOpen: false }, [])).toBe(false);
   });
 
   it("passes unknown keys through for fields added later", () => {

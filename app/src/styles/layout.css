@@ -3,8 +3,9 @@
 .app {
   display: grid;
   grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
-  grid-template-rows: var(--title-h) minmax(0, 1fr);
-  grid-template-areas: "title title title" "left center right";
+  --bottom-h: 24px;
+  grid-template-rows: var(--title-h) minmax(0, 1fr) var(--bottom-h);
+  grid-template-areas: "title title title" "left center right" "bottom bottom bottom";
   height: 100%;
   transition: grid-template-columns 160ms ease-out;
 }
@@ -103,3 +104,7 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 .tab .proc-icon { color: var(--fg-3); }
 .tab-active .proc-icon { color: var(--fg-1); }
 .zoom-chip { font-family: var(--mono); color: var(--fg-2); }
+
+.bottom-strip { grid-area: bottom; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: 0 var(--sp-2); border-top: 1px solid var(--line); background: var(--bg); color: var(--fg-2); font-size: var(--fs-1); }
+.toast-dock { position: fixed; right: 12px; bottom: calc(var(--bottom-h) + 12px); z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+.toast-dock .toast { position: static; inset: auto; transform: none; pointer-events: auto; }

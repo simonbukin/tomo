@@ -59,6 +59,8 @@ pub struct PaneState {
     pub stop_intent: bool,
 }
 
+const DIAGNOSTICS_KEPT: usize = 200;
+
 pub struct Inner {
     pub store: Store,
     pub config: Config,
@@ -85,6 +87,7 @@ pub struct Inner {
     pub endpoint_gone_ms: HashMap<Id, u64>,
     pub endpoints_at_ms: u64,
     pub closed_tabs: Vec<reopen::ClosedTab>,
+    pub diagnostics: std::collections::VecDeque<Diagnostic>,
 }
 
 pub struct Daemon {
@@ -174,6 +177,7 @@ impl Daemon {
                 endpoint_gone_ms: HashMap::new(),
                 endpoints_at_ms: 0,
                 closed_tabs: Vec::new(),
+                diagnostics: std::collections::VecDeque::new(),
             }),
             stop: tokio::sync::Notify::new(),
             refresh: tokio::sync::Notify::new(),
@@ -223,6 +227,17 @@ impl Daemon {
         for client in inner.clients.values().filter(|c| c.subscribed) {
             let _ = client.tx.send(text.clone());
         }
+    }
+
+    /// Records what Tomo itself did or noticed and pushes it to clients. Work events go to `record`.
+    pub fn diagnostic(inner: &mut Inner, level: DiagnosticLevel, source: &str, message: impl Into<String>) {
+        let at_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        let diagnostic = Diagnostic { at_ms, level, source: source.to_string(), message: message.into() };
+        if inner.diagnostics.len() >= DIAGNOSTICS_KEPT {
+            inner.diagnostics.pop_front();
+        }
+        inner.diagnostics.push_back(diagnostic.clone());
+        Self::emit(inner, Event::Diagnostic { diagnostic });
     }
 
     pub(crate) fn emit_tabs(inner: &mut Inner, worktree_id: &str) {
@@ -2185,6 +2200,10 @@ impl Daemon {
                 let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;
                 let list = tokio::task::spawn_blocking(move || sessions::list(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 ok(list)
+            }
+            Call::DiagnosticsList { limit } => {
+                let inner = self.lock();
+                ok(inner.diagnostics.iter().rev().take(limit.map_or(DIAGNOSTICS_KEPT, |n| n as usize)).cloned().collect::<Vec<_>>())
             }
             Call::UsageGet { refresh } => {
                 if refresh || self.lock().usage.is_empty() {
