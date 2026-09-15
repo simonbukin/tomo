@@ -60,78 +60,139 @@ closed when the component unmounts, so a tab switch reloads the page.
 Commands: `browser_create`, `browser_set_bounds`, `browser_set_visible`,
 `browser_navigate`, `browser_back`, `browser_forward`, `browser_reload`,
 `browser_close`, `browser_set_annotate`, `browser_clear_annotations`. The
-main window may call all of them. `browser_annotations` is the one command
-a page may call; the `browser` capability grants it to `browser-*`
-webviews for `http://*:*` and `https://*:*` origins.
+main window may call all of them. `browser_feedback` is the one command a
+page may call; the `browser` capability grants it to `browser-*` webviews
+for `http://*:*` and `https://*:*` origins.
 
-## Annotation overlay
+## Feedback overlay: Agentation
 
-`app/src-tauri/src/annotate.js` is the initialization script of every
-browser webview. It runs on each page and stays idle until the host calls
-`window.__tomoAnnotate.set(true)`. When it is on:
+The overlay is [Agentation](https://www.npmjs.com/package/agentation)
+(`agentation@3.0.2`), the feedback toolbar that other agent IDEs also
+embed. It is a React component. It puts a floating toolbar into the page,
+adds its own `<style>` tags, and lets the user click an element and write
+a note about it.
 
-- the page takes keyboard focus, and the element under the pointer gets
-  an outline;
-- a click selects the element and opens a small note box; Enter saves the
-  note, Escape cancels it; the page does not receive the click;
-- a badge in the corner shows the note count.
+### The bundle
 
-Each saved note is an `Annotation`: the note text, `location.href`, a
-short CSS selector (the element id, or a `tag:nth-of-type(n)` chain of at
-most six levels that is unique on the page), the first 120 characters of
-the element text, and the element rectangle in CSS pixels.
+`app/agentation/entry.tsx` wraps the component. `pnpm -C app
+build:agentation` builds it with `app/vite.agentation.config.ts` into one
+minified IIFE, `app/src-tauri/agentation/agentation.js` (about 620 kB, 157
+kB gzip). The file is committed, because the host includes it with
+`include_str!`. Build it again after an upgrade of `agentation` or a
+change to `app/agentation/`.
 
-After every change the page calls
-`window.__TAURI_INTERNALS__.invoke("browser_annotations", …)`. The host
-reads the pane id from the webview label, never from the page, and emits
-`browser://annotations` to the main webview. The component shows
-`N annotations · Send to…`.
+The bundle defines `window.__tomoAgentation = { set(enabled), clear() }`
+one time. `set(true)` mounts `<Agentation copyToClipboard={false}>` with
+its own React root in a `div[data-tomo-agentation]` on the document
+element. `set(false)` unmounts it.
+
+### Injection only when on
+
+The bundle is not an initialization script, so a page that is never
+annotated does not load it. `browser_set_annotate(pane_id, enabled)`
+records the flag for the pane, then evaluates
+`if (!window.__tomoAgentation) { bundle }` and
+`window.__tomoAgentation.set(enabled)`. The guard makes a second
+evaluation skip the bundle. A navigation replaces the page, so on each
+`PageLoadEvent::Finished` the host evaluates the bundle and `set(true)`
+again for a flagged pane. `browser_close` clears the flag. Enabling also
+gives the page keyboard focus.
+
+### The feedback command
+
+The entry keeps the list of notes. It seeds the list from
+`loadAnnotations(location.pathname)` when it mounts and updates it from
+the add, update, delete, and clear callbacks. After each change it calls
+`window.__TAURI_INTERNALS__.invoke("browser_feedback", { kind, count,
+markdown })`:
+
+| `kind`   | When                                   | `markdown`                                     |
+|----------|----------------------------------------|------------------------------------------------|
+| `change` | mount, and each change to the list     | `feedbackMarkdown(url, title, notes)` from `app/agentation/markdown.ts` |
+| `copy`   | the Agentation copy button             | Agentation's own markdown                      |
+| `submit` | the Agentation send button             | Agentation's own output                        |
+
+The host reads the pane id from the webview label, never from the page.
+It accepts `copy` and `submit` only while the pane is flagged, and it
+refuses every other kind. It emits `browser://feedback`
+`{ pane_id, kind, count, markdown }` to the main webview.
+
+`feedbackMarkdown` writes a heading with the page title and url, then one
+numbered item for each note: the element name, the `elementPath` in
+backticks, the comment, and optional `selected`, `nearby`, `react`, and
+`source` lines.
+
+### Copy and send
+
+The toolbar is: back, forward, reload, url field, Annotate. When the page
+has notes, a count badge, `Copy feedback`, and `Send feedback to an
+agent` follow. Open-external is last. `change` updates the count and the
+markdown. `copy` puts the markdown on the clipboard. `submit` opens the
+Send menu. A url change from the page resets the count until the page
+reports again.
+
+The Send menu lists the live agents of the worktree (`Claude — working`)
+and `Copy as markdown`. The toolbar never scrolls sideways: the buttons
+do not shrink, the url field shrinks to 40 px, and under a pane width of
+360 px the count badge and open-external are hidden.
 
 ## Evidence bundle
 
-`Send to…` lists the live agents of the worktree and `Copy as text`. An
-agent entry calls `annotations_send` with an `EvidenceBundle`:
+An agent entry calls `annotations_send` with an `EvidenceBundle`:
 
 ```json
 {
-  "source": "browser annotation",
+  "source": "browser feedback",
   "worktree_id": "a3dc426aa592",
   "url": "http://localhost:1420/",
   "action_id": null,
-  "annotations": [ … ],
-  "instruction": "Review and address these annotations."
+  "annotations": [],
+  "instruction": "Review and address this feedback.",
+  "markdown": "## Tomo (http://localhost:1420/)\n\n1. button `main > button` …",
+  "note_count": 3
 }
 ```
 
 The daemon requires a live agent (Claude, Codex, or Pi) in the target pane.
-It formats the bundle as plain text:
+When `markdown` is present, it is the body of the text:
 
 ```text
-Browser annotations from Tomo
+Browser feedback from Tomo
 worktree: labor (feat/labor-relations)
 runtime: http://localhost:1420/
 
-1. [#save] "Save" — wrong color
-2. [main > p:nth-of-type(2)] "Hello" — cut off
+## Tomo (http://localhost:1420/)
 
-Review and address these annotations.
+1. button "Save" `form > .actions > button`
+   wrong color
+   selected: "Save"
+
+Review and address this feedback.
 ```
 
-`runtime` is the label of the Action named by `action_id`, else the url.
-The text goes to the agent's PTY inside a bracketed paste
-(`ESC [200~ … ESC [201~`) followed by a carriage return, so a multi-line
-block arrives as one input and then submits. The daemon records an
-`annotations_sent` activity event (`Sent N annotations → Claude`, payload:
-the bundle) and runs the `annotation.sent` hooks. The GUI clears the notes
-and shows a toast.
+Without `markdown`, the body is the older list of `annotations`
+(`1. [#save] "Save" — wrong color`). `runtime` is the label of the Action
+named by `action_id`, else the url. The text goes to the agent's PTY
+inside a bracketed paste (`ESC [200~ … ESC [201~`) followed by a carriage
+return, so a multi-line block arrives as one input and then submits. The
+daemon records an `annotations_sent` activity event (payload: the bundle)
+with the title `Sent 3 notes → Claude` when `note_count` is set, else
+`Sent N annotations → Claude`. It runs the `annotation.sent` hooks. The
+GUI calls `browser_clear_annotations`, which runs
+`window.__tomoAgentation.clear()`, and shows `Sent 3 notes to Claude`.
+
+## What is persisted
+
+- Agentation keeps notes in the page's `localStorage`, one list for each
+  path. A reload or a return to the path shows them again. `clear()`
+  saves an empty list for the current path.
+- The daemon stores only the bundles that were sent, in the `activity`
+  table.
 
 ## What is not persisted
 
 - Page history, cookies, and form state live in the webview and vanish
   when the pane closes or the tab switches away.
-- Notes live in the page. A navigation or a reload drops the notes that
-  were not sent. The daemon stores only the bundles that were sent, in the
-  `activity` table.
 - Scrollback does not exist for a browser pane.
 - The `annotate` toggle is component state; it resets when the pane
   remounts.

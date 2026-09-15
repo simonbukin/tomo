@@ -2267,7 +2267,7 @@ impl Daemon {
                     worktree_id: Some(worktree_id.clone()),
                     pane_id: Some(pane_id.clone()),
                     agent_kind: Some(agent.kind),
-                    title: format!("Sent {} annotations → {}", bundle.annotations.len(), agent.kind.label()),
+                    title: evidence_title(&bundle, agent.kind.label()),
                     detail: bundle.url.clone(),
                     payload: serde_json::to_value(&bundle).unwrap_or(Value::Null),
                     attention_id: None,
@@ -2302,17 +2302,29 @@ impl Daemon {
 
 /// The plain-text form of an evidence bundle, as typed into an agent's terminal.
 pub fn evidence_text(worktree_name: &str, branch: &str, runtime: &str, bundle: &EvidenceBundle) -> String {
-    let lines: Vec<String> = bundle
-        .annotations
-        .iter()
-        .enumerate()
-        .map(|(i, a)| {
-            let selector = a.selector.as_deref().unwrap_or("-");
-            let element = a.element_text.as_deref().unwrap_or("").replace('\n', " ");
-            format!("{}. [{selector}] \"{element}\" — {}", i + 1, a.text.trim())
-        })
-        .collect();
-    format!("Browser annotations from Tomo\nworktree: {worktree_name} ({branch})\nruntime: {runtime}\n\n{}\n\n{}", lines.join("\n"), bundle.instruction.trim())
+    let body = match bundle.markdown.as_deref().map(str::trim) {
+        Some(markdown) if !markdown.is_empty() => markdown.to_string(),
+        _ => bundle
+            .annotations
+            .iter()
+            .enumerate()
+            .map(|(i, a)| {
+                let selector = a.selector.as_deref().unwrap_or("-");
+                let element = a.element_text.as_deref().unwrap_or("").replace('\n', " ");
+                format!("{}. [{selector}] \"{element}\" — {}", i + 1, a.text.trim())
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    };
+    format!("Browser feedback from Tomo\nworktree: {worktree_name} ({branch})\nruntime: {runtime}\n\n{body}\n\n{}", bundle.instruction.trim())
+}
+
+fn evidence_title(bundle: &EvidenceBundle, agent: &str) -> String {
+    match bundle.note_count {
+        Some(1) => format!("Sent 1 note → {agent}"),
+        Some(n) => format!("Sent {n} notes → {agent}"),
+        None => format!("Sent {} annotations → {agent}", bundle.annotations.len()),
+    }
 }
 
 // Bracketed paste keeps a multi-line block as one input in Claude, Codex, and Pi;
@@ -2379,12 +2391,35 @@ mod tests {
                 Annotation { text: "cut off".into(), url: "http://localhost:1420/".into(), selector: None, element_text: None, rect: Some([1.0, 2.0, 3.0, 4.0]) },
             ],
             instruction: "Review and address these annotations.".into(),
+            markdown: None,
+            note_count: None,
         };
         let text = evidence_text("labor", "feat/x", "http://localhost:1420/", &bundle);
         assert_eq!(
             text,
-            "Browser annotations from Tomo\nworktree: labor (feat/x)\nruntime: http://localhost:1420/\n\n1. [#save] \"Save\" — wrong color\n2. [-] \"\" — cut off\n\nReview and address these annotations."
+            "Browser feedback from Tomo\nworktree: labor (feat/x)\nruntime: http://localhost:1420/\n\n1. [#save] \"Save\" — wrong color\n2. [-] \"\" — cut off\n\nReview and address these annotations."
         );
+        assert_eq!(evidence_title(&bundle, "Claude"), "Sent 2 annotations → Claude");
         assert!(pasted("x").ends_with("\x1b[201~\r"));
+    }
+
+    #[test]
+    fn evidence_text_uses_the_markdown_body() {
+        let bundle = EvidenceBundle {
+            source: "browser feedback".into(),
+            worktree_id: "w".into(),
+            url: Some("http://localhost:1420/".into()),
+            action_id: None,
+            annotations: vec![],
+            instruction: "Review and address this feedback.".into(),
+            markdown: Some("## Tomo (http://localhost:1420/)\n\n1. button `main > button`\n   wrong color\n".into()),
+            note_count: Some(3),
+        };
+        let text = evidence_text("labor", "feat/x", "http://localhost:1420/", &bundle);
+        assert_eq!(
+            text,
+            "Browser feedback from Tomo\nworktree: labor (feat/x)\nruntime: http://localhost:1420/\n\n## Tomo (http://localhost:1420/)\n\n1. button `main > button`\n   wrong color\n\nReview and address this feedback."
+        );
+        assert_eq!(evidence_title(&bundle, "Claude"), "Sent 3 notes → Claude");
     }
 }
