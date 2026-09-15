@@ -84,10 +84,15 @@ A row whose `layout` fails to parse is skipped on load.
 | `agent_kind`    | R        | `claude`, `codex`, `pi`, or NULL                         |
 | `session_ref`   | R        | Native session reference for resume                      |
 | `created_at_ms` | R        | Creation time                                            |
-| `action_id`     | R        | Id of the `.tomo.toml` action that started the pane, or NULL |
+| `action_id`     | none     | Not read or written since the Actions addon. An old database keeps the column; a new database does not get it |
 
 Nothing here records the running command. On restart a pane gets a shell,
 and only a known agent kind with a session reference gets a resume line.
+
+The pane source (`Pane.source`, for example the Action that started the
+pane) is in memory only. A restored pane has no source, so the restored
+shell is never taken for the running Action. `Pane.action_id` on the wire
+comes from the source.
 
 ## attention
 

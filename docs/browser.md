@@ -171,8 +171,8 @@ Review and address this feedback.
 ```
 
 Without `markdown`, the body is the older list of `annotations`
-(`1. [#save] "Save" — wrong color`). `runtime` is the label of the Action
-named by `action_id`, else the url. The text goes to the agent's PTY
+(`1. [#save] "Save" — wrong color`). `runtime` is the source label of a
+running pane in the worktree whose Action id is `action_id`, else the url. The text goes to the agent's PTY
 inside a bracketed paste (`ESC [200~ … ESC [201~`) followed by a carriage
 return, so a multi-line block arrives as one input and then submits. The
 daemon records an `annotations_sent` activity event (payload: the bundle)

@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { builtins } from "./addons";
 import { rpc } from "./api";
 import { attentionDelivery, type AttentionActionId, type AttentionNames, type RouteContext } from "./notifyRoute";
 import { playChime } from "./sounds";
@@ -33,10 +34,11 @@ export function routeContext(s: State, focused: boolean): RouteContext {
   };
 }
 
+const sourceOwner = (kind: string) => builtins.find((a) => a.paneSource?.kind === kind)?.paneSource ?? null;
+
 function namesOf(s: State, item: AttentionItem): AttentionNames {
-  const actionId = item.pane_id ? s.panes[item.pane_id]?.action_id : null;
-  const def = actionId ? s.actions[item.worktree_id]?.actions.find((a) => a.id === actionId) : null;
-  return { worktree: s.worktrees.find((w) => w.id === item.worktree_id)?.name ?? null, action: actionId ? { id: actionId, label: def?.label ?? actionId } : null };
+  const source = item.pane_id ? s.panes[item.pane_id]?.source : null;
+  return { worktree: s.worktrees.find((w) => w.id === item.worktree_id)?.name ?? null, source: source ? { ...source, restartable: !!sourceOwner(source.kind) } : null };
 }
 
 // The store imports this module, and `actions` imports the store: a lazy import keeps that cycle out of module start.
@@ -53,7 +55,7 @@ function toastAction(id: AttentionActionId, item: AttentionItem, names: Attentio
     case "open":
       return { label: "Open", run: goTo };
     case "restart":
-      return { label: "Restart", run: withActions((a) => names.action && a.restartWorktreeAction(item.worktree_id, names.action.id)) };
+      return { label: "Restart", run: () => names.source && sourceOwner(names.source.kind)?.restart(item.worktree_id, names.source.id) };
     case "resolve":
       return { label: "Resolve", run: withActions((a) => a.resolveCheckpoint(item.id)) };
   }

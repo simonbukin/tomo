@@ -20,16 +20,16 @@ Paths without a prefix are in `crates/tomod/src/` (daemon), `crates/tomo-proto/s
 | towns | github | **Resolved in milestone 2.** Before: `TownHistory.pr` / `TownPr` (lib.rs:1142-1160); `Call::TownHistory` reads `inner.prs` (daemon.rs:2396-2404); `features/towns.rs:57, 75-77`. Now `dispatch.rs` gives `town_history` a plain PR lookup; neither addon imports the other. |
 | towns | activity | `towns::history` reads `ActivityKind::Archived` payload (`branch`, `checkpoint_commit`, `head`, from daemon.rs:1438-1440) and `PrMerged` payload (`number`, `url`) |
 | towns | core metadata | the create path sets `metadata.display_name` and calls `meta_upsert` |
-| runtime | actions | `runtime.rs:95-120` `observe` reads `row.action_id` and `inner.actions` for the label; `RuntimeEndpoint.action_id`/`label`; `HookAction` in `queue_endpoint_event` (runtime.rs:192-197); GUI `endpointLabel(e, actions)`, `liveEndpointFor`, `EndpointMark` |
-| actions | runtime | GUI only: the topbar endpoint arrow, `runningActionItems`, `endpointMenu` restart and stop |
+| runtime | actions | **Removed in milestone 3.** `observe` reads the Core `PaneSource` of the pane: `RuntimeEndpoint.action_id` comes from `PaneSource::action_id`, and `label` from the source label. `HookAction` and `HookEvent.action` are Core hook envelope types. `endpointLabel(e)` reads only the endpoint. The runtime Activity view reads the pane source label. Before: `observe` read `row.action_id` and `inner.actions` (runtime.rs:95-120), and the GUI read `State.actions` |
+| actions | runtime | GUI only, inside the Actions addon: the topbar endpoint arrow (`liveEndpointFor`), `runningActionItems`, and the `endpointMenu` slot read `RuntimeEndpoint.action_id` and the core client `State.endpoints`. Milestone 4 decides the owner of `State.endpoints` |
 | agentation | browser | Tauri `browser_create` re-injects the script on page load (src-tauri lib.rs:229-231); `browser_close` clears `AnnotatePanes` (lib.rs:278); all UI is inside `BrowserPane.tsx`; the `browser://feedback` event |
-| agentation | actions | `AnnotationsSend` uses `action_def(bundle.action_id)` for the runtime line (daemon.rs:2364-2371); `EvidenceBundle.action_id` |
+| agentation | actions | **Changed in milestone 3.** `AnnotationsSend` takes the runtime line from the source label of a running pane with that Action id (before: `action_def(bundle.action_id)`, daemon.rs:2364-2371); `EvidenceBundle.action_id` stays |
 | agentation | agents | live agent check in `inner.agents`, PTY write, `agentsOf`, `KIND_LABEL` |
 | usage | agent providers | `UsageSnapshot.provider: AgentKind`; `fetch_all` names `fetch_claude`, `fetch_codex` (usage.rs:265-277); `bottomModel.ts:15` filters `"pi"` |
 | checkpoint (core) | runtime | `WorktreeHeader.tsx:141-152` `CheckpointBanner` and `Activity.tsx:84-86` use the first HTTP endpoint for "Open App" |
 | terminal (core) | browser | Cmd-click on a URL calls `openEndpoint`, which calls `openInBrowser` (`terminalHooks.ts:16`, `actions.ts:300-303`) |
-| core keys | actions | `store.ts:406-409` `keyBindings` merges `action:<id>`; `actions.ts:688-692` `runAction` handles the `action:` prefix |
-| core attention | actions | `AttentionKind::Crash`; `attention.ts:36-39, 55-56`; `notifyRoute.ts` crash toast with Restart |
+| core keys | actions | **Removed in milestone 3.** `keyBindings` and `runAction` read the `shortcuts` slot. Before: `store.ts:406-409` merged `action:<id>`, and `actions.ts:688-692` handled the `action:` prefix |
+| core attention | actions | **Changed in milestone 3.** `AttentionKind::Crash` stays a Core kind, and the Actions addon decides when to raise it. The crash toast takes its title from the pane source and gets Restart from the `paneSource` slot. Before: `attention.ts:36-39, 55-56` read `Pane.action_id` and `State.actions` |
 
 ## Towns
 
@@ -177,6 +177,18 @@ Background work: the daemon has no poller. Each `pr_status` call starts one
 - Docs: `README.md`, `cli.md`, `activity.md`, `ui.md`, `features/towns.md`.
 
 ## Actions
+
+**Status after milestone 3:** extracted. Every **leak** and **seam** row
+below is gone from Core, except these, which "Milestone 3 result: Actions"
+in [addons.md](addons.md) explains: `Pane.action_id` (now derived from the
+Core `Pane.source`), `HookEvent.action` and `HookAction` (the Core hook
+envelope, which runtime events also fill), `AttentionKind::Crash` (a Core
+attention kind that Actions raises), and `EvidenceBundle.action_id`
+(agentation). The `panes.action_id` column stays in old databases and is
+not read. `Inner.actions` is now the addon's own map. The seams are
+`worktree_files` (discovery and watcher) and `pane_exited`. `restore` and
+`reopen.rs` need no seam, because the source is in memory only. The line
+numbers below are from before the extraction.
 
 Background work: none that runs by itself. `reload_actions` reads
 `.tomo.toml` for every worktree on each `discover`. The watcher reacts to

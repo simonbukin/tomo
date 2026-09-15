@@ -17,6 +17,7 @@ crates/tomod/              daemon
   src/addons/towns/        Japan Towns: calls, towns table, seams, dataset and pick
   src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
   src/addons/usage/        provider usage: Claude and Codex adapters, last result, poll, usage_get, notices
+  src/addons/actions/      repo Actions: .tomo.toml parser, calls, reload and pane exit seams
   src/store.rs             SQLite schema and queries
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
@@ -25,10 +26,9 @@ crates/tomod/              daemon
   src/monitor.rs           periodic poll: cwd, titles, heuristics, resources
   src/agents.rs            authority merge, hook mapping, spawn plans, hook JSON
   src/integrations.rs      user-level hook installation
-  src/watch.rs             Git directory and .tomo.toml watcher, discovery trigger
+  src/watch.rs             Git directory and addon worktree file watcher, discovery trigger
   src/config.rs            config.toml, defaults, paths
   src/events.rs            hook envelopes, hook processes, the archive gate
-  src/features/actions.rs  .tomo.toml parser for repo-defined Actions
 crates/tomo-cli/           `tomo` binary
   src/main.rs              clap definitions and command handlers
   src/client.rs            socket client, daemon autostart
@@ -47,6 +47,7 @@ app/                       Tauri client
   src/addons/towns/        Japan Towns view, ceremony, create field, state, CSS, data
   src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
   src/addons/usage/        usage meters, bucket popover, diagnostics section, state
+  src/addons/actions/      Action topbar buttons, menu items, palette entries, shortcuts, state
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation
 scripts/install.sh         release build and install
@@ -161,8 +162,10 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Which addons exist and where they join Core | `addons::seams`, `addons::start`, `dispatch::handle`, `app/src/addons/index.ts` |
 | When `gh` runs, and when `pr_changed` and `pr_merged` fire | `addons::github::model::{fresh, update}` |
 | When usage fetches and what it warns about | `addons::usage::{get, run, crossings}` |
-| What `.tomo.toml` accepts             | `features::actions::parse`              |
-| How an action runs, reuses, or stops  | `Daemon::run_action`, `Daemon::stop_action` |
+| What `.tomo.toml` accepts             | `addons::actions::model::parse`         |
+| How an action runs, reuses, or stops  | `addons::actions::{run, stop, restart}` |
+| What an Action pane exit records      | `addons::actions::exited`, joined through `Seams::pane_exited` |
+| What started a pane                   | `PaneState.source`, set by the spawner; `PaneSource::action_id` for the older wire fields |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
 
 ## Verification without model tokens

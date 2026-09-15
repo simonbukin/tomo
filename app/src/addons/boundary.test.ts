@@ -14,6 +14,15 @@ describe("addon boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("core client files do not name an Action type, call, or event", () => {
+    const actionNoun = /\bAction(Def|Set|RunResult|Mode|Show|Activity)\b|["'`]action_(list|run|stop|restart)["'`]|actions_changed|WorktreeAction\b|runningAction|activeActionSet/;
+    const offenders = Object.entries(sources)
+      .filter(([path]) => !inAddons(path))
+      .filter(([, text]) => actionNoun.test(text))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
   it("an addon imports no other addon folder", () => {
     const insideAddons = (path: string) => (path.startsWith("./") ? path.slice(2) : path.startsWith("../addons/") ? path.slice("../addons/".length) : null);
     const folderOf = (rel: string) => /^([^/]+)\//.exec(rel)?.[1];

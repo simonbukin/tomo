@@ -77,8 +77,8 @@ export interface AttentionDelivery {
 
 export interface AttentionNames {
   worktree: string | null;
-  /** The Action that runs in the item's pane, when there is one. */
-  action: { id: string; label: string } | null;
+  /** What started the item's pane, when anything did, and whether an addon can start it again. */
+  source: { kind: string; id: string; label: string; restartable: boolean } | null;
 }
 
 export const attentionToastKey = (id: Id) => `attention:${id}`;
@@ -93,8 +93,8 @@ function exitDetail(message: string): string {
 function toastFor(item: AttentionItem, names: AttentionNames): AttentionToast | null {
   const key = attentionToastKey(item.id);
   if (item.kind === "crash") {
-    const actions: AttentionActionId[] = [...(item.pane_id ? (["logs"] as const) : []), ...(names.action ? (["restart"] as const) : [])];
-    return { key, level: "error", title: `${names.action?.label ?? "Action"} crashed`, detail: joined(exitDetail(item.message), names.worktree), actions };
+    const actions: AttentionActionId[] = [...(item.pane_id ? (["logs"] as const) : []), ...(names.source?.restartable ? (["restart"] as const) : [])];
+    return { key, level: "error", title: `${names.source?.label ?? "Action"} crashed`, detail: joined(exitDetail(item.message), names.worktree), actions };
   }
   if (item.kind === "checkpoint") return { key, level: "warning", title: "Review requested", detail: joined(item.message, names.worktree), actions: ["open", "resolve"] };
   return null;

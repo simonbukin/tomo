@@ -5,8 +5,13 @@
 import type { AgentPresence } from "./AgentPresence";
 import type { PaneKind } from "./PaneKind";
 import type { PaneOrigin } from "./PaneOrigin";
+import type { PaneSource } from "./PaneSource";
 
-export type Pane = { id: string, tab_id: string, worktree_id: string, title: string, user_title: string | null, cwd: string, cols: number, rows: number, pid: number | null, live: boolean, origin: PaneOrigin, exit_code: number | null, agent: AgentPresence | null, created_at_ms: number, action_id: string | null, 
+export type Pane = { id: string, tab_id: string, worktree_id: string, title: string, user_title: string | null, cwd: string, cols: number, rows: number, pid: number | null, live: boolean, origin: PaneOrigin, exit_code: number | null, agent: AgentPresence | null, created_at_ms: number, 
+/**
+ * `source.id` when `source.kind` is `action`. Clients from before the Actions addon read it; see [`PaneSource::action_id`].
+ */
+action_id: string | null, source: PaneSource | null, 
 /**
  * Command line of the newest child of the pane's shell, for icons and titles.
  */

@@ -1,15 +1,16 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { allActions } from "./actions";
+import { builtins } from "./addons";
 import { Dialog, DialogContent } from "./components/ui";
 import { effectiveBindings, filterShortcuts, groupShortcuts, shortcutRows } from "./shortcuts";
-import { activeActionSet, keyBindings, setState, useStore } from "./store";
+import { keyBindings, setState, useStore } from "./store";
 
 /** Searchable list of every bound command, grouped. Reads the same registry and bindings as the palette and menus. */
 export function ShortcutReference() {
   const open = useStore((s) => s.shortcutsOpen);
   const bindings = useStore((s) => (s.shortcutsOpen ? keyBindings(s) : null));
-  const repoActions = useStore((s) => (s.shortcutsOpen ? (activeActionSet(s)?.actions ?? []) : []));
+  const bound = useStore((s) => (s.shortcutsOpen ? builtins.flatMap((a) => a.shortcuts?.(s) ?? []) : []));
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -17,11 +18,7 @@ export function ShortcutReference() {
     if (open) setQuery("");
   }, [open]);
 
-  const rows = useMemo(() => {
-    if (!bindings) return [];
-    const actionCommands = repoActions.map((a) => ({ id: `action:${a.id}`, label: `run ${a.label}`, group: "Worktrees" as const }));
-    return shortcutRows([...allActions(), ...actionCommands], effectiveBindings(bindings));
-  }, [bindings, repoActions]);
+  const rows = useMemo(() => (bindings ? shortcutRows([...allActions(), ...bound], effectiveBindings(bindings)) : []), [bindings, bound]);
   const groups = groupShortcuts(filterShortcuts(rows, query));
   const close = () => setState({ shortcutsOpen: false });
 
