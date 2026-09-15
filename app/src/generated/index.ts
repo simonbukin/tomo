@@ -60,6 +60,7 @@ export * from "./Pane";
 export * from "./PaneCreate";
 export * from "./PaneKind";
 export * from "./PaneOrigin";
+export * from "./PaneSource";
 export * from "./PrStatusResult";
 export * from "./PullRequest";
 export * from "./Repo";
