@@ -1,10 +1,9 @@
 import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import { openMenu } from "./MenuHost";
 import { Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";
-import { ResizeHandle } from "./Sidebar";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
@@ -13,9 +12,13 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { AgentSession, FsEntry, Id, PrStatusResult, ProcessInfo, Worktree } from "./types";
 
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
+  const section = useStore((s) => s.ui.rightSection);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (section) ref.current?.querySelector(`[data-section="${section}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [section]);
   return (
-    <aside className="rightbar">
-      <ResizeHandle side="right" />
+    <aside className="rightbar" ref={ref}>
       <MetadataSection w={worktree} />
       <GitSection w={worktree} />
       <PrSection w={worktree} />
@@ -39,7 +42,7 @@ function MetadataSection({ w }: { w: Worktree }) {
   }, [w.id, m.display_name, m.project, m.tags.join(",")]);
   const commit = (patch: Record<string, unknown>) => setMetadata(w.id, patch);
   return (
-    <section className="side-section">
+    <section className="side-section" data-section="worktree">
       <div className="section-label">worktree</div>
       <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label><input value={project} onChange={(e) => setProject(e.target.value)} onBlur={() => commit({ project: project.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
@@ -65,7 +68,7 @@ function GitSection({ w }: { w: Worktree }) {
     return () => window.clearInterval(t);
   }, [w.id]);
   return (
-    <section className="side-section">
+    <section className="side-section" data-section="git">
       <div className="section-label">git <button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></div>
       <div className="kv"><label>branch</label><span className="mono">{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
       {g ? (
@@ -96,7 +99,7 @@ function PrSection({ w }: { w: Worktree }) {
   const checks = pr ? pr.checks_passed + pr.checks_failed + pr.checks_pending : 0;
   const checkState = !pr || checks === 0 ? "none" : pr.checks_failed > 0 ? "failed" : pr.checks_pending > 0 ? "pending" : "passed";
   return (
-    <section className="side-section">
+    <section className="side-section" data-section="pr">
       <div className="section-label">pull request <button className="link" onClick={load}>refresh</button></div>
       {pr ? (
         <>
@@ -129,7 +132,7 @@ function ProcessSection({ w }: { w: Worktree }) {
   }, [open, w.id]);
   const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch((e) => notify("error", (e as Error).message));
   return (
-    <section className="side-section">
+    <section className="side-section" data-section="processes">
       <div className="section-label">processes <button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></div>
       {res ? (
         <div className="kv"><label>total</label><span>{res.process_count} proc · {res.cpu_percent.toFixed(0)}% cpu · {formatBytes(res.rss_bytes)}</span></div>
@@ -174,7 +177,7 @@ function SessionsSection({ w }: { w: Worktree }) {
   }, [w.id, w.exists, live.join(",")]);
   const resumable = (items ?? []).filter((s) => !live.includes(s.id));
   return (
-    <section className="side-section">
+    <section className="side-section" data-section="sessions">
       <div className="section-label">sessions{items && items.length > 0 && <span className="right">{items.length}</span>}</div>
       {items === null && w.exists && <SkeletonRows count={2} className="compact" label="looking for sessions" />}
       {items?.length === 0 && <div className="muted">no agent sessions rooted here</div>}
@@ -222,7 +225,7 @@ function FilesSection({ w }: { w: Worktree }) {
       </div>
     ));
   return (
-    <section className="side-section side-files">
+    <section className="side-section side-files" data-section="files">
       <div className="section-label">files</div>
       <div className="file-actions">
         <button className="link" onClick={() => act("finder")}><Eye className="icon" /> reveal</button>

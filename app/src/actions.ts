@@ -1,11 +1,10 @@
-import { cycleSidebar } from "./shell/sidebarMode";
 import { moduleCommands } from "./commands";
 import { stepZoom, type Appearance } from "./appearance";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { rpc, RpcFailure } from "./api";
 import { orderedStates } from "./homeQuery";
-import { activeTab, agentsOf, clearSelection, getState, needsMe, notify, paneIds, setRowError, setState, setUi } from "./store";
+import { activeTab, agentsOf, clearSelection, getState, needsMe, notify, paneIds, setRowError, setState, setUi, showStatus } from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { ActionRunResult, AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, UsageSnapshot, Worktree } from "./types";
 
@@ -550,8 +549,6 @@ export const actions: Action[] = [
   { id: "focus_right", label: "Focus pane right", run: () => focusDirection("right"), whenWorktree: true },
   { id: "focus_up", label: "Focus pane up", run: () => focusDirection("up"), whenWorktree: true },
   { id: "focus_down", label: "Focus pane down", run: () => focusDirection("down"), whenWorktree: true },
-  { id: "toggle_left_sidebar", label: "Toggle left sidebar", run: () => setUi({ leftMode: cycleSidebar(getState().ui.leftMode) }) },
-  { id: "toggle_right_sidebar", label: "Toggle right sidebar", run: () => setUi({ rightMode: cycleSidebar(getState().ui.rightMode) }) },
   { id: "spawn_claude", label: "Start Claude here", run: () => spawnAgent("claude"), whenWorktree: true },
   { id: "spawn_codex", label: "Start Codex here", run: () => spawnAgent("codex"), whenWorktree: true },
   { id: "spawn_pi", label: "Start Pi here", run: () => spawnAgent("pi"), whenWorktree: true },
@@ -590,7 +587,9 @@ export function setAppearance(patch: Partial<Appearance>): void {
 }
 
 export function applyZoom(dir: "in" | "out" | "reset"): void {
-  setAppearance({ zoom: stepZoom(getState().ui.appearance.zoom, dir) });
+  const zoom = stepZoom(getState().ui.appearance.zoom, dir);
+  setAppearance({ zoom });
+  showStatus(`Zoom ${Math.round(zoom * 100)}%`);
 }
 
 export function stateActions(): Action[] {
@@ -608,8 +607,6 @@ const COMMAND_GROUPS: Record<string, CommandGroup> = {
   activity: "Navigation",
   prev_worktree: "Navigation",
   next_worktree: "Navigation",
-  toggle_left_sidebar: "Navigation",
-  toggle_right_sidebar: "Navigation",
   toggle_board: "Navigation",
   palette: "General",
   appearance: "General",

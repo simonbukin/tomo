@@ -1,29 +1,33 @@
-/* App frame: title bar, three columns, worktree header, tabs, right inspector, resize handles. */
+/* Shell: 3 x 3 grid. Fixed top and bottom strips; left, center, right body columns; resize handles. */
 
 .app {
-  display: grid;
-  grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
   --bottom-h: 24px;
+  --traffic-inset: 84px;
+  --top-left-min: 144px;
+  --top-right-min: 40px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--left-col) minmax(0, 1fr) var(--right-col);
   grid-template-rows: var(--title-h) minmax(0, 1fr) var(--bottom-h);
-  grid-template-areas: "title title title" "left center right" "bottom bottom bottom";
+  grid-template-areas: "top top top" "left center right" "bottom bottom bottom";
   height: 100%;
-  transition: grid-template-columns 160ms ease-out;
+  transition: grid-template-columns var(--dur) var(--ease-out);
 }
-.app.no-left { grid-template-columns: 0 minmax(0, 1fr) var(--right-w); }
-.app.no-right { grid-template-columns: var(--left-w) minmax(0, 1fr) 0; }
-.app.no-left.no-right { grid-template-columns: 0 minmax(0, 1fr) 0; }
+:root[data-fullscreen] .app { --traffic-inset: var(--sp-3); --top-left-min: 72px; }
 
-.titlebar { grid-area: title; display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2) 0 84px; background: var(--bg); border-bottom: 1px solid var(--line); }
-.titlebar-text { display: flex; align-items: baseline; gap: var(--sp-2); color: var(--fg-2); font-size: var(--fs-1); padding-right: var(--sp-2); }
-.conn-bad { color: var(--hot); font-size: var(--fs-1); margin-right: var(--sp-2); }
-.attention-btn { background: var(--waiting-soft); color: var(--waiting); padding: 2px 10px; font-size: var(--fs-1); }
-.attention-btn:hover { background: var(--waiting-soft); filter: brightness(1.08); }
+/* The top-left region keeps the traffic-light safe width when the left column is a rail or 0. */
+.topbar { grid-area: top; display: grid; grid-template-columns: max(var(--left-col), var(--top-left-min)) minmax(0, 1fr) max(var(--right-col), var(--top-right-min)); min-width: 0; background: var(--bg); border-bottom: 1px solid var(--line); transition: grid-template-columns var(--dur) var(--ease-out); }
+.top-left { display: flex; align-items: center; gap: 2px; min-width: 0; padding: 0 var(--sp-2) 0 var(--traffic-inset); }
+.top-mark { color: var(--fg); }
+.top-middle { display: flex; align-items: center; min-width: 0; }
+.top-title { padding: 0 var(--sp-3); color: var(--fg-2); font-size: var(--fs-1); }
+.top-right { display: flex; align-items: center; justify-content: flex-end; min-width: 0; padding: 0 var(--sp-2); }
 
 .center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
 .center-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
 
 /* ---- worktree header: name, branch, state on the left; actions on the right */
-.wt-header { display: flex; align-items: center; gap: var(--sp-3); height: var(--bar-h); padding: 0 var(--sp-2) 0 var(--sp-3); border-bottom: 1px solid var(--line); min-width: 0; }
+.wt-header { display: flex; align-items: center; gap: var(--sp-3); flex: 1; height: 100%; padding: 0 0 0 var(--sp-3); min-width: 0; }
 .wt-header-name { font-weight: 600; color: var(--fg); white-space: nowrap; }
 .wt-header-branch { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .wt-header-state { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-1); color: var(--fg-2); white-space: nowrap; }
@@ -49,7 +53,6 @@
 .tab-edit { width: 160px; padding: 1px 6px; font-size: var(--fs-1); }
 .tab-close { opacity: 0; }
 .tab:hover .tab-close, .tab-close:focus-visible { opacity: 1; }
-.tab-new { color: var(--fg-3); align-self: center; margin: 0 var(--sp-1); }
 .tab { position: relative; }
 .tab-dragging { z-index: 2; background: var(--bg-1); color: var(--fg); }
 .tab-drop-before::before, .tab-drop-after::before { content: ""; position: absolute; top: 5px; bottom: 5px; width: 2px; border-radius: 1px; background: var(--accent); }
@@ -83,12 +86,12 @@
 .pr-title { color: var(--fg); cursor: default; }
 .pr-title:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 
-/* ---- resize handles */
-.sidebar, .rightbar { position: relative; }
-.resize-handle { position: absolute; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; }
-.resize-left { right: -3px; }
-.resize-right { left: -3px; }
-.resize-handle:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+/* ---- resize handles: body row only, a 10 px hit area over a 2 px line */
+.resize-handle { position: absolute; top: var(--title-h); bottom: var(--bottom-h); width: 10px; cursor: col-resize; z-index: 5; touch-action: none; }
+.resize-left { left: max(0px, calc(var(--left-col) - 5px)); }
+.resize-right { right: max(0px, calc(var(--right-col) - 5px)); }
+.resize-handle::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background-color var(--dur-hover) var(--ease-out); }
+.resize-handle:hover::after, .resize-handle:active::after { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 body.resizing-h { cursor: col-resize; }
 body.resizing-v { cursor: row-resize; }
 body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
@@ -103,7 +106,6 @@ body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 .pane-active .pane-legend .proc-icon { color: inherit; }
 .tab .proc-icon { color: var(--fg-3); }
 .tab-active .proc-icon { color: var(--fg-1); }
-.zoom-chip { font-family: var(--mono); color: var(--fg-2); }
 
 .bottom-strip { grid-area: bottom; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: 0 var(--sp-2); border-top: 1px solid var(--line); background: var(--bg); color: var(--fg-2); font-size: var(--fs-1); }
 .toast-dock { position: fixed; right: 12px; bottom: calc(var(--bottom-h) + 12px); z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }

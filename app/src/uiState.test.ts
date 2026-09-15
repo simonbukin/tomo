@@ -60,6 +60,13 @@ describe("sanitizeUi", () => {
     expect("leftOpen" in sanitizeUi({ leftOpen: false }, [])).toBe(false);
   });
 
+  it("keeps a known inspector section and drops anything else", () => {
+    expect(sanitizeUi({ rightSection: "git" }, []).rightSection).toBe("git");
+    expect(sanitizeUi({ rightSection: "terminal" }, []).rightSection).toBeNull();
+    expect(sanitizeUi({ rightSection: 3 }, []).rightSection).toBeNull();
+    expect(sanitizeUi({}, []).rightSection).toBeNull();
+  });
+
   it("passes unknown keys through for fields added later", () => {
     expect((sanitizeUi({ futureField: { a: 1 } }, []) as unknown as Record<string, unknown>).futureField).toEqual({ a: 1 });
   });
