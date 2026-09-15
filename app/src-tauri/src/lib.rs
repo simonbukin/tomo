@@ -1,8 +1,8 @@
+mod agentation;
 mod browser;
 
-use browser::browser_webview;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -175,58 +175,13 @@ async fn rpc(link: State<'_, Arc<Link>>, method: String, params: Option<Value>) 
     rx.await.unwrap_or_else(|_| Err(RpcError { code: ErrorCode::Io, message: "daemon disconnected".into() }))
 }
 
+/// What Browser runs for each addon when a page finishes loading (webview, pane id) and when a pane closes (app, pane id).
+pub(crate) const BROWSER_PAGE_LOADED: &[fn(&Webview, &str)] = &[agentation::page_loaded];
+pub(crate) const BROWSER_CLOSED: &[fn(&AppHandle, &str)] = &[agentation::closed];
+
 #[tauri::command]
 fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
     link.tx.lock().unwrap().is_some()
-}
-
-const AGENTATION_JS: &str = include_str!("../agentation/agentation.js");
-
-#[derive(Default)]
-pub struct AnnotatePanes(Mutex<HashSet<String>>);
-
-fn agentation_script(enabled: bool) -> String {
-    if enabled {
-        format!("if(!window.__tomoAgentation){{{AGENTATION_JS}\n}}window.__tomoAgentation.set(true);")
-    } else {
-        "window.__tomoAgentation&&window.__tomoAgentation.set(false);".to_string()
-    }
-}
-
-#[tauri::command]
-async fn browser_set_annotate(app: AppHandle, annotate: State<'_, AnnotatePanes>, pane_id: String, enabled: bool) -> Result<(), String> {
-    {
-        let mut panes = annotate.0.lock().unwrap();
-        if enabled { panes.insert(pane_id.clone()) } else { panes.remove(&pane_id) };
-    }
-    let wv = browser_webview(&app, &pane_id)?;
-    wv.eval(agentation_script(enabled)).map_err(|e| e.to_string())?;
-    if enabled {
-        wv.set_focus().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-async fn browser_clear_annotations(app: AppHandle, pane_id: String) -> Result<(), String> {
-    browser_webview(&app, &pane_id)?.eval("window.__tomoAgentation && window.__tomoAgentation.clear()").map_err(|e| e.to_string())
-}
-
-fn feedback_pane<'a>(label: &'a str, kind: &str, annotating: impl Fn(&str) -> bool) -> Result<&'a str, String> {
-    let pane_id = label.strip_prefix("browser-").ok_or("not a browser webview")?;
-    match kind {
-        "change" => Ok(pane_id),
-        "copy" | "submit" if annotating(pane_id) => Ok(pane_id),
-        "copy" | "submit" => Err("annotate is off for this pane".into()),
-        _ => Err(format!("unknown feedback kind {kind}")),
-    }
-}
-
-/// Called by the page inside a browser webview. The pane comes from the webview label, never from the page.
-#[tauri::command]
-fn browser_feedback(app: AppHandle, webview: Webview, annotate: State<'_, AnnotatePanes>, kind: String, count: u32, markdown: String) -> Result<(), String> {
-    let pane_id = feedback_pane(webview.label(), &kind, |p| annotate.0.lock().unwrap().contains(p))?;
-    app.emit_to("main", "browser://feedback", json!({ "pane_id": pane_id, "kind": kind, "count": count, "markdown": markdown })).map_err(|e| e.to_string())
 }
 
 // The main webview must be a child of the window, like the browser webviews. On macOS
@@ -250,7 +205,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(link)
-        .manage(AnnotatePanes::default())
+        .manage(agentation::AnnotatePanes::default())
         .invoke_handler(tauri::generate_handler![
             rpc,
             daemon_connected,
@@ -262,9 +217,9 @@ pub fn run() {
             browser::browser_forward,
             browser::browser_reload,
             browser::browser_close,
-            browser_set_annotate,
-            browser_clear_annotations,
-            browser_feedback
+            agentation::browser_set_annotate,
+            agentation::browser_clear_annotations,
+            agentation::browser_feedback
         ])
         .setup(|app| {
             mark("tauri setup");
@@ -279,32 +234,12 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn feedback_pane_comes_from_the_label_and_gates_copy_and_submit() {
-        let on = |p: &str| p == "p1";
-        assert_eq!(feedback_pane("browser-p1", "change", on), Ok("p1"));
-        assert_eq!(feedback_pane("browser-p2", "change", on), Ok("p2"));
-        assert_eq!(feedback_pane("browser-p1", "copy", on), Ok("p1"));
-        assert_eq!(feedback_pane("browser-p1", "submit", on), Ok("p1"));
-        assert!(feedback_pane("browser-p2", "copy", on).is_err());
-        assert!(feedback_pane("browser-p1", "eval", on).is_err());
-        assert!(feedback_pane("main", "change", on).is_err());
-    }
-
-    #[test]
-    fn agentation_script_injects_once_then_toggles() {
-        let script = agentation_script(true);
-        assert!(script.starts_with("if(!window.__tomoAgentation){"));
-        assert!(script.ends_with("}window.__tomoAgentation.set(true);"));
-        assert!(agentation_script(false).ends_with("set(false);"));
-    }
-
-    #[test]
-    fn only_enabling_carries_the_bundle() {
-        assert!(agentation_script(true).contains(AGENTATION_JS));
-        assert!(!agentation_script(false).contains(AGENTATION_JS));
-        assert!(agentation_script(false).len() < 100);
+    fn the_browser_host_does_not_name_agentation() {
+        let hits: Vec<(&str, &str)> = [("browser.rs", include_str!("browser.rs")), ("main.rs", include_str!("main.rs"))]
+            .into_iter()
+            .flat_map(|(file, text)| ["agentation", "annotat", "feedback"].into_iter().filter(move |noun| text.to_lowercase().contains(noun)).map(move |noun| (file, noun)))
+            .collect();
+        assert!(hits.is_empty(), "the browser host names agentation: {hits:?}");
     }
 }

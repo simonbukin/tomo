@@ -1,7 +1,7 @@
-use crate::{agentation_script, AnnotatePanes};
+use crate::{BROWSER_CLOSED, BROWSER_PAGE_LOADED};
 use serde_json::{json, Value};
 use tauri::webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder};
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Rect, State, Url, Webview, WebviewUrl};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Rect, Url, Webview, WebviewUrl};
 
 fn browser_label(pane_id: &str) -> String {
     format!("browser-{pane_id}")
@@ -43,8 +43,8 @@ pub async fn browser_create(app: AppHandle, pane_id: String, url: String, x: f64
         .on_page_load(move |wv, payload| {
             let loading = matches!(payload.event(), PageLoadEvent::Started);
             emit_browser_state(&load_app, &load_pane, json!({ "url": payload.url().as_str(), "loading": loading }));
-            if !loading && load_app.state::<AnnotatePanes>().0.lock().unwrap().contains(&load_pane) {
-                let _ = wv.eval(agentation_script(true));
+            if !loading {
+                BROWSER_PAGE_LOADED.iter().for_each(|hook| hook(&wv, &load_pane));
             }
         })
         .on_document_title_changed(move |_, title| emit_browser_state(&title_app, &title_pane, json!({ "title": title })))
@@ -91,8 +91,8 @@ pub async fn browser_reload(app: AppHandle, pane_id: String) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub async fn browser_close(app: AppHandle, annotate: State<'_, AnnotatePanes>, pane_id: String) -> Result<(), String> {
-    annotate.0.lock().unwrap().remove(&pane_id);
+pub async fn browser_close(app: AppHandle, pane_id: String) -> Result<(), String> {
+    BROWSER_CLOSED.iter().for_each(|hook| hook(&app, &pane_id));
     match browser_webview(&app, &pane_id) {
         Ok(wv) => wv.close().map_err(|e| e.to_string()),
         Err(_) => Ok(()),
