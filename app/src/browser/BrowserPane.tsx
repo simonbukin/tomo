@@ -117,10 +117,6 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     }
   }, [pane?.url]);
 
-  useEffect(() => {
-    invoke("browser_set_annotate", { paneId, enabled: annotate }).catch(browserHostFailed("browser_set_annotate"));
-  }, [paneId, annotate]);
-
   const navigate = (text: string) => {
     const next = normalizeUrl(text);
     setDraft(null);
@@ -144,6 +140,12 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
   };
 
   const copyFeedback = () => copyText(feedback.markdown, "Feedback");
+
+  const toggleAnnotate = () => {
+    const enabled = !annotate;
+    setAnnotate(enabled);
+    invoke("browser_set_annotate", { paneId, enabled }).catch(browserHostFailed("browser_set_annotate"));
+  };
 
   const sendItems = (): MenuItem[] => [
     ...(agents.length ? agents.map((a) => ({ label: `${KIND_LABEL[a.kind]} — ${a.state}`, run: () => send(a.pane_id, KIND_LABEL[a.kind]) })) : [{ label: "no live agent in this worktree", disabled: true }]),
@@ -192,7 +194,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
               if (e.key === "Escape") setDraft(null);
             }}
           />
-          <IconButton label={annotate ? "Stop annotating" : "Annotate"} className={annotate ? "browser-annotate-on" : undefined} aria-pressed={annotate} onClick={() => setAnnotate((v) => !v)}>
+          <IconButton label={annotate ? "Stop annotating" : "Annotate"} className={annotate ? "browser-annotate-on" : undefined} aria-pressed={annotate} onClick={toggleAnnotate}>
             <MessageSquarePlus className="icon" />
           </IconButton>
           {feedback.count > 0 && (
