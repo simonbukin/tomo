@@ -164,23 +164,25 @@ Clicks inside a card do not reach the row under it.
 
 ## Notifications
 
-A toast is for an error, an important background completion, a config
-problem, or the result of a destructive operation. Tomo does not toast a
-success that the UI already shows (copy, bulk tag, bulk restore, nothing to
-jump to).
+See [notifications.md](notifications.md) for the full model. In short: a
+small success that the user started is a status message in the bottom strip
+(`✓ Copied path`). A failure or an exceptional event is a toast in the dock
+at the bottom right, above the strip. Tomo internals go to Diagnostics, not
+to a toast and not to Activity. A dismissed toast never resolves attention.
 
-A new attention item goes through `attentionRoute` in
-`app/src/notifyRoute.ts`:
+A new attention item goes through `attentionDelivery` in
+`app/src/notifyRoute.ts`. The in-app indicators (sidebar dot or rail `◉`,
+tab dot, Activity count) always render from state:
 
-| Tomo window                        | Result                                           |
-|------------------------------------|--------------------------------------------------|
-| not focused                        | desktop notification when `[notifications] desktop` is on |
-| focused, other worktree, view, or pane | the in-app indicators only (sidebar dot or rail `◉`, tab dot, Activity count) |
-| focused on that pane or worktree   | nothing extra; a waiting item is marked seen     |
+| Tomo window | Crash | Waiting agent | Human checkpoint |
+|-------------|-------|---------------|------------------|
+| not focused | toast + desktop | desktop | chime + toast + desktop |
+| focused, elsewhere | toast with `Logs` and `Restart` | nothing extra | chime + toast with `Open` and `Resolve` |
+| focused on that pane | nothing extra | nothing extra; marked seen | chime |
 
-Desktop notifications use `tauri-plugin-notification`. A human checkpoint
-also calls `playChime("checkpoint")`, which plays only when
-`[notifications] sounds` is on.
+Desktop notifications use `tauri-plugin-notification` and need
+`[notifications] desktop`. The chime plays only when `[notifications] sounds`
+is on.
 
 ## Terminal links and file drop
 

@@ -58,9 +58,9 @@ pub fn parse_lsof(text: &str) -> Vec<Listener> {
 }
 
 /// One `lsof` call for the given pids; none when there is nothing to ask about.
-pub fn listeners(pids: &[u32]) -> Vec<Listener> {
+pub fn listeners(pids: &[u32]) -> Result<Vec<Listener>, String> {
     if pids.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let list = pids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
     std::process::Command::new("lsof")
@@ -69,7 +69,7 @@ pub fn listeners(pids: &[u32]) -> Vec<Listener> {
         .stderr(std::process::Stdio::null())
         .output()
         .map(|o| parse_lsof(&String::from_utf8_lossy(&o.stdout)))
-        .unwrap_or_default()
+        .map_err(|e| format!("lsof: {e}"))
 }
 
 pub fn is_shell(name: &str) -> bool {
@@ -199,8 +199,10 @@ impl Daemon {
     /// Runs `lsof` with no lock held, then merges the result. Call after a process poll.
     pub fn scan_endpoints(self: &Arc<Self>) {
         let pids = candidate_pids(&self.lock());
-        let found = listeners(&pids);
+        let scanned = listeners(&pids);
         let mut inner = self.lock();
+        Self::diagnostic_on_change(&mut inner, "runtime", "port scan", scanned.as_ref().err().cloned());
+        let Ok(found) = scanned else { return };
         let now = now_ms();
         let observed = observe(&inner, &found, now);
         let r = reconcile(&inner.endpoints, &inner.endpoint_gone_ms, observed, now);

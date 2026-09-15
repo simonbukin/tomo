@@ -317,6 +317,10 @@ pub async fn refresh(daemon: &Arc<Daemon>) {
     let mut inner = daemon.lock();
     let notices = crossings(&inner.usage, &fresh);
     let changed = !same(&inner.usage, &fresh);
+    for s in &fresh {
+        let problem = (!s.available).then(|| s.reason.clone().unwrap_or_else(|| "unavailable".to_string()));
+        Daemon::diagnostic_on_change(&mut inner, "usage", &format!("{} usage", s.provider.label().to_lowercase()), problem);
+    }
     inner.usage = fresh;
     if changed {
         let snapshots = inner.usage.clone();

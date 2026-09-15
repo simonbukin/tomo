@@ -13,7 +13,6 @@ import type { Diagnostic, DiagnosticLevel,
   ConfigIssue,
   Frame,
   Id,
-  IntegrationStatus,
   Pane,
   PrStatusResult,
   PullRequest,
@@ -207,9 +206,6 @@ export function applySnapshot(snap: Snapshot): void {
 function checkHealthOnce(): void {
   if (state.healthChecked) return;
   setState({ healthChecked: true });
-  rpc<IntegrationStatus[]>("integrations_status")
-    .then((list) => list.filter((i) => i.level === "partial" || i.level === "process_only").forEach((i) => recordDiagnostic("warning", "integrations", `${i.kind}: ${i.reason ?? i.level}`)))
-    .catch(() => {});
   rpc<ConfigIssue[]>("config_check")
     .then((issues) => {
       const errors = issues.filter((i) => i.level === "error");

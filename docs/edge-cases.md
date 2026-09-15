@@ -66,7 +66,7 @@ and the GUI as one surface, because most failures cross all three.
 ## Error Messages
 | Scenario | User-facing message | Tone/placement |
 |----------|---------------------|----------------|
-| Git failure | Git's own stderr, prefixed with the command | Toast, bottom center |
+| Git failure | Git's own stderr, prefixed with the command | Toast, bottom right |
 | Editor missing | "editor not found; opened with Finder" | Toast |
 | Pane has processes | "Processes are still running in this pane…" | Confirm dialog |
 | Daemon offline | "daemon offline" | Title bar, red |

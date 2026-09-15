@@ -1,5 +1,4 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { focusPane, openWorktree, resolveCheckpoint, restartWorktreeAction } from "./actions";
 import { rpc } from "./api";
 import { attentionDelivery, type AttentionActionId, type AttentionNames, type RouteContext } from "./notifyRoute";
 import { playChime } from "./sounds";
@@ -40,20 +39,23 @@ function namesOf(s: State, item: AttentionItem): AttentionNames {
   return { worktree: s.worktrees.find((w) => w.id === item.worktree_id)?.name ?? null, action: actionId ? { id: actionId, label: def?.label ?? actionId } : null };
 }
 
+// The store imports this module, and `actions` imports the store: a lazy import keeps that cycle out of module start.
+const withActions = (run: (a: typeof import("./actions")) => unknown) => () => void import("./actions").then(run);
+
 function toastAction(id: AttentionActionId, item: AttentionItem, names: AttentionNames): { label: string; run: () => void } {
-  const goTo = () => {
-    void openWorktree(item.worktree_id);
-    if (item.pane_id) window.setTimeout(() => void focusPane(item.pane_id!), 80);
-  };
+  const goTo = withActions((a) => {
+    void a.openWorktree(item.worktree_id);
+    if (item.pane_id) window.setTimeout(() => void a.focusPane(item.pane_id!), 80);
+  });
   switch (id) {
     case "logs":
       return { label: "Logs", run: goTo };
     case "open":
       return { label: "Open", run: goTo };
     case "restart":
-      return { label: "Restart", run: () => names.action && restartWorktreeAction(item.worktree_id, names.action.id) };
+      return { label: "Restart", run: withActions((a) => names.action && a.restartWorktreeAction(item.worktree_id, names.action.id)) };
     case "resolve":
-      return { label: "Resolve", run: () => resolveCheckpoint(item.id) };
+      return { label: "Resolve", run: withActions((a) => a.resolveCheckpoint(item.id)) };
   }
 }
 
