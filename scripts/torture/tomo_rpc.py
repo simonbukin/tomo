@@ -6,6 +6,7 @@
   tomo_rpc.py raw <pane_id> <seconds>              print raw bytes as repr
   tomo_rpc.py send <pane_id> <text>                send text (python escapes like \\r allowed)
   tomo_rpc.py events <seconds>                     count events on a subscribed connection
+  tomo_rpc.py watch <seconds> <event>              print the data of each matching event as one JSON line
 """
 import base64, json, os, re, socket, sys, time
 
@@ -72,6 +73,10 @@ def main():
         for f in r.frames(float(sys.argv[2])):
             if "event" in f: n += 1
         print(n)
+    elif cmd == "watch":
+        r.call("subscribe")
+        for f in r.frames(float(sys.argv[2])):
+            if f.get("event") == sys.argv[3]: print(json.dumps(f.get("data")), flush=True)
 
 if __name__ == "__main__":
     main()
