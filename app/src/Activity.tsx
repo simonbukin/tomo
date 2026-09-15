@@ -4,6 +4,8 @@ import { focusPane, openEndpoint, openWorktree, refreshUsage, resolveCheckpoint,
 import { rpc } from "./api";
 import { Button, Popover, PopoverContent, PopoverTitle, PopoverTrigger, SkeletonRows, Tooltip } from "./components/ui";
 import { activityEmptyText, type ActivityFilter as Filter } from "./emptyStates";
+import { activityStatus, GLYPH } from "./glyphs";
+import "./styles/previews.css";
 import { ProcessIcon } from "./ProcessIcon";
 import { EmptyState } from "./states";
 import { endpointsOf, setState, useStore, type State } from "./store";
@@ -92,10 +94,12 @@ function EventRow({ e }: { e: ActivityEvent }) {
     if (pane) window.setTimeout(() => focusPane(pane.id), 80);
   };
   const line = [who.text, worktree?.name].filter(Boolean).join(" · ");
+  const status = activityStatus(e.kind);
   return (
     <div className="activity-row">
       <span className="activity-time mono">{timeLabel(e.occurred_at_ms)}</span>
       <span className="activity-who">
+        {status && <span className={`glyph glyph-${status}`} aria-label={status}>{GLYPH[status]}</span>}
         {who.agent && <ProcessIcon agent={who.agent} size={11} />}
         {line}
       </span>

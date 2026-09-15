@@ -112,7 +112,8 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # Check it with: tomo config check
 
 # shell = "/bin/zsh"
-# editor_command = ["zed", "{path}"]
+# editor_command = ["zed", "{path}"]   # Cmd-click path:line opens "{path}" as path:line:col
+# editor_command = ["code", "-g", "{path}:{line}:{col}"]
 # worktree_parent_dir = "~/worktrees"
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
@@ -242,6 +243,7 @@ pub fn default_keybindings() -> BTreeMap<String, String> {
         ("move_pane_up", "mod+ctrl+alt+up"),
         ("move_pane_down", "mod+ctrl+alt+down"),
         ("equalize_panes", "mod+alt+e"),
+        ("reopen_tab", "mod+shift+t"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
