@@ -18,6 +18,11 @@ implemented only in the GUI. `scripts/torture/client.sh` proves this with a
 headless client. [client-independence.md](client-independence.md) lists the
 display logic that stays in the GUI.
 
+Tomo has three crates: `tomo-proto`, `tomod`, and `tomo-cli`. Milestone 10
+examined a fourth crate, a `tomo-core` domain library, and kept the three.
+The dependency law stays in the tests of `addons/mod.rs`. See "Milestone 10
+result: crate structure" in [addons.md](addons.md).
+
 The Tauri process does not talk to the daemon in JavaScript. A small Rust
 bridge (`app/src-tauri/src/lib.rs`) holds one socket connection, forwards
 `invoke("rpc", …)` calls, and re-emits daemon frames as the `daemon-event`
