@@ -2,7 +2,12 @@
 
 Diagnostics show what Tomo itself does: daemon reconnects, config reloads,
 usage adapter failures, hook runtime issues, integration health changes,
-and runtime scanner errors. Work events (an agent waits, an Action crashes,
+and runtime scanner errors. The scanner records `port scan: lsof failed:
+<error>` when the call does not start, and `port scan: lsof did not answer
+in 2 s` when Tomo kills a call that passes its deadline. A pane that keeps
+its queued command line because the terminal stays busy records a `daemon`
+warning; see [runtime.md](runtime.md) and the table in
+[notifications.md](notifications.md). Work events (an agent waits, an Action crashes,
 a worktree is archived) go to Activity, never to Diagnostics.
 
 ## Where to find them
