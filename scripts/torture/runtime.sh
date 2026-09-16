@@ -22,7 +22,7 @@ mk() { $T worktree create --repo "$R" --branch "$1" --new --json | jq_ "print(d[
 read -r WT P < <(mk feat/runtime)
 FIXED=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
 
-ids() { $T action list "$1" --json | jq_ "print(' '.join(a['id'] for a in d))"; }
+ids() { $T action list "$1" --json | jq_ "print(' '.join(a['id'] for a in d['actions']))"; }
 write_toml() { printf '%s\n' "$2" > "$1/.tomo.toml"; wait_for "[ \"\$(ids $3)\" = 'serve fixed crash raw ok' ]" 6; }
 TOML="[[actions]]
 id = \"serve\"
