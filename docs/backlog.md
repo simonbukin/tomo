@@ -66,6 +66,27 @@ webview alive.
   same webview, so the opener that must receive the code is destroyed. Open a
   real child webview instead.
 
+**Done, except the popup path.** Unmount hides the webview, and `BrowserHost`
+closes a webview only when its pane leaves the store, so a tab switch keeps the
+page, the heap, and the session cookies. The bounds go with `show()` inside one
+host command, so the page cannot appear in its old place.
+
+**What "sleep" really is.** Hidden, not suspended: in wry, `set_visible(false)`
+is `setHidden`, and Tauri offers no suspend, no mute, and no heap drop. WebKit
+probably throttles a hidden view, but that is unproven here. The cost is one
+`WebContent` process per pane. There is no cap (decision 0). If many sleeping
+panes hurt, the policy to try first is to close the browser panes of worktrees
+the user has not looked at, keyed by last focus.
+
+**Still open:** the popup path. A real child webview needs a unique
+`browser-*` label for the capability, a popup-to-pane link so a close cascades,
+a close path for the user and for `window.close()`, and proof that `build()` is
+safe inside the callback while WebKit holds the main thread. The recipe is in
+`docs/browser.md` under "Popups and OAuth". Also small: `browser_set_visible`
+reports a diagnostic when a pane has no webview, and the mount path still sends
+a redundant `browser_set_visible(true)` after `browser_create` has shown the
+page.
+
 ### 1.3 The right rail puts the status glyph beside the icon — S, client
 The `.rail-marker` rule no longer exists. It was deleted when the left rail
 changed to status dots, and only the left rail got a replacement, so the badge
