@@ -336,24 +336,77 @@ pub fn archive_result(r: &ArchiveResult, json: bool) {
 
 pub fn actions(set: &ActionSet, json: bool) {
     if json {
-        return emit_json(&set.actions);
+        return emit_json(set);
     }
-    for a in &set.actions {
-        let mode = match a.mode {
-            ActionMode::Pane => "pane",
-            ActionMode::External => "external",
-        };
-        let show = match a.show {
-            ActionShow::Topbar => "topbar",
-            ActionShow::Menu => "menu",
-        };
-        println!("{:<14} {:<18} {:<9} {:<7} {}", a.id, a.label, mode, show, a.command);
+    for line in action_lines(set) {
+        println!("{line}");
+    }
+}
+
+fn action_lines(set: &ActionSet) -> Vec<String> {
+    let mut lines: Vec<String> = set
+        .actions
+        .iter()
+        .map(|a| {
+            let mode = match a.mode {
+                ActionMode::Pane => "pane",
+                ActionMode::External => "external",
+            };
+            let show = match a.show {
+                ActionShow::Topbar => "topbar",
+                ActionShow::Menu => "menu",
+            };
+            format!("{:<14} {:<18} {:<9} {:<7} {}", a.id, a.label, mode, show, a.command)
+        })
+        .collect();
+    if !set.actions.is_empty() {
+        let source = if set.from_repo { "repository" } else { "worktree" };
+        lines.push(format!("from the {source} .tomo.toml"));
     }
     if let Some(e) = &set.error {
-        println!("warning: {e}");
+        lines.push(format!("warning: {e}"));
     }
     if set.actions.is_empty() && set.error.is_none() {
-        println!("no actions; add [[actions]] to .tomo.toml in the worktree");
+        lines.push("no actions; add [[actions]] to .tomo.toml in the worktree".into());
+    }
+    lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(from_repo: bool, actions: Vec<&str>, error: Option<&str>) -> ActionSet {
+        ActionSet {
+            worktree_id: "w1".into(),
+            actions: actions
+                .iter()
+                .map(|id| ActionDef { id: (*id).into(), label: (*id).into(), command: "true".into(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None })
+                .collect(),
+            error: error.map(String::from),
+            from_repo,
+        }
+    }
+
+    #[test]
+    fn the_list_names_the_file_that_the_set_came_from() {
+        assert_eq!(action_lines(&set(true, vec!["serve"], None)).last().unwrap(), "from the repository .tomo.toml");
+        assert_eq!(action_lines(&set(false, vec!["serve"], None)).last().unwrap(), "from the worktree .tomo.toml");
+    }
+
+    #[test]
+    fn an_empty_set_names_no_file_and_a_bad_set_keeps_its_warning() {
+        assert_eq!(action_lines(&set(true, vec![], None)), vec!["no actions; add [[actions]] to .tomo.toml in the worktree"]);
+        assert_eq!(action_lines(&set(true, vec![], Some("/r/.tomo.toml: bad"))), vec!["warning: /r/.tomo.toml: bad"]);
+    }
+
+    #[test]
+    fn the_json_result_is_the_whole_set() {
+        let v = serde_json::to_value(set(true, vec!["serve"], Some("/r/.tomo.toml: bad"))).unwrap();
+        assert_eq!(v["from_repo"], true);
+        assert_eq!(v["error"], "/r/.tomo.toml: bad");
+        assert_eq!(v["worktree_id"], "w1");
+        assert_eq!(v["actions"][0]["id"], "serve");
     }
 }
 

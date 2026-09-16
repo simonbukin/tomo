@@ -162,11 +162,23 @@ tomo action stop <action> [worktree]
 tomo action restart <action> [worktree]
 ```
 
-Actions come from `[[actions]]` in `<worktree>/.tomo.toml`. See
-[actions.md](actions.md). `list` prints one line per action with id,
-label, mode, show, and command; a malformed file adds a `warning:` line
-with the first problem. `run` starts the action, or focuses its pane when
-the same action already runs there:
+Actions come from `[[actions]]` in `<worktree>/.tomo.toml`, or from the
+repository file when the worktree has none. See [actions.md](actions.md).
+`list` prints one line per action with id, label, mode, show, and command,
+then one line that names the file the set came from; a malformed file adds
+a `warning:` line with the first problem:
+
+```text
+serve          Serve              pane      topbar  pnpm dev
+from the repository .tomo.toml
+```
+
+With `--json` the result is the whole `ActionSet`: `worktree_id`,
+`actions`, `error`, and `from_repo`. It was the `actions` array alone
+before, thus a client that reads the output must now read `.actions`.
+
+`run` starts the action, or focuses its pane when the same action already
+runs there:
 
 ```text
 Storybook started in pane 5cac1495a647
