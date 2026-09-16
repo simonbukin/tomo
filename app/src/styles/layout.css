@@ -83,6 +83,8 @@
 .file-tree { flex: 1; overflow: auto; font-size: var(--fs-1); font-family: var(--mono); margin: 0 calc(var(--sp-2) * -1); }
 .file-row { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 var(--sp-2); white-space: nowrap; border-radius: var(--radius-sm); color: var(--fg-1); transition: background-color var(--dur-fast) ease-out; }
 .file-row .icon { color: var(--fg-3); width: 12px; height: 12px; }
+.file-row .file-name { overflow: hidden; text-overflow: ellipsis; }
+.file-row .file-age { margin-left: auto; padding-left: var(--sp-2); color: var(--fg-3); font-size: var(--fs-0); }
 .file-row:hover { background: var(--bg-1); }
 .file-selected { background: var(--accent-soft); color: var(--accent); }
 .pr-title { color: var(--fg); cursor: default; }

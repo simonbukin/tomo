@@ -123,7 +123,7 @@ function ProcessSection({ w }: { w: Worktree }) {
   );
 }
 
-function ago(ms: number): string {
+export function ago(ms: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
   if (s < 60) return "now";
   if (s < 3600) return `${Math.floor(s / 60)}m`;
@@ -161,7 +161,15 @@ function SessionsSection({ w }: { w: Worktree }) {
   );
 }
 
+export type FileSort = "recent" | "name";
+
+/** `name` is the order the daemon sends: directories first, then name. `recent` is newest first. */
+export function sortEntries(entries: FsEntry[], by: FileSort): FsEntry[] {
+  return by === "name" ? entries : [...entries].sort((a, b) => b.modified_ms - a.modified_ms);
+}
+
 function FilesSection({ w }: { w: Worktree }) {
+  const [sort, setSort] = useState<FileSort>("recent");
   const [selected, setSelected] = useState<string>("");
   const [dirs, setDirs] = useState<Record<string, FsEntry[]>>({});
   const [openDirs, setOpenDirs] = useState<Set<string>>(new Set([""]));
@@ -184,17 +192,19 @@ function FilesSection({ w }: { w: Worktree }) {
   const act = (target: "finder" | "editor") => rpc("open_external", { worktree_id: w.id, rel_path: selected, target }).catch(failToast("Could not open"));
   const copy = () => navigator.clipboard.writeText(selected ? `${w.path}/${selected}` : w.path).catch(() => {});
   const render = (rel: string, depth: number): React.ReactNode =>
-    (dirs[rel] ?? []).map((e) => (
+    sortEntries(dirs[rel] ?? [], sort).map((e) => (
       <div key={e.rel_path}>
         <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(() => {})}>
-          {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />} {e.name}
+          {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />}
+          <span className="file-name">{e.name}</span>
+          {e.modified_ms > 0 && <span className="file-age">{ago(e.modified_ms)}</span>}
         </div>
         {e.is_dir && openDirs.has(e.rel_path) && render(e.rel_path, depth + 1)}
       </div>
     ));
   return (
     <section className="side-section side-files" data-section="files">
-      <SectionLabel id="files" />
+      <SectionLabel id="files"><button className="link" title={sort === "recent" ? "Sorted by change time. Click to sort by name." : "Sorted by name. Click to sort by change time."} onClick={() => setSort(sort === "recent" ? "name" : "recent")}>{sort}</button></SectionLabel>
       <div className="file-actions">
         <button className="link" onClick={() => act("finder")}><Eye className="icon" /> reveal</button>
         <button className="link" onClick={copy}><Copy className="icon" /> copy path</button>
