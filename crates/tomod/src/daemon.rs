@@ -158,6 +158,39 @@ pub fn problem_change(subject: &str, before: Option<&str>, after: Option<&str>) 
     }
 }
 
+/// The tty must stay silent for this long before Tomo types the queued line.
+const PENDING_QUIET_MS: u64 = 300;
+/// A pane that wrote nothing at all gets the line here, because a shell profile can be silent.
+const PENDING_SILENT_MS: u64 = 5_000;
+/// A tty that never goes quiet keeps the line until here. Then the line goes and a diagnostic stays.
+const PENDING_BUSY_MS: u64 = 30_000;
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Pending {
+    Wait,
+    Type,
+    Drop,
+}
+
+/// Decides what to do with the queued command line of a pane. Output that
+/// still flows means a program reads the tty, and the line would land in that
+/// program instead of the shell, so Tomo waits. A slow profile keeps the line
+/// until it goes quiet.
+pub(crate) fn pending_action(last_output_ms: u64, now: u64, started: u64) -> Pending {
+    let elapsed = now.saturating_sub(started);
+    if last_output_ms == 0 {
+        return if elapsed >= PENDING_SILENT_MS { Pending::Type } else { Pending::Wait };
+    }
+    if now.saturating_sub(last_output_ms) >= PENDING_QUIET_MS {
+        return Pending::Type;
+    }
+    if elapsed >= PENDING_BUSY_MS {
+        Pending::Drop
+    } else {
+        Pending::Wait
+    }
+}
+
 pub(crate) fn new_id() -> Id {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
@@ -751,6 +784,7 @@ impl Daemon {
 
     /// Types the queued command once the shell has produced output and then gone quiet,
     /// so the line lands after the prompt instead of inside shell start-up output.
+    /// While output still flows, a program can hold the tty, so Tomo waits: see `pending_action`.
     pub(crate) fn type_pending_when_quiet(self: &Arc<Self>, pane_id: String) {
         let daemon = self.clone();
         tokio::spawn(async move {
@@ -763,9 +797,16 @@ impl Daemon {
                     if pane.pending_line.is_none() || pane.pty.is_none() {
                         return;
                     }
-                    let quiet = pane.last_output_ms > 0 && now_ms().saturating_sub(pane.last_output_ms) >= 300;
-                    let timeout = now_ms().saturating_sub(started) > 5000;
-                    (quiet || timeout).then(|| (pane.pending_line.take().unwrap(), pane.pty.clone().unwrap()))
+                    match pending_action(pane.last_output_ms, now_ms(), started) {
+                        Pending::Wait => None,
+                        Pending::Type => Some((pane.pending_line.take().unwrap(), pane.pty.clone().unwrap())),
+                        Pending::Drop => {
+                            let line = pane.pending_line.take().unwrap_or_default();
+                            let message = format!("pane {pane_id}: the terminal did not go quiet, so Tomo did not type {line:?}");
+                            Daemon::diagnostic(&mut inner, DiagnosticLevel::Warning, "daemon", message);
+                            return;
+                        }
+                    }
                 };
                 if let Some((line, pty)) = ready {
                     let _ = pty.write(format!("{line}\n").as_bytes());
@@ -2171,6 +2212,16 @@ mod tests {
         assert_eq!(problem_change("port scan", None, Some("no token")), Some((DiagnosticLevel::Warning, "port scan: no token".into())));
         assert_eq!(problem_change("port scan", Some("no token"), Some("timeout")), Some((DiagnosticLevel::Warning, "port scan: timeout".into())));
         assert_eq!(problem_change("port scan", Some("timeout"), None), Some((DiagnosticLevel::Info, "port scan: ok again".into())));
+    }
+
+    #[test]
+    fn a_pending_line_waits_for_a_quiet_tty_and_goes_when_output_never_stops() {
+        assert_eq!(pending_action(0, 1_000, 0), Pending::Wait, "no output yet, inside the silent window");
+        assert_eq!(pending_action(0, PENDING_SILENT_MS, 0), Pending::Type, "a silent shell profile still gets the line");
+        assert_eq!(pending_action(700, 1_000, 0), Pending::Type, "quiet for 300 ms: the prompt is back");
+        assert_eq!(pending_action(900, 1_000, 0), Pending::Wait, "output 100 ms ago: a program can hold the tty");
+        assert_eq!(pending_action(9_950, 10_000, 0), Pending::Wait, "still busy after 10 s: wait, do not type");
+        assert_eq!(pending_action(PENDING_BUSY_MS, PENDING_BUSY_MS, 0), Pending::Drop, "busy at the give-up time");
     }
 
     #[test]
