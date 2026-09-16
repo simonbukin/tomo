@@ -5,6 +5,25 @@ file categorizes those notes, records the root cause where one is known, and
 gives an order. Effort is **S** (under an hour), **M** (a few hours), **L** (a
 day or more). Layer is core, client, addon, host (Tauri), or config.
 
+## 0. Decisions
+
+Settled with the user on 2026-09-16:
+
+- **Browser panes stay alive and sleep.** Do not cap the count. Tomo does not
+  try to be a full browser, but a pane must feel stable and real. A sleeping
+  pane keeps its page and its session, like a sleeping tab in Chromium. Open
+  question: show the live browser panes of a worktree the way runtime ports are
+  shown.
+- **`.tomo.toml` belongs to the repository.** A worktree file may still
+  override it. There is no reason for the file to be worktree-specific by
+  default.
+- **No artifact shelf.** Instead, sort the Files inspector by recency and give
+  it the same context menu (open, reveal in Finder, open in the editor).
+- **Mascots are their own addon** and can wait.
+- **CSS needs its own discussion.** Tomo must stay editable by an agent, so the
+  styling must be generic, simple, and open. CSS modules look right for that,
+  and the decision comes before item 2.3.
+
 ## 1. Bugs with a known root cause
 
 ### 1.1 An agent reads a flag as its first message — S, config
@@ -34,8 +53,9 @@ webview alive.
   `mount` slot) closes the ids that leave the store.
 - Push the bounds before `show()`, because a hidden webview keeps a stale rect
   after a resize or a zoom change.
-- Cap the kept-alive set (for example 3, or the active worktree) because each
-  webview is a full process.
+- Do not cap the set (decision 0). Make a hidden pane sleep instead: keep the
+  page and its session, and give back what a hidden page does not need. Measure
+  the cost of a sleeping webview first, because each one is a full process.
 - Second, for popup logins: `on_new_window` denies the popup and navigates the
   same webview, so the opener that must receive the code is destroyed. Open a
   real child webview instead.
@@ -122,11 +142,11 @@ the cause is known.
 | Idea | Shape | Effort |
 |---|---|---|
 | Drag arrangement like Rectangle | An overlay that shows the target region while a pane drags. The drop regions and the split-tree moves already exist; this is presentation and hit testing. | M |
-| Artifact shelf | Recent files by modification time in the inspector, opened from there or in Finder. Decide whether it detects files that agents wrote. | M |
+| Files by recency | Not a separate shelf (decision 0): sort the Files inspector by modification time and give it the same context menu (open, reveal in Finder, open in the editor). | S |
 | Sound hooks | Sounds for hook events (`worktree.*`, `agent.*`, `action.*`). `sounds.ts` and the `[notifications] sounds` switch exist; this generalizes them. Keep it off by default. | S |
 | Agent lineage | Which agent spawned which, per worktree. Needs a parent link at spawn time and a small view. | M |
 | Archive postcards | A card for each archived worktree: dates, commits, agent sessions, and running time. `town_history` has part of it; commits and session counts need an aggregate from activity and git. | M |
-| Worktree mascots | A small generated avatar for each worktree, from its id. Delight only. | S |
+| Worktree mascots | A small generated avatar for each worktree, from its id. Its own addon, separate from Towns (decision 0). Deferred. | S |
 | Linear | Issues beside a worktree. External API, tokens, and polling, so it is the largest. | L |
 
 ## 4. Order
