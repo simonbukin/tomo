@@ -36,11 +36,8 @@ resume_flags() { case $1 in claude) echo "--resume $2" ;; codex) echo "resume $2
 E=$($T pane create --worktree "$WT"); sleep 1.5
 $RPC send "$E" "env > $HOME/pane-env\r"
 wait_for "[ -s $HOME/pane-env ]" 20
-for v in CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_THREAD_ID ORCA_PANE; do
+for v in CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_THREAD_ID ORCA_PANE PI_CODING_AGENT CODEX_SANDBOX; do
   grep -q "^$v=" "$HOME/pane-env" && check 1 "pane env drops $v" || check 0 "pane env drops $v"
-done
-for v in PI_CODING_AGENT CODEX_SANDBOX; do
-  grep -q "^$v=" "$HOME/pane-env" && known "pane env keeps $v: inherited_env_to_remove names no Pi or Codex sandbox marker" || check 0 "pane env drops $v"
 done
 
 # 1. an agent started by hand, with no integration, is found by the process monitor

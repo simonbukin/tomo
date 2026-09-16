@@ -22,10 +22,10 @@ crates/tomod/              daemon
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
   src/git.rs               git child processes and porcelain parsers
-  src/procs.rs             process table, ownership, aggregation, agent detection
+  src/procs.rs             process table, ownership, aggregation
   src/monitor.rs           periodic poll: cwd, titles, heuristics, resources
-  src/agents.rs            authority merge, hook mapping, spawn plans, hook JSON
-  src/integrations.rs      user-level hook installation
+  src/agents.rs            authority merge, shell quoting
+  src/providers/           one module for each agent provider: flags, hook table, detection, env markers, launch files, install, health, sessions
   src/watch.rs             Git directory and addon worktree file watcher, discovery trigger
   src/config.rs            config.toml, defaults, paths
   src/events.rs            hook envelopes, hook processes, the archive gate
@@ -149,9 +149,10 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 
 | Question                              | Place                                   |
 |---------------------------------------|-----------------------------------------|
-| Which env vars a pane gets or loses   | `Daemon::pane_env`, `Daemon::inherited_env_to_remove` |
-| How an agent is launched or resumed   | `agents::spawn_plan`                    |
-| What a hook event means               | `agents::hook_outcome`                  |
+| Which env vars a pane gets or loses   | `Daemon::pane_env`, `Daemon::inherited_env_to_remove`, `providers::marks_nested_agent` |
+| How an agent is launched or resumed   | `providers::launch`, `flags` of the provider |
+| What a hook event means               | `providers::hook_outcome`, `hook_outcome` of the provider |
+| What one agent provider needs that the others do not | `crates/tomod/src/providers/` (the `Provider` table) |
 | Whether a weaker signal may overwrite | `agents::merge`                         |
 | What counts as owned or observed      | `procs::classify`                       |
 | How a moved worktree keeps its data   | `Daemon::rebind`, called from `Daemon::discover` (gitdir) and `restore_worktree` |

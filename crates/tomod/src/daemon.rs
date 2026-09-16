@@ -4,9 +4,10 @@ use crate::config::{self, Paths};
 use crate::git;
 use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
+use crate::providers;
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::events;
-use crate::features::{editor, reopen, sessions};
+use crate::features::{editor, reopen};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -19,7 +20,6 @@ use tomo_proto::*;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
-const PI_EXTENSION_SOURCE: &str = include_str!("../../../integrations/pi/tomo-status.ts");
 
 pub struct Client {
     pub tx: mpsc::UnboundedSender<String>,
@@ -238,37 +238,12 @@ impl Daemon {
             seams,
             paths,
         });
-        daemon.write_integration_files()?;
+        providers::write_launch_files(&daemon.paths.integrations_dir, &daemon.tomo_bin)?;
         Ok(daemon)
     }
 
     pub fn lock(&self) -> MutexGuard<'_, Inner> {
         self.inner.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
-    pub fn claude_settings_path(&self) -> PathBuf {
-        self.paths.integrations_dir.join("claude-hooks.json")
-    }
-
-    pub fn pi_extension_path(&self) -> PathBuf {
-        self.paths.integrations_dir.join("tomo-status.ts")
-    }
-
-    fn write_integration_files(&self) -> Result<()> {
-        let settings = agents::claude_hooks_settings(&self.tomo_bin);
-        std::fs::write(self.claude_settings_path(), serde_json::to_string_pretty(&settings)?)?;
-        std::fs::write(self.pi_extension_path(), PI_EXTENSION_SOURCE)?;
-        Ok(())
-    }
-
-    pub fn integrations(&self) -> Integrations {
-        let home = dirs::home_dir().unwrap_or_default();
-        let has = |p: PathBuf, needle: &str| std::fs::read_to_string(p).map(|t| t.contains(needle)).unwrap_or(false);
-        Integrations {
-            claude_hooks: has(home.join(".claude/settings.json"), "hook claude"),
-            codex_hooks: has(home.join(".codex/hooks.json"), "hook codex"),
-            pi_extension: home.join(".pi/agent/extensions/tomo-status.ts").exists(),
-        }
     }
 
     // ---------------------------------------------------------------- events
@@ -446,7 +421,7 @@ impl Daemon {
             live_panes: inner.panes.values().filter(|p| p.pty.is_some() && p.exit_code.is_none()).count(),
             agents: inner.agents.len(),
             clients: inner.clients.len(),
-            integrations: self.integrations(),
+            integrations: providers::installed(),
         }
     }
 
@@ -720,7 +695,7 @@ impl Daemon {
     fn inherited_env_to_remove() -> Vec<String> {
         std::env::vars()
             .map(|(k, _)| k)
-            .filter(|k| k == "CLAUDECODE" || k.starts_with("CLAUDE_CODE_") || k.starts_with("TOMO_") || k.starts_with("ORCA_") || k == "CODEX_THREAD_ID")
+            .filter(|k| k.starts_with("TOMO_") || k.starts_with("ORCA_") || providers::marks_nested_agent(k))
             .collect()
     }
 
@@ -1059,11 +1034,10 @@ impl Daemon {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
-            let resume_ref = row.session_ref.clone().or_else(|| (row.agent_kind == Some(AgentKind::Codex)).then(|| "--last".to_string()));
+            let resume_ref = row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string));
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
                 (Some(kind), Some(session)) => {
-                    let cmd = inner.config.agents.get(kind.label().to_lowercase().as_str()).cloned().unwrap_or(AgentCommand { command: kind.label().to_lowercase(), args: vec![] });
-                    let plan = agents::spawn_plan(kind, &cmd, Some(session), &self.claude_settings_path(), &self.pi_extension_path(), &[]);
+                    let plan = providers::launch(&inner.config, kind, Some(session), &self.paths.integrations_dir, &[]);
                     (PaneOrigin::Resumed, Some(agents::shell_line(&plan.argv)))
                 }
                 _ => (PaneOrigin::Restored, None),
@@ -1472,13 +1446,13 @@ impl Daemon {
                 Ok(Value::Null)
             }
             Call::IntegrationsInstall => {
-                crate::integrations::install(&self.tomo_bin, PI_EXTENSION_SOURCE).map_err(internal)?;
-                ok(self.integrations())
+                providers::install(&self.tomo_bin).map_err(internal)?;
+                ok(providers::installed())
             }
             Call::IntegrationsStatus => {
                 let mut inner = self.lock();
-                let list = crate::integrations::status(&inner.config);
-                crate::integrations::record_health(&mut inner, &list);
+                let list = providers::status(&inner.config);
+                providers::record_health(&mut inner, &list);
                 ok(list)
             }
             Call::ConfigCheck => {
@@ -1898,9 +1872,7 @@ impl Daemon {
                     }
                     _ => Self::worktree_for_spawn(&inner, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
                 };
-                let key = spec.kind.label().to_lowercase();
-                let cmd = inner.config.agents.get(&key).cloned().unwrap_or(AgentCommand { command: key.clone(), args: vec![] });
-                let plan = agents::spawn_plan(spec.kind, &cmd, spec.resume.as_deref(), &self.claude_settings_path(), &self.pi_extension_path(), &spec.extra_args);
+                let plan = providers::launch(&inner.config, spec.kind, spec.resume.as_deref(), &self.paths.integrations_dir, &spec.extra_args);
                 let line = agents::shell_line(&plan.argv);
                 let tab_id = if spec.new_tab { Some(Self::create_tab(&mut inner, &worktree_id, Some(spec.kind.label().to_string())).id) } else { spec.tab_id.clone() };
                 let (tab_id, pane_id) = self.spawn_in_worktree(
@@ -1917,7 +1889,7 @@ impl Daemon {
                 ok(SpawnResult { pane: Self::pane_view(&inner, &pane_id).unwrap(), tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
             }
             Call::AgentHook { kind, pane_id, payload, at_ms } => {
-                let outcome = agents::hook_outcome(kind, &payload);
+                let outcome = providers::hook_outcome(kind, &payload);
                 let mut inner = self.lock();
                 if !inner.panes.contains_key(&pane_id) {
                     return Ok(Value::Null);
@@ -2060,7 +2032,7 @@ impl Daemon {
             Call::SessionList { worktree_id, limit } => {
                 let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
                 let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;
-                let list = tokio::task::spawn_blocking(move || sessions::list(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+                let list = tokio::task::spawn_blocking(move || providers::sessions(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 ok(list)
             }
             Call::DiagnosticsList { limit } => {

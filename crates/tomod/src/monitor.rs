@@ -66,7 +66,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
         }
 
         let descendants = procs::descendants(&inner.proc_rows, root_pid);
-        let agent_proc = descendants.iter().filter_map(|pid| by_pid.get(pid)).map(|&i| &inner.proc_rows[i]).find_map(|r| procs::detect_agent(&r.name, &r.cmd).map(|k| (k, r.pid)));
+        let agent_proc = descendants.iter().filter_map(|pid| by_pid.get(pid)).map(|&i| &inner.proc_rows[i]).find_map(|r| crate::providers::detect(&r.name, &r.cmd).map(|k| (k, r.pid)));
         match agent_proc {
             Some((kind, pid)) => {
                 let subtree_cpu: f32 = std::iter::once(pid)
