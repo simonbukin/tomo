@@ -25,6 +25,12 @@ lsof -nP -iTCP -sTCP:LISTEN -a -p <pid,pid,...> -F pn
 The pid list holds every owned process except an idle pane shell, which
 cannot listen. When the list is empty, `lsof` does not run. The call runs
 with the daemon lock released, so a slow `lsof` never delays a keystroke.
+The call also has a deadline of 2 seconds. `lsof` can hang, for example on
+a stale network mount, and the monitor tick waits for the answer, so a hung
+call would stop the process poll, the agent state, and the resources of
+every worktree. At the deadline Tomo kills the call, records the `runtime`
+diagnostic `port scan: lsof did not answer in 2 s`, and keeps the endpoints
+of the last scan. The next tick asks again.
 `tomo runtime` triggers one extra poll when the last one is older than
 1.5 seconds, the same rule as `tomo ps`.
 
@@ -65,11 +71,12 @@ answers, the endpoint reports `tcp`. `https` is reserved and not produced.
 - A new listener adds an endpoint, emits `endpoints_changed`, fires the
   `runtime.endpoint_discovered` hook, and records `EndpointDiscovered` in
   the activity stream (at most once per worktree and port per minute).
-- A listener that disappears stays listed for 5 seconds. When a new pid
+- A listener that disappears stays listed for 15 seconds. When a new pid
   listens on the same port in the same worktree inside that window, the
   entry is replaced and no hook fires. This makes a dev-server restart
-  silent.
-- After the 5 seconds the endpoint is removed, `endpoints_changed` is
+  silent. The window is long because a dev server that builds again before
+  it listens again can need more than a few seconds.
+- After the 15 seconds the endpoint is removed, `endpoints_changed` is
   emitted, and `runtime.endpoint_removed` fires.
 
 Endpoints live in memory only. A daemon restart rediscovers them on the

@@ -516,7 +516,9 @@ Background work:
 - `login_env::apply` can run a login shell one time before the runtime starts.
 - Each config reload runs `integrations::status`.
 - Every `Status` and `Subscribe` reads three files in the home directory.
-- Each agent spawn starts `type_pending_when_quiet` (100 ms poll, 5 s maximum).
+- Each agent spawn starts `type_pending_when_quiet` (100 ms poll; it types after
+  300 ms of quiet, at 5 s when the pane wrote nothing, and drops the line after
+  30 s of output).
 - The GUI polls `session_list` every 30 s while the sessions section is mounted.
 
 | Location | Symbol | Class | Note |
