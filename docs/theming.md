@@ -94,6 +94,11 @@ preset, and the overrides. `applyTheme` sets the variables and
 `data-theme="light|dark"`. The xterm theme comes from the same resolved
 palette.
 
+A component module (`<Component>.module.css`) reads these tokens and writes
+no color, no typeface, and no duration of its own. A theme change therefore
+reaches the component, and `[theme]` stays the one theming surface. See
+[ui.md](ui.md).
+
 `app/src/styles/tokens.css` holds the Murasaki values for the first paint
 and derives the older short names (`--bg-1`, `--fg-2`, `--line`, `--hot`,
 and so on) from the tokens. A custom stylesheet later only has to set the

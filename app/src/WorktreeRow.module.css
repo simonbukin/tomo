@@ -1,0 +1,38 @@
+/*
+ * Layout of one sidebar worktree row. Every value for a tone, a typeface, or a
+ * duration comes from a token in styles/tokens.css, so a theme change restyles
+ * the row. The status dot, the star, the tag, and the signals stay global.
+ * The two grid rows and the fixed height give a row one size whatever it holds.
+ */
+
+.row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-rows: 18px 16px;
+  align-items: center;
+  column-gap: var(--sp-2);
+  height: 42px;
+  padding: 4px var(--sp-1) 4px var(--sp-3);
+  border-left: 2px solid transparent;
+}
+.row:hover { background: var(--bg-1); }
+.active { background: var(--bg-1); border-left-color: var(--accent); }
+.selected, .selected:hover { background: var(--accent-soft); }
+.archiving { opacity: 0.7; }
+.dragging { position: relative; z-index: 2; background: var(--bg-1); box-shadow: var(--shadow-pop); border-radius: var(--radius-sm); cursor: grabbing; }
+
+.nameLine { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
+.active .name { color: var(--accent); }
+.missing .name { color: var(--fg-3); text-decoration: line-through; }
+.archived .name { color: var(--fg-2); }
+.active :global(.wt-main-star) { color: var(--accent); }
+
+.meta { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.more { visibility: hidden; }
+.row:hover .more, .more:focus-visible { visibility: visible; }
+
+.sub { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
+.branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
+.stateLabel { font-family: var(--font-ui); color: var(--fg-2); }
+.signalArea { flex: 0 0 auto; max-width: 65%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

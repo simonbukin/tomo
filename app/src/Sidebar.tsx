@@ -8,6 +8,7 @@ import { byManualOrder } from "./order";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
+import styles from "./WorktreeRow.module.css";
 import { agentStatus, dotClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
@@ -202,7 +203,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false }: { w:
       {...drag.listeners}
       style={{ transform: CSS.Translate.toString(drag.transform), transition: drag.transition }}
       data-flip={w.id}
-      className={`wt-row${drag.isDragging ? " is-dragging" : ""}${active ? " wt-active" : ""}${w.exists || archived ? "" : " wt-missing"}${archived ? " wt-archived" : ""}${busy ? " wt-archiving" : ""}${selected ? " wt-selected" : ""}`}
+      className={["wt-row", styles.row, drag.isDragging && styles.dragging, active && styles.active, !w.exists && !archived && styles.missing, archived && styles.archived, busy && styles.archiving, selected && styles.selected].filter(Boolean).join(" ")}
       onClick={(e) => { if (!selectRow(e, w, siblings) && !archived && !busy) openWorktree(w.id); }}
       onContextMenu={(e) => {
         const sel = getState().selection;
@@ -210,23 +211,25 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false }: { w:
       }}
     >
       <span className={`${busy ? "state state-archiving" : dotClass(agentStatus(summary))}${selected ? " state-selected" : ""}`} />
-      <span className="wt-name-line">
-        <span className="wt-name">{w.name}</span>
+      <span className={styles.nameLine}>
+        <span className={styles.name}>{w.name}</span>
         {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
       </span>
-      <span className="wt-meta">
+      <span className={styles.meta}>
         <RowError worktreeId={w.id} />
         <DropdownMenu>
-          <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
+          <DropdownMenuTrigger render={<IconButton label="More" className={styles.more} onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
         </DropdownMenu>
       </span>
-      <span className="wt-branch" title={w.path}>
-        {busy ? <span className="wt-state">archiving… · </span> : archived ? "archived · " : state ? <span className="wt-state">{state} · </span> : null}{branch}
-        {w.git?.dirty ? " *" : ""}
-        {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
+      <span className={styles.sub}>
+        <span className={styles.branch} title={w.path}>
+          {busy ? <span className={styles.stateLabel}>archiving… · </span> : archived ? "archived · " : state ? <span className={styles.stateLabel}>{state} · </span> : null}{branch}
+          {w.git?.dirty ? " *" : ""}
+          {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
+        </span>
+        <span className={styles.signalArea}>{archived ? null : <Signals worktreeId={w.id} />}</span>
       </span>
-      {!archived && <Signals worktreeId={w.id} className="wt-agents" />}
     </div>
   );
 }
