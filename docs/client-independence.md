@@ -31,6 +31,7 @@ snapshot and applies each event, as `app/src/store.ts` does. It asserts:
 | `pane_send` | The agent waits, and `attention_added` opens a waiting item that needs a person. |
 | `attention_view` | `attention_viewed` marks the item. A viewed waiting item no longer needs a person. |
 | `checkpoint_create`, `checkpoint_resolve` | A checkpoint needs a person, and `attention_resolved` removes it. |
+| `fs_list` | Each entry carries `modified_ms`; the daemon sends directories first, then names, without case; a recency sort on the client puts the newest first. |
 | `attention_list` | The daemon list is the same as the client state. |
 | `status` | The repo, worktree, pane, live pane, and agent counts are the same as the client state. |
 | `pane_close`, `tab_close` | The pane, then the tab, its panes, and its agent leave the client state. |
@@ -102,6 +103,7 @@ live without them.
 |---|---|---|
 | Event fold | `applySnapshot` and `applyFrame` in `store.ts` | Start from `subscribe`, then apply each event. `tabs_changed` replaces the tabs of one worktree and drops the panes and agents that left its layouts. `headless_client.py` `fold` is a copy in about 40 lines. |
 | "Needs me" | `needsMeItem` in `activityModel.ts` | Copy the rule. An unresolved item that is not `waiting` needs a person. A `waiting` item needs a person while it is not viewed and its agent still waits. `Store::activity_list` in the daemon has the same rule for `needs_me`. |
+| File sort | `sortEntries` in `RightSidebar.tsx` | `fs_list` comes in name order, directories first. A client that wants the newest first sorts by `modified_ms` itself. |
 | Sort, filter, group | `homeQuery.ts`, `order.ts` | Copy them, or use the pure modules. The manual order lives in the UI state blob. |
 | Signals | `nowSignals` (pure), `signalsFor` in `Signals.tsx` (store and addon slots) | Copy the priority order and the cap of three. Addon signals, such as a pull request, come from GUI addon slots. |
 | Zoom | `State.zoomed` in `store.ts` | `pane_zoom` only sends a `zoom_request` event. The daemon does not keep zoom. |
