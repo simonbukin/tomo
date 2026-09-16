@@ -85,7 +85,13 @@ tomo worktree metadata set [worktree] [--name N] [--project P] [--state S] [--ta
 
 `create` runs `git worktree add`. Without `--path` Tomo names the directory
 after a Japanese town: `<parent>/<town slug>`, where the parent is
-`worktree_parent_dir` from the config, else the parent of the repository.
+`worktree_parent_dir` from the config, else `~/tomo/worktrees/<repo>`. The
+`<repo>` part is the directory name of the repository, not its path, so two
+repositories with the same directory name share one directory. Tomo makes the
+directories that the path needs. A name that is already taken there fails in
+`git worktree add`, the same as any other path that exists. Only a new worktree
+follows this rule: a worktree that exists keeps its path, and `restore` only
+puts a worktree in the parent above when its own parent directory is gone.
 `--town` picks a specific town that is not unlocked yet; otherwise Tomo
 picks one by rarity weight. The town becomes the display name unless you
 set one. `--new` passes `-b`; `--from` gives the start point for a new
