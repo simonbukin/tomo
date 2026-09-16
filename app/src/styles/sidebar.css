@@ -19,30 +19,14 @@
 .repo-head:hover .repo-name { color: var(--fg-1); }
 .repo-avatar { border-radius: var(--radius-sm); flex: none; }
 
-.wt-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: var(--sp-2); row-gap: 0; align-items: center; padding: 4px var(--sp-1) 4px var(--sp-3); border-left: 2px solid transparent; transition: background-color var(--dur-fast) ease-out; }
-.wt-row:hover { background: var(--bg-1); }
-.wt-active { background: var(--bg-1); border-left-color: var(--accent); }
-.wt-selected, .wt-selected:hover { background: var(--accent-soft); }
-.wt-missing .wt-name { color: var(--fg-3); text-decoration: line-through; }
-.wt-archived .wt-name { color: var(--fg-2); }
-.wt-archiving { opacity: 0.7; }
-.wt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
-.wt-active .wt-name { color: var(--accent); }
-.wt-branch { grid-column: 2 / 4; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wt-state { font-family: var(--font-ui); color: var(--fg-2); }
-.wt-agents { grid-column: 2 / 4; display: flex; flex-direction: column; align-items: flex-start; gap: 0; margin-top: 1px; }
-.wt-meta { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.wt-more { visibility: hidden; }
-.wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }
+/* The layout of a worktree row lives in app/src/WorktreeRow.module.css. What stays
+   here is what another component also uses, or what the row shares with the rails. */
 .tag { color: var(--fg-3); font-size: var(--fs-0); }
 
 /* ---- main worktree and manual order */
 .wt-main-star { width: 10px; height: 10px; flex: none; color: var(--fg-2); fill: currentColor; margin-left: 5px; vertical-align: -1px; }
-.wt-active .wt-main-star { color: var(--accent); }
-.wt-name-line { display: inline-flex; align-items: center; min-width: 0; }
-.wt-name-line .wt-name { min-width: 0; }
 .signal-waiting-note { color: var(--waiting); font-size: var(--fs-0); }
-.wt-row.is-dragging, .repo-group.is-dragging { position: relative; z-index: 2; background: var(--bg-1); box-shadow: var(--shadow-pop); border-radius: var(--radius-sm); cursor: grabbing; }
+.repo-group.is-dragging { position: relative; z-index: 2; background: var(--bg-1); box-shadow: var(--shadow-pop); border-radius: var(--radius-sm); cursor: grabbing; }
 .wt-row[aria-roledescription="sortable"]:focus-visible, .repo-head[aria-roledescription="sortable"]:focus-visible { outline-offset: -2px; }
 
 /* ---- minimal rails: left navigation and right inspector */
