@@ -248,9 +248,11 @@ pub struct Seams {
     pub worktree_files: Vec<WorktreeFile>,
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
     pub process_polled: Vec<fn(&Arc<Daemon>)>,
+    pub worktree_archived: Vec<fn(&Store, &ArchivedWorktree)>,
 }
 
 pub struct CreatedWorktree { pub id: Id, pub repo_id: Id, pub name: Option<String> }
+pub struct ArchivedWorktree { pub id: Id, pub name: String, pub at_ms: u64 }
 pub struct WorktreeFile { pub name: &'static str, pub reload: fn(&Arc<Daemon>) }
 pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<PaneSource>, pub exit_code: Option<i32>, pub stop_intent: bool }
 ```
@@ -263,6 +265,7 @@ pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<P
 | `worktree_files` | `discover`, after it releases the state lock and before it flushes the hooks; and `watch.rs`, when a watched worktree root reports a change to that file name | Actions must read `.tomo.toml` at the same two moments as before the split. One list gives both the file name and the reload, so the watcher and discovery cannot disagree. The watcher copies the names at start and runs each reload one time for a burst of changes. `reload` gets the daemon, because it reads files with no lock held and then takes the lock. |
 | `pane_exited` | `on_exit`, under the state lock, after the `pane_exited` event and before Core updates the agent and removes a pane that exited with 0 | The outcome (`action_completed`, `action_stopped`, or a crash with its attention item and hook) must go into the same lock as the exit, while the pane still exists for the `pane` field of the hook. An event would come after an exit-0 pane is gone. It gets only the facts of the exit: pane, worktree, source, exit code, and stop intent. |
 | `process_polled` | `monitor::poll_and_scan`, after the process poll releases the state lock and before the queued hooks go out | Runtime must read the fresh process table, and its `lsof` call must stay outside the lock. It is the same point where `scan_endpoints` ran before the split, so the cadence does not change: 2 s with a subscriber, 15 s without. It gets only the daemon, because the work takes and releases the lock itself. A list of plain functions, like the other seams. |
+| `worktree_archived` | `archive_worktree`, under the state lock of the success arm, next to the Core activity row and the `worktree.archived` hook | An addon that keeps a record of an archive needs the name that the worktree had at that moment, because a later read finds the worktree gone or renamed. It gets the store and the three facts, like `worktree_rebound`, so it needs no lock of its own. It returns nothing: the archive already succeeded, so a failed write is a log line, not an error to the client. |
 
 Actions also calls Core functions: `spawn_in_worktree`, `pane_view`,
 `emit_pane`, `emit_tabs`, `hook_pane`, `record`, the crate-wide
@@ -536,6 +539,7 @@ crates/tomod/src/
   main.rs                 composition root: startup, seams, migrate
   dispatch.rs             composition root: addon Call -> addon handler, the rest -> Daemon::handle
   daemon.rs store.rs ...  core (no addon names); Seams lives in daemon.rs
+  providers/              core: the per-provider table (Claude, Codex, Pi) behind one static match; not an addon
   providers/mod.rs        core: the Provider table and the one match on AgentKind
   providers/<name>.rs     core: what one agent provider needs that the others do not
   addons/mod.rs           composition root: static list, seams(), migrate(), the dependency test
