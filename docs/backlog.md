@@ -257,7 +257,7 @@ comes back, the first step is the callback port that the login prints.
 
 | Idea | Shape | Effort |
 |---|---|---|
-| Drag arrangement like Rectangle | An overlay that shows the target region while a pane drags. The drop regions and the split-tree moves already exist; this is presentation and hit testing. | M |
+| Drag arrangement like Rectangle | **Done.** A drag shows the rectangle the pane will occupy, computed by running the real move and laying out the result, so the picture cannot disagree with the drop. `stickyRegion` holds a region for 10 px to stop boundary flicker. Four numbers set the feel and none could be tuned without a window: the 140 ms glide, the 10 px slack, the 0.25 edge fraction, and the fill strength. Try 80 to 100 ms first if the glide lags a fast drag. Over a browser pane the preview may be clipped, because the native webview draws above the page. | M |
 | Files by recency | **Done.** `FsEntry.modified_ms` feeds the Files inspector, which sorts newest first, shows a short age per row, and has a heading toggle back to name order. The row menu already gave open, reveal, and copy. | S |
 | Sound hooks | Sounds for hook events (`worktree.*`, `agent.*`, `action.*`). `sounds.ts` and the `[notifications] sounds` switch exist; this generalizes them. Keep it off by default. | S |
 | Agent lineage | Which agent spawned which, per worktree. Needs a parent link at spawn time and a small view. | M |
