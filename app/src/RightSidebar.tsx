@@ -7,6 +7,7 @@ import { fileMenu } from "./menus";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
+import { SectionLabel } from "./sections";
 import { failToast, formatBytes, useStore } from "./store";
 import { inspectorSections } from "./addons";
 import type { AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
@@ -43,7 +44,7 @@ function MetadataSection({ w }: { w: Worktree }) {
   const commit = (patch: Record<string, unknown>) => setMetadata(w.id, patch);
   return (
     <section className="side-section" data-section="worktree">
-      <div className="section-label">worktree</div>
+      <SectionLabel id="worktree" />
       <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label><input value={project} onChange={(e) => setProject(e.target.value)} onBlur={() => commit({ project: project.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>state</label>
@@ -69,7 +70,7 @@ function GitSection({ w }: { w: Worktree }) {
   }, [w.id]);
   return (
     <section className="side-section" data-section="git">
-      <div className="section-label">git <button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></div>
+      <SectionLabel id="git"><button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></SectionLabel>
       <div className="kv"><label>branch</label><span className="mono">{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
       {g ? (
         <>
@@ -100,7 +101,7 @@ function ProcessSection({ w }: { w: Worktree }) {
   const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch(failToast("Kill failed"));
   return (
     <section className="side-section" data-section="processes">
-      <div className="section-label">processes <button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></div>
+      <SectionLabel id="processes"><button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></SectionLabel>
       {res ? (
         <div className="kv"><label>total</label><span>{res.process_count} proc · {res.cpu_percent.toFixed(0)}% cpu · {formatBytes(res.rss_bytes)}</span></div>
       ) : (
@@ -145,7 +146,7 @@ function SessionsSection({ w }: { w: Worktree }) {
   const resumable = (items ?? []).filter((s) => !live.includes(s.id));
   return (
     <section className="side-section" data-section="sessions">
-      <div className="section-label">sessions{items && items.length > 0 && <span className="right">{items.length}</span>}</div>
+      <SectionLabel id="sessions">{items && items.length > 0 && <span className="right">{items.length}</span>}</SectionLabel>
       {items === null && w.exists && <SkeletonRows count={2} className="compact" label="looking for sessions" />}
       {items?.length === 0 && <div className="muted">no agent sessions rooted here</div>}
       {resumable.map((s) => (
@@ -193,7 +194,7 @@ function FilesSection({ w }: { w: Worktree }) {
     ));
   return (
     <section className="side-section side-files" data-section="files">
-      <div className="section-label">files</div>
+      <SectionLabel id="files" />
       <div className="file-actions">
         <button className="link" onClick={() => act("finder")}><Eye className="icon" /> reveal</button>
         <button className="link" onClick={copy}><Copy className="icon" /> copy path</button>
