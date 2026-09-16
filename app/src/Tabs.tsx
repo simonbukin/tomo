@@ -1,5 +1,5 @@
 import { SortableContext } from "@dnd-kit/sortable";
-import { Plus, X } from "lucide-react";
+import { Globe, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { activateTab, closeTab } from "./actions";
@@ -75,7 +75,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
       onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
     >
-      {waiting ? <span className={dotClass("needs")} /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
+      {waiting ? <span className={dotClass("needs")} /> : lead?.kind === "browser" ? <Globe className="icon proc-icon" size={11} aria-label="Browser" /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
       {isEditing ? (
         <input
           autoFocus
