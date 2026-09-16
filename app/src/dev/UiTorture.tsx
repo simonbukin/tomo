@@ -1,7 +1,7 @@
 import { SortableContext } from "@dnd-kit/sortable";
 import { Bold, Ellipsis, Info, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
-import { keepInPlace, LayoutDnd, PaneDropZone, usePaneDrag, useTabSortable } from "../LayoutDnd";
+import { keepInPlace, LayoutDnd, LayoutPreview, PaneDropZone, usePaneDrag, usePaneDropHover, useTabSortable } from "../LayoutDnd";
 import { movePane, reorder } from "../layoutModel";
 import type { LayoutNode } from "../types";
 import {
@@ -183,9 +183,21 @@ function LayoutTorture({ say }: { say: (m: string) => void }) {
         </div>
         <div className="layout-root">
           <TortureNode node={layout} />
+          <LayoutPreview node={layout} />
         </div>
       </div>
+      <DropReadout />
     </LayoutDnd>
+  );
+}
+
+/** Live region under the pointer. Move slowly across a boundary: the region must hold until the pointer clears the slack. */
+function DropReadout() {
+  const hover = usePaneDropHover();
+  return (
+    <p className="muted mono" style={{ margin: 0, fontSize: 11 }}>
+      {hover ? `${hover.dragId} → ${hover.paneId} ${hover.place}` : "drag a pane chip onto another pane, a tab, or itself; Escape cancels"}
+    </p>
   );
 }
 

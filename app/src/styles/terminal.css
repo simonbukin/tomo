@@ -1,6 +1,6 @@
 /* Terminal workspace: splits, panes, legends. The terminal stays dominant; chrome stays thin. */
 
-.layout-root { flex: 1; min-height: 0; display: flex; padding: var(--sp-1) var(--sp-2) var(--sp-2); background: var(--bg); }
+.layout-root { --pane-top: 9px; flex: 1; min-height: 0; display: flex; padding: var(--sp-1) var(--sp-2) var(--sp-2); background: var(--bg); }
 .split { display: flex; flex: 1; min-width: 0; min-height: 0; }
 .split-horizontal { flex-direction: row; }
 .split-vertical { flex-direction: column; }
@@ -18,20 +18,19 @@ body.resizing-h .splitter-horizontal::after, body.resizing-v .splitter-vertical:
 .splitter-vertical::before { left: 0; right: 0; top: -4px; bottom: -4px; }
 .splitter-vertical::after { left: 4px; right: 4px; top: 3px; height: 2px; }
 
-/* ---- pane drag: the legend chip is the handle; the drop area shows where the pane lands */
+/* ---- pane drag: the legend chip is the handle; the preview draws the layout the drop makes */
 .pane-grip { cursor: grab; }
 body.pane-dragging, body.pane-dragging * { cursor: grabbing !important; }
 body.pane-dragging .xterm { pointer-events: none; }
 .pane-drop { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.pane-drop-area { position: absolute; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); }
-.pane-drop-center { inset: 25%; }
-.pane-drop-left { inset: 0 50% 0 0; }
-.pane-drop-right { inset: 0 0 0 50%; }
-.pane-drop-top { inset: 0 0 50% 0; }
-.pane-drop-bottom { inset: 50% 0 0 0; }
+.pane-preview-layer { position: absolute; }
+.pane-preview { position: fixed; z-index: 6; pointer-events: none; display: flex; align-items: center; justify-content: center; padding-top: var(--pane-top); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); transition: left var(--dur-open) var(--ease-out), top var(--dur-open) var(--ease-out), width var(--dur-open) var(--ease-out), height var(--dur-open) var(--ease-out); }
+.pane-preview::before { content: ""; position: absolute; inset: var(--pane-top) 0 0; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); }
+.pane-preview-target { color: transparent; }
+.pane-preview-target::before { background: none; border-style: dashed; }
 .pane-drag-chip { display: inline-block; padding: 0 8px; line-height: 18px; background: var(--bg-1); border: 1px solid var(--accent); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); white-space: nowrap; }
 
-.pane-wrap { flex: 1; display: flex; min-width: 0; min-height: 0; padding-top: 9px; }
+.pane-wrap { flex: 1; display: flex; min-width: 0; min-height: 0; padding-top: var(--pane-top, 9px); }
 .pane { container-type: inline-size; position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--term-bg); transition: border-color var(--dur-fast) ease-out; }
 .pane-active { border-color: var(--accent); }
 .pane-dead .pane-body { opacity: 0.55; }
