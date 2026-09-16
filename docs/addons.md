@@ -19,8 +19,8 @@ seam result", "Milestone 2 result: GitHub", "Milestone 3 result: Actions",
 "Milestone 4 result: Runtime", "Milestone 5 result: Usage", and "Milestone 7
 result: Agentation".
 
-The `anime-chart` example addon comes from the agent hackability exercise
-(PRD section 30). It added the `worktree_archived` seam, and it found the
+The agent hackability exercise (PRD section 30) built the `anime-chart`
+addon, and then removed it: no example addon ships. The exercise found the
 gaps that the checklist, the examples, and the verification list below now
 close. See "Agent hackability exercise".
 
@@ -93,7 +93,7 @@ source code with a clean dependency boundary.
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | **provider modules** (milestone 9; they are Core, not addons) |
-| anime-chart | **example** (the hackability exercise; see "Agent hackability exercise") |
+| anime-chart | **not shipped** (the hackability exercise; see "Agent hackability exercise") |
 
 ## The dependency law
 
@@ -254,11 +254,9 @@ pub struct Seams {
     pub worktree_files: Vec<WorktreeFile>,
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
     pub process_polled: Vec<fn(&Arc<Daemon>)>,
-    pub worktree_archived: Vec<fn(&Store, &ArchivedWorktree)>,
 }
 
 pub struct CreatedWorktree { pub id: Id, pub repo_id: Id, pub name: Option<String> }
-pub struct ArchivedWorktree { pub id: Id, pub name: String, pub at_ms: u64 }
 pub struct WorktreeFile { pub name: &'static str, pub reload: fn(&Arc<Daemon>) }
 pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<PaneSource>, pub exit_code: Option<i32>, pub stop_intent: bool }
 ```
@@ -271,7 +269,12 @@ pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<P
 | `worktree_files` | `discover`, after it releases the state lock and before it flushes the hooks; and `watch.rs`, when a watched worktree root reports a change to that file name | Actions must read `.tomo.toml` at the same two moments as before the split. One list gives both the file name and the reload, so the watcher and discovery cannot disagree. The watcher copies the names at start and runs each reload one time for a burst of changes. `reload` gets the daemon, because it reads files with no lock held and then takes the lock. |
 | `pane_exited` | `on_exit`, under the state lock, after the `pane_exited` event and before Core updates the agent and removes a pane that exited with 0 | The outcome (`action_completed`, `action_stopped`, or a crash with its attention item and hook) must go into the same lock as the exit, while the pane still exists for the `pane` field of the hook. An event would come after an exit-0 pane is gone. It gets only the facts of the exit: pane, worktree, source, exit code, and stop intent. |
 | `process_polled` | `monitor::poll_and_scan`, after the process poll releases the state lock and before the queued hooks go out | Runtime must read the fresh process table, and its `lsof` call must stay outside the lock. It is the same point where `scan_endpoints` ran before the split, so the cadence does not change: 2 s with a subscriber, 15 s without. It gets only the daemon, because the work takes and releases the lock itself. A list of plain functions, like the other seams. |
-| `worktree_archived` | `archive_worktree`, under the state lock of the success arm, next to the Core activity row and the `worktree.archived` hook | An addon that keeps a record of an archive needs the name that the worktree had at that moment, because a later read finds the worktree gone or renamed. It gets the store and the three facts, like `worktree_rebound`, so it needs no lock of its own. It returns nothing: the archive already succeeded, so a failed write is a log line, not an error to the client. |
+
+There is no archive seam today. The hackability exercise added one
+(`worktree_archived`, a `Vec<fn(&Store, &ArchivedWorktree)>` in the success
+arm of `archive_worktree`, next to the Core activity row) and removed it with
+its addon, because a seam with no user is dead Core code. An addon that must
+join an archive adds it again, at that one point.
 
 Actions also calls Core functions: `spawn_in_worktree`, `pane_view`,
 `emit_pane`, `emit_tabs`, `hook_pane`, `record`, the crate-wide
@@ -755,6 +758,11 @@ the deletion test stays short.
 
 ### A minimal example of each part
 
+These lines come from the anime-chart exercise. That addon is **not** in the
+repo, so no test compiles them. Read them as a shape to copy, and check them
+by hand when a slot changes. The example joins a `worktree_archived` seam
+that does not exist: add the seam first, as step 3 says.
+
 **Proto.** `crates/tomo-proto/src/addons/anime_chart.rs`, plus four lines in
 `lib.rs`: `pub mod anime_chart;` inside `pub mod addons`,
 `pub use addons::anime_chart::*;`, the `Call` variant, and the `export_all`
@@ -766,9 +774,9 @@ line. A `Call` variant becomes its method name in `snake_case`, so
 pub struct ArchivedShow { pub worktree_id: Id, pub name: String, pub archived_at_ms: u64 }
 ```
 
-**Daemon.** `crates/tomod/src/addons/anime_chart/mod.rs`. `Store::conn()`
-gives the `rusqlite` connection. A handler answers with `ok(value)` and maps
-an error with `internal`. A seam function returns nothing when the Core
+**Daemon.** `crates/tomod/src/addons/<name>/mod.rs`. `Store::conn()` gives
+the `rusqlite` connection. A handler answers with `ok(value)` and maps an
+error with `internal`. A seam function returns nothing when the Core
 operation already succeeded: a failed write is a log line, not an error.
 
 ```rust
@@ -873,8 +881,9 @@ Record the remaining coupling in [addons-map.md](addons-map.md).
 
 ### anime-chart deletion test (the hackability exercise)
 
-Done with `delete_anime_chart.py`, a script of exact replacements, on a
-throwaway branch from commit `b8d820a`, then deleted. The removal changed 11
+Done first as a rehearsal on a throwaway branch, with
+`delete_anime_chart.py`, a script of exact replacements. The same script then
+removed the addon for good, because it does not ship. The removal changed 11
 files: 220 lines deleted, 5 added, which includes the regenerated
 `app/src/generated/index.ts`. Outside the three deleted folders and the
 deleted `app/src/generated/ArchivedShow.ts`, these are the only lines that
@@ -888,8 +897,10 @@ changed:
 | `app/src/addons/index.ts` | remove the `animeChart` import; `builtins` becomes `[towns, github, usage, actions, runtime, agentation]` |
 
 No Core file changed: not `daemon.rs`, `store.rs`, `App.tsx`, `store.ts`, or
-`uiState.ts`. The `worktree_archived` seam and `ArchivedWorktree` stay,
-because they are Core.
+`uiState.ts`. The rehearsal left the `worktree_archived` seam and
+`ArchivedWorktree` in Core, because a seam is Core. The real removal took
+them out too, in a second commit: no other addon used them, and a seam with
+no user is dead Core code.
 
 Result with anime-chart removed:
 
@@ -2945,7 +2956,7 @@ that no step named.
 
 | # | The question the doc did not answer | Where the answer was | Now in this file |
 |---|---|---|---|
-| 1 | Which seam or event fires on an archive? | `daemon.rs`, `archive_worktree` | the `worktree_archived` seam |
+| 1 | Which seam or event fires on an archive? | `daemon.rs`, `archive_worktree` | "Seams": there is none, and where to add one |
 | 2 | Where does the state of a list go, and what does the SQL look like? | `store.rs` (`Store::conn`, `rusqlite`) | "A minimal example of each part" |
 | 3 | What does a daemon call handler return? | `daemon.rs` (`ok`, `internal`) | the same example |
 | 4 | How does a command open a view, and does `sanitizeUi` keep the id? | `App.tsx`, `uiState.ts`, `actions.ts` | "Five rules that the compiler does not give you" |
@@ -2966,17 +2977,21 @@ dependency law, and the seam rules were enough to choose the shape.
 table, one `Call`, one global view, and one command. It keeps no memory
 state, so it needs no `addons::State` field. It does no background work: the
 view sends one `anime_chart_list` when it mounts. Core never names it, and
-the deletion test removes it in 11 files.
+the deletion test removes it in 11 files. The addon and the seam are gone
+from the tree now; the tables here are the record.
 
-**Does it ship?** Keep it, as the example addon that this file cites, under
-the same deletion rule as every other addon. The reasons: the examples above
-stay true only while the code compiles, the dependency checks and the
-deletion test hold it honest, and the cost is one entry in the View menu and
-one small table. The cost is real: Core already records an `archived`
-activity row, so the view shows facts that `tomo activity` also shows. To
-drop it, do "Remove an addon" (11 files, 220 lines; the deletion test lists
-each line) and remove the `worktree_archived` seam from `Seams` and from
-`archive_worktree`, because no other addon uses it.
+**Does it ship? No.** PRD section 30 does not ask for it, and nobody asked
+for the feature. It would add an entry to the View menu, a rail button, and a
+table, for facts that `tomo activity` already shows from the Core `archived`
+row. So the exercise removed it in two commits: "Remove an addon" for the
+addon (11 files, 220 lines; the table above lists each line), and then the
+`worktree_archived` seam from `Seams` and from `archive_worktree`, because no
+other addon used it.
+
+The exercise still pays: the checklist, the examples, the five rules, the
+verification list, and the corrected removal steps stay in this file. The
+price is that the examples above compile nowhere. Check them by hand when a
+slot, a seam, or a composition root changes.
 
 ## Candidates
 
