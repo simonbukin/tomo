@@ -54,8 +54,73 @@ restart restores the last page.
 
 A child webview paints above the main webview. While a menu, a dialog, or
 the palette is open, the component hides the child with
-`browser_set_visible` so the floating surface stays visible. The child is
-closed when the component unmounts, so a tab switch reloads the page.
+`browser_set_visible` so the floating surface stays visible.
+
+## Lifetime: the pane owns the webview
+
+Only the active tab renders, so the component unmounts on a tab switch, on
+a worktree switch, and on a move to a global view. The component does not
+own the webview. On unmount it hides the child and keeps it alive, so the
+page, its heap, and its session cookies stay.
+
+`BrowserHost` in `BrowserPane.tsx` is mounted for the whole session, beside
+the addon `mount` slots in `App.tsx`. It watches the browser pane ids in the
+store and calls `browser_close` for each id that leaves. That covers a pane
+close, a tab close, a worktree whose tabs go, and a daemon reconnect that
+drops the pane. `browserPaneIds` in `browser.ts` is the sorted list, so an
+unchanged set gives an unchanged array.
+
+A remount calls `browser_create` again. The command finds the webview, sets
+the bounds, and then shows it. The order is necessary: a hidden webview
+keeps the rect that it had before, so a show before the bounds paints the
+page in the old place for one frame.
+
+### What sleep gives back
+
+A hidden pane sleeps, but it does not stop. `browser_set_visible(false)`
+becomes `WKWebView.setHidden(true)` in wry
+(`wry-0.55.1/src/wkwebview/mod.rs`, line 1031). The web process stays.
+macOS stops the drawing of a hidden view. WebKit also ties the visibility
+of a page to the view, so the timers of the page are throttled and the
+animation frames stop; this part is not proved here, because no window can
+run in this environment. A human must confirm it with a page that has a
+clock.
+
+Tauri 2.11.5 gives no other control. The `Webview` API has `show`, `hide`,
+`set_bounds`, `set_zoom`, `set_background_color`, `eval`, `reparent`, and
+`close`. There is no call to suspend the process, to mute the audio, or to
+drop the heap. So sleep here is "hidden but alive", and the honest cost is
+one live web process for each browser pane.
+
+Cost: each pane is one `com.apple.WebKit.WebContent` process, because wry
+makes a new `WKWebViewConfiguration` for each webview
+(`wry-0.55.1/src/wkwebview/mod.rs`, line 216). On this machine the main
+webview of Tomo holds 87 MB resident and a physical footprint of 396 MB.
+A page pane is usually smaller, but it is the same kind of process. There
+is no cap on the count (decision 0 in `backlog.md`). If many sleeping panes
+become expensive, the policy to try first is to close the browser panes of
+the worktrees that the user does not look at, not a cap.
+
+### Popups and OAuth
+
+`on_new_window` still denies the popup and navigates the same webview, so
+an OAuth flow that needs its opener still fails. A real child webview needs
+these parts, and none of them can be proved without a window:
+
+- `NewWindowResponse::Create { window }` (tauri 2.11.5,
+  `src/webview/mod.rs`, line 249) with
+  `WebviewWindowBuilder::window_features(features)`
+  (`src/webview/webview_window.rs`, line 1362). On macOS that call copies
+  the `WKWebViewConfiguration` of the opener. Without the same
+  configuration the popup gets no `window.opener`.
+- A unique label that starts with `browser-`, so that the `browser`
+  capability still grants `browser_feedback`, and a link from the popup to
+  the pane, so that `browser_close` closes the popups of that pane.
+- A way to close the popup: by the user, and by the page itself. Whether
+  `window.close()` from the page closes a Tauri window is not known.
+- The builder runs inside the `on_new_window` callback, on the main thread,
+  while WebKit waits for the answer. Whether `build()` is safe there is the
+  first thing to test.
 
 Commands: `browser_create`, `browser_set_bounds`, `browser_set_visible`,
 `browser_navigate`, `browser_back`, `browser_forward`, `browser_reload`,
@@ -220,8 +285,9 @@ GUI calls `browser_clear_annotations`, which runs
 
 ## What is not persisted
 
-- Page history, cookies, and form state live in the webview and vanish
-  when the pane closes or the tab switches away.
+- Page history, cookies, and form state live in the webview. They stay
+  while the pane exists, a tab switch included, and they vanish when the
+  pane closes or when the GUI restarts.
 - Scrollback does not exist for a browser pane.
 - The `annotate` toggle is component state; it resets when the pane
   remounts.

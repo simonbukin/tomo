@@ -123,6 +123,10 @@ no toast.
 - Known limit: a browser pane has no drag handle and is not a drop
   target. Its body is a native webview that does not get pointer events
   from the Tomo window.
+- A browser pane keeps its page when the tab switches away. The webview
+  sleeps: it stays in memory with its page and its session, and it stops
+  drawing. It comes back at the new size, and it closes with the pane. So
+  a login survives a tab switch. See [browser.md](browser.md).
 - Dividers are invisible until hover. The grab area is 8 px wider than
   the line. Double-click a divider to set that split to 50/50.
 - Rest the pointer on a background terminal tab to see the last lines of

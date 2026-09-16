@@ -16,8 +16,8 @@ vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof i
 const { invoke } = await import("@tauri-apps/api/core");
 const { openUrl } = await import("@tauri-apps/plugin-opener");
 const { rpc } = await import("../api");
-const { BrowserPane } = await import("./BrowserPane");
-const { normalizeUrl, openInBrowser } = await import("./browser");
+const { BrowserHost, BrowserPane } = await import("./BrowserPane");
+const { browserPaneIds, normalizeUrl, openInBrowser } = await import("./browser");
 const { TabLayout } = await import("../Layout");
 const { LayoutDnd } = await import("../LayoutDnd");
 const { TabBar } = await import("../Tabs");
@@ -108,11 +108,23 @@ describe("BrowserPane", () => {
     expect(vi.mocked(rpc).mock.calls).toEqual([["browser_navigate", { pane_id: "b1", url: "http://localhost:1420/next" }]]);
   });
 
-  it("stops following and closes the webview on unmount", () => {
+  it("stops following and hides the webview on unmount, and never closes it", () => {
     const { unmount } = render(<BrowserPane paneId="b1" active />);
     unmount();
     expect(cancelAnimationFrame).toHaveBeenCalled();
-    expect(calls("browser_close")).toEqual([{ paneId: "b1" }]);
+    expect(calls("browser_set_visible").at(-1)).toEqual({ paneId: "b1", visible: false });
+    expect(calls("browser_close")).toEqual([]);
+  });
+
+  it("wakes the webview at the new bounds: create carries them and runs before show", () => {
+    const { unmount } = render(<BrowserPane paneId="b1" active />);
+    unmount();
+    vi.mocked(invoke).mockClear();
+    rect = { left: 40, top: 60, width: 500, height: 400 };
+    render(<BrowserPane paneId="b1" active />);
+    expect(calls("browser_create")).toEqual([{ paneId: "b1", url: "http://localhost:1420/", x: 50, y: 75, width: 625, height: 500 }]);
+    const names = vi.mocked(invoke).mock.calls.map(([c]) => c);
+    expect(names.indexOf("browser_create")).toBeLessThan(names.indexOf("browser_set_visible"));
   });
 
   it("is what the layout renders for a browser leaf", () => {
@@ -127,6 +139,28 @@ describe("BrowserPane", () => {
       </LayoutDnd>,
     );
     expect(container.querySelector(".tab .proc-icon")).toHaveAttribute("aria-label", "Browser");
+  });
+});
+
+describe("BrowserHost", () => {
+  it("names the browser panes only, in a stable order", () => {
+    const panes = { b1: browser, t1: { ...browser, id: "t1", kind: "terminal" }, a9: { ...browser, id: "a9" } };
+    expect(browserPaneIds({ ...store.getState(), panes } as never)).toEqual(["a9", "b1"]);
+  });
+
+  it("closes the webview of a pane that left the store, exactly once", () => {
+    render(<BrowserHost />);
+    expect(calls("browser_close")).toEqual([]);
+    act(() => store.setState({ panes: {} }));
+    expect(calls("browser_close")).toEqual([{ paneId: "b1" }]);
+    act(() => store.setState({ tabs: {} }));
+    expect(calls("browser_close")).toEqual([{ paneId: "b1" }]);
+  });
+
+  it("keeps the webview of a pane that the layout stops rendering", () => {
+    render(<BrowserHost />);
+    act(() => store.setState({ ui: { ...store.getState().ui, view: "home" } }));
+    expect(calls("browser_close")).toEqual([]);
   });
 });
 
