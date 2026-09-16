@@ -41,6 +41,12 @@ sends as the first message. This happens on every start, not only on a reopen.
   command line after a 5 s timeout whatever reads the tty. Guard it while
   output still flows.
 
+**Done.** The user config is corrected. `config::issues` warns when an
+`agents.*.args` entry starts with a Unicode dash. The pending line now follows
+`pending_action`: it goes when the tty is quiet, it goes at 5 s when the pane
+wrote nothing, it waits while output flows, and after 30 s it is dropped with a
+diagnostic.
+
 ### 1.2 A browser pane loses its page and its login — M, client (+M host)
 `BrowserPane` closes the child webview in its unmount cleanup, and only the
 active tab renders, so a tab switch destroys the page, its heap, and its session
@@ -91,6 +97,18 @@ Several weaknesses, in order of value:
   the process tree; a marked, dimmed entry is a policy choice, not a fix.
 - The GUI hides an endpoint until its probe answers. Add a `probed` flag rather
   than widening the filter, which would surface databases.
+
+**Partly done.** `lsof` now has a 2 s deadline with its own diagnostic, and the
+removal grace is 15 s. Still open: the endpoint identity (worktree and port
+instead of pid and port), the orphaned servers after a daemon restart, and the
+`probed` flag in the GUI.
+
+### 1.6 Two small gaps found while fixing the above — S each, client and docs
+- `previews.css` has no `.glyph-dirty` rule, so the git marker in the right rail
+  takes the button color instead of a tone from the glyph table.
+- `docs/addons-map.md` still says an endpoint goes "after the 5 s grace". That
+  table records the layout before the addon split, so correct it or mark it as
+  history.
 
 ## 2. Behavior and ergonomics
 
