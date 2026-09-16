@@ -412,7 +412,7 @@ Background work that exists today and must keep its current trigger:
 | Work | Trigger | Owner |
 |---|---|---|
 | process poll | every 2 s with a subscriber, 15 s without | core `monitor.rs` |
-| `lsof` port scan | each monitor tick with candidate pids, through the `process_polled` seam | runtime addon |
+| `lsof` port scan | each monitor tick with candidate pids, through the `process_polled` seam; the call is killed at a 2 s deadline | runtime addon |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
 | usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
 | `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
@@ -2884,7 +2884,7 @@ never read. Runtime was their only reader. They are expected.
 The characterization tests came first (commit `9911170`) and passed on the
 code before the move:
 
-- `addons/runtime/tests.rs` runs a real daemon with a PTY pane that serves a fixed port. It checks the label, the `action_id`, and the `source` from the pane source, the `id`, the host, the pane, the HTTP probe, the `endpoints` field of the `subscribe` snapshot, the `endpoints_changed` frames that a subscribed client receives, the activity row with its payload, the `runtime.endpoint_discovered` hook with its `action` and `pane`, the 5 s grace before a removal, the `runtime.endpoint_removed` hook, and a second discovery on the same port that fires the hook again but records no second activity row.
+- `addons/runtime/tests.rs` runs a real daemon with a PTY pane that serves a fixed port. It checks the label, the `action_id`, and the `source` from the pane source, the `id`, the host, the pane, the HTTP probe, the `endpoints` field of the `subscribe` snapshot, the `endpoints_changed` frames that a subscribed client receives, the activity row with its payload, the `runtime.endpoint_discovered` hook with its `action` and `pane`, the removal grace, the `runtime.endpoint_removed` hook, and a second discovery on the same port that fires the hook again but records no second activity row.
 - `app/src/addons/runtime/runtime.test.tsx` renders the header popover from a snapshot and an `endpoints_changed` frame, the endpoint rows and their menu (including the disabled open of a TCP endpoint), the NOW signal before the memory warning with its arrow, the palette entries, the loose endpoints of the overflow menu, and the checkpoint banner and Activity links.
 - `app/src/addons/composition.test.tsx` checks the two addons together: the arrow inside the Serve button, the open and copy items of the running Action submenu, restart and stop in the menu of an Action endpoint, and the palette order.
 
@@ -2942,7 +2942,7 @@ Not measured: GUI cold launch and GUI RSS (no GUI allowed). Not run:
 None was hit. Near:
 
 - Four new GUI slots (`sourceMark`, `sourceMenu`, `appUrl`, `signalLine`) plus `paneSource.stop`. Each is one optional field with one render site, and they let the runtime code leave eight core client files (`store.ts`, `activityModel.ts`, `activityKinds.ts`, `WorktreeHeader.tsx`, `menus.ts`, `Palette.tsx`, `Signals.tsx`, `HoverPreviews.tsx`). The `sourceMenu` return of `first` and `last` is the one shape that is not obvious; it exists because the endpoint items sat at two places in the same menu before the split.
-- `RuntimeEndpoint.source` adds a field to the wire for a client join. The alternative, reading the pane source from the client store, loses the endpoints of a pane that has already gone during the 5 s grace.
+- `RuntimeEndpoint.source` adds a field to the wire for a client join. The alternative, reading the pane source from the client store, loses the endpoints of a pane that has already gone during the removal grace.
 
 ## Milestone 10 result: crate structure
 

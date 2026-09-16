@@ -132,8 +132,10 @@ same records once.
 | `config` | `<worktree> .tomo.toml: <error>` | warning | a `notice` |
 | `usage` | `<provider> usage: <reason>` when a provider becomes unavailable | warning | no |
 | `hooks` | `<event> hook failed: <command>` | warning | no; Activity keeps `hook failed` |
-| `runtime` | `port scan: lsof: <error>` | warning | no |
+| `runtime` | `port scan: lsof failed: <error>` | warning | no |
+| `runtime` | `port scan: lsof did not answer in 2 s`, when the call passes its deadline | warning | no |
 | `integrations` | `<agent>: <reason>` for a partial integration | warning | no |
+| `daemon` | `pane <id>: the terminal did not go quiet, so Tomo did not type <line>` | warning | no |
 | `daemon` | reconnect and disconnect, from the client | info, error | see Daemon health |
 | `browser` | a failed browser host call, from the client | error | only when the user started the call |
 | `app` | a menu bar install failure, from the client | error | no |

@@ -3,11 +3,20 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::Duration;
 use tomo_proto::*;
 
-/// A port that vanishes and returns within this window (a restart) makes no event.
-pub const REMOVAL_GRACE_MS: u64 = 5_000;
+/// A port that vanishes and returns within this window (a restart) makes no
+/// event. A dev server that builds again before it listens again needs more
+/// than a few seconds, and a remove with an add costs two hooks and two
+/// activity rows.
+pub const REMOVAL_GRACE_MS: u64 = 15_000;
+/// `lsof` can hang, for example on a stale network mount. The monitor tick
+/// waits for the answer, so a hung call would stop the process poll, the agent
+/// state, and the resources of every worktree.
+pub const LSOF_DEADLINE: Duration = Duration::from_secs(2);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(400);
 const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
 
@@ -115,6 +124,23 @@ pub fn probe(host: &str, port: u16) -> RuntimeProtocol {
     RuntimeProtocol::Tcp
 }
 
+/// Runs the command and gives it a deadline. `Ok(None)` means that the command
+/// did not answer and Tomo killed it. The caller gets the standard output.
+pub fn output_within(mut command: Command, deadline: Duration) -> std::io::Result<Option<Vec<u8>>> {
+    let child = command.stdout(Stdio::piped()).spawn()?;
+    let pid = child.id();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || tx.send(child.wait_with_output()));
+    match rx.recv_timeout(deadline) {
+        Ok(done) => done.map(|out| Some(out.stdout)),
+        Err(_) => {
+            // SIGKILL, because a call that hangs in the kernel does not answer a polite signal.
+            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+            Ok(None)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +182,19 @@ mod tests {
         let other = reconcile(&missing.endpoints, &missing.gone_ms, vec![ep(3, 3000, "v")], 2_000);
         assert_eq!(other.added.len(), 1, "same port in another worktree is a new endpoint");
         assert_eq!(other.endpoints.len(), 2);
+    }
+
+    #[test]
+    fn output_within_reads_an_answer_and_kills_a_command_that_gives_none() {
+        let mut echo = Command::new("echo");
+        echo.arg("hi");
+        assert_eq!(output_within(echo, Duration::from_secs(5)).unwrap(), Some(b"hi\n".to_vec()));
+        let mut slow = Command::new("sleep");
+        slow.arg("30");
+        let started = std::time::Instant::now();
+        assert_eq!(output_within(slow, Duration::from_millis(200)).unwrap(), None, "a command that does not answer gives None");
+        assert!(started.elapsed() < Duration::from_secs(2), "the deadline returns; it does not wait for the command");
+        assert!(output_within(Command::new("tomo-no-such-program"), Duration::from_secs(1)).is_err());
     }
 
     #[test]

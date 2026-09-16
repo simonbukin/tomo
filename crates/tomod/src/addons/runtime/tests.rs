@@ -121,7 +121,7 @@ async fn a_pane_listener_is_labelled_from_its_source_recorded_once_and_removed_a
     tokio::time::sleep(Duration::from_millis(300)).await;
     tick(&daemon).await;
     assert!(endpoints(&daemon, &worktree_id).await.iter().any(|x| x.port == port), "a gone listener stays listed for the grace");
-    tokio::time::sleep(Duration::from_millis(5_200)).await;
+    tokio::time::sleep(Duration::from_millis(super::model::REMOVAL_GRACE_MS + 200)).await;
     wait_for_list("the removal", &daemon, &worktree_id, |l| !l.iter().any(|x| x.port == port)).await;
     let removed = wait_for_hooks(&log, "runtime.endpoint_removed", 1).await;
     assert_eq!(removed[0].action.as_ref().map(|a| a.id.as_str()), Some("serve"));

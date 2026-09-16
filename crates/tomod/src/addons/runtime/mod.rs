@@ -39,18 +39,19 @@ fn state(inner: &Inner) -> &Endpoints {
 }
 
 /// One `lsof` call for the given pids; none when there is nothing to ask about.
+/// The call has a deadline, because the monitor tick waits for the answer.
 fn listeners(pids: &[u32]) -> Result<Vec<Listener>, String> {
     if pids.is_empty() {
         return Ok(Vec::new());
     }
     let list = pids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
-    std::process::Command::new("lsof")
-        .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", &list, "-F", "pn"])
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .map(|o| model::parse_lsof(&String::from_utf8_lossy(&o.stdout)))
-        .map_err(|e| format!("lsof: {e}"))
+    let mut command = std::process::Command::new("lsof");
+    command.args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", &list, "-F", "pn"]).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    match model::output_within(command, model::LSOF_DEADLINE) {
+        Ok(Some(stdout)) => Ok(model::parse_lsof(&String::from_utf8_lossy(&stdout))),
+        Ok(None) => Err(format!("lsof did not answer in {} s", model::LSOF_DEADLINE.as_secs())),
+        Err(e) => Err(format!("lsof failed: {e}")),
+    }
 }
 
 fn owned(inner: &Inner) -> Vec<ProcessInfo> {
