@@ -135,12 +135,37 @@ rail's section table. Share one table of id, label, and icon.
 **Done.** The table and `SectionLabel` live in `app/src/sections.tsx`, which
 the right rail and the open inspector both read.
 
-### 2.3 Sidebar cards keep one size — M, client
+### 2.3 Sidebar cards keep one size, and the CSS pilot — M, client
 Rows vary because the branch line spans a second grid row and the signal block
 is conditional. Give a row one height and a single-line signal area with an
-ellipsis. This is the natural place to answer the CSS question: a small card
-contract (grid areas plus tokens), and CSS modules only if the global sheet
-stops being enough.
+ellipsis.
+
+This item is also the CSS pilot. The goal is a whole app that stays easy to
+theme and easy for an agent to change. Two layers, and one rule to place
+anything:
+
+- **Global** (`app/src/styles/`): the design language. Tokens for color,
+  space, type, and motion; the status vocabulary (`.state`, the dot classes,
+  the glyph tones); resets; and anything a theme must restyle from one place.
+- **Module** (`<Component>.module.css` next to the component): the layout that
+  one component owns. Grid areas, sizes, and local states.
+- **The rule:** if a change should reach the whole app, it is a token or a
+  shared class. If a change should reach one component, it is a module.
+
+A module never writes a color, a font, or a motion value directly. It reads a
+token. That keeps `[theme]` in `config.toml` the one theming surface, so the
+pilot cannot make the app less themeable.
+
+Pilot scope: the sidebar worktree row becomes the first module, together with
+the fixed height above. Vite handles `*.module.css` with no new dependency.
+Keep the class names readable in the DOM, so a person or an agent can still
+find a rule from the inspector.
+
+Done means: a row keeps one height whatever it shows; the signal area is one
+line with an ellipsis; the module holds no color literal; a theme change still
+restyles the row; the sidebar tests pass; and `docs/ui.md` carries the rule
+above in one short section. The rest of the app moves later, one component at
+a time, only where a module makes it simpler.
 
 ### 2.4 Worktree home directory — M, core
 Create new worktrees in `~/tomo/worktrees/<repo>/<worktree>` instead of beside
