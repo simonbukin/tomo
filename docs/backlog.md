@@ -177,6 +177,28 @@ restyles the row; the sidebar tests pass; and `docs/ui.md` carries the rule
 above in one short section. The rest of the app moves later, one component at
 a time, only where a module makes it simpler.
 
+**Done.** A row is 42 px over two lines, and the signal slot always renders, so
+a quiet row and a busy row hold the same boxes. `WorktreeRow.module.css` is the
+first module, and `vite.config.ts` names a class `File__local__hash`, so the
+inspector still points at the file. A test reads the module and fails on a
+color, font, or duration literal, which keeps `[theme]` the one theming
+surface.
+
+**The verdict, for the next component.** The gain is real but smaller than the
+idea promises: the defensive `wt-` prefixes are gone, a rule can be deleted
+without a grep over the app, and the token discipline is now mechanical. The
+cost is that the row carries two class systems, because the shared motion,
+focus, and press states stay in `interaction.css`. So migrate one component at
+a time, and only where it owns a real block of layout: Home rows and cards, the
+terminal pane, the palette. Never migrate the status vocabulary, the primitives,
+or the shell grid; they are the design language, and a module would hide them.
+Copy the rule test each time.
+
+**Left behind by the pilot:** `.wt-main-star` and `.tag` live in `sidebar.css`
+although `WorktreeHeader.tsx` and `Home.tsx` also use them, and `sidebar.css`
+still holds rail rules that the row does not use. Both belong to a shared sheet
+under the rule above.
+
 ### 2.4 Worktree home directory — M, core
 Create new worktrees in `~/tomo/worktrees/<repo>/<worktree>` instead of beside
 the repository. Keep `worktree_parent_dir` as the override, never move existing
