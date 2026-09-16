@@ -71,6 +71,16 @@ pnpm --dir app build             # tsc --noEmit, then vite build
 pnpm --dir app test              # vitest
 ```
 
+A fresh git worktree has no `app/node_modules`, so every client check fails
+with "Cannot find package 'vite'". The lockfile is the same, so link the main
+checkout instead of a second install, and remove the link before you commit:
+
+```bash
+ln -s /path/to/main/checkout/app/node_modules app/node_modules
+# checks here
+rm app/node_modules
+```
+
 Run the app against a scratch data directory so your real state stays
 untouched:
 

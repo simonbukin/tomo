@@ -141,9 +141,8 @@ grace is 15 s.
   Action from a worktree one.
 - No harness script covers `fs_list` or the Files section. A `files` part in
   `scripts/torture/client.sh` would close that gap.
-- A fresh agent worktree has no `app/node_modules`, so every client check fails
-  until an agent links the main checkout's tree. Say so in
-  `docs/development.md`, or give the worktree setup that step.
+- **Done.** `docs/development.md` now gives the link step for a fresh worktree,
+  which has no `app/node_modules`.
 
 ## 2. Behavior and ergonomics
 
