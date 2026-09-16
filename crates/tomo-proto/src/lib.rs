@@ -19,7 +19,6 @@ pub use activity::*;
 pub mod addons {
     pub mod actions;
     pub mod agentation;
-    pub mod anime_chart;
     pub mod github;
     pub mod runtime;
     pub mod towns;
@@ -27,7 +26,6 @@ pub mod addons {
 }
 pub use addons::actions::*;
 pub use addons::agentation::*;
-pub use addons::anime_chart::*;
 pub use addons::github::*;
 pub use addons::runtime::*;
 pub use addons::towns::*;
@@ -157,7 +155,6 @@ pub enum Call {
     UiStateGet,
     UiStateSet { state: Value },
 
-    AnimeChartList,
     TownList,
     TownPick,
     /// Facts about one unlocked town: its worktree, branch, status, final commit, PR, and archive date.
@@ -1073,7 +1070,6 @@ mod bindings {
         RpcError::export_all(&cfg).unwrap();
         Hello::export_all(&cfg).unwrap();
         ArchiveResult::export_all(&cfg).unwrap();
-        ArchivedShow::export_all(&cfg).unwrap();
         AgentSession::export_all(&cfg).unwrap();
         DropPlace::export_all(&cfg).unwrap();
         NotificationSettings::export_all(&cfg).unwrap();
