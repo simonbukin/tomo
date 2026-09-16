@@ -103,7 +103,12 @@ removal grace is 15 s. Still open: the endpoint identity (worktree and port
 instead of pid and port), the orphaned servers after a daemon restart, and the
 `probed` flag in the GUI.
 
-### 1.6 Two small gaps found while fixing the above — S each, client and docs
+### 1.6 Small gaps found while fixing the above — S each, client and docs
+
+The first two are **done**: `previews.css` has `.glyph-dirty` (the `--waiting`
+token, because a dirty tree is a notice), and `docs/addons-map.md` now says the
+grace is 15 s.
+
 - `previews.css` has no `.glyph-dirty` rule, so the git marker in the right rail
   takes the button color instead of a tone from the glyph table.
 - `docs/addons-map.md` still says an endpoint goes "after the 5 s grace". That
@@ -112,6 +117,11 @@ instead of pid and port), the orphaned servers after a daemon restart, and the
 - `tomo action list --json` prints only `set.actions`, so `from_repo` and the
   set error never reach the CLI. A second client cannot tell a repository
   Action from a worktree one.
+- No harness script covers `fs_list` or the Files section. A `files` part in
+  `scripts/torture/client.sh` would close that gap.
+- A fresh agent worktree has no `app/node_modules`, so every client check fails
+  until an agent links the main checkout's tree. Say so in
+  `docs/development.md`, or give the worktree setup that step.
 
 ## 2. Behavior and ergonomics
 
@@ -193,7 +203,7 @@ the cause is known.
 | Idea | Shape | Effort |
 |---|---|---|
 | Drag arrangement like Rectangle | An overlay that shows the target region while a pane drags. The drop regions and the split-tree moves already exist; this is presentation and hit testing. | M |
-| Files by recency | Not a separate shelf (decision 0): sort the Files inspector by modification time and give it the same context menu (open, reveal in Finder, open in the editor). | S |
+| Files by recency | **Done.** `FsEntry.modified_ms` feeds the Files inspector, which sorts newest first, shows a short age per row, and has a heading toggle back to name order. The row menu already gave open, reveal, and copy. | S |
 | Sound hooks | Sounds for hook events (`worktree.*`, `agent.*`, `action.*`). `sounds.ts` and the `[notifications] sounds` switch exist; this generalizes them. Keep it off by default. | S |
 | Agent lineage | Which agent spawned which, per worktree. Needs a parent link at spawn time and a small view. | M |
 | Archive postcards | A card for each archived worktree: dates, commits, agent sessions, and running time. `town_history` has part of it; commits and session counts need an aggregate from activity and git. | M |
