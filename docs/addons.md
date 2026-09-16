@@ -2942,6 +2942,165 @@ None was hit. Near:
 - Four new GUI slots (`sourceMark`, `sourceMenu`, `appUrl`, `signalLine`) plus `paneSource.stop`. Each is one optional field with one render site, and they let the runtime code leave eight core client files (`store.ts`, `activityModel.ts`, `activityKinds.ts`, `WorktreeHeader.tsx`, `menus.ts`, `Palette.tsx`, `Signals.tsx`, `HoverPreviews.tsx`). The `sourceMenu` return of `first` and `last` is the one shape that is not obvious; it exists because the endpoint items sat at two places in the same menu before the split.
 - `RuntimeEndpoint.source` adds a field to the wire for a client join. The alternative, reading the pane source from the client store, loses the endpoints of a pane that has already gone during the 5 s grace.
 
+## Milestone 10 result: crate structure
+
+### Decision
+
+**Keep the three crates.** `tomo-core` does not ship. PRD section 24 allows
+a `tomo-core` library only if it reduces coupling and improves testability.
+It does neither here, and it makes two things worse.
+
+### The strongest argument, and why it fails
+
+The best reason for a split: the compiler, not a grep test, enforces the
+dependency law. The examination:
+
+| Question | Answer |
+|---|---|
+| Can `tomo-core` compile with no reference to an addon? | Yes. Core names an addon in 4 lines today, all in composition roots: `main.rs` (`seams`, `migrate`, `start`) and the `use` line of `dispatch.rs`. Both files stay in the host. |
+| Do the seams survive the split unchanged? | Yes. `Seams` holds plain `fn` pointers, `Inner.addons` is `Box<dyn Any + Send>`, and `dispatch::is_slow`, `process_polled`, `pane_exited`, `worktree_namer`, `worktree_created`, and `worktree_rebound` need no trait and no generic. |
+| Then how much does the compiler enforce? | 2 of the 58 patterns of `core_does_not_import_addons`: `addons::` and `mod addons`. |
+| What does it not enforce? | The other 56 patterns, which are the nouns of each addon (`town`, `pr_status`, `usagesnapshot`, `actiondef`, `runtimeendpoint`, `agentation`, and the rest). A crate boundary does not stop Core from writing a word. |
+| Does the boundary hide the addon wire types? | No. `tomo-proto` does not split, so `tomo-core` still sees `Call::PrStatus`, `Call::UsageGet`, `Snapshot.usage`, `PullRequest`, and `UsageSnapshot`. `Daemon::handle` matches the whole `Call` enum and ends with `_ => unsupported`. |
+| Which checks become redundant? | None. All four Rust checks stay, and two of them need a path repair: `core_does_not_import_addons` must add `tomo-core/src` to its scan, and `only_provider_modules_branch_on_a_provider` scans `CARGO_MANIFEST_DIR/src`, which after a split covers one crate only. |
+
+Core-to-addon coupling is already zero, in Rust and in the proto crate. A
+crate boundary cannot reduce zero.
+
+### Where the modules land
+
+| Module | Crate after a split | Cycle? |
+|---|---|---|
+| `daemon.rs`, `store.rs`, `pty.rs`, `procs.rs`, `layout.rs`, `git.rs`, `config.rs`, `activity.rs`, `monitor.rs`, `moves.rs`, `events.rs`, `watch.rs`, `settings.rs`, `system.rs`, `agents.rs`, `login_env.rs` | `tomo-core` | no |
+| `providers/` (4 files) | `tomo-core`. Milestone 9 made providers Core: they name no addon and no addon `Call`. | no |
+| `features/` (`browser.rs`, `editor.rs`, `reopen.rs`) | `tomo-core`. The daemon side of Browser is Core; Agentation reaches it only through GUI slots. | no |
+| `main.rs`, `dispatch.rs`, `addons/` | `tomod` | no |
+| `server.rs` | `tomod`, because it calls `crate::dispatch::is_slow` and `crate::dispatch::handle` | The call forces the move. A `server.rs` that stays in `tomo-core` needs a boxed async function pointer for the handler, which is worse code. |
+
+So 24 of the 27 core files move, and 3 stay beside the 13 addon files.
+
+### Cost
+
+| Item | Count |
+|---|---|
+| Files that move | 24 |
+| `pub` items that become the public API of a library with one consumer | 253 |
+| `pub(crate)` items that widen to `pub` | 8 of 16: `new_id`, `emit_tabs`, `emit_pane`, `focus_pane`, `stop_pane`, `touch`, `spawn_in_worktree`, `push_attention`. Actions calls each one. The other 8 (`type_pending_when_quiet`, `create_tab`, `create_pane`, `place_pane`, `create_browser_pane`, `browser_open`, `browser_navigate`, `reopen_tab`) stay crate-private. |
+| Import lines that change | 31: the 28 `use crate::…` lines in `addons/` become `use tomo_core::…`, plus the 3 lines of `server.rs`. Inside a moved file `crate::` still resolves, so the moved files keep their imports. |
+| Tests that change target | 97 of the 144 `tomod` tests move to the `tomo-core` lib target. The 47 addon tests stay in the bin target. |
+
+### Testability
+
+A library crate lets a test live in `crates/tomo-core/tests/`. Nothing needs
+that today. The 97 core tests already build real daemons in one process with
+`Daemon::new(paths, seams, state)`, and they read private items that an
+integration test cannot see. The two files that look like integration tests
+(`addons/actions/tests.rs`, `addons/runtime/tests.rs`) are addon tests. They
+stay in the bin target, so the split does not help them.
+
+### Build times
+
+Measured in this worktree on 2026-09-15, 15 cores, `cargo 1.97.1`, no other
+load. Each number ran twice. A `touch` of one file is the same work for
+`rustc` as a one-line change, because it recompiles the crate.
+
+| Build | Run 1 | Run 2 |
+|---|---|---|
+| Clean `cargo build --release -p tomod -p tomo-cli` | 31.02 s | 30.62 s |
+| Release rebuild after a touch of `daemon.rs` (Core) | 12.05 s | 12.05 s |
+| Release rebuild after a touch of `addons/usage/mod.rs` | 12.85 s | 12.51 s |
+| Clean debug build | 14.82 s | — |
+| Debug rebuild after a touch of `daemon.rs` | 1.47 s | 1.39 s |
+| Debug rebuild after a touch of `addons/usage/mod.rs` | 1.07 s | 0.75 s |
+
+No "after" number exists, because this milestone built no prototype of the
+split. The decision fails on coupling and enforcement before build time
+matters. The numbers above give the limit of the best case. A clean build
+gets no faster: it compiles the same code in two units. An addon edit gets
+faster, because it no longer compiles the core modules, and the saving is
+smaller than one crate rebuild: 1.4 s in debug, 12 s in release. A Core edit
+gets slower: it compiles `tomo-core`, waits for the metadata, then compiles
+`tomod`. The inner loop is the debug rebuild, and it is already about one
+second.
+
+### Traceability for an agent
+
+An agent that traces a bug from the socket to a PTY reads `server.rs`,
+`dispatch.rs`, `daemon.rs`, and `pty.rs`. Today all four are in
+`crates/tomod/src`. After a split, two are in `crates/tomod/src` and two in
+`crates/tomo-core/src`, and every addon reads `tomo_core::daemon` where it
+reads `crate::daemon` today. That is one more crate name and one more
+directory for no new fact. Two PRD stop conditions name this result:
+"traceability gets worse" and "agents need more files to understand a
+feature".
+
+### Also rejected: a `crates/tomod/src/core/` folder
+
+It renames `crate::x` to `crate::core::x` in every core module, in every
+addon import, and in the path constants of three tests, and it gives no new
+rule. The law lives in the tests and in this file, not in the folder names.
+The layout already separates the three groups: `addons/`, `providers/`,
+`features/`, and the core modules beside them.
+
+### What this milestone changed
+
+Only `docs/addons.md` and `docs/architecture.md`. No Rust file, no
+TypeScript file, no wire type, no SQLite schema, and no CLI command changed.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | 156 passed, 0 failed (144 `tomod`, 7 `tomo-proto`, 5 `tomo_app_lib`) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 272 passed |
+| `npx vite build` | built in 361 ms; main chunk 722.71 kB |
+| `scripts/torture/run-all.sh` (data dir `/tmp/tomo-addons-core-harness`) | PASS: 408 passed, 0 failed, 7 known (6 providers, 1 github) |
+
+`addons-bench.py` with the release daemon, data dir
+`/tmp/tomo-addons-core-bench`, and `TOMO_USAGE_MOCK` at a file with a far
+`fetched_at_ms`, so no check read a login or called the network. Round
+trips, median of 3 trial medians:
+
+| Metric | Baseline | Milestone 10 |
+|---|---|---|
+| Reattach | 7.66 ms | 7.64 ms |
+| of which `subscribe` | 0.51 ms | 0.49 ms |
+| of which `pane_attach` | 7.14 ms | 7.17 ms |
+| Worktree switch | 0.14 ms | 0.11 ms |
+| Worktree switch with attach | 9.26 ms | 8.20 ms |
+| Refresh | 164.31 ms | 156.01 ms |
+| Process poll, fresh | 23.41 ms | 23.64 ms |
+| Process poll, cached | 0.63 ms | 0.62 ms |
+
+Idle, one 60 s window for each mode, not three, because no code changed:
+
+| Metric | Baseline | Milestone 10 |
+|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | 0.15 % (limit 0.3 %) |
+| Idle CPU, one subscriber | 1.05 % | 1.12 % (limit 1.5 %) |
+| RSS at window end, no subscriber | 14.6 MB | 15.0 MB (limit 18 MB) |
+| RSS at window end, subscribed | 14.6 MB | 15.7 MB (limit 18 MB) |
+
+Gate: pass. Not measured: GUI cold launch and GUI RSS (no GUI allowed). Not
+run: `scripts/perf.sh` and the soak.
+
+### Stop conditions
+
+None was hit, because the tree keeps its code. A split hits two:
+"traceability gets worse" and "agents need more files to understand a
+feature".
+
+### If a later change needs the split
+
+Split when a second binary needs the domain code, for example a second host
+or a fuzz target. Then:
+
+1. Move the 24 core files. Keep `main.rs`, `dispatch.rs`, `server.rs`, and `addons/` in `tomod`.
+2. Widen the 8 `pub(crate)` items that Actions calls.
+3. Add `tomo-core/src` to the scan of `core_does_not_import_addons`, and give `only_provider_modules_branch_on_a_provider` the workspace root instead of `CARGO_MANIFEST_DIR/src`.
+4. Keep every noun check. The compiler replaces 2 of the 58 patterns.
+
 ## Agent hackability exercise
 
 PRD section 30 asks one question: can an agent add a whole feature with only
@@ -3006,6 +3165,7 @@ slot, a seam, or a composition root changes.
 | agentation | **done** | none in Core or Browser; see "Milestone 7 result: Agentation" |
 | activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
 | agent providers | **provider modules** | none in Core; see "Milestone 9 result: agent providers" |
+| `tomo-core` crate | **not split** | none; the three crates stay. See "Milestone 10 result: crate structure" |
 
 ## Migration order
 
@@ -3161,7 +3321,9 @@ Risks:
 - `daemon.rs` has more than 2500 lines with one global `Inner` mutex.
 - A crate split moves tests and changes the test layout.
 
-Do this milestone only if milestones 1 to 9 leave an obvious library edge.
+**Decided: no split.** Milestones 1 to 9 left no library edge, and the
+compiler would enforce 2 of the 58 patterns of the dependency check. See
+"Milestone 10 result: crate structure".
 
 ## Problems found in milestone 0
 
