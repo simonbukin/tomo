@@ -71,6 +71,11 @@ no toast.
 
 - The main worktree of a repo shows a star and always sorts first, in
   every sort mode.
+- Every worktree row has the same height: two lines, 42 px. The first line
+  holds the status dot, the name, the star, and the row menu. The second
+  line holds the state, the branch, the tags, and then the signals. Neither
+  line wraps. Each part cuts with an ellipsis, and the signals keep their
+  width before the branch does.
 - Drag a worktree row or a repo header to reorder it. The first drop
   switches the sidebar to `manual` sort and keeps the order that was on
   screen for everything else. The order lives in UI state
@@ -461,6 +466,28 @@ styles/
   bottom.css    bottom strip, its previews and popovers, diagnostics
   interaction.css  motion, focus, hit targets, scroll, skeleton, empty and error states
 ```
+
+### The two layers
+
+- **Global** (`app/src/styles/`): the design language. Tokens for color,
+  space, type, and motion; the status vocabulary (`.state`, the dot classes,
+  the glyph tones); the resets; and every class that more than one component
+  uses.
+- **Module** (`<Component>.module.css` beside the component): the layout that
+  one component owns. Grid areas, sizes, and local states.
+- **The rule:** if a change must reach the whole app, it is a token or a
+  shared class. If a change must reach one component, it is a module.
+
+A module reads tokens. It writes no color, no typeface, and no duration, so
+`[theme]` in `config.toml` stays the one theming surface (see
+[theming.md](theming.md)). Vite scopes each module class as
+`<File>__<class>__<hash>`, so the inspector still names the file that holds
+the rule.
+
+`app/src/WorktreeRow.module.css` is the first module: the sidebar worktree
+row. `Sidebar.test.tsx` fails if a row loses a slot, or if the module holds a
+color, a typeface, or a duration. The rest of the app moves later, one
+component at a time, and only where a module makes it simpler.
 
 ## Torture page
 
