@@ -1,9 +1,10 @@
 # Actions
 
 An Action is a named command that belongs to a repository. Tomo runs it in
-the context of the current worktree. Actions live in
-`<worktree>/.tomo.toml`, so they are versioned with the repository and can
-differ per branch.
+the context of the current worktree. Actions live in `.tomo.toml`, so they
+are versioned with the repository. The file at the repository root serves
+every worktree of that repository. A worktree can hold its own file, which
+lets the Actions differ per branch.
 
 Tomo never runs an Action by itself. Every run comes from a button, the
 palette, or `tomo action run`.
@@ -41,7 +42,18 @@ command = "pnpm playwright test --ui"
 | `show`     | no       | `topbar` or `menu` (default).                                        |
 | `shortcut` | no       | Keybinding in the `[keybindings]` syntax, such as `mod+shift+s`. Active while the worktree is open. |
 
-A missing file means no actions and no error.
+## Where the file lives
+
+Tomo reads two places, in this order:
+
+1. `<worktree>/.tomo.toml`.
+2. `<repository root>/.tomo.toml`, when the worktree has no file of its own.
+
+The repository root is the main worktree of the repository. The worktree
+file wins whole: Tomo does not merge the two files, because a merge needs a
+conflict rule for each id. A worktree file that holds no `[[actions]]` gives
+no actions, and the repository file stays unread. No file at either place
+means no actions and no error.
 
 ## Pane mode
 
@@ -86,7 +98,8 @@ Tomo does not track it: there is no reuse, no stop, and no exit event.
 
 - **GUI**. Actions with `show = "topbar"` are buttons in the top bar of the
   worktree; a live one shows a dot, and a right click on it offers focus,
-  restart, and stop. Every action is in the `•••` overflow menu, where a
+  restart, and stop. The tooltip of a button ends with `from the repository`
+  when the set comes from the repository file. Every action is in the `•••` overflow menu, where a
   running one opens the same submenu. The `⌘K` palette lists each action
   as `run <label>`. A `shortcut` works while that worktree is open; when
   it collides with a `[keybindings]` entry, the config entry wins.
@@ -99,17 +112,21 @@ Tomo does not track it: there is no reuse, no stop, and no exit event.
 ## Reload
 
 The daemon reads `.tomo.toml` on every discovery and watches the root of
-each worktree (not recursive) for a change to that file. A change reloads
-the set for that worktree, and clients get an `actions_changed` event. A
-save takes about half a second to show up.
+each worktree (not recursive) for a change to that file. It watches each
+repository root in the same way, because that root is not always an open
+worktree. A change reloads the set of each worktree that reads the file, and
+clients get an `actions_changed` event. A save takes about half a second to
+show up.
 
 ## Malformed files
 
 A bad entry is dropped; the rest of the file stays usable. The first
 problem is reported once as a warning notice in the GUI and as a
-`warning:` line in `tomo action list`. A file that is not valid TOML
-yields no actions and the parse error. A bad file never blocks the
-worktree.
+`warning:` line in `tomo action list`. Each problem names the full path of
+the file that holds it, because a repository file serves more than one
+worktree, and a bad repository file must warn one time and not once per
+worktree. A file that is not valid TOML yields no actions and the parse
+error. A bad file never blocks the worktree.
 
 ## Where the code lives
 
@@ -132,3 +149,8 @@ command comes from the repository's own file, so a cloned repository can
 define anything. Tomo never runs an action without an explicit request.
 Treat a cloned repository's `.tomo.toml` as you treat its `Makefile`:
 read it before you click.
+
+The file at the repository root gives these commands to every worktree of
+that repository at once. One file that you did not read is thus one button
+in each worktree. A worktree file limits a command to that worktree, because
+it hides the repository file.

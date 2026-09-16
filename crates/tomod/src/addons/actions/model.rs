@@ -1,8 +1,10 @@
-//! Repo-defined Actions: `[[actions]]` in `<worktree>/.tomo.toml`.
+//! Repo-defined Actions: `[[actions]]` in `.tomo.toml`.
 //!
-//! An Action is a named command that runs in the context of one worktree,
-//! either in a Tomo pane or as an external program. Nothing here runs by
-//! itself; the daemon executes an Action only on an explicit request.
+//! The file belongs to the repository. A worktree reads its own file, and the
+//! repository file when it has none. An Action is a named command that runs in
+//! the context of one worktree, either in a Tomo pane or as an external
+//! program. Nothing here runs by itself; the daemon executes an Action only on
+//! an explicit request.
 
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -28,11 +30,13 @@ struct Entry {
 }
 
 /// Parses the file text. Returns the actions and the first problem, if any.
-/// A problem in one entry drops that entry and keeps the rest.
-pub fn parse(text: &str) -> (Vec<ActionDef>, Option<String>) {
+/// A problem in one entry drops that entry and keeps the rest. Each problem
+/// names `source`, because a repository file serves every worktree of the repo.
+pub fn parse(text: &str, source: &Path) -> (Vec<ActionDef>, Option<String>) {
+    let source = source.display();
     let file: File = match toml::from_str(text) {
         Ok(f) => f,
-        Err(e) => return (Vec::new(), Some(format!("{FILE_NAME}: {}", e.message()))),
+        Err(e) => return (Vec::new(), Some(format!("{source}: {}", e.message()))),
     };
     let mut out = Vec::new();
     let mut seen = HashSet::new();
@@ -40,7 +44,7 @@ pub fn parse(text: &str) -> (Vec<ActionDef>, Option<String>) {
     for (i, e) in file.actions.into_iter().enumerate() {
         let mut fail = |msg: String| {
             if first_error.is_none() {
-                first_error = Some(format!("{FILE_NAME}: actions[{i}] {msg}"));
+                first_error = Some(format!("{source}: actions[{i}] {msg}"));
             }
         };
         let Some(id) = e.id.filter(|s| !s.trim().is_empty()) else {
@@ -87,23 +91,53 @@ pub fn parse(text: &str) -> (Vec<ActionDef>, Option<String>) {
     (out, first_error)
 }
 
-/// Reads `<worktree>/.tomo.toml`. A missing file means no actions and no error.
-pub fn load(worktree: &Path) -> (Vec<ActionDef>, Option<String>) {
-    match std::fs::read_to_string(worktree.join(FILE_NAME)) {
-        Ok(text) => parse(&text),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (Vec::new(), None),
-        Err(e) => (Vec::new(), Some(format!("{FILE_NAME}: {e}"))),
+/// Reads one file. `None` means the file is not there.
+fn read(file: &Path) -> Option<(Vec<ActionDef>, Option<String>)> {
+    match std::fs::read_to_string(file) {
+        Ok(text) => Some(parse(&text, file)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => Some((Vec::new(), Some(format!("{}: {e}", file.display())))),
+    }
+}
+
+/// Reads `<worktree>/.tomo.toml`, or `<repo>/.tomo.toml` when the worktree has
+/// no file of its own. The worktree file wins whole: the two are never merged,
+/// which would need a conflict rule for each id. The third value is true when
+/// the actions come from the repository file. No file at either place means no
+/// actions and no error.
+pub fn load(worktree: &Path, repo: Option<&Path>) -> (Vec<ActionDef>, Option<String>, bool) {
+    if let Some((actions, error)) = read(&worktree.join(FILE_NAME)) {
+        return (actions, error, false);
+    }
+    match repo.filter(|r| *r != worktree).and_then(|r| read(&r.join(FILE_NAME))) {
+        Some((actions, error)) => (actions, error, true),
+        None => (Vec::new(), None, false),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn temp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("tomo-actions-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn write(dir: &Path, text: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join(FILE_NAME), text).unwrap();
+    }
+
+    const BUILD: &str = "[[actions]]\nid = \"build\"\ncommand = \"make\"\n";
 
     #[test]
     fn parses_defaults_and_reports_first_problem_without_dropping_the_rest() {
         let (actions, err) = parse(
             "[[actions]]\nid = \"zed\"\nlabel = \"Zed\"\ncommand = \"zed .\"\nmode = \"external\"\nshow = \"topbar\"\n\n[[actions]]\nid = \"test\"\ncommand = \"pnpm test\"\n\n[[actions]]\nlabel = \"broken\"\ncommand = \"x\"\n\n[[actions]]\nid = \"test\"\ncommand = \"dup\"\n",
+            Path::new(FILE_NAME),
         );
         assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].mode, ActionMode::External);
@@ -116,18 +150,51 @@ mod tests {
 
     #[test]
     fn invalid_toml_and_bad_mode_are_reported() {
-        let (actions, err) = parse("[[actions]\nid = 1");
+        let (actions, err) = parse("[[actions]\nid = 1", Path::new(FILE_NAME));
         assert!(actions.is_empty() && err.unwrap().starts_with(".tomo.toml:"));
-        let (actions, err) = parse("[[actions]]\nid = \"a\"\ncommand = \"x\"\nmode = \"service\"\n");
+        let (actions, err) = parse("[[actions]]\nid = \"a\"\ncommand = \"x\"\nmode = \"service\"\n", Path::new(FILE_NAME));
         assert!(actions.is_empty());
         assert!(err.unwrap().contains("must be pane or external"));
     }
 
     #[test]
     fn missing_file_is_not_an_error() {
-        let dir = std::env::temp_dir().join(format!("tomo-actions-{}", std::process::id()));
+        let dir = temp("missing");
         std::fs::create_dir_all(&dir).unwrap();
-        assert_eq!(load(&dir), (Vec::new(), None));
+        assert_eq!(load(&dir, None), (Vec::new(), None, false));
+        assert_eq!(load(&dir, Some(&dir.join("no-such-repo"))), (Vec::new(), None, false), "a missing repository file is no error either");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_repo_file_applies_and_a_worktree_file_wins_whole() {
+        let dir = temp("fallback");
+        let (repo, worktree) = (dir.join("repo"), dir.join("feat-x"));
+        write(&repo, BUILD);
+        std::fs::create_dir_all(&worktree).unwrap();
+
+        let (actions, error, from_repo) = load(&worktree, Some(&repo));
+        assert_eq!((actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), error, from_repo), (vec!["build"], None, true));
+
+        write(&worktree, "[[actions]]\nid = \"test\"\ncommand = \"pnpm test\"\n");
+        let (actions, _, from_repo) = load(&worktree, Some(&repo));
+        assert_eq!((actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), from_repo), (vec!["test"], false), "the worktree file wins whole; the two never merge");
+
+        let (actions, _, from_repo) = load(&repo, Some(&repo));
+        assert_eq!((actions.len(), from_repo), (1, false), "the repository root reads its own file as a worktree");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_bad_repo_file_names_its_own_path() {
+        let dir = temp("bad-repo");
+        let (repo, worktree) = (dir.join("repo"), dir.join("feat-x"));
+        write(&repo, "[[actions]]\ncommand = \"make\"\n");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let (_, error, from_repo) = load(&worktree, Some(&repo));
+        let error = error.unwrap();
+        assert_eq!(error, format!("{}: actions[0] id is required", repo.join(FILE_NAME).display()));
+        assert!(from_repo && !error.contains("feat-x"), "the problem names the repository file, not the worktree");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
