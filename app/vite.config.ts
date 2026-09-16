@@ -7,6 +7,7 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: { target: "safari15", outDir: "dist" },
+  css: { modules: { generateScopedName: "[name]__[local]__[hash:base64:4]" } },
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
