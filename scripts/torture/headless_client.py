@@ -202,6 +202,34 @@ def attached_text(conn, pane_id, needle, timeout=10):
     return needle.encode() in seen
 
 
+def files_check(conn, wt, repo_path):
+    """fs_list: the wire fields, the order the daemon sends, and the recency sort that each client does itself."""
+    root = os.path.join(repo_path, "files-check")
+    os.makedirs(os.path.join(root, "sub"), exist_ok=True)
+    now = time.time()
+    ages = {"alpha.txt": 300, "Beta.txt": 200, "gamma.txt": 100}
+    for name, age in ages.items():
+        path = os.path.join(root, name)
+        with open(path, "w") as f:
+            f.write(name)
+        os.utime(path, (now - age, now - age))
+    os.utime(os.path.join(root, "sub"), (now - 400, now - 400))
+
+    entries = conn.call("fs_list", {"worktree_id": wt, "rel_path": "files-check"})
+    by_name = {e["name"]: e for e in entries}
+    sane = len(entries) == 4 and by_name["sub"]["is_dir"] and not by_name["alpha.txt"]["is_dir"]
+    sane = sane and all(e["rel_path"] == f"files-check/{e['name']}" for e in entries)
+    sane = sane and all(e["size"] == len(name) for name, e in by_name.items() if name in ages)
+    sane = sane and all(abs(by_name[name]["modified_ms"] / 1000 - (now - age)) < 2 for name, age in ages.items())
+    check(sane, "fs_list: each entry carries a sane modified_ms, size, is_dir, and rel_path", json.dumps(entries)[:400])
+
+    names = [e["name"] for e in entries]
+    check(names == ["sub", "alpha.txt", "Beta.txt", "gamma.txt"], "fs_list: the daemon sends directories first, then names, without case", json.dumps(names))
+
+    recent = [e["name"] for e in sorted(entries, key=lambda e: -e["modified_ms"])]
+    check(recent == ["gamma.txt", "Beta.txt", "alpha.txt", "sub"], "fs_list: a recency sort on the client puts the newest entry first", json.dumps(recent))
+
+
 def run(repo_path):
     conn = Conn()
     hello = conn.call("hello", {"protocol": PROTOCOL, "client": "headless-client"})
@@ -214,6 +242,7 @@ def run(repo_path):
     state, ok = wait_until(conn, state, lambda s: any(r["path"] == repo_path for r in s["repos"].values()) and any(w["path"] == repo_path and w["is_main"] for w in s["worktrees"].values()))
     check(ok, "repo_add: repos_changed and worktrees_changed show the repo and its main worktree")
     wt = next(w["id"] for w in state["worktrees"].values() if w["path"] == repo_path)
+    files_check(conn, wt, repo_path)
 
     tab = conn.call("tab_create", {"worktree_id": wt, "title": "headless"})
     state, ok = wait_until(conn, state, lambda s: tab["id"] in s["tabs"] and all(p in s["panes"] for p in leaf_ids(s["tabs"][tab["id"]]["layout"])))
