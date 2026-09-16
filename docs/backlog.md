@@ -78,7 +78,8 @@ probably throttles a hidden view, but that is unproven here. The cost is one
 panes hurt, the policy to try first is to close the browser panes of worktrees
 the user has not looked at, keyed by last focus.
 
-**Still open:** the popup path. A real child webview needs a unique
+**Deferred**, the user's call on 2026-09-16: the popup path. A child webview
+needs a unique
 `browser-*` label for the capability, a popup-to-pane link so a close cascades,
 a close path for the user and for `window.close()`, and proof that `build()` is
 safe inside the callback while WebKit holds the main thread. The recipe is in
@@ -235,11 +236,10 @@ Studio action. The Drizzle one is a `.tomo.toml` entry, so it is easier after
 button, with the `reveal_finder` shortcut in its tooltip. The Drizzle action
 still waits for 2.1.
 
-### 2.6 Infisical login — diagnosis first
-The CLI opens the system browser and waits on a localhost callback, so the Tomo
-pane is not in that path. Run the login in a pane, note the callback port, and
-check whether the port is reachable and whether the daemon sees it. No fix until
-the cause is known.
+### 2.6 Infisical login — deferred
+**Deferred**, the user's call on 2026-09-16. The CLI opens the system browser
+and waits on a localhost callback, so the Tomo pane is not in that path. If it
+comes back, the first step is the callback port that the login prints.
 
 ## 3. New features, each an addon
 
