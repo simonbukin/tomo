@@ -1071,11 +1071,13 @@ Use an existing slot. Add a new slot only when an extraction needs it. Do not
 add a slot "for later". Add the slot to the `Addon` type, then render it at
 one site from `builtins`.
 
-Slots that exist (see "Static composition, GUI"): `views`, `commands`,
-`inspectorSections`, `worktreeSignals`, `repoAvatar`, `worktreeNameField`,
-`mount`, `bottomItem`, `diagnosticsSection`, `topbar`, `worktreeMenu`,
-`endpointMenu`, `paletteEntries`, `shortcuts`, `paneSource`, `browserToolbar`,
-`onSnapshot`, `onFrame`.
+Slots that exist, in the order of `app/src/addons/types.ts` (21): `views`,
+`commands`, `inspectorSections`, `worktreeSignals`, `signalLine`,
+`repoAvatar`, `worktreeNameField`, `topbar`, `browserToolbar`,
+`worktreeMenu`, `sourceMark`, `sourceMenu`, `appUrl`, `paletteEntries`,
+`shortcuts`, `paneSource`, `mount`, `bottomItem`, `diagnosticsSection`,
+`onSnapshot`, `onFrame`. Milestone 4 replaced `endpointMenu` with
+`sourceMenu`, so an addon names a pane source, not an Action.
 
 Slots that later milestones will need (from the map):
 
@@ -3163,7 +3165,7 @@ slot, a seam, or a composition root changes.
 | usage | **done** | none in Core; see "Milestone 5 result: Usage" |
 | browser | **built-in pane kind** | not an addon; see "Milestone 6 result: Browser" |
 | agentation | **done** | none in Core or Browser; see "Milestone 7 result: Agentation" |
-| activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
+| activity projections | kind seam **done** | `activityModel.ts` keeps the usage helpers `sparkCells` and `resetsIn`; the runtime helpers left in milestone 4; see "Activity kind seam result" |
 | agent providers | **provider modules** | none in Core; see "Milestone 9 result: agent providers" |
 | `tomo-core` crate | **not split** | none; the three crates stay. See "Milestone 10 result: crate structure" |
 
@@ -3293,7 +3295,7 @@ Narrowest seam:
 Risks:
 
 - **Fixed.** "Needs Me" was defined in SQL (`store.rs`) and in `activityModel.ts` `needsMeItem`, and the two definitions differed.
-- **Open.** `activityModel.ts` mixes runtime and usage helpers. The PR helper moved to the GitHub addon in milestone 2.
+- **Open.** `activityModel.ts` keeps the usage helpers `sparkCells`, `SPARK_WIDTH`, and `resetsIn`, which the usage addon imports. The PR helper moved to the GitHub addon in milestone 2, and the runtime helpers moved in milestone 4.
 - **Avoided.** A string kind loses compile-time checks. Each owner has a typed enum and a typed record of views.
 
 The kind seam is done. See "Activity kind seam result". The plan above was
