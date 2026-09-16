@@ -15,7 +15,7 @@ $T config check >/dev/null 2>&1 && check 0 "config check accepts action.* hooks"
 R=$(new_repo); $T repo add "$R" >/dev/null
 read -r WT P < <($T worktree create --repo "$R" --branch feat/actions --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
 
-ids() { $T action list "$WT" --json | jq_ "print(' '.join(a['id'] for a in d))"; }
+ids() { $T action list "$WT" --json | jq_ "print(' '.join(a['id'] for a in d['actions']))"; }
 list_text() { $T action list "$WT" 2>&1; }
 write_toml() { printf '%s\n' "$1" > "$P/.tomo.toml"; wait_for "[ \"\$(ids)\" = \"$2\" ]" 4; }
 run() { $T action run "$1" "$WT" --json 2>&1; }
@@ -41,8 +41,8 @@ id = "mark"
 command = "touch marker-ext"
 mode = "external"' "quick serve mark"
 $T action list "$WT" --json | jq_ "import sys
-a={x['id']:x for x in d}
-ok=len(d)==3 and a['quick']['label']=='Quick' and a['quick']['show']=='topbar' and a['quick']['mode']=='pane' and a['serve']['label']=='serve' and a['serve']['show']=='menu' and a['mark']['mode']=='external'
+a={x['id']:x for x in d['actions']}
+ok=len(d['actions'])==3 and d['worktree_id']=='$WT' and d['error'] is None and d['from_repo'] is False and a['quick']['label']=='Quick' and a['quick']['show']=='topbar' and a['quick']['mode']=='pane' and a['serve']['label']=='serve' and a['serve']['show']=='menu' and a['mark']['mode']=='external'
 sys.exit(0 if ok else 1)" && check 0 "three valid entries with defaults" || check 1 "valid file" "$(list_text)"
 sleep 2; [ -z "$(action_panes)" ] && check 0 "nothing runs on its own after the file appears" || check 1 "autorun" "$(action_panes)"
 
@@ -74,7 +74,7 @@ command = "true"' "fine"
 list_text | grep -q "warning: $P/.tomo.toml: actions\[0\] weird: mode \"sideways\"" && check 0 "bad mode is dropped with a warning" || check 1 "bad mode" "$(list_text)"
 
 write_toml 'this is not = [[[ toml' ""
-list_text | grep -q "warning: $P/.tomo.toml:" && [ "$($T action list "$WT" --json)" = "[]" ] && check 0 "invalid TOML gives zero actions and a warning" || check 1 "invalid toml" "$(list_text)"
+list_text | grep -q "warning: $P/.tomo.toml:" && [ "$($T action list "$WT" --json | jq_ "print(d['actions'], d['error'] is not None)")" = "[] True" ] && check 0 "invalid TOML gives zero actions, a warning, and the error in the json set" || check 1 "invalid toml" "$(list_text)"
 $T worktree open "$WT" >/dev/null 2>&1 && check 0 "worktree still opens with an invalid .tomo.toml" || check 1 "open with invalid toml"
 
 # runs
@@ -148,15 +148,19 @@ write_repo_toml '[[actions]]
 id = "repo-wide"
 command = "true"' "repo-wide"
 [ "$(ids)" = "repo-wide" ] && check 0 "a sibling worktree sees the repository .tomo.toml" || check 1 "repo fallback" "$(ids)"
+$T action list "$WT" --json | jq_ "import sys; sys.exit(0 if d['from_repo'] is True else 1)" && check 0 "the json set marks a repository set with from_repo" || check 1 "json from_repo" "$($T action list "$WT" --json)"
+list_text | grep -q "from the repository .tomo.toml" && check 0 "the list names the repository file as the source" || check 1 "repo source line" "$(list_text)"
 
 printf '[[actions]]\nid = "local-only"\ncommand = "true"\n' > "$P/.tomo.toml"
 wait_for "[ \"\$(ids)\" = 'local-only' ]" 8
 [ "$(ids)" = "local-only" ] && check 0 "a worktree file wins whole over the repository file" || check 1 "worktree override" "$(ids)"
+$T action list "$WT" --json | jq_ "import sys; sys.exit(0 if d['from_repo'] is False else 1)" && list_text | grep -q "from the worktree .tomo.toml" && check 0 "a worktree set says from_repo false and names the worktree file" || check 1 "worktree source" "$(list_text)"
 
 rm -f "$P/.tomo.toml"; wait_for "[ \"\$(ids)\" = 'repo-wide' ]" 8
 write_repo_toml '[[actions]]
 command = "true"' ""
 list_text | grep -q "warning: $R/.tomo.toml: actions\[0\] id is required" && check 0 "a bad repository file names its own path" || check 1 "repo file error path" "$(list_text)"
+$T action list "$WT" --json | jq_ "import sys; sys.exit(0 if d['error'] and d['error'].startswith('$R/.tomo.toml:') else 1)" && check 0 "the json set carries the error with the path of the file that holds it" || check 1 "json error" "$($T action list "$WT" --json)"
 rm -f "$R/.tomo.toml"
 
 # hook timeout kills the tree; hook output keeps UTF-8 intact

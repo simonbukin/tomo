@@ -17,7 +17,7 @@ command = "sleep 30"
 id = "crash"
 label = "Crashy"
 command = "exit 2"' > "$P/.tomo.toml"
-wait_for "[ \"\$($T action list $WT --json | jq_ \"print(len(d))\")\" = 2 ]" 6
+wait_for "[ \"\$($T action list $WT --json | jq_ \"print(len(d['actions']))\")\" = 2 ]" 6
 
 act() { $T activity --json "$@"; }
 kinds() { act "$@" | jq_ "print(' '.join(e['kind'] for e in d))"; }
