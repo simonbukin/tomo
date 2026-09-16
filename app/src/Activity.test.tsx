@@ -18,7 +18,7 @@ const worktree = { id: "w1", name: "kobe", repo_id: "r1", path: "/src/kobe", bra
 const pane = { id: "p1", worktree_id: "w1", tab_id: "t1", live: true, source: { kind: "action", id: "serve", label: "Serve" } } as unknown as Pane;
 const agent = (state: AgentPresence["state"]) => ({ pane_id: "p1", worktree_id: "w1", kind: "claude", state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null }) as AgentPresence;
 const attention = (id: string, kind: AttentionItem["kind"]): AttentionItem => ({ id, worktree_id: "w1", pane_id: "p1", level: "attention", message: id, created_at_ms: 1, viewed_at_ms: null, kind, url: null, agent_kind: null, resolved_at_ms: null });
-const serve: ActionSet = { worktree_id: "w1", actions: [{ id: "serve", label: "Serve", command: "sleep 30", mode: "pane", show: "topbar", shortcut: null }], error: null };
+const serve: ActionSet = { worktree_id: "w1", actions: [{ id: "serve", label: "Serve", command: "sleep 30", mode: "pane", show: "topbar", shortcut: null }], error: null, from_repo: false };
 const endpoint: RuntimeEndpoint = { id: "e", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, source: pane.source };
 
 const claude = { agent_kind: "claude", pane_id: "p1" } as const;

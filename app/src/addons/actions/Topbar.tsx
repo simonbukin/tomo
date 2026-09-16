@@ -24,7 +24,7 @@ export function ActionButtons({ worktree: w }: TopbarProps) {
   const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");
   return topbar.map((a) => {
     const live = running.includes(a.id);
-    const hint = [a.command, a.shortcut ? describeBinding(a.shortcut) : null].filter(Boolean).join(" · ");
+    const hint = [a.command, a.shortcut ? describeBinding(a.shortcut) : null, set?.from_repo ? "from the repository" : null].filter(Boolean).join(" · ");
     return (
       <Tooltip key={a.id} content={live ? `${hint} · running (right-click for more)` : hint}>
         <Button variant="ghost" size="sm" className="action-btn" onClick={() => runWorktreeAction(w.id, a.id)} onContextMenu={(e) => live && openMenu(e, runningActionItems(w.id, a.id))}>

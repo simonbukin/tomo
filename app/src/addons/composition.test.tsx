@@ -25,6 +25,7 @@ const set: ActionSet = {
     { id: "lint", label: "Lint", command: "pnpm lint", mode: "pane", show: "topbar", shortcut: null },
   ],
   error: null,
+  from_repo: false,
 };
 const served = (extra: Partial<RuntimeEndpoint> = {}) => ({ id: "1:3000", worktree_id: "w1", pane_id: "p1", action_id: "serve", source: serveSource, pid: 1, process: "node", protocol: "http", host: "localhost", port: 3000, label: "Serve", discovered_at_ms: 0, ...extra }) as RuntimeEndpoint;
 

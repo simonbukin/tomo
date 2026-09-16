@@ -52,7 +52,7 @@ command = "echo no-id"
 [[actions]]
 id = "ok"
 command = "true"' "ok"
-list_text | grep -q 'warning: .tomo.toml: actions\[0\] id is required' && check 0 "missing id is dropped with a warning" || check 1 "missing id" "$(list_text)"
+list_text | grep -q "warning: $P/.tomo.toml: actions\[0\] id is required" && check 0 "missing id is dropped with a warning that names the file" || check 1 "missing id" "$(list_text)"
 
 write_toml '[[actions]]
 id = "dup"
@@ -61,7 +61,7 @@ command = "true"
 [[actions]]
 id = "dup"
 command = "false"' "dup"
-list_text | grep -q 'warning: .tomo.toml: actions\[1\] duplicate id' && check 0 "duplicate id is dropped with a warning" || check 1 "duplicate id" "$(list_text)"
+list_text | grep -q "warning: $P/.tomo.toml: actions\[1\] duplicate id" && check 0 "duplicate id is dropped with a warning" || check 1 "duplicate id" "$(list_text)"
 
 write_toml '[[actions]]
 id = "weird"
@@ -71,10 +71,10 @@ mode = "sideways"
 [[actions]]
 id = "fine"
 command = "true"' "fine"
-list_text | grep -q 'warning: .tomo.toml: actions\[0\] weird: mode "sideways"' && check 0 "bad mode is dropped with a warning" || check 1 "bad mode" "$(list_text)"
+list_text | grep -q "warning: $P/.tomo.toml: actions\[0\] weird: mode \"sideways\"" && check 0 "bad mode is dropped with a warning" || check 1 "bad mode" "$(list_text)"
 
 write_toml 'this is not = [[[ toml' ""
-list_text | grep -q 'warning: .tomo.toml:' && [ "$($T action list "$WT" --json)" = "[]" ] && check 0 "invalid TOML gives zero actions and a warning" || check 1 "invalid toml" "$(list_text)"
+list_text | grep -q "warning: $P/.tomo.toml:" && [ "$($T action list "$WT" --json)" = "[]" ] && check 0 "invalid TOML gives zero actions and a warning" || check 1 "invalid toml" "$(list_text)"
 $T worktree open "$WT" >/dev/null 2>&1 && check 0 "worktree still opens with an invalid .tomo.toml" || check 1 "open with invalid toml"
 
 # runs
@@ -140,6 +140,24 @@ $T hooks log --json -n 40 | jq_ "import sys; ev=[r['event'] for r in d if r['eve
 # reload on edit
 printf '\n[[actions]]\nid = "late"\ncommand = "true"\n' >> "$P/.tomo.toml"
 wait_for "[ \"\$(ids)\" = 'quick serve fail mark late' ]" 4 && check 0 "an added action shows within 2 s" || check 1 "reload" "$(ids)"
+
+# the repository file, and the worktree override
+write_repo_toml() { printf '%s\n' "$1" > "$R/.tomo.toml"; wait_for "[ \"\$(ids)\" = \"$2\" ]" 8; }
+rm -f "$P/.tomo.toml"
+write_repo_toml '[[actions]]
+id = "repo-wide"
+command = "true"' "repo-wide"
+[ "$(ids)" = "repo-wide" ] && check 0 "a sibling worktree sees the repository .tomo.toml" || check 1 "repo fallback" "$(ids)"
+
+printf '[[actions]]\nid = "local-only"\ncommand = "true"\n' > "$P/.tomo.toml"
+wait_for "[ \"\$(ids)\" = 'local-only' ]" 8
+[ "$(ids)" = "local-only" ] && check 0 "a worktree file wins whole over the repository file" || check 1 "worktree override" "$(ids)"
+
+rm -f "$P/.tomo.toml"; wait_for "[ \"\$(ids)\" = 'repo-wide' ]" 8
+write_repo_toml '[[actions]]
+command = "true"' ""
+list_text | grep -q "warning: $R/.tomo.toml: actions\[0\] id is required" && check 0 "a bad repository file names its own path" || check 1 "repo file error path" "$(list_text)"
+rm -f "$R/.tomo.toml"
 
 # hook timeout kills the tree; hook output keeps UTF-8 intact
 daemon_fresh "[[hooks]]

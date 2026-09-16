@@ -266,7 +266,7 @@ pub struct PaneExit { pub pane_id: Id, pub worktree_id: Id, pub source: Option<P
 | `worktree_namer` | `worktree_create`, before `git worktree add`, only when the client gave no `path` | The directory name must exist before Git runs, so a later hook is too late. It gets only the store and the request. It is an `Option`, not a list, because one directory has one name. An error refuses the create (`conflict` when every town is unlocked, `bad_request` for a taken or unknown town). |
 | `worktree_created` | `worktree_create`, after discovery, under the same state lock that queues the `worktree.created` hook | The unlock and the display name must be written exactly once, in the create call, before the reply. An event would let the reply go out before the unlock. It needs `&mut Inner` to set the display name and to emit `TownUnlocked`. |
 | `worktree_rebound` | `Daemon::rebind`, which `discover` (a move on disk) and `restore_worktree` (a restore at a new path) call | A new worktree id must move every row that keys on the old id. It gets only the store and the two ids. An error is logged; it does not stop the Core rebind. |
-| `worktree_files` | `discover`, after it releases the state lock and before it flushes the hooks; and `watch.rs`, when a watched worktree root reports a change to that file name | Actions must read `.tomo.toml` at the same two moments as before the split. One list gives both the file name and the reload, so the watcher and discovery cannot disagree. The watcher copies the names at start and runs each reload one time for a burst of changes. `reload` gets the daemon, because it reads files with no lock held and then takes the lock. |
+| `worktree_files` | `discover`, after it releases the state lock and before it flushes the hooks; and `watch.rs`, when a watched worktree root or repository root reports a change to that file name | Actions must read `.tomo.toml` at the same two moments as before the split. The watcher also watches each repository root, because a repository file serves the worktrees that have no file of their own. One list gives both the file name and the reload, so the watcher and discovery cannot disagree. The watcher copies the names at start and runs each reload one time for a burst of changes. `reload` gets the daemon, because it reads files with no lock held and then takes the lock. |
 | `pane_exited` | `on_exit`, under the state lock, after the `pane_exited` event and before Core updates the agent and removes a pane that exited with 0 | The outcome (`action_completed`, `action_stopped`, or a crash with its attention item and hook) must go into the same lock as the exit, while the pane still exists for the `pane` field of the hook. An event would come after an exit-0 pane is gone. It gets only the facts of the exit: pane, worktree, source, exit code, and stop intent. |
 | `process_polled` | `monitor::poll_and_scan`, after the process poll releases the state lock and before the queued hooks go out | Runtime must read the fresh process table, and its `lsof` call must stay outside the lock. It is the same point where `scan_endpoints` ran before the split, so the cadence does not change: 2 s with a subscriber, 15 s without. It gets only the daemon, because the work takes and releases the lock itself. A list of plain functions, like the other seams. |
 
@@ -403,8 +403,8 @@ cadence it had in Core (see the table). The reason is in
 no request; the `refresh` link sends one `usage_get` on a click.
 
 Actions background work: none. The reload reads `.tomo.toml` in each
-worktree at each discovery and at a watcher change to that file, as before
-the split. A run starts a process only on an explicit call. The topbar sends
+worktree, or the repository file when the worktree has none, at each
+discovery and at a watcher change to that file, as before the split. A run starts a process only on an explicit call. The topbar sends
 `action_list` only for a worktree that has no set yet.
 
 Background work that exists today and must keep its current trigger:
@@ -418,7 +418,7 @@ Background work that exists today and must keep its current trigger:
 | `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
-| `.tomo.toml` reads | each discovery, and a watcher change to the file | actions addon (`worktree_files`) |
+| `.tomo.toml` reads | each discovery, and a watcher change to a worktree file or a repository file | actions addon (`worktree_files`) |
 
 ## Addon state
 
@@ -445,7 +445,7 @@ pub fn new(paths: Paths, seams: Seams, addons: Box<dyn std::any::Any + Send>) ->
 // crates/tomod/src/addons/mod.rs (composition root)
 #[derive(Default)]
 pub struct State {
-    pub actions: actions::Sets,      // BTreeMap<Id, ActionSet>: the parsed .tomo.toml of each worktree
+    pub actions: actions::Sets,      // BTreeMap<Id, ActionSet>: the parsed .tomo.toml of each worktree, from its own file or the repository file
     pub github: github::Cache,       // BTreeMap<Id, PrStatusResult>: the last pr_status answer
     pub runtime: runtime::Endpoints, // the endpoint list, the removal times, and the time of the last scan
     pub usage: usage::Last,          // Vec<UsageSnapshot>: the last result

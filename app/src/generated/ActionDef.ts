@@ -6,6 +6,6 @@ import type { ActionMode } from "./ActionMode";
 import type { ActionShow } from "./ActionShow";
 
 /**
- * One entry of `[[actions]]` in a worktree's `.tomo.toml`.
+ * One entry of `[[actions]]` in a `.tomo.toml`.
  */
 export type ActionDef = { id: string, label: string, command: string, mode: ActionMode, show: ActionShow, shortcut: string | null, };

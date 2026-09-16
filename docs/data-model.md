@@ -238,8 +238,9 @@ defaults. The daemon reloads the file when it changes and sends
 
 ## .tomo.toml
 
-`<worktree>/.tomo.toml` is not Tomo state. It belongs to the repository and
-holds `[[actions]]`. The daemon reads it on discovery and on change and
+`.tomo.toml` is not Tomo state. It belongs to the repository and holds
+`[[actions]]`. A worktree reads its own file, and the file at the repository
+root when it has none. The daemon reads it on discovery and on change and
 keeps the result only in memory. See [actions.md](actions.md).
 
 ## hooks.log

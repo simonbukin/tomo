@@ -129,7 +129,7 @@ same records once.
 |--------|-------|-------|--------------|
 | `config` | `config reloaded` when config.toml changes | info | no |
 | `config` | `config: <first issue> (+N more)` when the issues change | warning | a `notice` when the new issues include an error |
-| `config` | `<worktree> .tomo.toml: <error>` | warning | a `notice` |
+| `config` | `<path>/.tomo.toml: <error>` | warning | a `notice` |
 | `usage` | `<provider> usage: <reason>` when a provider becomes unavailable | warning | no |
 | `hooks` | `<event> hook failed: <command>` | warning | no; Activity keeps `hook failed` |
 | `runtime` | `port scan: lsof failed: <error>` | warning | no |
