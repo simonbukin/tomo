@@ -42,14 +42,16 @@ pub async fn run(daemon: Arc<Daemon>) {
     let mut watched: HashSet<PathBuf> = HashSet::new();
     let mut ticker = tokio::time::interval(Duration::from_secs(30));
     loop {
-        let (repo_dirs, worktree_dirs): (Vec<PathBuf>, Vec<PathBuf>) = {
+        // The repository root joins the flat list because a `worktree_files` file can live there
+        // for the whole repository, and the root is not always an open worktree.
+        let (repo_dirs, flat_dirs): (Vec<PathBuf>, Vec<PathBuf>) = {
             let inner = daemon.lock();
             (
                 inner.repos.iter().filter(|r| r.exists).map(|r| r.path.join(".git")).collect(),
-                inner.worktrees.values().filter(|w| w.exists).map(|w| w.path.clone()).collect(),
+                inner.worktrees.values().filter(|w| w.exists).map(|w| w.path.clone()).chain(inner.repos.iter().filter(|r| r.exists).map(|r| r.path.clone())).collect(),
             )
         };
-        for (dir, mode) in repo_dirs.into_iter().map(|d| (d, RecursiveMode::Recursive)).chain(worktree_dirs.into_iter().map(|d| (d, RecursiveMode::NonRecursive))) {
+        for (dir, mode) in repo_dirs.into_iter().map(|d| (d, RecursiveMode::Recursive)).chain(flat_dirs.into_iter().map(|d| (d, RecursiveMode::NonRecursive))) {
             if dir.is_dir() && !watched.contains(&dir) && watcher.watch(&dir, mode).is_ok() {
                 watched.insert(dir);
             }

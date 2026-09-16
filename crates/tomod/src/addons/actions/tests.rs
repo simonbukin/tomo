@@ -194,6 +194,30 @@ async fn list_run_reuse_stop_restart_and_exit_outcomes() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_sibling_worktree_reads_the_repo_file_until_it_has_one_of_its_own() {
+    async fn set_of(daemon: &Arc<Daemon>, worktree_id: &Id) -> ActionSet {
+        serde_json::from_value(call(daemon, Call::ActionList { worktree_id: worktree_id.clone() }).await.unwrap()).unwrap()
+    }
+    let f = fixture("repo-file").await;
+    let repo_id = f.daemon.lock().worktrees.get(&f.worktree_id).unwrap().repo_id.clone();
+    let path = f.dir.join("feat-x");
+    call(&f.daemon, Call::WorktreeCreate(WorktreeCreate { repo_id, branch: "feat/x".into(), new_branch: true, start_ref: None, path: Some(path.clone()), name_hint: None })).await.unwrap();
+    call(&f.daemon, Call::WorktreeRefresh).await.unwrap();
+    let worktrees: Vec<Worktree> = serde_json::from_value(call(&f.daemon, Call::WorktreeList).await.unwrap()).unwrap();
+    let sibling = worktrees.iter().find(|w| !w.is_main).expect("the second worktree").id.clone();
+
+    let set = set_of(&f.daemon, &sibling).await;
+    assert_eq!((set.actions.len(), set.from_repo, set.error), (4, true, None), "a worktree with no file of its own reads the repository file");
+    assert!(!set_of(&f.daemon, &f.worktree_id).await.from_repo, "the repository root reads its own file");
+
+    std::fs::write(path.join(".tomo.toml"), "[[actions]]\nid = \"local\"\ncommand = \"true\"\n").unwrap();
+    call(&f.daemon, Call::WorktreeRefresh).await.unwrap();
+    let set = set_of(&f.daemon, &sibling).await;
+    assert_eq!((set.actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), set.from_repo), (vec!["local"], false), "the worktree file wins whole");
+    f.finish();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn closing_an_action_pane_records_nothing_and_a_shell_exit_is_no_crash() {
     let f = fixture("close").await;
     let pane = f.run("serve").await.unwrap().pane.unwrap();

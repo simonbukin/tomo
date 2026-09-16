@@ -57,30 +57,45 @@ fn activity_event(kind: ActionActivity, worktree_id: &str, action: &ActionDef, p
     ActivityEvent { pane_id: pane_id.map(str::to_string), payload: json!({ "action_id": action.id, "pane_id": pane_id }), ..activity::event(kind, Some(worktree_id), format!("{} {verb}", action.label)) }
 }
 
-/// The `worktree_files` reload. It reads `.tomo.toml` in every worktree and sends `actions_changed` for each set that changed.
-/// A bad file never blocks the worktree: it gives an empty set and one notice.
+/// The root of each repository: its main worktree, or the recorded repo path.
+fn repo_paths(inner: &Inner) -> BTreeMap<Id, PathBuf> {
+    let mut out: BTreeMap<Id, PathBuf> = inner.repos.iter().map(|r| (r.id.clone(), r.path.clone())).collect();
+    for w in inner.worktrees.values().filter(|w| w.is_main && w.exists) {
+        out.insert(w.repo_id.clone(), w.path.clone());
+    }
+    out
+}
+
+/// The `worktree_files` reload. It reads the `.tomo.toml` of every worktree, or the repository file
+/// when the worktree has none, and sends `actions_changed` for each set that changed.
+/// A bad file never blocks the worktree: it gives an empty set and one notice, keyed by the file
+/// that holds the problem, so one bad repository file warns one time and not once per worktree.
 fn reload(daemon: &Arc<Daemon>) {
-    let targets: Vec<(Id, PathBuf)> = daemon.lock().worktrees.values().filter(|w| w.exists).map(|w| (w.id.clone(), w.path.clone())).collect();
-    let loaded: Vec<ActionSet> = targets
+    let targets: Vec<(Id, PathBuf, Option<PathBuf>)> = {
+        let inner = daemon.lock();
+        let repos = repo_paths(&inner);
+        inner.worktrees.values().filter(|w| w.exists).map(|w| (w.id.clone(), w.path.clone(), repos.get(&w.repo_id).cloned())).collect()
+    };
+    let loaded: Vec<(ActionSet, PathBuf)> = targets
         .into_iter()
-        .map(|(worktree_id, path)| {
-            let (actions, error) = model::load(&path);
-            ActionSet { worktree_id, actions, error }
+        .map(|(worktree_id, path, repo)| {
+            let (actions, error, from_repo) = model::load(&path, repo.as_deref());
+            let source = if from_repo { repo.unwrap_or(path) } else { path };
+            (ActionSet { worktree_id, actions, error, from_repo }, source.join(model::FILE_NAME))
         })
         .collect();
     let mut inner = daemon.lock();
-    let changed: Vec<ActionSet> = {
+    let changed: Vec<(ActionSet, PathBuf)> = {
         let sets = &mut addons::state_mut(&mut inner).actions;
-        let live: HashSet<Id> = loaded.iter().map(|s| s.worktree_id.clone()).collect();
+        let live: HashSet<Id> = loaded.iter().map(|(s, _)| s.worktree_id.clone()).collect();
         sets.retain(|id, _| live.contains(id));
-        let changed: Vec<ActionSet> = loaded.into_iter().filter(|set| sets.get(&set.worktree_id) != Some(set)).collect();
-        sets.extend(changed.iter().map(|s| (s.worktree_id.clone(), s.clone())));
+        let changed: Vec<(ActionSet, PathBuf)> = loaded.into_iter().filter(|(set, _)| sets.get(&set.worktree_id) != Some(set)).collect();
+        sets.extend(changed.iter().map(|(s, _)| (s.worktree_id.clone(), s.clone())));
         changed
     };
-    for set in changed {
-        let name = inner.worktrees.get(&set.worktree_id).map(|w| Daemon::worktree_view(&inner, w).name).unwrap_or_default();
-        if Daemon::diagnostic_on_change(&mut inner, "config", &format!("{name} .tomo.toml"), set.error.clone()) {
-            Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{name}: {}", set.error.as_deref().unwrap_or_default()) });
+    for (set, source) in changed {
+        if Daemon::diagnostic_on_change(&mut inner, "config", &source.display().to_string(), set.error.clone()) {
+            Daemon::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: set.error.clone().unwrap_or_default() });
         }
         Daemon::emit(&mut inner, Event::ActionsChanged { set });
     }
@@ -139,7 +154,7 @@ pub fn list(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcError> {
         }
         sets(&inner).get(&worktree_id).cloned()
     };
-    ok(set.unwrap_or(ActionSet { worktree_id, actions: vec![], error: None }))
+    ok(set.unwrap_or(ActionSet { worktree_id, actions: vec![], error: None, from_repo: false }))
 }
 
 pub fn run(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Value, RpcError> {
