@@ -2286,6 +2286,68 @@ The provider fixtures found both. Each has its own commit and its test.
 - A Claude or Pi session with no message has no transcript or session file, so a resume after a restart fails.
 - The Pi session reference becomes the session file only after the first message.
 
+### Tests
+
+| Suite | Milestone 9, merged with master `96458b0` |
+|---|---|
+| `cargo test --workspace` | 156 passed, 0 failed, 0 ignored (tomod 144, tomo-proto 7, tomo_app_lib 5) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 38 files, 272 tests |
+| `npx vite build` | main JS 722.71 kB, CSS 61.50 kB |
+| torture harness (`run-all.sh`, 20 scripts) | **408 passed, 0 failed, 7 known**; overall PASS |
+
+No test was removed. Each provider test moved with its code. New:
+`nested_agent_markers_name_the_parent_agent` and
+`only_provider_modules_branch_on_a_provider`. The boundary check was proven
+with a planted `// AgentKind::Claude` line in `monitor.rs`, which made it
+fail, and the line was removed again. The ignored detection test now runs.
+`providers.sh` goes from 69 passed and 8 known to 71 passed and 6 known, so
+the harness goes from 406 to 408 passed and from 9 to 7 known.
+
+The wire does not change, so `app/src/generated` is untouched and
+`TOMO_WRITE_TYPES=1` was not needed. SQLite does not change.
+
+### Performance
+
+Measured on 2026-09-15 with the commands in
+[addons-baseline.md](addons-baseline.md), release build, data dir
+`/tmp/tomo-addons-providers2-bench`, with `TOMO_USAGE_MOCK` at a file with a
+far `fetched_at_ms`, as in milestones 3, 5, 6, and 7. The owner used the
+machine. The numbers come from the tree **before** the merge with the Runtime
+master, so they measure this milestone and not the Runtime change. The change
+moves code; it adds no work to a daemon path.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 9 |
+|---|---|---|
+| Reattach | 7.66 ms | 7.60 ms |
+| of which `subscribe` | 0.51 ms | 0.47 ms |
+| of which `pane_attach` | 7.14 ms | 7.18 ms |
+| Worktree switch | 0.14 ms | 0.11 ms |
+| Worktree switch with attach | 9.26 ms | 7.59 ms |
+| Refresh | 164.31 ms | 141.47 ms |
+| Process poll, fresh | 23.41 ms | 20.96 ms |
+| Process poll, cached | 0.63 ms | 0.61 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 9 (runs) |
+|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | **0.12 %** (0.13, 0.12, 0.12) |
+| Idle CPU, one subscriber | 1.05 % | **0.83 %** (0.67, 0.83, 0.90) |
+| RSS at window end, no subscriber | 14.6 MB | **14.8 MB** (14.9, 14.6, 14.8) |
+| RSS at window end, subscribed | 14.6 MB | **14.6 MB** (14.3, 14.7, 14.6) |
+
+Gate: pass. No round trip is more than 1 ms and 20 % slower than the
+baseline; `pane_attach`, which this milestone does not touch, is 0.04 ms
+slower. Idle CPU is 0.12 % without a subscriber (limit 0.3 %) and 0.83 % with
+one (limit 1.5 %). RSS stays below 18 MB. The process poll calls
+`providers::detect` for each descendant, as it called `procs::detect_agent`
+before; the fresh poll is 20.96 ms against 23.41 ms in the baseline. Not
+measured: GUI cold launch and GUI RSS (no GUI allowed). Not run:
+`scripts/perf.sh` and the soak.
+
 ### Stop conditions
 
 None was hit. Near: "agents need more files to understand a feature". The
