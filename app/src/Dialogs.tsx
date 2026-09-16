@@ -103,7 +103,6 @@ function AddRepo({ close }: { close: () => void }) {
 
 function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string }) {
   const repos = useStore((s) => s.repos);
-  const config = useStore((s) => s.config);
   const [repo, setRepo] = useState(repoId ?? repos[0]?.id ?? "");
   const [branch, setBranch] = useState("");
   const [isNew, setIsNew] = useState(true);
@@ -117,8 +116,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
     if (!repo && repos[0]) setRepo(repos[0].id);
   }, [repos, repo]);
   const r = repos.find((x) => x.id === repo);
-  const parent = r ? (config?.worktree_parent_dir ?? r.path.replace(/\/[^/]+$/, "")) : "";
-  const defaultPath = r ? `${parent}/${nameHint ?? "<name>"}` : "";
+  const defaultPath = r?.worktree_parent ? `${r.worktree_parent}/${nameHint ?? "<name>"}` : "";
   const create = async () => {
     if (!repo || !branch.trim()) return;
     setBusy(true);

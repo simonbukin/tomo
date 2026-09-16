@@ -39,6 +39,8 @@ pub fn reload(daemon: &Daemon) -> Config {
         inner.config = cfg.clone();
         Daemon::diagnostic(&mut inner, DiagnosticLevel::Info, "config", "config reloaded");
         Daemon::emit(&mut inner, Event::ConfigChanged { config: cfg.clone() });
+        let repos = Daemon::repo_views(&inner);
+        Daemon::emit(&mut inner, Event::ReposChanged { repos });
     }
     let summary = issues_summary(&issues);
     if Daemon::diagnostic_on_change(&mut inner, "config", "config", summary.clone()) && issues.iter().any(|i| i.level == IssueLevel::Error) {

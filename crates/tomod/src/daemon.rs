@@ -323,7 +323,11 @@ impl Daemon {
     // ----------------------------------------------------------------- views
 
     pub fn repo_views(inner: &Inner) -> Vec<Repo> {
-        inner.repos.clone()
+        inner
+            .repos
+            .iter()
+            .map(|r| Repo { worktree_parent: Some(config::worktree_parent(inner.config.worktree_parent_dir.as_deref(), &r.path)), ..r.clone() })
+            .collect()
     }
 
     pub fn worktree_view(inner: &Inner, w: &WorktreeState) -> Worktree {
@@ -1391,7 +1395,8 @@ impl Daemon {
         let path = if path.parent().map_or(false, |p| p.is_dir()) {
             path
         } else {
-            let parent = self.lock().config.worktree_parent_dir.clone().unwrap_or_else(|| repo_path.parent().unwrap_or(&repo_path).to_path_buf());
+            let parent = config::worktree_parent(self.lock().config.worktree_parent_dir.as_deref(), &repo_path);
+            let _ = std::fs::create_dir_all(&parent);
             parent.join(path.file_name().map(|n| n.to_os_string()).unwrap_or_default())
         };
         git::worktree_add(&repo_path, &path, &branch, false, None).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
@@ -1581,12 +1586,15 @@ impl Daemon {
                     };
                     (repo.path.clone(), inner.config.worktree_parent_dir.clone(), name)
                 };
-                let parent = parent_dir.unwrap_or_else(|| repo_path.parent().unwrap_or(&repo_path).to_path_buf());
+                let parent = config::worktree_parent(parent_dir.as_deref(), &repo_path);
                 let path = match (&spec.path, &name) {
                     (Some(p), _) => config::expand_tilde(p),
                     (None, Some(name)) => parent.join(name),
                     (None, None) => parent.join(spec.branch.replace('/', "-")),
                 };
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| err(ErrorCode::Io, format!("{}: {e}", dir.display())))?;
+                }
                 git::worktree_add(&repo_path, &path, &spec.branch, spec.new_branch, spec.start_ref.as_deref())
                     .await
                     .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
@@ -2164,7 +2172,7 @@ fn pasted(text: &str) -> String {
 pub async fn repo_view(id: Id, path: PathBuf) -> Repo {
     let exists = path.exists();
     let remote_url = if exists { git::remote_url(&path).await } else { None };
-    Repo { id, name: repo_name(&path), exists, path, remote_url }
+    Repo { id, name: repo_name(&path), exists, path, remote_url, worktree_parent: None }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

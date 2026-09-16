@@ -36,7 +36,8 @@ that no worktree has unlocked yet. The pick draws a rarity tier by weight
 (common 55, uncommon 25, rare 13, epic 5, legendary 2), then a random town
 in that tier. `--town <slug>` picks a specific locked town. The worktree
 directory becomes `<parent>/<slug>` and the town name becomes the display
-name unless you set one.
+name unless you set one. The parent is `worktree_parent_dir`, else
+`~/tomo/worktrees/<repo>`. See [cli.md](../cli.md).
 
 After `git worktree add` succeeds, Tomo writes one row to the `towns` table
 and emits `TownUnlocked`. A town unlocks once. Archiving, restoring, or

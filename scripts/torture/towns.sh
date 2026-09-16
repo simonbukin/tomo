@@ -3,6 +3,10 @@
 set -u
 . "$(dirname "$0")/lib.sh"
 
+# A scratch home under /tmp, so the harness never writes a worktree into the real ~/tomo.
+export HOME=$(cd "$(mktemp -d /tmp/tomo-home-XXXXXX)" && pwd -P)
+export GIT_AUTHOR_NAME=tomo GIT_AUTHOR_EMAIL=tomo@example.com GIT_COMMITTER_NAME=tomo GIT_COMMITTER_EMAIL=tomo@example.com
+
 daemon_fresh
 R=$(new_repo); $T repo add "$R" >/dev/null
 
@@ -45,6 +49,7 @@ A=$(cd "$(mktemp -d /tmp/tomo-harness-wts.XXXX)" && pwd -P); B=$(cd "$(mktemp -d
 parent_dir "$A"
 read -r W2 P2 < <($T worktree create --repo "$R" --branch feat/restored --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
 S2=$(slug_of "$W2")
+[ "$P2" = "$A/$S2" ] && check 0 "worktree_parent_dir still decides where a new worktree goes" || check 1 "override parent" "$P2"
 $T worktree archive "$W2" --json >/dev/null 2>&1
 rm -rf "$A"
 parent_dir "$B"
@@ -63,6 +68,11 @@ $T worktree refresh >/dev/null
 N3=$(wt_id "$P3-moved" 2>/dev/null)
 [ -n "$N3" ] && [ "$(slug_of "$N3")" = "$S3" ] && check 0 "a moved worktree keeps its unlock" || check 1 "unlock after move" "old=$W3 new=$N3 unlock=$(slug_of "$N3")"
 [ -n "$N3" ] && $T activity --json --worktree "$N3" | jq_ "import sys; sys.exit(0 if any(e['kind']=='checkpoint_created' for e in d) else 1)" && check 0 "a moved worktree keeps its activity" || check 1 "activity after move" "$($T activity --json --worktree "$N3" 2>&1 | head -5)"
+
+# No override: a new worktree goes to the worktree home, ~/tomo/worktrees/<repo>/<name>.
+rm -f "$TOMO_DATA_DIR/config.toml"; daemon_restart
+read -r W4 P4 < <($T worktree create --repo "$R" --branch feat/home --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
+[ "$P4" = "$HOME/tomo/worktrees/$(basename "$R")/$(slug_of "$W4")" ] && check 0 "a new worktree goes under the worktree home" || check 1 "worktree home" "$P4"
 
 daemon_stop
 summary
