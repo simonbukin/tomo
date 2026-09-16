@@ -88,6 +88,7 @@ source code with a clean dependency boundary.
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | **provider modules** (milestone 9; they are Core, not addons) |
+| anime-chart | **example** (the hackability exercise; see "Agent hackability exercise") |
 
 ## The dependency law
 
@@ -686,7 +687,15 @@ below.
 
 ## Add an addon
 
-Towns is the worked example for each step.
+Towns is the worked example for each step. The checklist, the examples, and
+the verification list below come from the anime-chart exercise.
+
+**The name.** An addon has one name in two spellings: `snake_case` for each
+Rust module (`crates/tomod/src/addons/anime_chart/`,
+`crates/tomo-proto/src/addons/anime_chart.rs`), and `kebab-case` for the GUI
+folder, the addon `id`, and each view id (`app/src/addons/anime-chart/`,
+`"anime-chart"`). The key of the `OWNED_NOUNS` entry must be the Rust folder
+name, because the dependency check finds the owner with it.
 
 1. Answer the three questions at the top. If the code is Core reality, do not make an addon.
 2. **Proto.** Put the types in `crates/tomo-proto/src/addons/<name>.rs` and derive `TS`.
@@ -703,17 +712,137 @@ Towns is the worked example for each step.
    If a client needs the addon state at `subscribe`, add a field to `Snapshot` in `lib.rs` and fill it in the `Subscribe` arm of `dispatch.rs`.
 4. **Background work.** Write the reason in the addon doc. If there is no reason, add no background work.
    A task gets one line in `addons::start`. It must check for a subscriber or another trigger before it does work.
-5. **CLI.** Add a subcommand block in `crates/tomo-cli/src/main.rs` with a `--json` branch.
+5. **CLI.** Only for a command that a person or a script runs: add a subcommand block in `crates/tomo-cli/src/main.rs` with a `--json` branch.
+   An addon that only its own view reads needs no CLI block.
 6. **GUI.** Make `app/src/addons/<name>/index.ts`, which exports one `Addon` value. Add it to `builtins`.
-   Put its CSS next to it and add one `@import` line in `app/src/styles/index.css`.
    Keep its client state in its own module.
+   Write CSS only for a rule that does not exist yet. Reuse the core class names first; add the `@import` line in `app/src/styles/index.css` only with a CSS file.
    If the addon records activity, add `app/src/addons/<name>/activity.ts` with a `Record<Kind, ActivityKindView>`
    of its generated kind union, and list it in `app/src/addons/activity.ts`.
-7. **Tests.** Put unit tests next to the code.
-   For daemon behavior, add `scripts/torture/<name>.sh` and add its name to `scripts/torture/run-all.sh`.
-   Add the addon nouns to `OWNED_NOUNS`.
+7. **Tests.** Put unit tests next to the code: a Rust test for each daemon rule, a vitest render for each view, and a test for each pure function.
+   Add `scripts/torture/<name>.sh`, and its name in `scripts/torture/run-all.sh`, only for daemon behavior that a client must see over the socket. A rule that one function holds needs a unit test, not a script.
+   Add the addon nouns to `OWNED_NOUNS`. Each noun must be a word that Core never writes: `anime_chart` is safe, `archived` is not.
 8. **Docs.** Write `docs/<name>.md` (Towns: `docs/features/towns.md`), and change the candidate table in this file.
-9. Run the gates, the deletion test, and the baseline commands.
+9. Run the gates, the deletion test, and the baseline commands. See "The verification checklist".
+
+### The file checklist of a new addon
+
+The anime-chart exercise (a global view of the archived worktrees) needed the
+files below. "Only" means: leave the file out when the addon does not need it.
+
+| File | When | What it holds |
+|---|---|---|
+| `crates/tomo-proto/src/addons/<name>.rs` | with a `Call` or an event | the wire types with `derive(TS)`, and the activity kind enum |
+| `crates/tomod/src/addons/<name>/mod.rs` | daemon side | `migrate`, the seam functions, the call handlers, the tests |
+| `crates/tomod/src/addons/<name>/model.rs` | only pure rules | pure functions and their tests |
+| `app/src/addons/<name>/index.ts` | GUI side | the one `Addon` value |
+| `app/src/addons/<name>/<View>.tsx` | only a React part | the view, the toolbar, or the section |
+| `app/src/addons/<name>/<name>.test.tsx` | GUI side | the render tests |
+| `app/src/addons/<name>/state.ts` | only client state | the private store, or the declared `State` key |
+| `app/src/addons/<name>/activity.ts` | only activity kinds | the kind views |
+| `app/src/addons/<name>/<name>.css` | only a new rule | its CSS, plus one `@import` line |
+| a block in `crates/tomo-cli/src/main.rs` | only a CLI command | the subcommand and its `--json` branch |
+| `scripts/torture/<name>.sh` | only daemon behavior over the socket | the end-to-end checks |
+| `docs/<name>.md` | always | what the addon does, and its background work |
+
+The registration lines are the list in "Remove an addon". Write them last, and
+the deletion test stays short.
+
+### A minimal example of each part
+
+**Proto.** `crates/tomo-proto/src/addons/anime_chart.rs`, plus four lines in
+`lib.rs`: `pub mod anime_chart;` inside `pub mod addons`,
+`pub use addons::anime_chart::*;`, the `Call` variant, and the `export_all`
+line. A `Call` variant becomes its method name in `snake_case`, so
+`AnimeChartList` is the method `anime_chart_list`.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ArchivedShow { pub worktree_id: Id, pub name: String, pub archived_at_ms: u64 }
+```
+
+**Daemon.** `crates/tomod/src/addons/anime_chart/mod.rs`. `Store::conn()`
+gives the `rusqlite` connection. A handler answers with `ok(value)` and maps
+an error with `internal`. A seam function returns nothing when the Core
+operation already succeeded: a failed write is a log line, not an error.
+
+```rust
+pub fn migrate(store: &Store) -> anyhow::Result<()> {
+    store.conn().execute("CREATE TABLE IF NOT EXISTS anime_chart (worktree_id TEXT PRIMARY KEY, name TEXT NOT NULL, archived_at_ms INTEGER NOT NULL)", [])?;
+    Ok(())
+}
+
+pub fn archived(store: &Store, worktree: &ArchivedWorktree) {
+    let written = store.conn().execute("INSERT OR REPLACE INTO anime_chart (worktree_id, name, archived_at_ms) VALUES (?1, ?2, ?3)", params![worktree.id, worktree.name, worktree.at_ms as i64]);
+    if let Err(e) = written { tracing::warn!("anime chart: {}: {e}", worktree.id); }
+}
+
+pub fn list(daemon: &Arc<Daemon>) -> Result<Value, RpcError> {
+    let inner = daemon.lock();
+    let shows = shows(&inner.store).map_err(internal)?;
+    drop(inner);
+    ok(shows)
+}
+```
+
+**Composition roots.** One line in each.
+
+```rust
+// crates/tomod/src/addons/mod.rs
+pub mod anime_chart;
+worktree_archived: vec![anime_chart::archived],        // in seams()
+towns::migrate(store)?;  anime_chart::migrate(store)   // in migrate()
+// crates/tomod/src/dispatch.rs
+Call::AnimeChartList => anime_chart::list(daemon),
+```
+
+**GUI.** `app/src/addons/anime-chart/index.ts`: one view, and the command
+that opens it.
+
+```ts
+export const animeChart: Addon = {
+  id: "anime-chart",
+  views: [{ id: "anime-chart", title: "anime chart", label: "chart", icon: Film, component: lazy(() => import("./Chart")), fallback: () => createElement(SkeletonRows, { count: 6 }) }],
+  commands: [{ id: "anime-chart", label: "Anime chart", group: "Navigation", run: () => setUi({ view: "anime-chart" }) }],
+};
+```
+
+Five rules that the compiler does not give you:
+
+- A command **must** have a `group` from `CommandGroup` (`Navigation`,
+  `Worktrees`, `Tabs`, `Panes`, `Agents`, `Browser`, `General`). A core test
+  fails on a command without one.
+- A command opens a view with `setUi({ view: <view id> })`. The view id is
+  the value of `ui.view`, and `sanitizeUi` keeps it, because the list of
+  valid views comes from `addonViews()`.
+- `index.ts` is not a `.tsx` file, so it holds no JSX. Build the `fallback`
+  with `createElement`, and put every other React part in its own `.tsx`
+  file.
+- A module that `addons/index.ts` loads must not import `actions.ts`,
+  `menus.ts`, `Palette.tsx`, or `activityKinds.ts` (see "Module load"). A
+  lazy view file may import them.
+- A view reads the daemon with `rpc<T>("<method>")` from `api.ts`, inside a
+  `useEffect`. So the addon starts no work until the user opens the view.
+
+### The verification checklist
+
+Run these from the repo root, in this order. The frontend commands run in
+`app/`, which needs `node_modules`.
+
+| Step | Command | When |
+|---|---|---|
+| bindings | `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | after any change in `crates/tomo-proto`; commit `app/src/generated` |
+| Rust | `cargo test --workspace` | always; it runs the dependency checks |
+| types | `npx tsc --noEmit` | always |
+| GUI tests | `npx vitest run` | always; it runs `addons/boundary.test.ts` |
+| bundle | `npx vite build` | always |
+| harness | `TOMO_DATA_DIR=/tmp/tomo-<scratch> bash scripts/torture/run-all.sh` | for daemon behavior; one script, such as `archive.sh`, for one area |
+| deletion | "Remove an addon" on a throwaway branch | before the milestone ends |
+
+A torture script runs the daemon and the CLI from `target/debug`. Build them
+first with `cargo build -p tomod -p tomo-cli`, or every check fails with a
+JSON error that hides the cause. `run-all.sh` builds them itself. Always give
+a scratch `TOMO_DATA_DIR`; never run a check against the default data dir.
 
 ## Remove an addon
 
