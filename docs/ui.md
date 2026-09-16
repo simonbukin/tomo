@@ -109,17 +109,24 @@ no toast.
   `tabs_changed` snapshot from `tab_move` wins. The order persists.
 - Drag a pane by its title chip in the legend. The terminal body never
   starts a drag, so text selection works as before. While the drag is
-  active, the pane under the pointer shows where the pane lands: the outer
-  quarter of each side splits that side (`split left`, `split right`,
-  `split up`, `split down`), the middle swaps the two panes. Escape cancels.
+  active, a translucent shape shows the layout that the drop makes, not the
+  region under the pointer: the box the pane takes, with the box the target
+  keeps as a dashed outline. The outer quarter of each side splits that side
+  (`split left`, `split right`, `split up`, `split down`), and the middle
+  swaps the two panes. The shape moves at `--dur-open` and `--ease-out`, and
+  the region holds until the pointer moves 10 px, so a boundary does not
+  flicker. Escape cancels.
 - Drop a pane on another tab to add it to that tab as a right split. If
   the pane was the last one of its tab, that empty tab closes; no process
   stops. A tab that already holds `max_panes_per_tab` panes refuses the
   drop. Panes never move to another worktree.
 - A drop always calls `pane_move`, which uses the same split-tree
   functions as the commands. `LayoutDnd.tsx` holds the one drag context
-  for the tab strip and the split layout. `layoutModel.ts` holds the pure
-  helpers (drop region from the pointer, tab reorder) with unit tests.
+  for the tab strip and the split layout, and it draws the preview.
+  `layoutModel.ts` holds the pure helpers (drop region from the pointer,
+  the region that holds at a boundary, the box of each pane, the boxes
+  after a move, tab reorder) with unit tests. The preview calls the same
+  `movePane` as the drop, so the picture cannot disagree with the result.
 - Known limit: a browser pane has no drag handle and is not a drop
   target. Its body is a native webview that does not get pointer events
   from the Tomo window.
@@ -141,7 +148,8 @@ and `equalize_panes`.
 
 The torture page (`#ui-torture`) has a tab strip and a nested pane grid on
 local state. Use it to try every drop region, a drop on self, a cancel, and
-a small window.
+a small window. A line under the grid names the pane under the pointer and
+its region, so you can see the preview and the region together.
 
 ## Status glyphs
 
