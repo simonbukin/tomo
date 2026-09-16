@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropRegion, insertionSide, leafIds, movePane, reorder, reorderTabs } from "./layoutModel";
+import { dropRegion, insertionSide, leafIds, moveBoxes, movePane, paneBoxes, reorder, reorderTabs, stickyRegion } from "./layoutModel";
 import type { LayoutNode, Tab } from "./types";
 
 const box = { left: 100, top: 50, width: 400, height: 200 };
@@ -23,6 +23,24 @@ describe("dropRegion", () => {
     expect(dropRegion(box, 0, 150)).toBe("left");
     expect(dropRegion(box, 300, 900)).toBe("bottom");
     expect(dropRegion({ left: 0, top: 0, width: 0, height: 0 }, 5, 5)).toBe("center");
+  });
+});
+
+describe("stickyRegion", () => {
+  it("starts from the plain region and records the point", () => {
+    expect(stickyRegion(box, 110, 150, null)).toEqual({ place: "left", x: 110, y: 150 });
+  });
+  it("holds the region while the pointer stays inside the slack", () => {
+    const last = stickyRegion(box, 198, 150, null);
+    expect(last.place).toBe("left");
+    expect(stickyRegion(box, 202, 150, last)).toBe(last);
+    expect(stickyRegion(box, 198, 158, last)).toBe(last);
+  });
+  it("holds a center that the pointer has just left, and gives way when the pointer clears the slack", () => {
+    const inside = stickyRegion(box, 205, 150, null);
+    expect(inside.place).toBe("center");
+    expect(stickyRegion(box, 199, 150, inside)).toBe(inside);
+    expect(stickyRegion(box, 193, 150, inside)).toEqual({ place: "left", x: 193, y: 150 });
   });
 });
 
@@ -73,6 +91,72 @@ describe("movePane", () => {
       const next = movePane(tree, ids[(i * 7) % ids.length], ids[(i * 3 + 1) % ids.length], places[i % 5], `m${i}`);
       if (next) tree = next;
       expect([...leafIds(tree)].sort()).toEqual(["a", "b", "c"]);
+    }
+  });
+});
+
+const area = { left: 0, top: 0, width: 408, height: 208 };
+const nested = split("s1", "horizontal", leaf("a"), split("s2", "vertical", leaf("b"), leaf("c")));
+
+describe("paneBoxes", () => {
+  it("gives the whole box to a single pane", () => {
+    expect(paneBoxes(leaf("a"), area, 8).get("a")).toEqual(area);
+  });
+  it("splits by ratio and keeps the gap for the divider", () => {
+    const boxes = paneBoxes(split("s", "horizontal", leaf("a"), leaf("b")), area, 8);
+    expect(boxes.get("a")).toEqual({ left: 0, top: 0, width: 200, height: 208 });
+    expect(boxes.get("b")).toEqual({ left: 208, top: 0, width: 200, height: 208 });
+  });
+  it("nests, so a child splits only its own box", () => {
+    const boxes = paneBoxes(nested, area, 8);
+    expect(boxes.get("a")).toEqual({ left: 0, top: 0, width: 200, height: 208 });
+    expect(boxes.get("b")).toEqual({ left: 208, top: 0, width: 200, height: 100 });
+    expect(boxes.get("c")).toEqual({ left: 208, top: 108, width: 200, height: 100 });
+  });
+  it("follows a ratio that is not one half", () => {
+    const node: LayoutNode = { type: "split", id: "s", direction: "horizontal", ratio: 0.25, first: leaf("a"), second: leaf("b") };
+    const boxes = paneBoxes(node, area, 8);
+    expect(boxes.get("a")).toEqual({ left: 0, top: 0, width: 100, height: 208 });
+    expect(boxes.get("b")).toEqual({ left: 108, top: 0, width: 300, height: 208 });
+  });
+  it("stays at zero in a box smaller than the gap", () => {
+    const boxes = paneBoxes(split("s", "horizontal", leaf("a"), leaf("b")), { left: 0, top: 0, width: 4, height: 4 }, 8);
+    expect(boxes.get("a")!.width).toBe(0);
+    expect(boxes.get("b")!.width).toBe(0);
+  });
+});
+
+describe("moveBoxes", () => {
+  it("shows half of the target and the reflow the move makes elsewhere", () => {
+    const now = paneBoxes(nested, area, 8);
+    const after = moveBoxes(nested, "c", "a", "left", area, 8)!;
+    expect(after.get("c")).toEqual({ left: 0, top: 0, width: 96, height: 208 });
+    expect(after.get("a")).toEqual({ left: 104, top: 0, width: 96, height: 208 });
+    expect(now.get("b")).toEqual({ left: 208, top: 0, width: 200, height: 100 });
+    expect(after.get("b")).toEqual({ left: 208, top: 0, width: 200, height: 208 });
+  });
+  it("swaps the two boxes on center and leaves the rest alone", () => {
+    const now = paneBoxes(nested, area, 8);
+    const after = moveBoxes(nested, "a", "c", "center", area, 8)!;
+    expect(after.get("a")).toEqual(now.get("c"));
+    expect(after.get("c")).toEqual(now.get("a"));
+    expect(after.get("b")).toEqual(now.get("b"));
+  });
+  it("has nothing to draw for a drop on the pane itself or a stale id", () => {
+    expect(moveBoxes(nested, "a", "a", "left", area, 8)).toBeNull();
+    expect(moveBoxes(nested, "zz", "a", "left", area, 8)).toBeNull();
+    expect(moveBoxes(leaf("a"), "a", "b", "left", area, 8)).toBeNull();
+  });
+  it("keeps every preview inside the layout box for every region", () => {
+    for (const place of ["center", "left", "right", "top", "bottom"] as const) {
+      for (const b of moveBoxes(nested, "c", "a", place, area, 8)!.values()) {
+        expect(b.width).toBeGreaterThanOrEqual(0);
+        expect(b.height).toBeGreaterThanOrEqual(0);
+        expect(b.left).toBeGreaterThanOrEqual(area.left);
+        expect(b.top).toBeGreaterThanOrEqual(area.top);
+        expect(b.left + b.width).toBeLessThanOrEqual(area.left + area.width);
+        expect(b.top + b.height).toBeLessThanOrEqual(area.top + area.height);
+      }
     }
   });
 });

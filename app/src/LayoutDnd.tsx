@@ -2,15 +2,16 @@ import { closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor, 
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { sortableKeyboardCoordinates, useSortable, type SortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { movePane, moveTab, type PaneTarget } from "./commands/panes";
 import type { DropPlace } from "./generated";
-import { dropRegion, insertionSide } from "./layoutModel";
-import type { Id } from "./types";
+import { insertionSide, moveBoxes, stickyRegion, type Box, type Sticky } from "./layoutModel";
+import type { Id, LayoutNode } from "./types";
 
 type DragData = { kind: "tab"; tabId: Id } | { kind: "pane"; paneId: Id; tabId: Id; title: string };
 type DropData = { kind: "tab"; tabId: Id } | { kind: "pane-drop"; paneId: Id };
-type Hover = { paneId: Id; place: DropPlace } | null;
+type Hover = { dragId: Id; paneId: Id; place: DropPlace } | null;
+type Anchor = { paneId: Id; at: Sticky } | null;
 
 const HoverContext = createContext<Hover>(null);
 
@@ -36,12 +37,15 @@ function pointer(e: DragMoveEvent | DragEndEvent): { x: number; y: number } | nu
   return typeof start.clientX === "number" && typeof start.clientY === "number" ? { x: start.clientX + e.delta.x, y: start.clientY + e.delta.y } : null;
 }
 
-function paneDrop(e: DragMoveEvent | DragEndEvent): Hover {
+/** The region under the pointer, held steady by `anchor` so a boundary does not flicker. A new target pane starts a new anchor. */
+function paneDrop(e: DragMoveEvent | DragEndEvent, anchor: Anchor): { hover: Hover; anchor: Anchor } {
   const from = dragData(e.active);
   const to = dropData(e.over);
-  if (from?.kind !== "pane" || to?.kind !== "pane-drop" || to.paneId === from.paneId || !e.over) return null;
+  if (from?.kind !== "pane" || to?.kind !== "pane-drop" || to.paneId === from.paneId || !e.over) return { hover: null, anchor: null };
   const p = pointer(e);
-  return { paneId: to.paneId, place: p ? dropRegion(e.over.rect, p.x, p.y) : "center" };
+  if (!p) return { hover: { dragId: from.paneId, paneId: to.paneId, place: "center" }, anchor: null };
+  const at = stickyRegion(e.over.rect, p.x, p.y, anchor?.paneId === to.paneId ? anchor.at : null);
+  return { hover: { dragId: from.paneId, paneId: to.paneId, place: at.place }, anchor: { paneId: to.paneId, at } };
 }
 
 export interface LayoutDndProps {
@@ -54,18 +58,22 @@ export interface LayoutDndProps {
 export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane }: LayoutDndProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const [hover, setHover] = useState<Hover>(null);
+  const anchor = useRef<Anchor>(null);
   const finish = () => {
     setHover(null);
+    anchor.current = null;
     document.body.classList.remove("pane-dragging");
   };
   const onDragStart = (e: DragStartEvent) => {
     if (dragData(e.active)?.kind === "pane") document.body.classList.add("pane-dragging");
   };
   const onDragMove = (e: DragMoveEvent) => {
-    const next = paneDrop(e);
+    const { hover: next, anchor: at } = paneDrop(e, anchor.current);
+    anchor.current = at;
     setHover((h) => (h?.paneId === next?.paneId && h?.place === next?.place ? h : next));
   };
   const onDragEnd = (e: DragEndEvent) => {
+    const drop = paneDrop(e, anchor.current).hover;
     finish();
     const from = dragData(e.active);
     const to = dropData(e.over);
@@ -74,7 +82,6 @@ export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane
       if (index !== undefined) onTabMove(from.tabId, index);
     }
     if (from?.kind === "pane" && to?.kind === "tab" && to.tabId !== from.tabId) onPaneMove(from.paneId, { tabId: to.tabId }, "right");
-    const drop = paneDrop(e);
     if (from?.kind === "pane" && drop) onPaneMove(from.paneId, { paneId: drop.paneId }, drop.place);
   };
   return (
@@ -111,14 +118,44 @@ export function usePaneDrag(paneId: Id, tabId: Id, title: string) {
 
 const PLACE_LABEL: Record<DropPlace, string> = { center: "swap", left: "split left", right: "split right", top: "split up", bottom: "split down" };
 
-/** Fills the pane; shows where the dragged pane lands. Render it inside a positioned pane frame. */
+/** Fills the pane so a drag can aim at it. The preview over the layout draws the result. */
 export function PaneDropZone({ paneId }: { paneId: Id }) {
   const { setNodeRef } = useDroppable({ id: `pane-drop:${paneId}`, data: { kind: "pane-drop", paneId } satisfies DropData });
+  return <div ref={setNodeRef} className="pane-drop" aria-hidden />;
+}
+
+/** The pane under the pointer and the region it shows, or `null` while no pane drags. */
+export const usePaneDropHover = () => useContext(HoverContext);
+
+const num = (style: CSSStyleDeclaration, prop: string) => parseFloat(style.getPropertyValue(prop)) || 0;
+
+/** The box the split tree fills: the content box of the layout root, in viewport coordinates. */
+function contentBox(el: HTMLElement): Box {
+  const rect = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  const left = num(style, "padding-left");
+  const top = num(style, "padding-top");
+  return { left: rect.left + left, top: rect.top + top, width: rect.width - left - num(style, "padding-right"), height: rect.height - top - num(style, "padding-bottom") };
+}
+
+const frame = (box: Box): CSSProperties => ({ left: box.left, top: box.top, width: box.width, height: box.height });
+
+/**
+ * Draws the result of the drop, not the region under the pointer: the box the dragged pane takes, and the box
+ * the target keeps. `moveBoxes` runs the same `movePane` as the drop, so the picture cannot disagree with it.
+ * Render it as the last child of `.layout-root`.
+ */
+export function LayoutPreview({ node }: { node: LayoutNode }) {
   const hover = useContext(HoverContext);
-  const place = hover?.paneId === paneId ? hover.place : null;
+  const [root, setRoot] = useState<HTMLElement | null>(null);
+  const mount = useCallback((el: HTMLDivElement | null) => setRoot(el?.parentElement ?? null), []);
+  const boxes = hover && root ? moveBoxes(node, hover.dragId, hover.paneId, hover.place, contentBox(root), num(getComputedStyle(root), "--sp-2")) : null;
+  const landing = hover && boxes ? boxes.get(hover.dragId) : undefined;
+  const target = hover && boxes ? boxes.get(hover.paneId) : undefined;
   return (
-    <div ref={setNodeRef} className="pane-drop" aria-hidden>
-      {place && <div className={`pane-drop-area pane-drop-${place}`}>{PLACE_LABEL[place]}</div>}
+    <div className="pane-preview-layer" ref={mount} aria-hidden>
+      {target && <div className="pane-preview pane-preview-target" style={frame(target)} />}
+      {landing && hover && <div className="pane-preview" style={frame(landing)}>{PLACE_LABEL[hover.place]}</div>}
     </div>
   );
 }

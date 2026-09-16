@@ -3,6 +3,7 @@ import { rpc } from "./api";
 import { paneIds, useStore } from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
 import { BrowserPane } from "./browser/BrowserPane";
+import { LayoutPreview } from "./LayoutDnd";
 import type { Id, LayoutNode, Tab } from "./types";
 
 export function TabLayout({ tab }: { tab: Tab }) {
@@ -11,6 +12,7 @@ export function TabLayout({ tab }: { tab: Tab }) {
   return (
     <div className="layout-root">
       <Node node={node} tabId={tab.id} activePane={tab.active_pane_id} />
+      <LayoutPreview node={node} />
     </div>
   );
 }

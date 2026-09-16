@@ -19,6 +19,18 @@ export function dropRegion(box: Box, x: number, y: number, edge = 0.25): DropPla
   return fy < 0.5 ? "top" : "bottom";
 }
 
+export interface Sticky {
+  place: DropPlace;
+  x: number;
+  y: number;
+}
+
+/** Keeps the last region until the pointer moves `slop` px, so a small move at a boundary does not flicker. */
+export function stickyRegion(box: Box, x: number, y: number, last: Sticky | null, slop = 10, edge = 0.25): Sticky {
+  if (last && Math.abs(x - last.x) < slop && Math.abs(y - last.y) < slop) return last;
+  return { place: dropRegion(box, x, y, edge), x, y };
+}
+
 /** Moves `id` to `position` (clamped), like the daemon's `tab_move`. Unknown ids leave the list unchanged. */
 export function reorder(ids: Id[], id: Id, position: number): Id[] {
   if (!ids.includes(id)) return ids;
@@ -60,6 +72,21 @@ export function beside(node: LayoutNode, place: DropPlace, paneId: Id, splitId: 
   return { type: "split", id: splitId, direction: place === "top" || place === "bottom" ? "vertical" : "horizontal", ratio: 0.5, first: paneFirst ? leaf(paneId) : node, second: paneFirst ? node : leaf(paneId) };
 }
 
+function boxPairs(node: LayoutNode, box: Box, gap: number): [Id, Box][] {
+  if (node.type === "leaf") return [[node.pane_id, box]];
+  const horizontal = node.direction === "horizontal";
+  const span = Math.max(0, (horizontal ? box.width : box.height) - gap);
+  const head = span * node.ratio;
+  const first = horizontal ? { ...box, width: head } : { ...box, height: head };
+  const second = horizontal ? { ...box, left: box.left + head + gap, width: span - head } : { ...box, top: box.top + head + gap, height: span - head };
+  return [...boxPairs(node.first, first, gap), ...boxPairs(node.second, second, gap)];
+}
+
+/** The box each pane takes when `node` fills `box` and every split keeps `gap` px for its divider. Mirrors the flex rules of `.split-child`. */
+export function paneBoxes(node: LayoutNode, box: Box, gap = 0): Map<Id, Box> {
+  return new Map(boxPairs(node, box, gap));
+}
+
 /** Client copy of the daemon's `layout::move_within`, for the dev torture page. `null` means no change. */
 export function movePane(node: LayoutNode, paneId: Id, targetId: Id, place: DropPlace, splitId: string): LayoutNode | null {
   const ids = leafIds(node);
@@ -67,4 +94,10 @@ export function movePane(node: LayoutNode, paneId: Id, targetId: Id, place: Drop
   if (place === "center") return mapLeaves(node, (id, n) => (id === paneId ? leaf(targetId) : id === targetId ? leaf(paneId) : n));
   const rest = removeLeaf(node, paneId);
   return rest && mapLeaves(rest, (id, n) => (id === targetId ? beside(n, place, paneId, splitId) : n));
+}
+
+/** The box each pane takes after `paneId` drops on `targetId` at `place`. `null` when the drop changes nothing. */
+export function moveBoxes(node: LayoutNode, paneId: Id, targetId: Id, place: DropPlace, box: Box, gap = 0): Map<Id, Box> | null {
+  const next = movePane(node, paneId, targetId, place, "preview");
+  return next && paneBoxes(next, box, gap);
 }
