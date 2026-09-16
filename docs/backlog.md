@@ -109,6 +109,9 @@ instead of pid and port), the orphaned servers after a daemon restart, and the
 - `docs/addons-map.md` still says an endpoint goes "after the 5 s grace". That
   table records the layout before the addon split, so correct it or mark it as
   history.
+- `tomo action list --json` prints only `set.actions`, so `from_repo` and the
+  set error never reach the CLI. A second client cannot tell a repository
+  Action from a worktree one.
 
 ## 2. Behavior and ergonomics
 
@@ -119,6 +122,11 @@ no merge, which would need a conflict rule per id). Also watch the repo root
 file, put the source path in the error, and show in the GUI when a set came from
 the repository. An Action is arbitrary shell, so a repo-level file gives that to
 every worktree at once.
+
+**Done.** `model::load(worktree, repo)` reads the worktree file, and the
+repository file only when the worktree has none, so a worktree file wins whole.
+The watcher covers the repository root, a problem names its own file, and
+`ActionSet.from_repo` puts "from the repository" in the topbar tooltip.
 
 ### 2.2 Icons in the open inspector — S, client
 The inspector renders plain text headings while the icons live only in the
