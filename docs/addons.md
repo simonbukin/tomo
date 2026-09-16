@@ -19,6 +19,11 @@ seam result", "Milestone 2 result: GitHub", "Milestone 3 result: Actions",
 "Milestone 4 result: Runtime", "Milestone 5 result: Usage", and "Milestone 7
 result: Agentation".
 
+The `anime-chart` example addon comes from the agent hackability exercise
+(PRD section 30). It added the `worktree_archived` seam, and it found the
+gaps that the checklist, the examples, and the verification list below now
+close. See "Agent hackability exercise".
+
 Related files:
 
 - [addons-map.md](addons-map.md) shows how each candidate touches every layer.
@@ -848,7 +853,8 @@ a scratch `TOMO_DATA_DIR`; never run a check against the default data dir.
 
 1. Delete `crates/tomod/src/addons/<name>/`, `crates/tomo-proto/src/addons/<name>.rs`, and `app/src/addons/<name>/`.
 2. Remove the registration lines:
-   - its lines in `State`, `seams()`, `migrate()`, and `start()` in `addons/mod.rs`
+   - its lines in `State`, `migrate()`, and `start()` in `addons/mod.rs`
+   - its entry in each `seams()` list: the **field stays** and becomes `vec![]` (or `None` for `worktree_namer`), because `Seams` is a Core struct with a fixed set of fields. Only the addon name goes. The anime-chart deletion test failed first on a deleted field line.
    - its arms, its `use` line, and its field line in the `Subscribe` arm in `dispatch.rs`
    - its `mod` line, its re-export, its `Call` and `Event` variants, its `Snapshot` field, its `HOOK_EVENTS` names, and its `export_all` lines in `lib.rs`
    - its entry in `builtins`
@@ -864,6 +870,45 @@ a scratch `TOMO_DATA_DIR`; never run a check against the default data dir.
 
 If step 2 needs more than these lines, the extraction is not complete.
 Record the remaining coupling in [addons-map.md](addons-map.md).
+
+### anime-chart deletion test (the hackability exercise)
+
+Done with `delete_anime_chart.py`, a script of exact replacements, on a
+throwaway branch from commit `b8d820a`, then deleted. The removal changed 11
+files: 220 lines deleted, 5 added, which includes the regenerated
+`app/src/generated/index.ts`. Outside the three deleted folders and the
+deleted `app/src/generated/ArchivedShow.ts`, these are the only lines that
+changed:
+
+| File | Change |
+|---|---|
+| `crates/tomod/src/addons/mod.rs` | remove `pub mod anime_chart;`; `worktree_archived: vec![]`; `migrate` returns `towns::migrate(store)`; remove the `OWNED_NOUNS` entry and count 7 → 6 |
+| `crates/tomod/src/dispatch.rs` | drop `anime_chart` from the `use` line; remove the `Call::AnimeChartList` arm |
+| `crates/tomo-proto/src/lib.rs` | remove `pub mod anime_chart;`, `pub use addons::anime_chart::*;`, `Call::AnimeChartList`, and the `ArchivedShow` `export_all` line |
+| `app/src/addons/index.ts` | remove the `animeChart` import; `builtins` becomes `[towns, github, usage, actions, runtime, agentation]` |
+
+No Core file changed: not `daemon.rs`, `store.rs`, `App.tsx`, `store.ts`, or
+`uiState.ts`. The `worktree_archived` seam and `ArchivedWorktree` stay,
+because they are Core.
+
+Result with anime-chart removed:
+
+| Check | Result |
+|---|---|
+| `TOMO_WRITE_TYPES=1 cargo test -p tomo-proto` | pass |
+| `cargo test --workspace` | pass: 156 tests (tomod 144, tomo-proto 7, tomo_app_lib 5) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 38 files, 272 tests pass |
+| `npx vite build` | pass |
+
+The removed build has one compiler warning and no errors: the fields of
+`ArchivedWorktree` are never read. It shows a seam that no addon uses, like
+the warnings of the earlier deletion tests. It is expected.
+
+The first try failed, and the test did its job. The script deleted the whole
+`worktree_archived` line from `seams()`, and `tomod` stopped with
+`missing field worktree_archived in initializer of Seams`. The step list of
+"Remove an addon" now says that a seam field becomes `vec![]`.
 
 ### Towns deletion test (milestone 1)
 
@@ -2885,6 +2930,53 @@ None was hit. Near:
 
 - Four new GUI slots (`sourceMark`, `sourceMenu`, `appUrl`, `signalLine`) plus `paneSource.stop`. Each is one optional field with one render site, and they let the runtime code leave eight core client files (`store.ts`, `activityModel.ts`, `activityKinds.ts`, `WorktreeHeader.tsx`, `menus.ts`, `Palette.tsx`, `Signals.tsx`, `HoverPreviews.tsx`). The `sourceMenu` return of `first` and `last` is the one shape that is not obvious; it exists because the endpoint items sat at two places in the same menu before the split.
 - `RuntimeEndpoint.source` adds a field to the wire for a client join. The alternative, reading the pane source from the client store, loses the endpoints of a pane that has already gone during the 5 s grace.
+
+## Agent hackability exercise
+
+PRD section 30 asks one question: can an agent add a whole feature with only
+this file? An agent built the `anime-chart` addon (a global view of the
+archived worktrees) and read no other addon while it worked.
+
+**The result.** Yes, but with 12 questions that this file did not answer. The
+addon was green on every gate 9 minutes after the first read, and the whole
+exercise with the merge, the deletion test, the harness, and these doc fixes
+took 24 minutes. The agent left the doc 12 times and read 13 source files
+that no step named.
+
+| # | The question the doc did not answer | Where the answer was | Now in this file |
+|---|---|---|---|
+| 1 | Which seam or event fires on an archive? | `daemon.rs`, `archive_worktree` | the `worktree_archived` seam |
+| 2 | Where does the state of a list go, and what does the SQL look like? | `store.rs` (`Store::conn`, `rusqlite`) | "A minimal example of each part" |
+| 3 | What does a daemon call handler return? | `daemon.rs` (`ok`, `internal`) | the same example |
+| 4 | How does a command open a view, and does `sanitizeUi` keep the id? | `App.tsx`, `uiState.ts`, `actions.ts` | "Five rules that the compiler does not give you" |
+| 5 | Must a command have a `group`? | a core vitest failure | the same list; the field is mandatory |
+| 6 | How does a `Call` variant become a method name? | `lib.rs` (`rename_all = "snake_case"`) | the proto example |
+| 7 | What does `OWNED_NOUNS` forbid? | `addons/mod.rs` | step 7: a noun must be a word Core never writes |
+| 8 | How do I name a two-word addon? Rust takes no hyphen. | nothing; the agent guessed | "The name" in "Add an addon" |
+| 9 | `index.ts` holds no JSX, but `fallback` is a component. | a `tsc` error | rule 3 of the same list |
+| 10 | Are the CSS file, the CLI block, and the torture script mandatory? | nothing; steps 5 to 7 read as mandatory | "The file checklist", with a "When" column |
+| 11 | Why does a torture script fail every check with a JSON error? | `run-all.sh` builds the binaries first | "The verification checklist" |
+| 12 | Does a seam field go away with its addon? | a build failure in the deletion test | step 2 of "Remove an addon" |
+
+Questions 5, 9, 11, and 12 each cost a failed run. The other eight cost a
+search. No question was a wrong turn in design: the three layers, the
+dependency law, and the seam rules were enough to choose the shape.
+
+**What the addon proved.** One new seam (`worktree_archived`), one addon
+table, one `Call`, one global view, and one command. It keeps no memory
+state, so it needs no `addons::State` field. It does no background work: the
+view sends one `anime_chart_list` when it mounts. Core never names it, and
+the deletion test removes it in 11 files.
+
+**Does it ship?** Keep it, as the example addon that this file cites, under
+the same deletion rule as every other addon. The reasons: the examples above
+stay true only while the code compiles, the dependency checks and the
+deletion test hold it honest, and the cost is one entry in the View menu and
+one small table. The cost is real: Core already records an `archived`
+activity row, so the view shows facts that `tomo activity` also shows. To
+drop it, do "Remove an addon" (11 files, 220 lines; the deletion test lists
+each line) and remove the `worktree_archived` seam from `Seams` and from
+`archive_worktree`, because no other addon uses it.
 
 ## Candidates
 
