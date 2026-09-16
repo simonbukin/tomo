@@ -52,6 +52,18 @@ describe("minimal right rail", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Files" }));
     expect(getState().ui).toMatchObject({ rightMode: "open", rightSection: "files" });
   });
+
+  it("puts the marker in a corner badge that leaves the icon alone", () => {
+    const dirty = { ...wt("w3", "kamakura"), git: { dirty: true } } as unknown as Worktree;
+    render(<RightRail worktree={dirty} />);
+    const marked = screen.getByRole("button", { name: "Git, dirty" });
+    const plain = screen.getByRole("button", { name: "Files" });
+    expect(marked.firstElementChild?.tagName).toBe("svg");
+    expect(plain.firstElementChild?.tagName).toBe("svg");
+    expect(plain.children).toHaveLength(1);
+    expect(marked.children).toHaveLength(2);
+    expect(marked.querySelector(".rail-marker")).toHaveAttribute("aria-hidden");
+  });
 });
 
 describe("top-left chrome", () => {
