@@ -19,6 +19,8 @@ const { rpc } = await import("../api");
 const { BrowserPane } = await import("./BrowserPane");
 const { normalizeUrl, openInBrowser } = await import("./browser");
 const { TabLayout } = await import("../Layout");
+const { LayoutDnd } = await import("../LayoutDnd");
+const { TabBar } = await import("../Tabs");
 const { openEndpoint } = await import("../actions");
 const { browserMenu } = await import("../menus");
 const store = await import("../store");
@@ -116,6 +118,15 @@ describe("BrowserPane", () => {
   it("is what the layout renders for a browser leaf", () => {
     const { container } = render(<TabLayout tab={tab} />);
     expect(container.querySelector(".pane-browser .browser-host")).not.toBeNull();
+  });
+
+  it("gives its tab the globe, not the terminal icon", () => {
+    const { container } = render(
+      <LayoutDnd>
+        <TabBar worktreeId="w1" />
+      </LayoutDnd>,
+    );
+    expect(container.querySelector(".tab .proc-icon")).toHaveAttribute("aria-label", "Browser");
   });
 });
 
