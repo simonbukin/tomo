@@ -227,6 +227,19 @@ the repository. Keep `worktree_parent_dir` as the override, never move existing
 worktrees, and update the create dialog preview. Orca and Conductor both use
 this shape.
 
+**Done.** `config::worktree_parent(override, repo_path)` holds the one rule.
+`<repo>` is the repository directory name, so two repositories of the same name
+share a directory and a taken name still fails inside `git worktree add`, as
+before. An override stays flat and wins whole. No existing worktree moves:
+discovery, archive, rebind, and open never ask the rule. `Repo.worktree_parent`
+carries the daemon's answer to the create dialog, so the client no longer
+recomputes the path.
+
+**Hazard this created:** a harness script that inherits the real `HOME` now
+writes into the user's own `~/tomo/worktrees`. `towns.sh` and `archive.sh` got
+a scratch `HOME`; the fix belongs in `scripts/torture/lib.sh` so every script
+is covered.
+
 ### 2.5 Generic actions — S each, addon
 "Open in Finder" as a built-in action next to the editor button, and a Drizzle
 Studio action. The Drizzle one is a `.tomo.toml` entry, so it is easier after
