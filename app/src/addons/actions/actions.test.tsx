@@ -56,7 +56,7 @@ describe("actions topbar", () => {
   it("renders topbar actions before the editor button, a dot on the running one, and the file warning after the editor", () => {
     render(<WorktreeHeader worktree={worktree} />);
     const buttons = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent);
-    expect(buttons).toEqual(["Serve", "Lint", "Zed", "Actions config problem", "More actions"]);
+    expect(buttons).toEqual(["Serve", "Lint", "Zed", "Reveal in Finder", "Actions config problem", "More actions"]);
     expect(screen.getByRole("button", { name: "Serve" }).querySelector(".state-working")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Lint" }).querySelector(".state-working")).toBeNull();
   });
