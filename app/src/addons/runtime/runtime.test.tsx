@@ -52,7 +52,7 @@ describe("runtime header popover", () => {
   it("appears from the snapshot after the editor button, lists each endpoint, and goes away when the list empties", async () => {
     act(() => store.applySnapshot(snapshot([app, db])));
     render(<WorktreeHeader worktree={worktree} />);
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["Zed", "Runtime endpoints", "More actions"]);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["Zed", "Reveal in Finder", "Runtime endpoints", "More actions"]);
     await userEvent.setup().click(screen.getByRole("button", { name: "Runtime endpoints" }));
     await screen.findByText("runtime");
     const rows = [...document.querySelectorAll(".runtime-row")];

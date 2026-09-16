@@ -1,4 +1,4 @@
-import { Ellipsis, Star } from "lucide-react";
+import { Ellipsis, FolderOpen, Star } from "lucide-react";
 import { appUrl, builtins } from "./addons";
 import { needsMeItem } from "./activityModel";
 import { focusPane, openEndpoint, openExternalFor, resolveCheckpoint } from "./actions";
@@ -48,6 +48,7 @@ function HeaderControls({ worktree: w }: { worktree: Worktree }) {
         return Buttons && <Buttons key={a.id} worktree={w} />;
       })}
       <EditorButton worktree={w} />
+      <FinderButton worktree={w} />
       {builtins.map((a) => {
         const Marks = a.topbar?.marks;
         return Marks && <Marks key={a.id} worktree={w} />;
@@ -75,6 +76,15 @@ function EditorButton({ worktree: w }: { worktree: Worktree }) {
         {label}
       </Button>
     </Tooltip>
+  );
+}
+
+function FinderButton({ worktree: w }: { worktree: Worktree }) {
+  const shortcut = useShortcuts();
+  return (
+    <IconButton label="Reveal in Finder" shortcut={shortcut("reveal_finder")} className="action-btn" onClick={() => openExternalFor(w.id, "finder")}>
+      <FolderOpen className="icon" />
+    </IconButton>
   );
 }
 
