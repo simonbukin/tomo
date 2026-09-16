@@ -8,5 +8,6 @@
 .glyph-working { color: var(--working); }
 .glyph-needs { color: var(--waiting); }
 .glyph-failed { color: var(--hot); }
+.glyph-dirty { color: var(--waiting); }
 .glyph-complete { color: var(--ins); }
 .glyph-idle, .glyph-unknown { color: var(--fg-3); }

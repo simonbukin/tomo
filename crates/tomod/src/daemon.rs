@@ -1999,7 +1999,8 @@ impl Daemon {
                         let meta = e.metadata().ok();
                         let name = e.file_name().to_string_lossy().into_owned();
                         let rel = if rel_path.is_empty() { name.clone() } else { format!("{}/{}", rel_path.trim_end_matches('/'), name) };
-                        FsEntry { is_dir: meta.as_ref().map_or(false, |m| m.is_dir()), size: meta.map_or(0, |m| m.len()), name, rel_path: rel }
+                        let modified_ms = meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+                        FsEntry { is_dir: meta.as_ref().map_or(false, |m| m.is_dir()), size: meta.map_or(0, |m| m.len()), modified_ms, name, rel_path: rel }
                     })
                     .collect();
                 entries.sort_by(|a, b| (!a.is_dir, a.name.to_lowercase()).cmp(&(!b.is_dir, b.name.to_lowercase())));
