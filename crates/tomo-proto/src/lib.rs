@@ -957,6 +957,9 @@ pub struct FsEntry {
     pub rel_path: String,
     pub is_dir: bool,
     pub size: u64,
+    /// Modification time in milliseconds since the epoch; 0 when the metadata read fails.
+    #[serde(default)]
+    pub modified_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
