@@ -587,6 +587,11 @@ pub struct Repo {
     pub exists: bool,
     #[serde(default)]
     pub remote_url: Option<String>,
+    /// Where a new worktree of this repository goes: `worktree_parent_dir`, else
+    /// `~/tomo/worktrees/<repo>`. The daemon owns the rule; a client shows the path.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub worktree_parent: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

@@ -3,6 +3,10 @@
 set -u
 . "$(dirname "$0")/lib.sh"
 
+# A scratch home under /tmp, so the harness never writes a worktree into the real ~/tomo.
+export HOME=$(cd "$(mktemp -d /tmp/tomo-home-XXXXXX)" && pwd -P)
+export GIT_AUTHOR_NAME=tomo GIT_AUTHOR_EMAIL=tomo@example.com GIT_COMMITTER_NAME=tomo GIT_COMMITTER_EMAIL=tomo@example.com
+
 daemon_fresh
 R=$(new_repo); $T repo add "$R" >/dev/null
 
@@ -88,6 +92,13 @@ o=$(archive "$W"); sleep 0.5
 W=$($T worktree list --json | jq_ "print([w['id'] for w in d if w['branch']=='feat/tracked'][0])")
 $T worktree restore "$W" >/dev/null && P=$($T worktree list --json | jq_ "print([w['path'] for w in d if w['id']=='$W'][0])")
 [ -f "$P/t.txt" ] && [ "$(cat "$P/t.txt")" = changed ] && check 0 "restore brings the checkpointed file back" || check 1 "restore" "$P"
+
+# 12. a worktree in an old location, beside its repository, still opens and archives
+OLD=$(cd "$(mktemp -d /tmp/tomo-home-old.XXXXXX)" && pwd -P)
+$T worktree create --repo "$R" --branch feat/old --new --path "$OLD/legacy" --json >/dev/null
+W=$(wt_id "$OLD/legacy")
+$T worktree open "$W" >/dev/null; sleep 1
+o=$(archive "$W"); gone "$OLD/legacy" && check 0 "a worktree in an old location opens and archives" || check 1 "old location" "$o"
 
 $T config check >/dev/null 2>&1 && check 0 "config check passes with no hooks" || check 1 "config check (no hooks)"
 

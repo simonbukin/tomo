@@ -94,6 +94,63 @@ detached, with stdin, stdout, and stderr closed. The process gets
 `TOMO_WORKTREE_ID`, `TOMO_WORKTREE_PATH`, `TOMO_SOCKET`, and `TOMO_BIN`.
 Tomo does not track it: there is no reuse, no stop, and no exit event.
 
+## A worked example: Drizzle Studio
+
+Drizzle Kit has a studio server. Tomo needs no Drizzle integration, because
+the studio is one Action in the repository file:
+
+```toml
+[[actions]]
+id = "drizzle"
+label = "Drizzle Studio"
+command = "pnpm drizzle-kit studio --port 4983"
+show = "topbar"
+```
+
+Write the command that your repository uses. Tomo does not know your package
+manager, your script name, or the path of your Drizzle config. A repository
+that has a script for the studio uses that script, for example
+`pnpm db:studio`. A repository that keeps the config somewhere else adds
+`--config <path>`. Keep `--port`, because a port that you choose is a port
+that you can open again.
+
+**Keep the default mode.** Pane mode gives the button its arrow. Runtime
+endpoints attribute a port to the pane that owns the process, so Tomo finds
+only a process below a pane shell. `mode = "external"` gets no arrow, no
+stop, and no exit event. See [runtime.md](runtime.md).
+
+**How the port reaches the button.** The process monitor polls every 2
+seconds while a GUI is subscribed. The scan finds the port, names the pane,
+and the Runtime addon draws an arrow in the Action button through the
+`sourceMark` slot. The arrow opens `http://localhost:<port>`, and a right
+click on the button copies the same URL. The arrow comes after the protocol
+probe answers, thus a few seconds after the studio starts. Drizzle Kit also
+prints its own URL in the pane. When that URL is not the local port, use the
+printed link, and keep the arrow for the local server.
+
+**More than one package.** Give each package its own Action, with its own id,
+its own label, and its own port:
+
+```toml
+[[actions]]
+id = "drizzle-web"
+label = "Drizzle web"
+command = "pnpm --filter @acme/web drizzle-kit studio --port 4983"
+show = "topbar"
+
+[[actions]]
+id = "drizzle-api"
+label = "Drizzle api"
+command = "pnpm --filter @acme/api drizzle-kit studio --port 4984"
+show = "menu"
+```
+
+Two studios on one port fight for it, and the second one does not start. Two
+worktrees of the same repository have the same problem, because the
+repository file serves every worktree. Run the studio in one worktree at a
+time, or give the second worktree its own `.tomo.toml` with another port. A
+second click on a live button focuses the pane and starts nothing.
+
 ## Where actions appear
 
 - **GUI**. Actions with `show = "topbar"` are buttons in the top bar of the
