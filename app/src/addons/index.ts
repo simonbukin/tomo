@@ -4,6 +4,7 @@ import type { Id } from "../types";
 import type { ComponentType } from "react";
 import { actions } from "./actions";
 import { agentation } from "./agentation";
+import { animeChart } from "./anime-chart";
 import { github } from "./github";
 import { runtime } from "./runtime";
 import { towns } from "./towns";
@@ -11,7 +12,7 @@ import type { Addon, BrowserToolbarProps, GlobalView, InspectorSection, SourceKe
 import { usage } from "./usage";
 
 /** The composition root of the GUI: every built-in addon, in render order. Core client files reach addons only through this module. */
-export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime, agentation];
+export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime, agentation, animeChart];
 
 export const addonViews = (): GlobalView[] => builtins.flatMap((a) => a.views ?? []);
 

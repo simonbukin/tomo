@@ -20,6 +20,7 @@ export * from "./AgentState";
 export * from "./AgentationActivity";
 export * from "./Annotation";
 export * from "./ArchiveResult";
+export * from "./ArchivedShow";
 export * from "./AttentionItem";
 export * from "./AttentionKind";
 export * from "./AttentionLevel";
