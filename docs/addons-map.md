@@ -283,7 +283,7 @@ endpoint. `RuntimeList` forces a tick when the data is older than 1.5 s.
 | monitor.rs:102-112 | `poll_and_scan` calls `scan_endpoints` | **seam** | monitor tick seam |
 | daemon.rs:86-88, 188-190 | `Inner.endpoints`, `endpoint_gone_ms`, `endpoints_at_ms` | **leak** | |
 | daemon.rs:2241-2251 | `RuntimeList` arm | fine | |
-| archive, pane close | no explicit endpoint cleanup | fine | removed after the 5 s grace |
+| archive, pane close | no explicit endpoint cleanup | fine | removed after the 15 s grace |
 
 ### Store, CLI, GUI
 
