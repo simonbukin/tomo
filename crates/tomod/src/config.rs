@@ -114,7 +114,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # shell = "/bin/zsh"
 # editor_command = ["zed", "{path}"]   # Cmd-click path:line opens "{path}" as path:line:col
 # editor_command = ["code", "-g", "{path}:{line}:{col}"]
-# worktree_parent_dir = "~/worktrees"
+# worktree_parent_dir = "~/worktrees"   # default: ~/tomo/worktrees/<repo>/<worktree>
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
 # max_panes_per_tab = 4
@@ -276,6 +276,20 @@ pub fn expand_tilde(p: &Path) -> PathBuf {
     match s.strip_prefix("~/") {
         Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
         None => p.to_path_buf(),
+    }
+}
+
+/// The directory that holds the new worktrees of one repository. `worktree_parent_dir` wins
+/// whole and stays flat. Without it the parent is `~/tomo/worktrees/<repository directory name>`.
+/// Two repositories with the same directory name share one directory; a name that is already
+/// taken there fails in `git worktree add`, as it does today.
+pub fn worktree_parent(parent_dir: Option<&Path>, repo_path: &Path) -> PathBuf {
+    match parent_dir {
+        Some(dir) => dir.to_path_buf(),
+        None => {
+            let repo = repo_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "repo".into());
+            dirs::home_dir().unwrap_or_default().join("tomo").join("worktrees").join(repo)
+        }
     }
 }
 
@@ -649,6 +663,16 @@ mod tests {
         assert!(issues.is_empty(), "{issues:?}");
         assert_eq!(cfg.theme, ThemeConfig::default());
         assert_eq!(cfg.font_size, 13);
+    }
+
+    #[test]
+    fn a_new_worktree_goes_under_the_worktree_home_unless_the_config_says_otherwise() {
+        let repo = Path::new("/Users/x/Projects/tomo");
+        let home = dirs::home_dir().unwrap_or_default();
+        assert_eq!(worktree_parent(None, repo), home.join("tomo/worktrees/tomo"));
+        assert_eq!(worktree_parent(Some(Path::new("/tmp/wt")), repo), PathBuf::from("/tmp/wt"));
+        assert_eq!(worktree_parent(None, Path::new("/Users/y/work/tomo")), home.join("tomo/worktrees/tomo"), "the directory name decides, not the path");
+        assert_eq!(worktree_parent(None, Path::new("/")), home.join("tomo/worktrees/repo"));
     }
 
     #[test]
