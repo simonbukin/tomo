@@ -252,6 +252,14 @@ trusted), `process_only` (binary found, no hooks installed), or
 `unavailable` (binary not on PATH), with a reason. The GUI shows the same
 list from the palette.
 
+Each provider owns its own answer. `crates/tomod/src/providers/` has one
+module for each provider (`claude.rs`, `codex.rs`, `pi.rs`) and one static
+`Provider` table in `mod.rs`: the command flags, the resume fallback, the
+hook table, process detection, the environment markers, the launch file, the
+install, the health gap, and the session reader. `provider(kind)` is the one
+`match`. Providers are Core, not addons: `AgentKind`, presence, state,
+session identity, and `agents::merge` stay generic.
+
 ## Login PATH
 
 A daemon that the installed app starts gets the bare launchd `PATH`

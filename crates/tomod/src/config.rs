@@ -251,9 +251,12 @@ pub fn default_keybindings() -> BTreeMap<String, String> {
 }
 
 fn default_agents() -> BTreeMap<String, AgentCommand> {
-    ["claude", "codex", "pi"]
+    tomo_proto::AgentKind::all()
         .into_iter()
-        .map(|name| (name.to_string(), AgentCommand { command: name.to_string(), args: vec![] }))
+        .map(|kind| {
+            let name = kind.label().to_lowercase();
+            (name.clone(), AgentCommand { command: name, args: vec![] })
+        })
         .collect()
 }
 

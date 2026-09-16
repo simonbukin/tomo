@@ -12,7 +12,7 @@ use crate::store::TabRow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tomo_proto::{AgentCommand, AgentKind, AgentState, Id, LayoutNode, PaneKind, PaneOrigin};
+use tomo_proto::{AgentKind, AgentState, Id, LayoutNode, PaneKind, PaneOrigin};
 
 pub const LIMIT: usize = 10;
 
@@ -109,9 +109,7 @@ impl Daemon {
             ClosedPane::Terminal { cwd, title } => self.create_pane(inner, tab_id, worktree_id, cwd.clone(), None, title.clone(), None, None, None, PaneOrigin::Live),
             ClosedPane::Browser { cwd, url } => Daemon::create_browser_pane(inner, tab_id, worktree_id, cwd.clone(), url.clone()),
             ClosedPane::Agent { cwd, title, kind, session_ref } => {
-                let key = kind.label().to_lowercase();
-                let cmd = inner.config.agents.get(&key).cloned().unwrap_or(AgentCommand { command: key, args: vec![] });
-                let plan = agents::spawn_plan(*kind, &cmd, Some(session_ref), &self.claude_settings_path(), &self.pi_extension_path(), &[]);
+                let plan = crate::providers::launch(&inner.config, *kind, Some(session_ref), &self.paths.integrations_dir, &[]);
                 let line = agents::shell_line(&plan.argv);
                 self.create_pane(inner, tab_id, worktree_id, cwd.clone(), None, title.clone(), Some(*kind), plan.session_ref, Some(line), PaneOrigin::Live)
             }

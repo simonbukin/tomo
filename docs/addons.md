@@ -48,7 +48,7 @@ opinions.
 | PTYs, panes, scrollback | `pty.rs`, `daemon.rs` |
 | Tabs, layout, layout persistence | `layout.rs`, `moves.rs`, `features/reopen.rs` (these do not move in this refactor) |
 | Processes, ownership, provenance | `procs.rs`, `monitor.rs` |
-| Agent abstraction, presence, authority | `agents.rs` (`merge`, `AgentPresence`) |
+| Agent abstraction, presence, authority | `agents.rs` (`merge`, `AgentPresence`); the provider specifics in `providers/` |
 | Attention, checkpoints | `daemon.rs`, `store.rs` |
 | Hooks, activity recording, core activity kinds | `events.rs`, `activity.rs`; `CoreActivity` in `crates/tomo-proto/src/activity.rs` |
 | Persistence, recovery | `store.rs`, `daemon.rs` (`restore`) |
@@ -87,7 +87,7 @@ source code with a clean dependency boundary.
 | agentation | **done** (milestone 7) |
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
-| agent providers | evaluate last |
+| agent providers | **provider modules** (milestone 9; they are Core, not addons) |
 
 ## The dependency law
 
@@ -536,6 +536,8 @@ crates/tomod/src/
   main.rs                 composition root: startup, seams, migrate
   dispatch.rs             composition root: addon Call -> addon handler, the rest -> Daemon::handle
   daemon.rs store.rs ...  core (no addon names); Seams lives in daemon.rs
+  providers/mod.rs        core: the Provider table and the one match on AgentKind
+  providers/<name>.rs     core: what one agent provider needs that the others do not
   addons/mod.rs           composition root: static list, seams(), migrate(), the dependency test
   addons/<name>/mod.rs    handlers, seams, SQL, tests
   addons/<name>/model.rs  pure logic and its tests
@@ -2114,6 +2116,248 @@ locator (see the decision). The framework code is 20 lines (`State`, two
 accessors, one field, one parameter); it removed three statics, three lock
 helpers, three lock-order comments, and the merged Actions test.
 
+## Milestone 9 result: agent providers
+
+### The question
+
+Tomo supports three agent providers: Claude, Codex, and Pi. Core owns
+`AgentKind`, `AgentPresence`, `AgentState`, session identity, the generic
+spawn and resume calls, and attention. The question of this milestone: do
+the provider specifics belong in one module for each provider, or does that
+add indirection without a gain?
+
+### Where the code branched on a provider before this milestone
+
+| Site | Symbol | Branches |
+|---|---|---|
+| `agents.rs:48-53` | `hook_outcome` | 2 (Codex shares the Claude table) |
+| `agents.rs:59-88` | `claude_style_outcome`, `pi_outcome` | 2 tables |
+| `agents.rs:95-144` | `spawn_plan` | 3 |
+| `agents.rs:159-190` | `claude_hooks_settings`, `codex_hooks_entries` | 2 |
+| `integrations.rs:52-62` | `install` | 3 |
+| `integrations.rs:104-123` | `codex_hooks_trusted` | 1 |
+| `integrations.rs:134-159` | `status` | 3 |
+| `procs.rs:191-205` | `detect_agent` | 3 |
+| `daemon.rs:22`, `1458` | `PI_EXTENSION_SOURCE` and the install call | 1 |
+| `daemon.rs:244-257` | `claude_settings_path`, `pi_extension_path`, `write_integration_files` | 2 |
+| `daemon.rs:259-267` | `integrations()` | 3 |
+| `daemon.rs:706-711` | `inherited_env_to_remove` | 3 markers of 2 providers |
+| `daemon.rs:1048` | restore: Codex without a session uses `--last` | 1 |
+| `daemon.rs:1051-1052`, `daemon.rs:1884-1886`, `features/reopen.rs:112-114` | the spawn plan, built three times with both provider file paths | 3 |
+| `features/sessions.rs:13-139` | `claude_project_dir`, `parse_claude`, `codex_text`, `parse_codex`, `list` | 2 readers |
+| `config.rs:253-257` | `default_agents` | 3 |
+
+That is **28 provider branches at 16 sites in 7 daemon files**.
+
+Ten more branches are identity, not behavior: `store.rs:167-173`
+(`agent_kind_str`) and `tomo-proto/src/lib.rs:784-814` (`AgentKind`,
+`label`, `all`, `from_str`). They stay where they are.
+
+Outside the daemon: the `Integrations` wire struct (`lib.rs:361-366`), the
+CLI (`main.rs:55`, `303` value parsers, `print.rs:45`, three help texts), the
+GUI (`actions.ts:508-510`, `591-593`, `appMenu.ts:31`,
+`ProcessIcon.tsx:56-68`, `types.ts:150`), and `fetch_all` in the Usage addon
+(`addons/usage/mod.rs:283`).
+
+### The target shape
+
+```text
+crates/tomod/src/providers/
+  mod.rs      the Provider table, fn provider(kind) -> &'static Provider, the loops, shared helpers
+  claude.rs   Claude: flags, hook table, detection, env markers, hooks file, install, sessions
+  codex.rs    Codex: the same set, plus resume --last and the trust check
+  pi.rs       Pi: the same set, plus the embedded extension
+```
+
+`Provider` is a plain struct of function pointers and data. `provider(kind)`
+is one `match`. There is no dynamic registration, no lookup by key, and no
+trait object.
+
+### Does it reduce the places a future agent must touch?
+
+Yes. To add a provider:
+
+| | Before | After |
+|---|---|---|
+| Daemon files | `agents.rs`, `integrations.rs`, `procs.rs`, `daemon.rs`, `config.rs`, `features/sessions.rs` (6) | `providers/mod.rs` (one `match` arm) and the new `providers/<name>.rs` (2) |
+| Identity | `tomo-proto/src/lib.rs`, `store.rs` | the same |
+| Client | CLI value parsers and the GUI commands | the same |
+| Compiler help | 5 of 16 sites are exhaustive matches. A new variant compiles with no detection, no env markers, no install, no launch file, and no default command. | every capability is a field of `Provider`, so a missing one does not compile |
+
+It also removes a real duplicate: the spawn plan, built in three places,
+becomes one `providers::launch`.
+
+### Does debugging stay easy?
+
+Yes.
+
+- `rg -i claude crates/tomod/src` lands on `providers/claude.rs`, plus the
+  composition points in `providers/mod.rs`. Before, it landed on six files.
+- A backtrace keeps the real names: `providers::claude::flags`, called from
+  `providers::launch`, called from `Daemon::handle`. A function pointer does
+  not hide the symbol.
+- The cost is one hop: "go to definition" on a table field goes to the
+  `PROVIDER` value of the module, and from there to the function. The
+  `PROVIDER` value of each module is also the index of what that provider
+  supports.
+
+### Decision
+
+**Extract.** The branch count in Core goes from 28 to 0, the file count for
+a new provider goes from 6 to 2, and the compiler checks the set of
+capabilities. No stop condition is hit: no registry, no service locator, no
+event replaces a direct call, and the wire stays typed.
+
+### Not moved, with the reason
+
+| Item | Why it stays |
+|---|---|
+| `AgentKind`, `AgentPresence`, `AgentState`, `agents::merge`, attention | Core identity and Core coordination, as the PRD says (section 23) |
+| `store.rs::agent_kind_str`, `AgentKind::label`, `all`, `from_str` | identity text of a Core enum, not provider behavior |
+| `Integrations { claude_hooks, codex_hooks, pi_extension }` | wire type; a rename is a wire change |
+| the usage capability | Usage is an addon. A usage hook in the table would make Core name `UsageSnapshot`, which `core_does_not_import_addons` forbids. `fetch_all` keeps the two provider names inside the addon. |
+| the CLI value parsers and the GUI spawn commands, labels, and icons | client code; this milestone changes the daemon only |
+
+### What moved
+
+| From | To |
+|---|---|
+| `crates/tomod/src/integrations.rs` | `crates/tomod/src/providers/mod.rs` (`git mv`, so the history stays) |
+| `agents::hook_outcome`, `claude_style_outcome`, `pi_outcome` | `providers::hook_outcome` and the `hook_outcome` field; Codex points at `claude::hook_outcome` |
+| `agents::spawn_plan` | `providers::plan` and the `flags` field. `providers::launch` also reads the command from the config, which the three call sites each did for themselves |
+| `agents::claude_hooks_settings`, `agents::codex_hooks_entries` | `claude::hooks_settings`, `codex::hooks_entries` |
+| `procs::detect_agent` | `providers::detect` and the `detects` field |
+| the provider names in `Daemon::inherited_env_to_remove` | the `nested_env` field |
+| `Daemon::claude_settings_path`, `Daemon::pi_extension_path`, `Daemon::write_integration_files`, `PI_EXTENSION_SOURCE` | `providers::write_launch_files` and the `write_launch_file` field; `pi.rs` embeds the extension |
+| `Daemon::integrations` | `providers::installed` |
+| `integrations::install` | `providers::install` and the `install` field |
+| `integrations::status`, `codex_hooks_trusted` | `providers::status` and the `gap` field; the trust check is in `codex.rs` |
+| `crates/tomod/src/features/sessions.rs` | `providers::sessions` and the `sessions` field: the file walk and the text helpers in `mod.rs`, the parsers in `claude.rs` and `codex.rs`, `no_sessions` for Pi |
+| the Codex `--last` fallback in `restore` | the `resume_without_session` field |
+| the three names in `config::default_agents` | `AgentKind::all()` |
+
+The `Provider` table has ten fields. Three defaults in `mod.rs` (`no_gap`,
+`no_launch_file`, `no_sessions`) say that a provider does not need that
+capability. `agents.rs` keeps `merge`, `STALE_MS`, `shell_quote`, and
+`shell_line`. Tests moved with their code: the provider tests are in
+`providers/mod.rs`, the Codex trust test in `codex.rs`, and the Claude
+directory test in `claude.rs`.
+
+### Bug fixes
+
+The provider fixtures found both. Each has its own commit and its test.
+
+1. **Process detection counted a program that only mentions a provider.**
+   Any program whose name started with `codex` (for example a `codexbar` menu
+   app) counted as Codex, and any command that contained `pi-coding-agent`
+   (for example `vim .../pi-coding-agent/README.md`) counted as Pi. Now Codex
+   is `codex` or `codex-<arch>-...`, and Pi is a `node` or `bun` process whose
+   first argument is a script in the package. The ignored test
+   `detect_agent_ignores_programs_that_only_mention_a_provider` now runs and
+   passes, and it also keeps a plain `codex` and a runtime flag before the
+   script working.
+2. **`PI_CODING_AGENT` and `CODEX_SANDBOX` leaked into every pane.**
+   `inherited_env_to_remove` named only the Claude, Tomo, Orca, and
+   `CODEX_THREAD_ID` markers, so a daemon that a Codex or Pi agent started
+   gave every pane the sandbox markers of its parent. The markers are now
+   `nested_env` of the provider that owns them, and
+   `nested_agent_markers_name_the_parent_agent` covers them. `providers.sh`
+   turns its two `KNOWN` lines into checks.
+
+### Coupling that stays
+
+| Coupling | Why it stays |
+|---|---|
+| `AgentKind` in the wire types, `store.rs::agent_kind_str`, `AgentKind::label`, `all`, `from_str` | Core identity; a provider id is a Core fact |
+| `Integrations { claude_hooks, codex_hooks, pi_extension }`, which `providers::installed` fills by name | wire field names; a rename is a wire change |
+| the CLI value parsers `["claude", "codex", "pi"]`, `print::status`, and three help texts | client; the layout rule keeps one clap tree |
+| the GUI `spawn_claude`, `spawn_codex`, `spawn_pi`, `KIND_LABEL`, `ProcessIcon`, and the `"pi"` filter in the Usage addon | client and addon code |
+| `fetch_all` names Claude and Codex inside the Usage addon | a usage field in the Core table would make Core name `UsageSnapshot` |
+| `providers/mod.rs` names its three modules in `provider` and `installed` | the composition point; `provider` is the one `match` |
+
+### Known limitations, not changed
+
+`providers.sh` reports each of these as `KNOWN`:
+
+- Codex installs no `SessionEnd` hook, so only the process monitor sees a Codex exit.
+- `session_list` reads no Pi sessions (`pi.rs` uses `no_sessions`).
+- Restore resumes an agent that had exited before the restart.
+- Two Codex panes in one worktree both resume with `resume --last`, so the untrusted pane gets the session of the other pane.
+- A Claude or Pi session with no message has no transcript or session file, so a resume after a restart fails.
+- The Pi session reference becomes the session file only after the first message.
+
+### Tests
+
+| Suite | Milestone 9, merged with master `96458b0` |
+|---|---|
+| `cargo test --workspace` | 156 passed, 0 failed, 0 ignored (tomod 144, tomo-proto 7, tomo_app_lib 5) |
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | 38 files, 272 tests |
+| `npx vite build` | main JS 722.71 kB, CSS 61.50 kB |
+| torture harness (`run-all.sh`, 20 scripts) | **408 passed, 0 failed, 7 known**; overall PASS |
+
+No test was removed. Each provider test moved with its code. New:
+`nested_agent_markers_name_the_parent_agent` and
+`only_provider_modules_branch_on_a_provider`. The boundary check was proven
+with a planted `// AgentKind::Claude` line in `monitor.rs`, which made it
+fail, and the line was removed again. The ignored detection test now runs.
+`providers.sh` goes from 69 passed and 8 known to 71 passed and 6 known, so
+the harness goes from 406 to 408 passed and from 9 to 7 known.
+
+The wire does not change, so `app/src/generated` is untouched and
+`TOMO_WRITE_TYPES=1` was not needed. SQLite does not change.
+
+### Performance
+
+Measured on 2026-09-15 with the commands in
+[addons-baseline.md](addons-baseline.md), release build, data dir
+`/tmp/tomo-addons-providers2-bench`, with `TOMO_USAGE_MOCK` at a file with a
+far `fetched_at_ms`, as in milestones 3, 5, 6, and 7. The owner used the
+machine. The numbers come from the tree **before** the merge with the Runtime
+master, so they measure this milestone and not the Runtime change. The change
+moves code; it adds no work to a daemon path.
+
+Round trips (`addons-bench.py ops 3`, median of the trial medians):
+
+| Metric | Baseline | Milestone 9 |
+|---|---|---|
+| Reattach | 7.66 ms | 7.60 ms |
+| of which `subscribe` | 0.51 ms | 0.47 ms |
+| of which `pane_attach` | 7.14 ms | 7.18 ms |
+| Worktree switch | 0.14 ms | 0.11 ms |
+| Worktree switch with attach | 9.26 ms | 7.59 ms |
+| Refresh | 164.31 ms | 141.47 ms |
+| Process poll, fresh | 23.41 ms | 20.96 ms |
+| Process poll, cached | 0.63 ms | 0.61 ms |
+
+Idle (`addons-bench.py idle 60`, 3 windows each):
+
+| Metric | Baseline | Milestone 9 (runs) |
+|---|---|---|
+| Idle CPU, no subscriber | 0.13 % | **0.12 %** (0.13, 0.12, 0.12) |
+| Idle CPU, one subscriber | 1.05 % | **0.83 %** (0.67, 0.83, 0.90) |
+| RSS at window end, no subscriber | 14.6 MB | **14.8 MB** (14.9, 14.6, 14.8) |
+| RSS at window end, subscribed | 14.6 MB | **14.6 MB** (14.3, 14.7, 14.6) |
+
+Gate: pass. No round trip is more than 1 ms and 20 % slower than the
+baseline; `pane_attach`, which this milestone does not touch, is 0.04 ms
+slower. Idle CPU is 0.12 % without a subscriber (limit 0.3 %) and 0.83 % with
+one (limit 1.5 %). RSS stays below 18 MB. The process poll calls
+`providers::detect` for each descendant, as it called `procs::detect_agent`
+before; the fresh poll is 20.96 ms against 23.41 ms in the baseline. Not
+measured: GUI cold launch and GUI RSS (no GUI allowed). Not run:
+`scripts/perf.sh` and the soak.
+
+### Stop conditions
+
+None was hit. Near: "agents need more files to understand a feature". The
+count goes the other way (6 files to 2), and each provider is one file. The
+table is not a service locator: nothing registers at run time, there is no
+lookup by key, and `provider(kind)` is one `match` that the compiler checks.
+The framework code is about 40 lines: the struct, the `match`, `table`, the
+five loops (`detect`, `marks_nested_agent`, `write_launch_files`, `install`,
+`sessions`), and three `no_*` defaults.
+
 ## Milestone 7 result: Agentation
 
 Agentation is an addon on top of Browser. Browser works without it, agents
@@ -2521,7 +2765,7 @@ None was hit. Near:
 | browser | **built-in pane kind** | not an addon; see "Milestone 6 result: Browser" |
 | agentation | **done** | none in Core or Browser; see "Milestone 7 result: Agentation" |
 | activity projections | kind seam **done** | `activityModel.ts` still mixes runtime and usage helpers; see "Activity kind seam result" |
-| agent providers | evaluate last | closed `AgentKind` in 10 types, spawn plan built in 3 places, `detect_agent` and env stripping in core |
+| agent providers | **provider modules** | none in Core; see "Milestone 9 result: agent providers" |
 
 ## Migration order
 
