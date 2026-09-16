@@ -1,8 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { focusPane, openWorktree } from "../actions";
 import { rpc } from "../api";
-import { errorText, failToast, getState, recordDiagnostic, toast } from "../store";
+import { errorText, failToast, getState, recordDiagnostic, toast, type State } from "../store";
 import type { Id } from "../types";
+
+/** The panes that own a webview, sorted, so that an unchanged set stays the same array for the store. */
+export const browserPaneIds = (s: State): Id[] =>
+  Object.values(s.panes)
+    .filter((p) => p.kind === "browser")
+    .map((p) => p.id)
+    .sort();
 
 export function normalizeUrl(text: string): string {
   const t = text.trim();

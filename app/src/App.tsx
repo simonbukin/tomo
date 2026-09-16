@@ -10,6 +10,7 @@ import { Activity } from "./Activity";
 import { Dialogs } from "./Dialogs";
 import { Home } from "./Home";
 import { findAction } from "./keys";
+import { BrowserHost } from "./browser/BrowserPane";
 import { TabLayout } from "./Layout";
 import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
@@ -155,6 +156,7 @@ function Shell() {
       <ShortcutReference />
       <Dialogs />
       {builtins.map((a) => a.mount && <a.mount key={a.id} />)}
+      <BrowserHost />
       <BottomStrip left={layout.left} />
       <ToastDock />
     </div>

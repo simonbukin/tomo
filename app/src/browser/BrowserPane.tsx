@@ -11,7 +11,7 @@ import { browserMenu, isLastPane } from "../menus";
 import { useShortcuts } from "../shortcuts";
 import { getState, useStore } from "../store";
 import type { Id } from "../types";
-import { browserCommand, browserHostFailed, normalizeUrl } from "./browser";
+import { browserCommand, browserHostFailed, browserPaneIds, normalizeUrl } from "./browser";
 
 type BrowserState = { pane_id: Id; url?: string; title?: string; loading?: boolean };
 type Bounds = { x: number; y: number; width: number; height: number };
@@ -32,6 +32,17 @@ function boundsOf(el: HTMLElement): Bounds {
 }
 
 const sameBounds = (a: Bounds | null, b: Bounds) => !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+
+/** Mounted for the whole session. A sleeping webview has no component, so the close of a pane that left the store happens here. */
+export function BrowserHost() {
+  const ids = useStore(browserPaneIds);
+  const known = useRef(ids);
+  useEffect(() => {
+    known.current.filter((id) => !ids.includes(id)).forEach((id) => invoke("browser_close", { paneId: id }).catch(browserHostFailed("browser_close")));
+    known.current = ids;
+  }, [ids]);
+  return null;
+}
 
 export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean }) {
   const pane = useStore((s) => s.panes[paneId]);
@@ -88,7 +99,8 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     return () => {
       cancelAnimationFrame(frame);
       offState.then((off) => off());
-      invoke("browser_close", { paneId }).catch(browserHostFailed("browser_close"));
+      // The pane owns the webview, not this component: unmount puts the page to sleep, and BrowserHost closes it when the pane goes.
+      invoke("browser_set_visible", { paneId, visible: false }).catch(browserHostFailed("browser_set_visible"));
     };
   }, [paneId]);
 

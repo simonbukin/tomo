@@ -25,8 +25,10 @@ fn bounds(x: f64, y: f64, width: f64, height: f64) -> Rect {
 
 #[tauri::command]
 pub async fn browser_create(app: AppHandle, pane_id: String, url: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
+    // A sleeping pane keeps the rect it had when it went to sleep, so the bounds go first and the page never paints in the old place.
     if let Ok(existing) = browser_webview(&app, &pane_id) {
-        return existing.set_bounds(bounds(x, y, width, height)).map_err(|e| e.to_string());
+        existing.set_bounds(bounds(x, y, width, height)).map_err(|e| e.to_string())?;
+        return existing.show().map_err(|e| e.to_string());
     }
     let window = app.get_window("main").ok_or("main window missing")?;
     let target = Url::parse(&url).map_err(|e| e.to_string())?;

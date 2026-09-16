@@ -120,7 +120,7 @@ describe("Agentation in a browser pane", () => {
     ]);
   });
 
-  it("turns annotate on and off, and closes the webview on unmount", async () => {
+  it("turns annotate on and off, and keeps the webview on unmount", async () => {
     const user = setupUser();
     const { unmount } = render(<BrowserPane paneId="b1" active />);
     await user.click(screen.getByRole("button", { name: "Annotate" }));
@@ -129,6 +129,7 @@ describe("Agentation in a browser pane", () => {
     await user.click(screen.getByRole("button", { name: "Stop annotating" }));
     expect(calls("browser_set_annotate").at(-1)).toEqual({ paneId: "b1", enabled: false });
     unmount();
-    expect(calls("browser_close")).toEqual([{ paneId: "b1" }]);
+    expect(calls("browser_close")).toEqual([]);
+    expect(calls("browser_set_visible").at(-1)).toEqual({ paneId: "b1", visible: false });
   });
 });
