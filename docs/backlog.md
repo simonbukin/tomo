@@ -136,11 +136,14 @@ grace is 15 s.
 - `docs/addons-map.md` still says an endpoint goes "after the 5 s grace". That
   table records the layout before the addon split, so correct it or mark it as
   history.
-- `tomo action list --json` prints only `set.actions`, so `from_repo` and the
-  set error never reach the CLI. A second client cannot tell a repository
-  Action from a worktree one.
-- No harness script covers `fs_list` or the Files section. A `files` part in
-  `scripts/torture/client.sh` would close that gap.
+- **Done.** `tomo action list --json` now prints the whole `ActionSet`
+  (`worktree_id`, `actions`, `error`, `from_repo`), and the text output says
+  whether a set came from the repository file or the worktree file. The shape
+  changed, so a reader must take `.actions`; every in-repo consumer moved in
+  the same commit.
+- **Done.** `headless_client.py` has a `files_check`, run by
+  `scripts/torture/client.sh`: `modified_ms` is sane, the daemon keeps its name
+  order on the wire, and a recency sort gives the newest first.
 - **Done.** `docs/development.md` now gives the link step for a fresh worktree,
   which has no `app/node_modules`.
 
