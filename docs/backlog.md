@@ -45,11 +45,17 @@ The `.rail-marker` rule no longer exists. It was deleted when the left rail
 changed to status dots, and only the left rail got a replacement, so the badge
 now flows inline. Restore a positioned badge rule scoped to the rail button.
 
+**Done.** `.rail-btn .rail-marker` in `sidebar.css` puts the badge in the
+corner of the button, so the icon column stays straight.
+
 ### 1.4 A browser tab shows the terminal icon — S, client
 `Tabs.tsx` renders `ProcessIcon` from `agent` and `process_cmd`. A browser pane
 has neither, so the icon falls through to the terminal glyph. Render the globe
 when the lead pane kind is `browser`, as the pane legend already does. Keep
 `ProcessIcon` about processes.
+
+**Done.** `Tabs.tsx` draws the globe for a browser lead pane; `ProcessIcon`
+did not change.
 
 ### 1.5 Runtime endpoints are unreliable — S to M, addon (+client)
 Several weaknesses, in order of value:
@@ -80,6 +86,9 @@ every worktree at once.
 The inspector renders plain text headings while the icons live only in the
 rail's section table. Share one table of id, label, and icon.
 
+**Done.** The table and `SectionLabel` live in `app/src/sections.tsx`, which
+the right rail and the open inspector both read.
+
 ### 2.3 Sidebar cards keep one size — M, client
 Rows vary because the branch line spans a second grid row and the signal block
 is conditional. Give a row one height and a single-line signal area with an
@@ -97,6 +106,10 @@ this shape.
 "Open in Finder" as a built-in action next to the editor button, and a Drizzle
 Studio action. The Drizzle one is a `.tomo.toml` entry, so it is easier after
 2.1.
+
+**Done (Finder).** `WorktreeHeader.tsx` has a Finder button next to the editor
+button, with the `reveal_finder` shortcut in its tooltip. The Drizzle action
+still waits for 2.1.
 
 ### 2.6 Infisical login — diagnosis first
 The CLI opens the system browser and waits on a localhost callback, so the Tomo

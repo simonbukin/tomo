@@ -96,6 +96,9 @@ no toast.
   codex, pi) or splits the focused pane of the current tab (`split right`,
   `split down`, `split with` a browser or an agent). Each pane header also
   has split right and split down buttons.
+- A tab chip shows what leads the tab: the process icon of the agent or the
+  command, the globe of the pane legend when the lead pane is a browser, or
+  the amber dot when an agent waits.
 - Drag a tab to reorder it. The other tabs stay in place; an accent line
   shows where the tab lands. The strip changes at once, then the
   `tabs_changed` snapshot from `tab_move` wins. The order persists.
@@ -309,7 +312,8 @@ bottom strip (three sections on the same columns)
   under them.
 - Top-middle: for a worktree, `WorktreeHeader` (name, branch, state on the
   left; `topbar` Actions, the editor button (`Zed` from `editor_command`),
-  runtime, and the overflow menu on the right). The `+` menu sits after the
+  the Finder button (`reveal_finder`), runtime, and the overflow menu on
+  the right). The `+` menu sits after the
   last tab. For Home, Activity, and Towns, a short view title. Nothing
   else: usage, metrics, daemon health, and Settings live in the bottom
   strip. The checkpoint banner stays at the top of the middle column.
@@ -390,8 +394,15 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
   the rail reads at once.
 - The right rail shows `*` on git when the tree is dirty, `×` on the pull
   request when checks failed, `✓` when it merged, and `●` on processes
-  when processes run. A click opens the inspector at that section
-  (`rightSection` in UI state).
+  when processes run. Each mark is a badge in the corner of the button
+  (`.rail-marker`), over the icon, so the rail stays one straight column
+  of icons. A click opens the inspector at that section (`rightSection` in
+  UI state).
+- The rail and the open inspector read one table of id, label, and icon in
+  `app/src/sections.tsx`. `SectionLabel` draws each inspector heading: the
+  icon, the lowercase label, then the control of the section (`refresh`,
+  `show`, or a count). An addon section calls `SectionLabel` with its own
+  id, so it gets the icon of its `inspectorSections` entry.
 
 ## Resize and snapping
 
