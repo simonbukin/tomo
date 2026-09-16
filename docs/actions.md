@@ -160,7 +160,9 @@ second click on a live button focuses the pane and starts nothing.
   running one opens the same submenu. The `⌘K` palette lists each action
   as `run <label>`. A `shortcut` works while that worktree is open; when
   it collides with a `[keybindings]` entry, the config entry wins.
-- **CLI**. `tomo action list|run|stop|restart`. See [cli.md](cli.md).
+- **CLI**. `tomo action list|run|stop|restart`. `list` ends with the file
+  that the set came from, and `--json` gives the whole `ActionSet`, with
+  `from_repo` and the set `error`. See [cli.md](cli.md).
 - **Hooks**. `action.started` fires on every run. `action.exited` fires
   when a pane-mode action exits or is stopped. Both carry the `action`
   envelope field `{ "id": …, "label": … }`, and pane mode also carries
@@ -178,8 +180,9 @@ show up.
 ## Malformed files
 
 A bad entry is dropped; the rest of the file stays usable. The first
-problem is reported once as a warning notice in the GUI and as a
-`warning:` line in `tomo action list`. Each problem names the full path of
+problem is reported once as a warning notice in the GUI, as a `warning:`
+line in `tomo action list`, and as `ActionSet.error` on the wire and in
+`tomo action list --json`. Each problem names the full path of
 the file that holds it, because a repository file serves more than one
 worktree, and a bad repository file must warn one time and not once per
 worktree. A file that is not valid TOML yields no actions and the parse
