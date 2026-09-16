@@ -86,16 +86,16 @@ $T runtime "$WT" --json | jq_ "import sys; sys.exit(0 if all(e['worktree_id']=='
   && check 0 "endpoints are isolated per worktree" || check 1 "isolation" "$($T runtime --json)"
 $T action stop serve "$WT2" >/dev/null
 
-# 5. a restart on the same port within 5 s makes no event
+# 5. a restart on the same port inside the removal grace makes no event
 F=$(run "$WT" fixed)
 wait_for "[ \"\$(ep $WT fixed port)\" = $FIXED ]" 6 && check 0 "fixed-port server discovered" || check 1 "fixed discovery"
 PID1=$(ep "$WT" fixed pid)
 $T action restart fixed "$WT" >/dev/null
 wait_for "[ \"\$(ep $WT fixed pid)\" != $PID1 ] && [ \"\$(ep $WT fixed pid)\" != none ]" 8 && check 0 "restart replaces the pid on the same port" || check 1 "restart pid" "$(ep "$WT" fixed pid) vs $PID1"
 wait_for false 12
-[ "$(events runtime.endpoint_discovered "e['action']['id']=='fixed'")" = 1 ] && [ "$(events runtime.endpoint_removed "e['action']['id']=='fixed'")" = 0 ] && check 0 "restart within 5 s fires no removed and no second discovered" || check 1 "restart debounce" "discovered=$(events runtime.endpoint_discovered "e['action']['id']=='fixed'") removed=$(events runtime.endpoint_removed "e['action']['id']=='fixed'")"
+[ "$(events runtime.endpoint_discovered "e['action']['id']=='fixed'")" = 1 ] && [ "$(events runtime.endpoint_removed "e['action']['id']=='fixed'")" = 0 ] && check 0 "restart inside the grace fires no removed and no second discovered" || check 1 "restart debounce" "discovered=$(events runtime.endpoint_discovered "e['action']['id']=='fixed'") removed=$(events runtime.endpoint_removed "e['action']['id']=='fixed'")"
 $T action stop fixed "$WT" >/dev/null
-wait_for "[ \"\$(ep $WT fixed port)\" = none ]" 20 && check 0 "stopped server leaves the list after the grace period" || check 1 "removal" "$(ep "$WT" fixed port)"
+wait_for "[ \"\$(ep $WT fixed port)\" = none ]" 50 && check 0 "stopped server leaves the list after the grace period" || check 1 "removal" "$(ep "$WT" fixed port)"
 wait_for "[ \"\$(events runtime.endpoint_removed \"e['action']['id']=='fixed' and e['worktree']['id']=='$WT'\")\" = 1 ]" 6 && check 0 "runtime.endpoint_removed fired once" || check 1 "removed hook" "$(cut -c1-200 "$EVLOG")"
 
 # 6. a crash keeps the pane, raises attention, and records the exit code
@@ -105,7 +105,7 @@ wait_for "[ \"\$(pane_exit $WT $C)\" = 1 ]" 16 && check 0 "crashed action pane s
 wait_for "[ \"\$(events action.crashed \"e['action']['id']=='crash' and e['pane']['id']=='$C' and e['attention']['kind']=='crash'\")\" = 1 ]" 6 && check 0 "action.crashed fired with pane and a crash attention item" || check 1 "crashed hook" "$(grep crashed "$EVLOG" | cut -c1-300)"
 $T attention list --json | jq_ "import sys; sys.exit(0 if any(a['kind']=='crash' and a['pane_id']=='$C' and a['message']=='Crashy exited with code 1' and a['level']=='attention' and a['agent_kind'] is None for a in d) else 1)" && check 0 "attention item has kind crash and the exit message" || check 1 "crash attention" "$($T attention list)"
 [ "$(activity_of "$WT" action_crashed crash payload)" != none ] && $T activity --json --worktree "$WT" | jq_ "import sys; m=[e for e in d if e['kind']=='action_crashed']; sys.exit(0 if m and m[0]['payload']['exit_code']==1 and m[0]['payload']['pane_id']=='$C' and m[0]['attention_id'] else 1)" && check 0 "activity ActionCrashed carries exit_code, pane_id, and the attention id" || check 1 "crash activity" "$($T activity --json --worktree "$WT" | head -30)"
-wait_for "[ \"\$(ep $WT crash port)\" = none ]" 20 && check 0 "crashed server's endpoint is removed" || check 1 "crash removal"
+wait_for "[ \"\$(ep $WT crash port)\" = none ]" 50 && check 0 "crashed server's endpoint is removed" || check 1 "crash removal"
 $T pane close "$C" --force >/dev/null 2>&1
 
 # 7. a stop is a stop, not a crash

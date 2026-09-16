@@ -230,8 +230,9 @@ equalize_panes = "mod+alt+e"
 
 `tomo config check` validates the file: unknown hook events, duplicate
 state ids, missing programs, bad keybindings, cleanup entries that are
-not plain names, bad theme and terminal values, and a file that does not
-parse. Malformed config never stops the daemon; it logs a warning and uses
+not plain names, bad theme and terminal values, an `agents.*.args` entry
+that starts with a Unicode dash (U+2010 to U+2015 or U+2212, which the
+agent reads as text and not as a flag), and a file that does not parse. Malformed config never stops the daemon; it logs a warning and uses
 defaults. The daemon reloads the file when it changes and sends
 `config_changed`. `config_set` edits one key in place and keeps comments.
 
