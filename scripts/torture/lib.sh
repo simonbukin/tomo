@@ -4,6 +4,15 @@ export TOMO_DATA_DIR="${TOMO_DATA_DIR:-/tmp/tomo-harness}"
 export TOMO_DAEMON_BIN="${TOMO_DAEMON_BIN:-$ROOT/target/debug/tomod}"
 export TOMO_BIN="${TOMO_BIN:-$ROOT/target/debug/tomo}"
 T="$TOMO_BIN"
+# A new worktree defaults to $HOME/tomo/worktrees, so a script that keeps the real HOME
+# writes into the user's own tree. Every script gets a scratch HOME beside its data dir.
+if [ -z "${TOMO_KEEP_HOME:-}" ]; then
+  _scratch_home="${TOMO_DATA_DIR%/}-home"
+  case "$_scratch_home" in
+    /tmp/?*|/private/tmp/?*) mkdir -p "$_scratch_home" && export HOME="$_scratch_home" ;;
+    *) echo "refusing to use $_scratch_home as HOME"; exit 1 ;;
+  esac
+fi
 RPC="python3 $ROOT/scripts/torture/tomo_rpc.py"
 FIX="$ROOT/scripts/fixtures"
 PASS_COUNT=0; FAIL_COUNT=0
