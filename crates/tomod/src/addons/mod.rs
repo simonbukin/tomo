@@ -39,7 +39,6 @@ pub fn seams() -> Seams {
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
         process_polled: vec![runtime::scan],
-        worktree_archived: vec![],
     }
 }
 
