@@ -103,8 +103,6 @@ pub struct Seams {
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
     /// Runs with no lock held after each process poll of the monitor, before the queued hooks go out.
     pub process_polled: Vec<fn(&Arc<Daemon>)>,
-    /// Runs under the state lock after an archive succeeds, next to the Core activity row and the `worktree.archived` hook.
-    pub worktree_archived: Vec<fn(&Store, &ArchivedWorktree)>,
 }
 
 #[derive(Clone, Copy)]
@@ -127,13 +125,6 @@ pub struct CreatedWorktree {
     pub repo_id: Id,
     /// What `worktree_namer` returned. `None` when the client gave a path or no namer exists.
     pub name: Option<String>,
-}
-
-pub struct ArchivedWorktree {
-    pub id: Id,
-    /// The name that the worktree had at the archive, because the worktree can go away later.
-    pub name: String,
-    pub at_ms: u64,
 }
 
 pub struct Daemon {
@@ -1300,12 +1291,8 @@ impl Daemon {
             Ok(result) => {
                 let ev = events::envelope(&inner, "worktree.archived", Some(worktree_id));
                 inner.hook_queue.push(ev);
-                let name = Self::worktree_name(&inner, worktree_id);
-                let archived = ArchivedWorktree { id: worktree_id.to_string(), name: name.clone(), at_ms: now_ms() };
-                for seam in &self.seams.worktree_archived {
-                    seam(&inner.store, &archived);
-                }
-                let mut ev = activity::event(CoreActivity::Archived, Some(worktree_id), format!("{name} archived"));
+                let title = format!("{} archived", Self::worktree_name(&inner, worktree_id));
+                let mut ev = activity::event(CoreActivity::Archived, Some(worktree_id), title);
                 ev.detail = result.checkpoint_commit.as_ref().map(|c| format!("checkpoint {}", &c[..c.len().min(7)]));
                 ev.payload = json!({ "branch": result.branch, "checkpoint_commit": result.checkpoint_commit, "head": head });
                 Self::record(&mut inner, ev);
