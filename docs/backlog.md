@@ -1,0 +1,135 @@
+# Backlog
+
+The source is `TOFIX.md` in the repository root, which stays the inbox. This
+file categorizes those notes, records the root cause where one is known, and
+gives an order. Effort is **S** (under an hour), **M** (a few hours), **L** (a
+day or more). Layer is core, client, addon, host (Tauri), or config.
+
+## 1. Bugs with a known root cause
+
+### 1.1 An agent reads a flag as its first message — S, config
+`agents.claude.args` in the user config holds `—dangerously-skip-permissions`
+with an em dash (U+2014), not `--`. `providers::launch` passes it as `argv[1]`,
+`shell_quote` quotes it because of the non-ASCII character, and the agent takes
+a value that does not start with `-` as a positional operand, which Claude Code
+sends as the first message. This happens on every start, not only on a reopen.
+
+- Fix the config line.
+- Add a check in `config::issues` (`crates/tomod/src/config.rs`): warn when an
+  `agents.*.args` entry starts with U+2010 to U+2015 or U+2212. A warning, not
+  a rejection.
+- Latent, separate: `type_pending_when_quiet` (`daemon.rs`) writes the pending
+  command line after a 5 s timeout whatever reads the tty. Guard it while
+  output still flows.
+
+### 1.2 A browser pane loses its page and its login — M, client (+M host)
+`BrowserPane` closes the child webview in its unmount cleanup, and only the
+active tab renders, so a tab switch destroys the page, its heap, and its session
+cookies. `docs/browser.md` records this as intended. The behavior looks random
+because `browser_close` is fire-and-forget: a fast return sometimes finds the
+webview alive.
+
+- Keep the webview alive and hide it. Move the lifetime from the React
+  component to the pane: unmount hides, and an always-mounted host (the unused
+  `mount` slot) closes the ids that leave the store.
+- Push the bounds before `show()`, because a hidden webview keeps a stale rect
+  after a resize or a zoom change.
+- Cap the kept-alive set (for example 3, or the active worktree) because each
+  webview is a full process.
+- Second, for popup logins: `on_new_window` denies the popup and navigates the
+  same webview, so the opener that must receive the code is destroyed. Open a
+  real child webview instead.
+
+### 1.3 The right rail puts the status glyph beside the icon — S, client
+The `.rail-marker` rule no longer exists. It was deleted when the left rail
+changed to status dots, and only the left rail got a replacement, so the badge
+now flows inline. Restore a positioned badge rule scoped to the rail button.
+
+### 1.4 A browser tab shows the terminal icon — S, client
+`Tabs.tsx` renders `ProcessIcon` from `agent` and `process_cmd`. A browser pane
+has neither, so the icon falls through to the terminal glyph. Render the globe
+when the lead pane kind is `browser`, as the pane legend already does. Keep
+`ProcessIcon` about processes.
+
+### 1.5 Runtime endpoints are unreliable — S to M, addon (+client)
+Several weaknesses, in order of value:
+
+- `lsof` runs with no deadline. A hung call blocks the monitor tick, so process
+  polling, agent state, and resources stop. Give it about 2 s and a diagnostic.
+- An endpoint id is `pid:port`, so a dev server that restarts slower than the
+  5 s grace produces a remove and an add, with duplicate hooks and activity.
+  Key it by worktree and port, and keep the pid as a field.
+- The removal grace of 5 s is short for a restart; about 15 s is calmer.
+- After a daemon restart, servers started from the old panes are reparented and
+  become `observed`, so they never appear again. There is no honest fix through
+  the process tree; a marked, dimmed entry is a policy choice, not a fix.
+- The GUI hides an endpoint until its probe answers. Add a `probed` flag rather
+  than widening the filter, which would surface databases.
+
+## 2. Behavior and ergonomics
+
+### 2.1 Repo-level `.tomo.toml` — M, addon
+Actions read `<worktree>/.tomo.toml` only, so every worktree needs a copy. Add a
+fallback to the repository file when the worktree has none (the worktree wins;
+no merge, which would need a conflict rule per id). Also watch the repo root
+file, put the source path in the error, and show in the GUI when a set came from
+the repository. An Action is arbitrary shell, so a repo-level file gives that to
+every worktree at once.
+
+### 2.2 Icons in the open inspector — S, client
+The inspector renders plain text headings while the icons live only in the
+rail's section table. Share one table of id, label, and icon.
+
+### 2.3 Sidebar cards keep one size — M, client
+Rows vary because the branch line spans a second grid row and the signal block
+is conditional. Give a row one height and a single-line signal area with an
+ellipsis. This is the natural place to answer the CSS question: a small card
+contract (grid areas plus tokens), and CSS modules only if the global sheet
+stops being enough.
+
+### 2.4 Worktree home directory — M, core
+Create new worktrees in `~/tomo/worktrees/<repo>/<worktree>` instead of beside
+the repository. Keep `worktree_parent_dir` as the override, never move existing
+worktrees, and update the create dialog preview. Orca and Conductor both use
+this shape.
+
+### 2.5 Generic actions — S each, addon
+"Open in Finder" as a built-in action next to the editor button, and a Drizzle
+Studio action. The Drizzle one is a `.tomo.toml` entry, so it is easier after
+2.1.
+
+### 2.6 Infisical login — diagnosis first
+The CLI opens the system browser and waits on a localhost callback, so the Tomo
+pane is not in that path. Run the login in a pane, note the callback port, and
+check whether the port is reachable and whether the daemon sees it. No fix until
+the cause is known.
+
+## 3. New features, each an addon
+
+| Idea | Shape | Effort |
+|---|---|---|
+| Drag arrangement like Rectangle | An overlay that shows the target region while a pane drags. The drop regions and the split-tree moves already exist; this is presentation and hit testing. | M |
+| Artifact shelf | Recent files by modification time in the inspector, opened from there or in Finder. Decide whether it detects files that agents wrote. | M |
+| Sound hooks | Sounds for hook events (`worktree.*`, `agent.*`, `action.*`). `sounds.ts` and the `[notifications] sounds` switch exist; this generalizes them. Keep it off by default. | S |
+| Agent lineage | Which agent spawned which, per worktree. Needs a parent link at spawn time and a small view. | M |
+| Archive postcards | A card for each archived worktree: dates, commits, agent sessions, and running time. `town_history` has part of it; commits and session counts need an aggregate from activity and git. | M |
+| Worktree mascots | A small generated avatar for each worktree, from its id. Delight only. | S |
+| Linear | Issues beside a worktree. External API, tokens, and polling, so it is the largest. | L |
+
+## 4. Order
+
+1. **1.1, 1.3, 1.4** — small, independent, and each removes a daily irritation.
+2. **1.5 (the `lsof` deadline first)** — it protects the whole monitor tick.
+3. **1.2** — the browser keep-alive, then the popup path.
+4. **2.1, 2.2, 2.5** — repo-level actions unlock the Drizzle action.
+5. **2.3, 2.4** — sidebar contract, then the worktree home.
+6. **3** — one addon at a time, cheapest first: sounds, mascots, artifact shelf,
+   lineage, postcards, drag overlay, Linear.
+
+## 5. Open questions
+
+- `.tomo.toml`: fallback only, or a merge with the worktree winning per id?
+- Browser keep-alive: how many panes stay alive on a memory-tight machine?
+- Artifact shelf: only recent files, or detect what an agent wrote?
+- Mascots and towns both name a worktree. One identity or two?
+- CSS: keep one global sheet with tokens, or move cards to CSS modules?
