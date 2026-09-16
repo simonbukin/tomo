@@ -20,7 +20,7 @@ pub enum ActionShow {
     Menu,
 }
 
-/// One entry of `[[actions]]` in a worktree's `.tomo.toml`.
+/// One entry of `[[actions]]` in a `.tomo.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ActionDef {
     pub id: String,
@@ -36,6 +36,9 @@ pub struct ActionSet {
     pub worktree_id: Id,
     pub actions: Vec<ActionDef>,
     pub error: Option<String>,
+    /// True when the set comes from the repository file, because the worktree has none.
+    #[serde(default)]
+    pub from_repo: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

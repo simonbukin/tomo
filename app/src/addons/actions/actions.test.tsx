@@ -27,7 +27,8 @@ const set: ActionSet = {
     { id: "lint", label: "Lint", command: "pnpm lint", mode: "pane", show: "topbar", shortcut: null },
     { id: "quick", label: "quick", command: "true", mode: "pane", show: "menu", shortcut: null },
   ],
-  error: ".tomo.toml: actions[3] id is required",
+  error: "/src/aogashima/.tomo.toml: actions[3] id is required",
+  from_repo: false,
 };
 
 const labels = (items: MenuItem[]) => items.map((it) => ("separator" in it ? "—" : it.label));
