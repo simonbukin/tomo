@@ -540,6 +540,14 @@ fn issue(level: IssueLevel, key: &str, message: impl Into<String>) -> ConfigIssu
     ConfigIssue { level, key: key.to_string(), message: message.into() }
 }
 
+/// A word that starts with U+2010 to U+2015 or U+2212 looks like a flag but is
+/// not one. An editor writes these when it "improves" `--`, and the agent takes
+/// the word as a positional operand, which Claude Code sends as its first
+/// message. A warning only, because a Unicode argument can be deliberate.
+fn unicode_dash(arg: &str) -> Option<char> {
+    arg.chars().next().filter(|c| matches!(c, '\u{2010}'..='\u{2015}' | '\u{2212}'))
+}
+
 /// Reports problems without changing behavior; the daemon already applied defaults.
 pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
     let mut out = Vec::new();
@@ -604,6 +612,12 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
         if resolve_program(&agent.command).is_none() {
             out.push(issue(IssueLevel::Warning, &format!("agents.{name}"), format!("{} not found on PATH", agent.command)));
         }
+        for (i, arg) in agent.args.iter().enumerate() {
+            if let Some(dash) = unicode_dash(arg) {
+                let message = format!("{arg:?} starts with {dash:?}, which is not a dash. The agent reads the entry as text, not as a flag. Write the flag with --");
+                out.push(issue(IssueLevel::Warning, &format!("agents.{name}.args[{i}]"), message));
+            }
+        }
     }
     out
 }
@@ -655,6 +669,17 @@ mod tests {
         assert!(messages.iter().any(|m| m.contains("duplicate state id a")), "{messages:?}");
         assert!(messages.iter().any(|m| m.contains("unknown event")), "{messages:?}");
         assert!(messages.iter().any(|m| m.contains("plain directory name")), "{messages:?}");
+    }
+
+    #[test]
+    fn check_warns_when_an_agent_argument_starts_with_a_unicode_dash() {
+        let (cfg, _) = parse("[agents.claude]\ncommand = \"sh\"\nargs = [\"\u{2014}dangerously-skip-permissions\", \"--ok\", \"-p\", \"\u{2212}x\", \"plain\"]\n");
+        let issues = check(&cfg);
+        let keys: Vec<&str> = issue_keys(&issues).into_iter().filter(|k| k.starts_with("agents.claude.args")).collect();
+        assert_eq!(keys, vec!["agents.claude.args[0]", "agents.claude.args[3]"], "{issues:?}");
+        let first = issues.iter().find(|i| i.key == "agents.claude.args[0]").unwrap();
+        assert_eq!(first.level, IssueLevel::Warning);
+        assert!(first.message.contains("Write the flag with --"), "{}", first.message);
     }
 
     #[test]
