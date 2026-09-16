@@ -3,6 +3,7 @@
 
 pub mod actions;
 pub mod agentation;
+pub mod anime_chart;
 pub mod github;
 pub mod runtime;
 pub mod towns;
@@ -39,11 +40,13 @@ pub fn seams() -> Seams {
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
         process_polled: vec![runtime::scan],
+        worktree_archived: vec![anime_chart::archived],
     }
 }
 
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
-    towns::migrate(store)
+    towns::migrate(store)?;
+    anime_chart::migrate(store)
 }
 
 /// Starts the background task of each addon that has one. The addon doc gives the reason for each task.
@@ -59,7 +62,8 @@ mod tests {
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
-    const OWNED_NOUNS: [(&str, &[&str]); 6] = [
+    const OWNED_NOUNS: [(&str, &[&str]); 7] = [
+        ("anime_chart", &["anime_chart", "animechart", "archivedshow", "anime_chart_list"]),
         (
             "runtime",
             &["runtimeendpoint", "runtimeprotocol", "runtimeactivity", "runtime_list", "runtimelist", "endpoints_changed", "endpointschanged", "scan_endpoints", "endpoint_gone", "endpoints_at", "endpoint_repeat", "inner.endpoints", "lsof"],
