@@ -5,7 +5,7 @@ import type { AddonSignal } from "../activityModel";
 import type { MenuItem } from "../components/ui";
 import type { Status } from "../glyphs";
 import type { PaletteEntry } from "../paletteModel";
-import type { RailMarker } from "../shell/RightRail";
+import type { RailMarker } from "../sections";
 import type { State } from "../store";
 import type { PaneSource } from "../generated";
 import type { ActivityEvent, Frame, Id, Repo, Snapshot, Worktree } from "../types";

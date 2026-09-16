@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect } from "react";
 import { rpc } from "../../api";
 import { SkeletonRows } from "../../components/ui";
+import { SectionLabel } from "../../sections";
 import type { PrStatusResult } from "../../generated";
 import { useStore } from "../../store";
 import type { Worktree } from "../../types";
@@ -22,7 +23,7 @@ export function PrSection({ worktree: w }: { worktree: Worktree }) {
   const checkState = !pr || checks === 0 ? "none" : pr.checks_failed > 0 ? "failed" : pr.checks_pending > 0 ? "pending" : "passed";
   return (
     <section className="side-section" data-section="pr">
-      <div className="section-label">pull request <button className="link" onClick={load}>refresh</button></div>
+      <SectionLabel id="pr"><button className="link" onClick={load}>refresh</button></SectionLabel>
       {pr ? (
         <>
           <div className="kv"><label>#{pr.number}</label><span className="pr-title" title={pr.title} onClick={() => openUrl(pr.url).catch(() => {})}>{pr.title}</span></div>

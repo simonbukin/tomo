@@ -65,6 +65,8 @@
 /* ---- right inspector */
 .rightbar { grid-area: right; display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); overflow-y: auto; }
 .side-section { padding: var(--sp-2) var(--sp-3) var(--sp-3); border-bottom: 1px solid var(--line); }
+.side-section .section-label { gap: var(--sp-1); }
+.side-section .section-label .icon { flex: none; width: 12px; height: 12px; color: var(--fg-3); }
 .side-section .section-label .link, .side-section .section-label .btn-link { margin-left: auto; }
 .kv { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: center; column-gap: var(--sp-2); min-height: 24px; font-size: var(--fs-1); }
 .kv label { color: var(--fg-2); font-size: var(--fs-1); }

@@ -1,6 +1,6 @@
 import type { AddonSignal } from "../../activityModel";
 import { GLYPH } from "../../glyphs";
-import type { RailMarker } from "../../shell/RightRail";
+import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
 import type { Id, Worktree } from "../../types";
 import { prOf } from "./state";
