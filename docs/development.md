@@ -18,6 +18,8 @@ crates/tomod/              daemon
   src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
   src/addons/usage/        provider usage: Claude and Codex adapters, last result, poll, usage_get, notices
   src/addons/actions/      repo Actions: .tomo.toml parser, calls, reload and pane exit seams
+  src/addons/runtime/      runtime endpoints: the lsof scan, endpoint rules, runtime_list, endpoint activity
+  src/addons/agentation/   annotations: annotations_send, evidence text, annotation activity
   src/store.rs             SQLite schema and queries
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
@@ -51,6 +53,7 @@ app/                       Tauri client
   src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
   src/addons/usage/        usage meters, bucket popover, diagnostics section, state
   src/addons/actions/      Action topbar buttons, menu items, palette entries, shortcuts, state
+  src/addons/runtime/      endpoint state, the header popover, source marks and menu items, NOW signal
   src/addons/agentation/   browser toolbar items, page overlay source (page/), CSS
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation

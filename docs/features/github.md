@@ -56,8 +56,9 @@ Milestone 2 kept these triggers. It added no work.
 
 ## State
 
-The cache is in memory in the addon: `CACHE` in
-`crates/tomod/src/addons/github/mod.rs`, one answer for each worktree id. A
+The cache is in memory in the per-daemon addon state: `addons::State.github`
+(type `github::Cache` in `crates/tomod/src/addons/github/mod.rs`), one answer
+for each worktree id. A
 daemon restart empties it. The addon owns no table. The `activity` table
 keeps the `pr_merged` rows.
 
