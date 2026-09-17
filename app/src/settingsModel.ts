@@ -1,4 +1,4 @@
-export const SETTINGS_SECTIONS = ["appearance", "terminal", "keyboard", "agents", "notifications", "archive", "integrations"] as const;
+export const SETTINGS_SECTIONS = ["appearance", "terminal", "keyboard", "agents", "notifications", "integrations"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 const MODIFIER_KEYS = ["Meta", "Shift", "Alt", "Control", "CapsLock", "Fn", "Dead"];

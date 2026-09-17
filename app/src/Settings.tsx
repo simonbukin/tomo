@@ -33,7 +33,6 @@ export function Settings({ close, section }: { close: () => void; section?: Sett
           {config && active === "keyboard" && <KeyboardSection config={config} />}
           {config && active === "agents" && <AgentsSection config={config} />}
           {config && active === "notifications" && <NotificationsSection config={config} />}
-          {config && active === "archive" && <ArchiveSection config={config} />}
           {config && active === "integrations" && <IntegrationsSection config={config} />}
         </div>
       </div>
@@ -284,21 +283,6 @@ function NotificationsSection({ config }: { config: Config }) {
       <label className="check">
         <input type="checkbox" checked={n.sounds} onChange={(e) => setConfig("notifications.sounds", e.target.checked)} /> sounds for human checkpoints and rare town unlocks
       </label>
-    </div>
-  );
-}
-
-function ArchiveSection({ config }: { config: Config }) {
-  return (
-    <div className="settings-grid">
-      <Row label="cleanup" note="folders that archive deletes from the worktree root, separated by commas">
-        <div className="settings-pair">
-          <TextField label="Archive cleanup" value={config.archive_cleanup.join(", ")} onCommit={(v) => setConfig("archive.cleanup", splitList(v, /[\s,]+/))} />
-          <Button variant="link" onClick={() => setConfig("archive.cleanup", null)}>
-            reset
-          </Button>
-        </div>
-      </Row>
     </div>
   );
 }

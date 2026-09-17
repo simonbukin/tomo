@@ -104,9 +104,9 @@ branch. After a successful create the `worktree.created` hooks run.
 
 `archive` marks the worktree as archiving, runs the `worktree.before_archive`
 hooks (a non-zero exit aborts), commits a checkpoint when the tree is
-dirty, closes the worktree's terminals, kills the processes they own,
-deletes the `[archive] cleanup` directories under the worktree, and runs
-`git worktree remove --force`. The branch is kept, with the checkpoint on
+dirty, closes the worktree's terminals, kills the processes they own, and
+runs `git worktree remove --force`. The default `worktree.before_archive`
+hook deletes the build directories; see [hooks.md](hooks.md). The branch is kept, with the checkpoint on
 it. The worktree stays listed as archived.
 
 `--no-checkpoint` refuses a dirty tree with a conflict error instead of a
@@ -117,7 +117,6 @@ merge conflict is refused before any pane closes. The printed result:
 ```text
 archived a3dc426aa592
 checkpoint 1f3a9c2 tomo: archive checkpoint
-removed node_modules, dist
 branch kept: feat/labor-relations
 ```
 
@@ -128,8 +127,7 @@ committed. With `--json` the result is an `ArchiveResult`:
 {
   "worktree_id": "a3dc426aa592",
   "branch": "feat/labor-relations",
-  "checkpoint_commit": "1f3a9c2…",
-  "cleanup_removed": ["node_modules", "dist"]
+  "checkpoint_commit": "1f3a9c2…"
 }
 ```
 
