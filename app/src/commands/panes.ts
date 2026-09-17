@@ -30,7 +30,6 @@ export function movePane(paneId: Id, target: PaneTarget, place: DropPlace): void
   rpc("pane_move", { pane_id: paneId, ...to, place }).catch(fail);
 }
 
-/** Take one pane out of its tab and give it a tab of its own. A drop beside the tabs lands here. */
 export async function paneToNewTab(paneId: Id): Promise<void> {
   const pane = getState().panes[paneId];
   if (!pane) return;

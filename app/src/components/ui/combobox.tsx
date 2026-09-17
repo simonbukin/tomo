@@ -1,6 +1,6 @@
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import type { KeyboardEvent, ReactNode } from "react";
-import { cx } from "./cx";
+import { cx, plainTextInput } from "./cx";
 
 export interface ComboboxProps {
   value: string;
@@ -17,7 +17,6 @@ export interface ComboboxProps {
   empty?: ReactNode;
   className?: string;
   onKeyDown?: (event: KeyboardEvent) => void;
-  /** Runs when the box loses focus, so a caller can save what the user typed. */
   onBlur?: () => void;
   "aria-label"?: string;
 }
@@ -26,8 +25,7 @@ export interface ComboboxProps {
 export function Combobox({ value, onValueChange, items, onSelect, onHighlight, detail, placeholder, empty, className, onKeyDown, onBlur, ...aria }: ComboboxProps) {
   return (
     <Autocomplete.Root items={items} value={value} onValueChange={onValueChange} onItemHighlighted={(item) => onHighlight?.(item)}>
-      {/* A filter box never wants the platform to capitalise or correct what the user types. */}
-      <Autocomplete.Input className={cx("combobox-input", className)} placeholder={placeholder} onKeyDown={onKeyDown} onBlur={onBlur} autoCapitalize="none" autoCorrect="off" spellCheck={false} {...aria} />
+      <Autocomplete.Input className={cx("combobox-input", className)} placeholder={placeholder} onKeyDown={onKeyDown} onBlur={onBlur} {...plainTextInput} {...aria} />
       <Autocomplete.Portal>
         <Autocomplete.Positioner className="combobox-positioner" sideOffset={4} collisionPadding={8}>
           <Autocomplete.Popup className="combobox-popup">

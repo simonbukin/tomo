@@ -9,7 +9,6 @@ export interface CollapsibleProps {
   className?: string;
 }
 
-/** A disclosure. The caller owns `open`, so a section can remember its state between sessions. */
 export function Collapsible({ open, onOpenChange, children, className }: CollapsibleProps) {
   return (
     <Base.Root open={open} onOpenChange={onOpenChange} className={className}>

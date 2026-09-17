@@ -6,7 +6,6 @@ D=${TOMO_PERF_DIR:-/tmp/tomo-perf}; rm -rf "$D"; mkdir -p "$D"
 SRC=${TOMO_PERF_SOURCE:-/tmp/tomo-dev}; cp "$SRC/tomo.sqlite3" "$D/" 2>/dev/null; cp "$SRC/config.toml" "$D/" 2>/dev/null
 export TOMO_DATA_DIR=$D
 TOMOD=${TOMOD:-$HOME/.local/bin/tomod}; T=${T:-$HOME/.local/bin/tomo}
-# Read the protocol from the crate that defines it. A bump then cannot leave this script behind.
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PROTO=$(sed -n 's/.*PROTOCOL_VERSION: u32 = \([0-9]*\).*/\1/p' "$ROOT/crates/tomo-proto/src/lib.rs" | head -1)
 export TOMO_PROTO=${PROTO:?could not read PROTOCOL_VERSION from crates/tomo-proto/src/lib.rs}
@@ -55,7 +54,6 @@ while True:
     if time.time()>deadline: die("no worktree appeared within 60 s")
     time.sleep(0.005)
 t_visible=time.time()-t0
-# A worktree whose directory is gone never gets a git summary. Wait only on the ones that exist.
 deadline=time.time()+120
 while True:
     ws=call("worktree_list")["result"]

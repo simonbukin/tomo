@@ -3,7 +3,7 @@ export { Collapsible, CollapsiblePanel, CollapsibleTrigger, type CollapsibleProp
 export { Combobox, type ComboboxProps } from "./combobox";
 export { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
 export { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "./context-menu";
-export { cx, type WithClassName } from "./cx";
+export { cx, plainTextInput, type WithClassName } from "./cx";
 export { Dialog, DialogActions, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger, type DialogContentProps } from "./dialog";
 export {
   AnchoredMenu,
