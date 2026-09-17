@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="tomo">
+  <g fill="currentColor">
+    <rect x="5" y="2" width="3" height="12" rx="0.5"/>
+    <rect x="2" y="5" width="9" height="3" rx="0.5"/>
+    <rect x="7" y="11" width="6" height="3" rx="0.5"/>
+  </g>
+  <rect x="12" y="2" width="2" height="2" rx="0.5" fill="var(--brand-accent, #7d4dff)"/>
+</svg>
