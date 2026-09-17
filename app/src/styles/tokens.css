@@ -49,7 +49,7 @@
 
   /* typography */
   --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
-  --mono: "Commit Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --mono: "CommitMono", "Commit Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --fs-0: 11px;
   --fs-1: 12px;
   --fs-2: 13px;
