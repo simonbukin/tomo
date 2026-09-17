@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight, File, Folder, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { rpc } from "./api";
+import { z } from "zod";
+import { rpc, rpcParsed } from "./api";
+import { agentSessionSchema, fsEntrySchema, processInfoSchema } from "./generated/schemas";
 import { openMenu } from "./MenuHost";
 import { Combobox, IconButton, plainTextInput, Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";
@@ -11,6 +13,7 @@ import { InspectorSection } from "./sections";
 import { failToast, formatBytes, useStore } from "./store";
 import { gitDetails, inspectorSections } from "./addons";
 import type { AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
+
 
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
   const section = useStore((s) => s.ui.rightSection);
@@ -102,7 +105,7 @@ function ProcessSection({ w }: { w: Worktree }) {
   const res = useStore((s) => s.resources[w.id]);
   const [procs, setProcs] = useState<ProcessInfo[]>([]);
   useEffect(() => {
-    const load = () => rpc<ProcessInfo[]>("ps", { worktree_id: w.id }).then((rows) => setProcs(Array.isArray(rows) ? rows : [])).catch(() => {});
+    const load = () => rpcParsed("ps", z.array(processInfoSchema), { worktree_id: w.id }).then(setProcs).catch(() => {});
     load();
     const t = window.setInterval(load, 3000);
     return () => window.clearInterval(t);
@@ -148,7 +151,7 @@ function SessionsSection({ w }: { w: Worktree }) {
   useEffect(() => {
     setItems(null);
     if (!w.exists) return;
-    const load = () => rpc<AgentSession[]>("session_list", { worktree_id: w.id, limit: 8 }).then(setItems).catch(() => setItems([]));
+    const load = () => rpcParsed("session_list", z.array(agentSessionSchema), { worktree_id: w.id, limit: 8 }).then(setItems).catch(() => setItems([]));
     load();
     const t = window.setInterval(load, 30_000);
     return () => window.clearInterval(t);
@@ -182,7 +185,7 @@ function FilesSection({ w }: { w: Worktree }) {
   const [selected, setSelected] = useState<string>("");
   const [dirs, setDirs] = useState<Record<string, FsEntry[]>>({});
   const [openDirs, setOpenDirs] = useState<Set<string>>(new Set([""]));
-  const load = (rel: string) => rpc<FsEntry[]>("fs_list", { worktree_id: w.id, rel_path: rel }).then((e) => setDirs((d) => ({ ...d, [rel]: e }))).catch(() => {});
+  const load = (rel: string) => rpcParsed("fs_list", z.array(fsEntrySchema), { worktree_id: w.id, rel_path: rel }).then((e) => setDirs((d) => ({ ...d, [rel]: e }))).catch(() => {});
   useEffect(() => {
     setDirs({});
     setOpenDirs(new Set([""]));

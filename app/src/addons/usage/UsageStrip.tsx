@@ -1,5 +1,7 @@
 import { resetsIn } from "../../activityModel";
-import { rpc } from "../../api";
+import { rpcParsed } from "../../api";
+import { usageSnapshotSchema } from "../../generated/schemas";
+import { z } from "zod";
 import type { UsageSnapshot } from "../../generated";
 import { HoverPopover } from "../../shell/HoverPopover";
 import { KIND_LABEL } from "../../types";
@@ -7,9 +9,7 @@ import { bucketTone, headlineBucket, microBar, percentText, resetShort, usageIss
 import { setUsage, useUsage } from "./state";
 
 function refreshUsage(): void {
-  rpc<UsageSnapshot[]>("usage_get", { refresh: true })
-    .then((list) => Array.isArray(list) && setUsage(list))
-    .catch(() => {});
+  rpcParsed("usage_get", z.array(usageSnapshotSchema), { refresh: true }).then(setUsage).catch(() => {});
 }
 
 function MicroBar({ fraction, width }: { fraction: number | null; width?: number }) {

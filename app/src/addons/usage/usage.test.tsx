@@ -10,7 +10,7 @@ const { refreshed } = vi.hoisted(() => ({
 }));
 
 const rpc = vi.fn((method: string, _params?: unknown) => Promise.resolve(method === "usage_get" ? refreshed : []));
-vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: (method: string, params?: unknown) => rpc(method, params) }));
+vi.mock("../../api", async (importOriginal) => (await import("../../test-api")).mockApi(await importOriginal<typeof import("../../api")>(), (method: string, params?: unknown) => rpc(method, params)));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(() => Promise.resolve("0.1.3")) }));
 
 const { BottomStrip } = await import("../../shell/BottomStrip");

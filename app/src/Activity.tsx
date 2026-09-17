@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { activityView } from "./activityKinds";
 import { groupByDay, mergeActivity, needsMeItem, payloadString, timeLabel } from "./activityModel";
 import { openEndpoint, resolveCheckpoint } from "./actions";
-import { rpc } from "./api";
+import { rpcParsed } from "./api";
+import { activityEventSchema } from "./generated/schemas";
+import { z } from "zod";
 import { SkeletonRows } from "./components/ui";
 import { activityEmptyText, type ActivityFilter as Filter } from "./emptyStates";
 import { GLYPH } from "./glyphs";
@@ -15,9 +17,7 @@ import { KIND_LABEL, type ActivityEvent } from "./types";
 const PAGE = 200;
 
 function load(beforeMs: number | null): Promise<ActivityEvent[]> {
-  return rpc<ActivityEvent[]>("activity_list", { limit: PAGE, before_ms: beforeMs, worktree_id: null, needs_me: false })
-    .then((list) => (Array.isArray(list) ? list : []))
-    .catch(() => []);
+  return rpcParsed("activity_list", z.array(activityEventSchema), { limit: PAGE, before_ms: beforeMs, worktree_id: null, needs_me: false }).catch(() => []);
 }
 
 /** Loads one page of activity into the store and reports how many events arrived. */

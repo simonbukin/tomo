@@ -1085,6 +1085,7 @@ mod bindings {
         Town::export_all(&cfg).unwrap();
         TownHistory::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
+        ProcessInfo::export_all(&cfg).unwrap();
         SpawnResult::export_all(&cfg).unwrap();
         MetadataPatch::export_all(&cfg).unwrap();
         WorktreeCreate::export_all(&cfg).unwrap();

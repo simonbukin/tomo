@@ -2,7 +2,8 @@ import { CircleHelp, Settings2 } from "lucide-react";
 import { useEffect } from "react";
 import { runAction } from "../actions";
 import { builtins } from "../addons";
-import { rpc } from "../api";
+import { rpcParsed } from "../api";
+import { systemStatsSchema } from "../generated/schemas";
 import { openSettings } from "../commands/settings";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
@@ -54,7 +55,7 @@ function SystemMetrics() {
   const nonce = useStore((s) => s.connectionNonce);
   useEffect(() => {
     if (!nonce) return;
-    rpc<SystemStats>("system_stats")
+    rpcParsed("system_stats", systemStatsSchema)
       .then((system) => system?.memory_total_bytes && setState({ system }))
       .catch(() => {});
   }, [nonce]);

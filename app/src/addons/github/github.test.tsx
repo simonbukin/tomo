@@ -4,7 +4,7 @@ import type { PullRequest } from "../../generated";
 import type { ActivityEvent, AgentPresence, Frame, Repo, Worktree } from "../../types";
 
 const replies = vi.hoisted(() => ({}) as Record<string, unknown>);
-vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: vi.fn((method: string) => Promise.resolve(replies[method] ?? null)) }));
+vi.mock("../../api", async (importOriginal) => (await import("../../test-api")).mockApi(await importOriginal<typeof import("../../api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null))));
 
 const { rpc } = await import("../../api");
 const { applyFrame, getState, setState } = await import("../../store");
