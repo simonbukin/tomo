@@ -43,7 +43,9 @@ pub fn answer(out: std::io::Result<Output>) -> PrStatusResult {
     match out {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => unavailable("gh is not installed"),
         Err(e) => unavailable(e.to_string()),
-        Ok(o) if o.status.success() => PrStatusResult { available: true, reason: None, pr: parse_pr(&serde_json::from_slice(&o.stdout).unwrap_or(Value::Null)) },
+        Ok(o) if o.status.success() => {
+            PrStatusResult { available: true, reason: None, pr: parse_pr(&serde_json::from_slice(&o.stdout).unwrap_or(Value::Null)) }
+        }
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
             if err.contains("no pull requests found") {
@@ -75,7 +77,11 @@ pub fn update<'a>(before: Option<&PrStatusResult>, after: &'a PrStatusResult) ->
 }
 
 pub fn merged_event(worktree_id: &str, pr: &PullRequest) -> ActivityEvent {
-    ActivityEvent { detail: Some(pr.title.clone()), payload: json!({ "number": pr.number, "url": pr.url }), ..activity::event(GitHubActivity::PrMerged, Some(worktree_id), format!("PR #{} merged", pr.number)) }
+    ActivityEvent {
+        detail: Some(pr.title.clone()),
+        payload: json!({ "number": pr.number, "url": pr.url }),
+        ..activity::event(GitHubActivity::PrMerged, Some(worktree_id), format!("PR #{} merged", pr.number))
+    }
 }
 
 /// A pull request link: the number, the URL, and the state.
@@ -104,7 +110,19 @@ mod tests {
     use tomo_proto::CoreActivity;
 
     fn pr(state: &str, fetched_at_ms: u64) -> PullRequest {
-        PullRequest { number: 3, title: "t".into(), url: "u".into(), state: state.into(), draft: false, review_decision: None, mergeable: None, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms }
+        PullRequest {
+            number: 3,
+            title: "t".into(),
+            url: "u".into(),
+            state: state.into(),
+            draft: false,
+            review_decision: None,
+            mergeable: None,
+            checks_passed: 0,
+            checks_failed: 0,
+            checks_pending: 0,
+            fetched_at_ms,
+        }
     }
 
     fn found(pr: Option<PullRequest>) -> PrStatusResult {
@@ -116,7 +134,18 @@ mod tests {
     }
 
     fn event(kind: impl Into<ActivityKind>, at: u64, payload: Value) -> ActivityEvent {
-        ActivityEvent { id: format!("e{at}"), kind: kind.into(), occurred_at_ms: at, worktree_id: Some("w1".into()), pane_id: None, agent_kind: None, title: String::new(), detail: None, payload, attention_id: None }
+        ActivityEvent {
+            id: format!("e{at}"),
+            kind: kind.into(),
+            occurred_at_ms: at,
+            worktree_id: Some("w1".into()),
+            pane_id: None,
+            agent_kind: None,
+            title: String::new(),
+            detail: None,
+            payload,
+            attention_id: None,
+        }
     }
 
     #[test]
@@ -174,7 +203,10 @@ mod tests {
     #[test]
     fn the_merge_event_names_the_pull_request() {
         let e = merged_event("w1", &PullRequest { number: 7, title: "Ship it".into(), url: "https://github.com/o/r/pull/7".into(), ..pr("merged", 1) });
-        assert_eq!((e.kind.as_str(), e.worktree_id.as_deref(), e.title.as_str(), e.detail.as_deref()), ("pr_merged", Some("w1"), "PR #7 merged", Some("Ship it")));
+        assert_eq!(
+            (e.kind.as_str(), e.worktree_id.as_deref(), e.title.as_str(), e.detail.as_deref()),
+            ("pr_merged", Some("w1"), "PR #7 merged", Some("Ship it"))
+        );
         assert_eq!(e.payload, json!({ "number": 7, "url": "https://github.com/o/r/pull/7" }));
     }
 

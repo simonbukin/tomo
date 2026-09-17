@@ -66,7 +66,15 @@ pub fn parse_session(path: &Path) -> Option<AgentSession> {
     if turns == 0 {
         return None;
     }
-    Some(AgentSession { kind: AgentKind::Claude, id, title: title.or(first_prompt), branch, updated_at_ms: super::modified_at_ms(path)?, turns, path: path.to_path_buf() })
+    Some(AgentSession {
+        kind: AgentKind::Claude,
+        id,
+        title: title.or(first_prompt),
+        branch,
+        updated_at_ms: super::modified_at_ms(path)?,
+        turns,
+        path: path.to_path_buf(),
+    })
 }
 
 fn write_launch_file(launch_dir: &Path, tomo_bin: &Path) -> Result<()> {

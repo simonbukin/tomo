@@ -1,0 +1,5 @@
+# This codebase is written wide: 99% of its lines already fit in 160 columns. `Max` lets a
+# struct literal, a call, or a chain stay on one line up to that width, instead of rustfmt's
+# defaults of 18, 60 and 60, which would break up lines that are already short enough to read.
+max_width = 160
+use_small_heuristics = "Max"

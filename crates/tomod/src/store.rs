@@ -13,7 +13,9 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
-use tomo_proto::{ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, PaneKind, WorktreeMetadata};
+use tomo_proto::{
+    ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, PaneKind, WorktreeMetadata,
+};
 
 pub struct Store {
     conn: Connection,
@@ -131,19 +133,15 @@ CREATE TABLE IF NOT EXISTS activity (
 CREATE INDEX IF NOT EXISTS activity_occurred_at ON activity(occurred_at_ms);
 "#;
 
-const META_COLUMNS: [(&str, &str); 4] = [
-    ("first_seen_ms", "INTEGER"),
-    ("archived_at_ms", "INTEGER"),
-    ("archived_branch", "TEXT"),
-    ("state", "TEXT"),
-];
+const META_COLUMNS: [(&str, &str); 4] = [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT")];
 
 const PANE_COLUMNS: [(&str, &str); 2] = [("kind", "TEXT"), ("url", "TEXT")];
 
 const ATTENTION_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("agent_kind", "TEXT"), ("resolved_at_ms", "INTEGER")];
 
 fn add_missing_columns(conn: &Connection, table: &str, columns: &[(&str, &str)]) -> Result<()> {
-    let existing: Vec<String> = conn.prepare(&format!("PRAGMA table_info({table})"))?.query_map([], |r| r.get::<_, String>(1))?.filter_map(|r| r.ok()).collect();
+    let existing: Vec<String> =
+        conn.prepare(&format!("PRAGMA table_info({table})"))?.query_map([], |r| r.get::<_, String>(1))?.filter_map(|r| r.ok()).collect();
     for (name, ty) in columns.iter().filter(|(n, _)| !existing.iter().any(|e| e == n)) {
         conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {name} {ty}"), [])?;
     }
@@ -180,7 +178,11 @@ fn pane_kind_str(k: PaneKind) -> &'static str {
 }
 
 fn parse_pane_kind(s: Option<String>) -> PaneKind {
-    if s.as_deref() == Some("browser") { PaneKind::Browser } else { PaneKind::Terminal }
+    if s.as_deref() == Some("browser") {
+        PaneKind::Browser
+    } else {
+        PaneKind::Terminal
+    }
 }
 
 fn level_str(l: AttentionLevel) -> &'static str {
@@ -191,7 +193,11 @@ fn level_str(l: AttentionLevel) -> &'static str {
 }
 
 fn parse_level(s: &str) -> AttentionLevel {
-    if s == "info" { AttentionLevel::Info } else { AttentionLevel::Attention }
+    if s == "info" {
+        AttentionLevel::Info
+    } else {
+        AttentionLevel::Attention
+    }
 }
 
 impl Store {
@@ -224,10 +230,7 @@ impl Store {
     }
 
     pub fn repo_add(&self, id: &str, path: &Path, now_ms: u64) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR IGNORE INTO repos (id, path, added_at_ms) VALUES (?1, ?2, ?3)",
-            params![id, path.to_string_lossy(), now_ms as i64],
-        )?;
+        self.conn.execute("INSERT OR IGNORE INTO repos (id, path, added_at_ms) VALUES (?1, ?2, ?3)", params![id, path.to_string_lossy(), now_ms as i64])?;
         Ok(())
     }
 
@@ -305,9 +308,7 @@ impl Store {
     }
 
     pub fn tabs(&self) -> Result<Vec<TabRow>> {
-        let mut st = self.conn.prepare(
-            "SELECT id, worktree_id, title, position, layout, active_pane_id, is_active FROM tabs ORDER BY position",
-        )?;
+        let mut st = self.conn.prepare("SELECT id, worktree_id, title, position, layout, active_pane_id, is_active FROM tabs ORDER BY position")?;
         let rows = st.query_map([], |r| {
             let layout: String = r.get(4)?;
             Ok((
@@ -335,15 +336,7 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET worktree_id=excluded.worktree_id, title=excluded.title, position=excluded.position,
                layout=excluded.layout, active_pane_id=excluded.active_pane_id, is_active=excluded.is_active",
-            params![
-                t.id,
-                t.worktree_id,
-                t.title,
-                t.position,
-                serde_json::to_string(&t.layout)?,
-                t.active_pane_id,
-                t.is_active as i64
-            ],
+            params![t.id, t.worktree_id, t.title, t.position, serde_json::to_string(&t.layout)?, t.active_pane_id, t.is_active as i64],
         )?;
         Ok(())
     }
@@ -354,9 +347,8 @@ impl Store {
     }
 
     pub fn panes(&self) -> Result<Vec<PaneRow>> {
-        let mut st = self.conn.prepare(
-            "SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url FROM panes",
-        )?;
+        let mut st =
+            self.conn.prepare("SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url FROM panes")?;
         let rows = st.query_map([], |r| {
             Ok(PaneRow {
                 id: r.get(0)?,
@@ -426,7 +418,8 @@ impl Store {
         Ok(())
     }
 
-    const ATTENTION_SELECT: &'static str = "SELECT id, worktree_id, pane_id, level, message, created_at_ms, viewed_at_ms, kind, url, agent_kind, resolved_at_ms FROM attention";
+    const ATTENTION_SELECT: &'static str =
+        "SELECT id, worktree_id, pane_id, level, message, created_at_ms, viewed_at_ms, kind, url, agent_kind, resolved_at_ms FROM attention";
 
     fn attention_row(r: &rusqlite::Row) -> rusqlite::Result<AttentionItem> {
         Ok(AttentionItem {
@@ -480,7 +473,10 @@ impl Store {
     }
 
     pub fn activity_trim(&self, keep: usize) -> Result<()> {
-        self.conn.execute("DELETE FROM activity WHERE rowid NOT IN (SELECT rowid FROM activity ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?1)", params![keep as i64])?;
+        self.conn.execute(
+            "DELETE FROM activity WHERE rowid NOT IN (SELECT rowid FROM activity ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?1)",
+            params![keep as i64],
+        )?;
         Ok(())
     }
 
@@ -512,7 +508,8 @@ impl Store {
              ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?4",
         )?;
         let waiting = serde_json::to_string(waiting_panes)?;
-        let rows = st.query_map(params![q.before_ms.map(|v| v as i64), q.worktree_id, q.needs_me as i64, q.limit.unwrap_or(100) as i64, waiting], Self::activity_row)?;
+        let rows =
+            st.query_map(params![q.before_ms.map(|v| v as i64), q.worktree_id, q.needs_me as i64, q.limit.unwrap_or(100) as i64, waiting], Self::activity_row)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
@@ -566,10 +563,7 @@ impl Store {
     }
 
     pub fn kv_set(&self, key: &str, value: &str) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO kv (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            params![key, value],
-        )?;
+        self.conn.execute("INSERT INTO kv (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![key, value])?;
         Ok(())
     }
 }
@@ -623,11 +617,34 @@ mod tests {
     }
 
     fn item(id: &str, kind: AttentionKind) -> AttentionItem {
-        AttentionItem { id: id.into(), worktree_id: "w".into(), pane_id: None, level: AttentionLevel::Attention, message: id.into(), created_at_ms: 1, viewed_at_ms: None, kind, url: None, agent_kind: None, resolved_at_ms: None }
+        AttentionItem {
+            id: id.into(),
+            worktree_id: "w".into(),
+            pane_id: None,
+            level: AttentionLevel::Attention,
+            message: id.into(),
+            created_at_ms: 1,
+            viewed_at_ms: None,
+            kind,
+            url: None,
+            agent_kind: None,
+            resolved_at_ms: None,
+        }
     }
 
     fn activity(id: &str, at: u64, kind: ActivityKind, attention_id: Option<&str>) -> ActivityEvent {
-        ActivityEvent { id: id.into(), kind, occurred_at_ms: at, worktree_id: Some("w".into()), pane_id: None, agent_kind: None, title: id.into(), detail: None, payload: serde_json::json!({ "port": 3000 }), attention_id: attention_id.map(String::from) }
+        ActivityEvent {
+            id: id.into(),
+            kind,
+            occurred_at_ms: at,
+            worktree_id: Some("w".into()),
+            pane_id: None,
+            agent_kind: None,
+            title: id.into(),
+            detail: None,
+            payload: serde_json::json!({ "port": 3000 }),
+            attention_id: attention_id.map(String::from),
+        }
     }
 
     #[test]
@@ -730,12 +747,14 @@ mod tests {
             ("crash-resolved", AttentionKind::Crash, None, Some(2), None, false),
         ];
         for (i, (id, attention_kind, viewed, resolved, _, _)) in cases.iter().enumerate() {
-            s.attention_insert(&AttentionItem { viewed_at_ms: *viewed, resolved_at_ms: *resolved, pane_id: Some(id.to_string()), ..item(id, *attention_kind) }).unwrap();
+            s.attention_insert(&AttentionItem { viewed_at_ms: *viewed, resolved_at_ms: *resolved, pane_id: Some(id.to_string()), ..item(id, *attention_kind) })
+                .unwrap();
             s.activity_insert(&activity(id, i as u64, kind(), Some(id))).unwrap();
         }
         s.activity_insert(&activity("orphan", 50, kind(), Some("missing"))).unwrap();
         let waiting_panes: Vec<Id> = cases.iter().filter(|c| c.4 == waits).map(|c| c.0.to_string()).collect();
-        let mut open: Vec<String> = s.activity_list(&ActivityQuery { needs_me: true, ..Default::default() }, &waiting_panes).unwrap().into_iter().map(|e| e.id).collect();
+        let mut open: Vec<String> =
+            s.activity_list(&ActivityQuery { needs_me: true, ..Default::default() }, &waiting_panes).unwrap().into_iter().map(|e| e.id).collect();
         open.sort();
         let mut expected: Vec<String> = cases.iter().filter(|c| c.5).map(|c| c.0.to_string()).collect();
         expected.sort();
@@ -769,7 +788,20 @@ mod tests {
     #[test]
     fn browser_pane_keeps_kind_and_url() {
         let s = Store::open_in_memory().unwrap();
-        let row = PaneRow { id: "p1".into(), tab_id: "t".into(), worktree_id: "w".into(), user_title: None, cwd: PathBuf::from("/tmp"), cols: 1, rows: 1, agent_kind: None, session_ref: None, created_at_ms: 1, kind: PaneKind::Browser, url: Some("http://localhost:1420/".into()) };
+        let row = PaneRow {
+            id: "p1".into(),
+            tab_id: "t".into(),
+            worktree_id: "w".into(),
+            user_title: None,
+            cwd: PathBuf::from("/tmp"),
+            cols: 1,
+            rows: 1,
+            agent_kind: None,
+            session_ref: None,
+            created_at_ms: 1,
+            kind: PaneKind::Browser,
+            url: Some("http://localhost:1420/".into()),
+        };
         s.pane_upsert(&row).unwrap();
         let back = s.panes().unwrap();
         assert_eq!((back[0].kind, back[0].url.as_deref()), (PaneKind::Browser, Some("http://localhost:1420/")));

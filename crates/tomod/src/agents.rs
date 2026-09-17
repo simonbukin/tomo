@@ -94,9 +94,15 @@ mod tests {
     #[test]
     fn torture_authority_battery() {
         let waiting = merge(None, &rep("p", Authority::Lifecycle, Some(AgentState::Waiting), 10_000), "w", Some(7)).unwrap();
-        assert!(merge(Some(&waiting), &rep("p", Authority::Heuristic, Some(AgentState::Working), 11_000), "w", Some(7)).is_none(), "heuristic must not beat fresh lifecycle");
+        assert!(
+            merge(Some(&waiting), &rep("p", Authority::Heuristic, Some(AgentState::Working), 11_000), "w", Some(7)).is_none(),
+            "heuristic must not beat fresh lifecycle"
+        );
         assert!(merge(Some(&waiting), &rep("p", Authority::Lifecycle, Some(AgentState::Idle), 9_000), "w", Some(7)).is_none(), "older lifecycle is ignored");
-        assert!(merge(Some(&waiting), &rep("p", Authority::Report, Some(AgentState::Idle), 12_000), "w", Some(7)).is_none(), "explicit report is weaker than lifecycle");
+        assert!(
+            merge(Some(&waiting), &rep("p", Authority::Report, Some(AgentState::Idle), 12_000), "w", Some(7)).is_none(),
+            "explicit report is weaker than lifecycle"
+        );
         let stale = merge(Some(&waiting), &rep("p", Authority::Heuristic, Some(AgentState::Working), 10_000 + STALE_MS + 1), "w", Some(7)).unwrap();
         assert_eq!((stale.state, stale.authority), (AgentState::Working, Authority::Heuristic), "silent lifecycle yields to heuristic");
         let back = merge(Some(&stale), &rep("p", Authority::Lifecycle, Some(AgentState::Idle), 10_000 + STALE_MS + 2), "w", Some(7)).unwrap();

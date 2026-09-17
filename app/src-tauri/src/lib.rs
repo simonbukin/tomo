@@ -142,7 +142,13 @@ async fn connect_loop(app: AppHandle) {
                 attempts += 1;
             }
         }
-        let wait = if attempts == 0 { 300 } else if attempts < 80 { 25 } else { 250 };
+        let wait = if attempts == 0 {
+            300
+        } else if attempts < 80 {
+            25
+        } else {
+            250
+        };
         tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
     }
 }
@@ -238,7 +244,9 @@ mod tests {
     fn the_browser_host_does_not_name_agentation() {
         let hits: Vec<(&str, &str)> = [("browser.rs", include_str!("browser.rs")), ("main.rs", include_str!("main.rs"))]
             .into_iter()
-            .flat_map(|(file, text)| ["agentation", "annotat", "feedback"].into_iter().filter(move |noun| text.to_lowercase().contains(noun)).map(move |noun| (file, noun)))
+            .flat_map(|(file, text)| {
+                ["agentation", "annotat", "feedback"].into_iter().filter(move |noun| text.to_lowercase().contains(noun)).map(move |noun| (file, noun))
+            })
             .collect();
         assert!(hits.is_empty(), "the browser host names agentation: {hits:?}");
     }

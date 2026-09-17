@@ -105,15 +105,15 @@ fn editor_argv(editor: &[String], path: &Path) -> Vec<String> {
 
 fn watched_dirs(config_path: &Path) -> Vec<PathBuf> {
     let real = std::fs::canonicalize(config_path).ok();
-    [config_path.parent().map(Path::to_path_buf), real.as_deref().and_then(Path::parent).map(Path::to_path_buf)]
-        .into_iter()
-        .flatten()
-        .fold(Vec::new(), |mut dirs, d| {
+    [config_path.parent().map(Path::to_path_buf), real.as_deref().and_then(Path::parent).map(Path::to_path_buf)].into_iter().flatten().fold(
+        Vec::new(),
+        |mut dirs, d| {
             if !dirs.contains(&d) {
                 dirs.push(d);
             }
             dirs
-        })
+        },
+    )
 }
 
 /// Reloads config.toml when the file changes on disk, so theme and font edits apply without a restart.

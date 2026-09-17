@@ -114,18 +114,38 @@ mod tests {
     }
 
     fn event(kind: impl Into<ActivityKind>, at: u64, payload: serde_json::Value) -> ActivityEvent {
-        ActivityEvent { id: format!("e{at}"), kind: kind.into(), occurred_at_ms: at, worktree_id: Some("w1".into()), pane_id: None, agent_kind: None, title: String::new(), detail: None, payload, attention_id: None }
+        ActivityEvent {
+            id: format!("e{at}"),
+            kind: kind.into(),
+            occurred_at_ms: at,
+            worktree_id: Some("w1".into()),
+            pane_id: None,
+            agent_kind: None,
+            title: String::new(),
+            detail: None,
+            payload,
+            attention_id: None,
+        }
     }
 
     fn facts(archived_at_ms: Option<u64>) -> WorktreeFacts {
-        WorktreeFacts { name: "Aogashima".into(), branch: Some("feat/labor".into()), head: if archived_at_ms.is_some() { String::new() } else { "abc1234".into() }, exists: archived_at_ms.is_none(), archived_at_ms }
+        WorktreeFacts {
+            name: "Aogashima".into(),
+            branch: Some("feat/labor".into()),
+            head: if archived_at_ms.is_some() { String::new() } else { "abc1234".into() },
+            exists: archived_at_ms.is_none(),
+            archived_at_ms,
+        }
     }
 
     #[test]
     fn history_of_an_active_town_uses_the_live_head() {
         let h = history(unlock(), Some("tomo".into()), Some(facts(None)), &[], None);
         assert_eq!(h.status, TownWorktreeStatus::Active);
-        assert_eq!((h.branch.as_deref(), h.final_commit.as_deref(), h.repo_name.as_deref(), h.worktree_name.as_deref()), (Some("feat/labor"), Some("abc1234"), Some("tomo"), Some("Aogashima")));
+        assert_eq!(
+            (h.branch.as_deref(), h.final_commit.as_deref(), h.repo_name.as_deref(), h.worktree_name.as_deref()),
+            (Some("feat/labor"), Some("abc1234"), Some("tomo"), Some("Aogashima"))
+        );
         assert_eq!((h.archived_at_ms, h.pr), (None, None));
     }
 

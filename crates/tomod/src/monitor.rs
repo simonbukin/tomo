@@ -38,7 +38,8 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
         let Some(root_pid) = inner.panes.get(&pane_id).filter(|p| p.exit_code.is_none()).and_then(|p| p.pty.as_ref()).map(|p| p.pid) else { continue };
         let Some(&root_idx) = by_pid.get(&root_pid) else { continue };
         let cwd = inner.proc_rows[root_idx].cwd.clone();
-        let newest = index.get(&root_pid).and_then(|kids| kids.iter().filter_map(|k| by_pid.get(k)).map(|&i| &inner.proc_rows[i]).max_by_key(|r| r.start_time_s));
+        let newest =
+            index.get(&root_pid).and_then(|kids| kids.iter().filter_map(|k| by_pid.get(k)).map(|&i| &inner.proc_rows[i]).max_by_key(|r| r.start_time_s));
         let title = newest.map(|r| r.name.clone());
         let cmd = newest.map(|r| r.cmd.chars().take(200).collect::<String>());
         let mut changed = false;
@@ -66,7 +67,11 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
         }
 
         let descendants = procs::descendants(&inner.proc_rows, root_pid);
-        let agent_proc = descendants.iter().filter_map(|pid| by_pid.get(pid)).map(|&i| &inner.proc_rows[i]).find_map(|r| crate::providers::detect(&r.name, &r.cmd).map(|k| (k, r.pid)));
+        let agent_proc = descendants
+            .iter()
+            .filter_map(|pid| by_pid.get(pid))
+            .map(|&i| &inner.proc_rows[i])
+            .find_map(|r| crate::providers::detect(&r.name, &r.cmd).map(|k| (k, r.pid)));
         match agent_proc {
             Some((kind, pid)) => {
                 let subtree_cpu: f32 = std::iter::once(pid)
@@ -82,7 +87,14 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                 let gone = inner.agents.get(&pane_id).map_or(false, |a| a.pid.is_some() && a.state != AgentState::Exited);
                 if gone {
                     let kind = inner.agents[&pane_id].kind;
-                    let report = AgentReport { pane_id: pane_id.clone(), kind, state: Some(AgentState::Exited), session_ref: None, authority: Authority::Lifecycle, at_ms: now };
+                    let report = AgentReport {
+                        pane_id: pane_id.clone(),
+                        kind,
+                        state: Some(AgentState::Exited),
+                        session_ref: None,
+                        authority: Authority::Lifecycle,
+                        at_ms: now,
+                    };
                     Daemon::apply_report(inner, &report, None);
                 }
             }
@@ -91,7 +103,12 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
 
     let resources = procs::worktrees_by_weight(&classify_all(inner));
     let changed = resources.len() != inner.resources.len()
-        || resources.iter().zip(&inner.resources).any(|(a, b)| a.worktree_id != b.worktree_id || a.rss_bytes.abs_diff(b.rss_bytes) > 8 * 1024 * 1024 || (a.cpu_percent - b.cpu_percent).abs() > 2.0 || a.process_count != b.process_count);
+        || resources.iter().zip(&inner.resources).any(|(a, b)| {
+            a.worktree_id != b.worktree_id
+                || a.rss_bytes.abs_diff(b.rss_bytes) > 8 * 1024 * 1024
+                || (a.cpu_percent - b.cpu_percent).abs() > 2.0
+                || a.process_count != b.process_count
+        });
     inner.resources = resources;
     if changed {
         let snapshot = inner.resources.clone();

@@ -1,13 +1,13 @@
 use crate::activity;
 use crate::agents;
 use crate::config::{self, Paths};
+use crate::events;
+use crate::features::{editor, reopen};
 use crate::git;
 use crate::layout;
 use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::providers;
 use crate::pty::{PtySession, Scrollback, Spawn};
-use crate::events;
-use crate::features::{editor, reopen};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -436,12 +436,8 @@ impl Daemon {
     }
 
     pub fn pane_views(inner: &Inner, worktree_id: Option<&str>) -> Vec<Pane> {
-        let mut panes: Vec<Pane> = inner
-            .panes
-            .keys()
-            .filter_map(|id| Self::pane_view(inner, id))
-            .filter(|p| worktree_id.map_or(true, |w| p.worktree_id == w))
-            .collect();
+        let mut panes: Vec<Pane> =
+            inner.panes.keys().filter_map(|id| Self::pane_view(inner, id)).filter(|p| worktree_id.map_or(true, |w| p.worktree_id == w)).collect();
         panes.sort_by_key(|p| p.created_at_ms);
         panes
     }
@@ -528,7 +524,9 @@ impl Daemon {
                     archived_at_ms: None,
                     archived_branch: None,
                 };
-                let needs_write = existing.as_ref().map_or(true, |m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id || m.first_seen_ms.is_none() || m.archived_at_ms.is_some());
+                let needs_write = existing
+                    .as_ref()
+                    .map_or(true, |m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id || m.first_seen_ms.is_none() || m.archived_at_ms.is_some());
                 if needs_write {
                     inner.store.meta_upsert(&row)?;
                 }
@@ -602,7 +600,8 @@ impl Daemon {
     /// Types `text` into the live agent of a pane as one bracketed paste, then submits it. Returns the agent and the pane for a hook.
     pub fn paste_to_agent(inner: &Inner, pane_id: &str, text: &str) -> Result<(AgentPresence, HookPane), RpcError> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-        let agent = inner.agents.get(pane_id).filter(|a| a.state != AgentState::Exited).cloned().ok_or_else(|| err(ErrorCode::BadRequest, "pane has no live agent"))?;
+        let agent =
+            inner.agents.get(pane_id).filter(|a| a.state != AgentState::Exited).cloned().ok_or_else(|| err(ErrorCode::BadRequest, "pane has no live agent"))?;
         let pty = pane.pty.clone().filter(|_| pane.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "agent pane is not live"))?;
         pty.write(pasted(text).as_bytes()).map_err(internal)?;
         Ok((agent, HookPane { id: pane.row.id.clone(), tab_id: pane.row.tab_id.clone(), cwd: pane.row.cwd.clone() }))
@@ -704,11 +703,7 @@ impl Daemon {
 
     pub fn resolve_worktree(worktrees: &HashMap<Id, WorktreeState>, path: &Path) -> Option<Id> {
         let path = canonical(path);
-        worktrees
-            .values()
-            .filter(|w| path.starts_with(&w.path))
-            .max_by_key(|w| w.path.as_os_str().len())
-            .map(|w| w.id.clone())
+        worktrees.values().filter(|w| path.starts_with(&w.path)).max_by_key(|w| w.path.as_os_str().len()).map(|w| w.id.clone())
     }
 
     pub(crate) fn touch(inner: &mut Inner, worktree_id: &str) {
@@ -742,10 +737,7 @@ impl Daemon {
     /// Variables that mark a process as nested inside another agent or Tomo pane.
     /// A shell started by Tomo must not inherit them from however tomod was launched.
     fn inherited_env_to_remove() -> Vec<String> {
-        std::env::vars()
-            .map(|(k, _)| k)
-            .filter(|k| k.starts_with("TOMO_") || k.starts_with("ORCA_") || providers::marks_nested_agent(k))
-            .collect()
+        std::env::vars().map(|(k, _)| k).filter(|k| k.starts_with("TOMO_") || k.starts_with("ORCA_") || providers::marks_nested_agent(k)).collect()
     }
 
     fn start_pty(self: &Arc<Self>, inner: &mut Inner, pane_id: &str, command: Option<&[String]>) -> Result<()> {
@@ -845,7 +837,13 @@ impl Daemon {
         let mut inner = self.lock();
         let Some(pane) = inner.panes.get_mut(pane_id) else { return };
         pane.exit_code = Some(code.unwrap_or(-1));
-        let exit = PaneExit { pane_id: pane_id.to_string(), worktree_id: pane.row.worktree_id.clone(), source: pane.source.clone(), exit_code: code, stop_intent: pane.stop_intent };
+        let exit = PaneExit {
+            pane_id: pane_id.to_string(),
+            worktree_id: pane.row.worktree_id.clone(),
+            source: pane.source.clone(),
+            exit_code: code,
+            stop_intent: pane.stop_intent,
+        };
         let worktree_id = exit.worktree_id.clone();
         Self::emit(&mut inner, Event::PaneExited { pane_id: pane_id.to_string(), exit_code: code });
         for seam in &self.seams.pane_exited {
@@ -973,7 +971,19 @@ impl Daemon {
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line, last_output_ms: 0, scrollback: Scrollback::default(), stop_intent: false, source: None },
+            PaneState {
+                row,
+                pty: None,
+                origin,
+                exit_code: None,
+                process_title: None,
+                process_cmd: None,
+                pending_line,
+                last_output_ms: 0,
+                scrollback: Scrollback::default(),
+                stop_intent: false,
+                source: None,
+            },
         );
         if let Some(kind) = agent_kind {
             let presence = AgentPresence {
@@ -1054,8 +1064,13 @@ impl Daemon {
         title: Option<String>,
         agent: Option<(AgentKind, Option<String>, String)>,
     ) -> Result<(Id, Id), RpcError> {
-        let crowded = |inner: &Inner, t: &str| inner.tabs.get(t).map_or(false, |tab| layout::pane_ids(&tab.layout).len() >= inner.config.max_panes_per_tab as usize);
-        let tab_id = match tab_id.map(str::to_string).or_else(|| split_from.and_then(|p| inner.panes.get(p)).map(|p| p.row.tab_id.clone())).or_else(|| Self::active_tab(inner, worktree_id)) {
+        let crowded =
+            |inner: &Inner, t: &str| inner.tabs.get(t).map_or(false, |tab| layout::pane_ids(&tab.layout).len() >= inner.config.max_panes_per_tab as usize);
+        let tab_id = match tab_id
+            .map(str::to_string)
+            .or_else(|| split_from.and_then(|p| inner.panes.get(p)).map(|p| p.row.tab_id.clone()))
+            .or_else(|| Self::active_tab(inner, worktree_id))
+        {
             Some(t) if inner.tabs.contains_key(&t) && !(tab_id.is_none() && split_from.is_none() && crowded(inner, &t)) => t,
             _ => Self::create_tab(inner, worktree_id, None).id,
         };
@@ -1120,13 +1135,26 @@ impl Daemon {
             }
             inner.panes.insert(
                 row.id.clone(),
-                PaneState { row: row.clone(), pty: None, origin, exit_code: None, process_title: None, process_cmd: None, pending_line: pending, last_output_ms: 0, scrollback, stop_intent: false, source: None },
+                PaneState {
+                    row: row.clone(),
+                    pty: None,
+                    origin,
+                    exit_code: None,
+                    process_title: None,
+                    process_cmd: None,
+                    pending_line: pending,
+                    last_output_ms: 0,
+                    scrollback,
+                    stop_intent: false,
+                    source: None,
+                },
             );
             if let Err(e) = self.start_pty(&mut inner, &row.id, None) {
                 tracing::warn!("restore pane {}: {e}", row.id);
             }
         }
-        let empty_tabs: Vec<Id> = inner.tabs.values().filter(|t| layout::pane_ids(&t.layout).iter().all(|p| !inner.panes.contains_key(p))).map(|t| t.id.clone()).collect();
+        let empty_tabs: Vec<Id> =
+            inner.tabs.values().filter(|t| layout::pane_ids(&t.layout).iter().all(|p| !inner.panes.contains_key(p))).map(|t| t.id.clone()).collect();
         for id in empty_tabs {
             inner.tabs.remove(&id);
             let _ = inner.store.tab_delete(&id);
@@ -1196,8 +1224,10 @@ impl Daemon {
             inner.hook_queue.push(ev);
         }
         if next.state == AgentState::Waiting && previous != Some(AgentState::Waiting) {
-            let attention_id = Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, format!("{} is waiting for you", next.kind.label()));
-            let repeat = Self::recorded_recently(inner, CoreActivity::AgentWaiting, activity::WAITING_REPEAT_MS, |a| a.pane_id.as_deref() == Some(&report.pane_id));
+            let attention_id =
+                Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, format!("{} is waiting for you", next.kind.label()));
+            let repeat =
+                Self::recorded_recently(inner, CoreActivity::AgentWaiting, activity::WAITING_REPEAT_MS, |a| a.pane_id.as_deref() == Some(&report.pane_id));
             if !repeat {
                 let mut ev = Self::agent_event(CoreActivity::AgentWaiting, &next, "is waiting for you");
                 ev.attention_id = attention_id;
@@ -1364,7 +1394,15 @@ impl Daemon {
         }
     }
 
-    async fn archive_steps(self: &Arc<Self>, worktree_id: &str, path: &Path, repo_path: &Path, branch: &str, event: HookEvent, checkpoint: CheckpointMode) -> Result<ArchiveResult, RpcError> {
+    async fn archive_steps(
+        self: &Arc<Self>,
+        worktree_id: &str,
+        path: &Path,
+        repo_path: &Path,
+        branch: &str,
+        event: HookEvent,
+        checkpoint: CheckpointMode,
+    ) -> Result<ArchiveResult, RpcError> {
         if let Err(run) = self.gate(event).await {
             return Err(err(ErrorCode::Aborted, format!("before_archive hook refused ({}): {}", run.command, run.output_tail.lines().last().unwrap_or(""))));
         }
@@ -1484,7 +1522,11 @@ impl Daemon {
         }
         let mut inner = self.lock();
         let pane = spec.pane_id.as_deref().and_then(|p| inner.panes.get(p)).map(|p| (p.row.id.clone(), p.row.worktree_id.clone()));
-        let worktree_id = spec.worktree_id.clone().or_else(|| pane.as_ref().map(|(_, w)| w.clone())).ok_or_else(|| err(ErrorCode::BadRequest, "pane_id or worktree_id required"))?;
+        let worktree_id = spec
+            .worktree_id
+            .clone()
+            .or_else(|| pane.as_ref().map(|(_, w)| w.clone()))
+            .ok_or_else(|| err(ErrorCode::BadRequest, "pane_id or worktree_id required"))?;
         if !inner.worktrees.contains_key(&worktree_id) {
             return Err(err(ErrorCode::NotFound, "worktree not found"));
         }
@@ -1566,7 +1608,10 @@ impl Daemon {
             Err(e) if target == ExternalTarget::Editor => {
                 let _ = std::process::Command::new("open").arg(&path).spawn();
                 let mut inner = self.lock();
-                Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{} not found ({e}); opened with the default app instead", argv[0]) });
+                Self::emit(
+                    &mut inner,
+                    Event::Notice { level: NoticeLevel::Warning, message: format!("{} not found ({e}); opened with the default app instead", argv[0]) },
+                );
                 Ok(Value::Null)
             }
             Err(e) => Err(err(ErrorCode::Io, format!("{}: {e}", argv[0]))),
@@ -1584,7 +1629,11 @@ impl Daemon {
                 let meta = e.metadata().ok();
                 let name = e.file_name().to_string_lossy().into_owned();
                 let rel = if rel_path.is_empty() { name.clone() } else { format!("{}/{}", rel_path.trim_end_matches('/'), name) };
-                let modified_ms = meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+                let modified_ms = meta
+                    .as_ref()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_millis() as u64);
                 FsEntry { is_dir: meta.as_ref().map_or(false, |m| m.is_dir()), size: meta.map_or(0, |m| m.len()), modified_ms, name, rel_path: rel }
             })
             .collect();
@@ -1641,7 +1690,11 @@ impl Daemon {
             None,
             Some((spec.kind, plan.session_ref, line)),
         )?;
-        ok(SpawnResult { pane: Self::pane_of(&inner, &pane_id)?, tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
+        ok(SpawnResult {
+            pane: Self::pane_of(&inner, &pane_id)?,
+            tab: Self::tab_view(&inner, &inner.tabs[&tab_id]),
+            agent: inner.agents.get(&pane_id).cloned(),
+        })
     }
 
     async fn pane_kill_tree(self: &Arc<Self>, pane_id: Id) -> Result<Value, RpcError> {
@@ -1657,7 +1710,8 @@ impl Daemon {
     async fn pane_attach(self: &Arc<Self>, client_id: u64, pane_id: Id) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         Self::terminal_only(&inner, &pane_id)?;
-        let snapshot = crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
+        let snapshot =
+            crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
         let view = Self::pane_view(&inner, &pane_id);
         if let Some(c) = inner.clients.get_mut(&client_id) {
             c.attached.insert(pane_id.clone());
@@ -1887,7 +1941,12 @@ impl Daemon {
         }
         let ev = events::envelope(&inner, "worktree.created", Some(&id));
         inner.hook_queue.push(ev);
-        inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
+        inner
+            .worktrees
+            .get(&id)
+            .map(|w| Self::worktree_view(&inner, w))
+            .ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered"))
+            .and_then(ok)
     }
 
     async fn repo_remove(self: &Arc<Self>, repo_id: Id) -> Result<Value, RpcError> {
@@ -1934,7 +1993,9 @@ impl Daemon {
     async fn layout_rotate(self: &Arc<Self>, tab_id: Id, split_id: Option<Id>) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
-        let target = split_id.or_else(|| tab.active_pane_id.as_deref().and_then(|p| layout::split_of(&tab.layout, p))).ok_or_else(|| err(ErrorCode::BadRequest, "tab has no split to rotate"))?;
+        let target = split_id
+            .or_else(|| tab.active_pane_id.as_deref().and_then(|p| layout::split_of(&tab.layout, p)))
+            .ok_or_else(|| err(ErrorCode::BadRequest, "tab has no split to rotate"))?;
         tab.layout = layout::rotate(&tab.layout, &target);
         let tab = tab.clone();
         inner.store.tab_upsert(&tab).map_err(internal)?;
@@ -2030,7 +2091,8 @@ impl Daemon {
             Call::WorktreeOpen { worktree_id } => self.worktree_open(worktree_id).await,
             Call::WorktreeResolve { path } => {
                 let inner = self.lock();
-                let id = Self::resolve_worktree(&inner.worktrees, &path).ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", path.display())))?;
+                let id = Self::resolve_worktree(&inner.worktrees, &path)
+                    .ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", path.display())))?;
                 ok(Self::worktree_view(&inner, &inner.worktrees[&id]))
             }
             Call::MetadataGet { worktree_id } => {
@@ -2083,7 +2145,17 @@ impl Daemon {
             Call::PaneCreate(spec) => {
                 let mut inner = self.lock();
                 let (worktree_id, cwd) = Self::worktree_for_spawn(&inner.worktrees, spec.worktree_id.as_deref(), spec.cwd.as_deref())?;
-                let (tab_id, pane_id) = self.spawn_in_worktree(&mut inner, &worktree_id, cwd, spec.tab_id.as_deref(), None, SplitDirection::Horizontal, spec.command.as_deref(), spec.title, None)?;
+                let (tab_id, pane_id) = self.spawn_in_worktree(
+                    &mut inner,
+                    &worktree_id,
+                    cwd,
+                    spec.tab_id.as_deref(),
+                    None,
+                    SplitDirection::Horizontal,
+                    spec.command.as_deref(),
+                    spec.title,
+                    None,
+                )?;
                 ok(Self::pane_result(&inner, &pane_id, &tab_id)?)
             }
             Call::PaneSplit { pane_id, direction, command } => {
@@ -2092,7 +2164,8 @@ impl Daemon {
                     let p = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
                     (p.row.worktree_id.clone(), p.row.cwd.clone())
                 };
-                let (tab_id, new_id) = self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, Some(&pane_id), direction, command.as_deref(), None, None)?;
+                let (tab_id, new_id) =
+                    self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, Some(&pane_id), direction, command.as_deref(), None, None)?;
                 ok(Self::pane_result(&inner, &new_id, &tab_id)?)
             }
             Call::PaneClose { pane_id, force } => self.pane_close(pane_id, force).await,
@@ -2124,7 +2197,8 @@ impl Daemon {
             Call::PaneKillTree { pane_id } => self.pane_kill_tree(pane_id).await,
             Call::AgentList { worktree_id } => {
                 let inner = self.lock();
-                let mut agents: Vec<AgentPresence> = inner.agents.values().filter(|a| worktree_id.as_deref().map_or(true, |w| a.worktree_id == w)).cloned().collect();
+                let mut agents: Vec<AgentPresence> =
+                    inner.agents.values().filter(|a| worktree_id.as_deref().map_or(true, |w| a.worktree_id == w)).cloned().collect();
                 agents.sort_by(|a, b| (&a.worktree_id, &a.pane_id).cmp(&(&b.worktree_id, &b.pane_id)));
                 ok(agents)
             }
@@ -2135,7 +2209,11 @@ impl Daemon {
                 if !inner.panes.contains_key(&pane_id) {
                     return Ok(Value::Null);
                 }
-                Self::apply_report(&mut inner, &AgentReport { pane_id, kind, state: outcome.state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms }, None);
+                Self::apply_report(
+                    &mut inner,
+                    &AgentReport { pane_id, kind, state: outcome.state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
+                    None,
+                );
                 Ok(Value::Null)
             }
             Call::AgentReport(report) => {
@@ -2191,7 +2269,9 @@ impl Daemon {
             Call::SessionList { worktree_id, limit } => {
                 let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
                 let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;
-                let list = tokio::task::spawn_blocking(move || providers::sessions(&home, &cwd, limit.unwrap_or(20))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+                let list = tokio::task::spawn_blocking(move || providers::sessions(&home, &cwd, limit.unwrap_or(20)))
+                    .await
+                    .map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 ok(list)
             }
             Call::DiagnosticsList { limit } => {
@@ -2284,15 +2364,8 @@ pub struct RestoreTarget {
 }
 
 pub fn restore_target(w: &WorktreeState, repos: &[Repo], row: &MetaRow) -> Result<RestoreTarget, RpcError> {
-    let branch = row
-        .archived_branch
-        .clone()
-        .ok_or_else(|| err(ErrorCode::BadRequest, "worktree is not archived or has no branch to restore"))?;
-    let repo_path = repos
-        .iter()
-        .find(|r| r.id == w.repo_id)
-        .map(|r| r.path.clone())
-        .ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+    let branch = row.archived_branch.clone().ok_or_else(|| err(ErrorCode::BadRequest, "worktree is not archived or has no branch to restore"))?;
+    let repo_path = repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
     Ok(RestoreTarget { path: w.path.clone(), repo_path, branch })
 }
 
@@ -2306,11 +2379,7 @@ pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>
     if archiving.contains(&w.id) {
         return Err(err(ErrorCode::Conflict, "worktree is already being archived"));
     }
-    let repo_path = repos
-        .iter()
-        .find(|r| r.id == w.repo_id)
-        .map(|r| r.path.clone())
-        .ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+    let repo_path = repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
     Ok(ArchiveTarget { path: w.path.clone(), repo_path, branch: w.branch.clone().unwrap_or_default(), head: w.head.clone() })
 }
 

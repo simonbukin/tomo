@@ -48,7 +48,13 @@ pub async fn run(daemon: Arc<Daemon>) {
             let inner = daemon.lock();
             (
                 inner.repos.iter().filter(|r| r.exists).map(|r| r.path.join(".git")).collect(),
-                inner.worktrees.values().filter(|w| w.exists).map(|w| w.path.clone()).chain(inner.repos.iter().filter(|r| r.exists).map(|r| r.path.clone())).collect(),
+                inner
+                    .worktrees
+                    .values()
+                    .filter(|w| w.exists)
+                    .map(|w| w.path.clone())
+                    .chain(inner.repos.iter().filter(|r| r.exists).map(|r| r.path.clone()))
+                    .collect(),
             )
         };
         for (dir, mode) in repo_dirs.into_iter().map(|d| (d, RecursiveMode::Recursive)).chain(flat_dirs.into_iter().map(|d| (d, RecursiveMode::NonRecursive))) {

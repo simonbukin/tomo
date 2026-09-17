@@ -114,7 +114,11 @@ fn discovered(e: &RuntimeEndpoint) -> ActivityEvent {
         pane_id: e.pane_id.clone(),
         detail: Some(format!("{}:{}", e.host, e.port)),
         payload: json!({ "port": e.port, "host": e.host, "pid": e.pid, "action_id": e.action_id, "endpoint_id": e.id }),
-        ..activity::event(RuntimeActivity::EndpointDiscovered, Some(&e.worktree_id), format!("{} listens on {}", e.label.clone().unwrap_or_else(|| e.process.clone()), e.port))
+        ..activity::event(
+            RuntimeActivity::EndpointDiscovered,
+            Some(&e.worktree_id),
+            format!("{} listens on {}", e.label.clone().unwrap_or_else(|| e.process.clone()), e.port),
+        )
     }
 }
 
@@ -126,7 +130,9 @@ pub fn remember(inner: &mut Inner, observed: Vec<RuntimeEndpoint>, now: u64) -> 
     for e in &added {
         let ev = hook(inner, "runtime.endpoint_discovered", e);
         inner.hook_queue.push(ev);
-        let repeat = Daemon::recorded_recently(inner, RuntimeActivity::EndpointDiscovered, ENDPOINT_REPEAT_MS, |a| a.worktree_id.as_deref() == Some(e.worktree_id.as_str()) && a.payload["port"] == e.port);
+        let repeat = Daemon::recorded_recently(inner, RuntimeActivity::EndpointDiscovered, ENDPOINT_REPEAT_MS, |a| {
+            a.worktree_id.as_deref() == Some(e.worktree_id.as_str()) && a.payload["port"] == e.port
+        });
         if !repeat {
             Daemon::record(inner, discovered(e));
         }

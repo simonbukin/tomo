@@ -23,7 +23,8 @@ pub fn migrate(store: &Store) -> anyhow::Result<()> {
 
 fn unlocks(store: &Store) -> anyhow::Result<Vec<TownUnlock>> {
     let mut st = store.conn().prepare("SELECT slug, worktree_id, repo_id, unlocked_at_ms FROM towns ORDER BY unlocked_at_ms")?;
-    let rows = st.query_map([], |r| Ok(TownUnlock { slug: r.get(0)?, worktree_id: r.get(1)?, repo_id: r.get(2)?, unlocked_at_ms: r.get::<_, i64>(3)? as u64 }))?;
+    let rows =
+        st.query_map([], |r| Ok(TownUnlock { slug: r.get(0)?, worktree_id: r.get(1)?, repo_id: r.get(2)?, unlocked_at_ms: r.get::<_, i64>(3)? as u64 }))?;
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
@@ -43,7 +44,9 @@ fn insert(store: &Store, u: &TownUnlock) -> anyhow::Result<()> {
 pub fn name_worktree(store: &Store, spec: &WorktreeCreate) -> Result<Option<String>, RpcError> {
     let unlocked = unlocked_slugs(store)?;
     let town = match &spec.name_hint {
-        Some(slug) => model::find(slug).filter(|t| !unlocked.contains(&t.slug)).ok_or_else(|| err(ErrorCode::BadRequest, format!("town {slug} is unknown or already unlocked")))?,
+        Some(slug) => model::find(slug)
+            .filter(|t| !unlocked.contains(&t.slug))
+            .ok_or_else(|| err(ErrorCode::BadRequest, format!("town {slug} is unknown or already unlocked")))?,
         None => model::pick(&unlocked).ok_or_else(|| err(ErrorCode::Conflict, "every town is unlocked; pass a path"))?,
     };
     Ok(Some(town.slug.clone()))
@@ -87,10 +90,23 @@ pub fn pick(daemon: &Daemon) -> Result<Value, RpcError> {
 /// `pr` finds the pull request of the unlocking worktree from its id and its activity. The composition root supplies it.
 pub fn history(daemon: &Daemon, slug: &str, pr: fn(&Inner, &str, &[ActivityEvent]) -> Option<TownPr>) -> Result<Value, RpcError> {
     let inner = daemon.lock();
-    let unlock = unlocks(&inner.store).map_err(internal)?.into_iter().find(|u| u.slug == slug).ok_or_else(|| err(ErrorCode::NotFound, format!("town {slug} is not unlocked")))?;
-    let events = inner.store.activity_list(&ActivityQuery { limit: Some(1000), worktree_id: Some(unlock.worktree_id.clone()), ..Default::default() }, &[]).map_err(internal)?;
+    let unlock = unlocks(&inner.store)
+        .map_err(internal)?
+        .into_iter()
+        .find(|u| u.slug == slug)
+        .ok_or_else(|| err(ErrorCode::NotFound, format!("town {slug} is not unlocked")))?;
+    let events = inner
+        .store
+        .activity_list(&ActivityQuery { limit: Some(1000), worktree_id: Some(unlock.worktree_id.clone()), ..Default::default() }, &[])
+        .map_err(internal)?;
     let repo_name = inner.repos.iter().find(|r| r.id == unlock.repo_id).map(|r| r.name.clone());
-    let worktree = inner.worktrees.get(&unlock.worktree_id).map(|w| model::WorktreeFacts { name: Daemon::worktree_view(&inner, w).name, branch: w.branch.clone(), head: w.head.clone(), exists: w.exists, archived_at_ms: w.archived_at_ms });
+    let worktree = inner.worktrees.get(&unlock.worktree_id).map(|w| model::WorktreeFacts {
+        name: Daemon::worktree_view(&inner, w).name,
+        branch: w.branch.clone(),
+        head: w.head.clone(),
+        exists: w.exists,
+        archived_at_ms: w.archived_at_ms,
+    });
     let pr = pr(&inner, &unlock.worktree_id, &events);
     ok(model::history(unlock, repo_name, worktree, &events, pr))
 }

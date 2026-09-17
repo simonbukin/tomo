@@ -5,8 +5,8 @@
 //! them here. A reopen builds new panes from the record; it never reruns the
 //! command that a pane source started.
 
-use crate::daemon::{Daemon, Inner};
 use crate::agents;
+use crate::daemon::{Daemon, Inner};
 use crate::layout;
 use crate::store::TabRow;
 use std::collections::HashMap;
@@ -19,9 +19,20 @@ pub const LIMIT: usize = 10;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClosedPane {
     /// A shell, or a pane that a source started: it comes back as a shell in its cwd with its title.
-    Terminal { cwd: PathBuf, title: Option<String> },
-    Agent { cwd: PathBuf, title: Option<String>, kind: AgentKind, session_ref: String },
-    Browser { cwd: PathBuf, url: String },
+    Terminal {
+        cwd: PathBuf,
+        title: Option<String>,
+    },
+    Agent {
+        cwd: PathBuf,
+        title: Option<String>,
+        kind: AgentKind,
+        session_ref: String,
+    },
+    Browser {
+        cwd: PathBuf,
+        url: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,12 +97,20 @@ pub fn remember(inner: &mut Inner, tab: &TabRow) {
         .into_iter()
         .filter_map(|id| {
             let p = inner.panes.get(&id)?;
-            let agent = inner.agents.get(&id).filter(|a| a.state != AgentState::Exited).map(|a| (a.kind, a.session_ref.clone().or_else(|| p.row.session_ref.clone())));
+            let agent =
+                inner.agents.get(&id).filter(|a| a.state != AgentState::Exited).map(|a| (a.kind, a.session_ref.clone().or_else(|| p.row.session_ref.clone())));
             Some((id, closed_pane(p.row.kind, p.row.cwd.clone(), p.row.user_title.clone(), p.row.url.clone(), agent)))
         })
         .collect();
     let index = ordered_tabs(inner, &tab.worktree_id).iter().position(|t| t.id == tab.id).unwrap_or(0);
-    let closed = ClosedTab { worktree_id: tab.worktree_id.clone(), title: tab.title.clone(), index, layout: tab.layout.clone(), active_pane_id: tab.active_pane_id.clone(), panes };
+    let closed = ClosedTab {
+        worktree_id: tab.worktree_id.clone(),
+        title: tab.title.clone(),
+        index,
+        layout: tab.layout.clone(),
+        active_pane_id: tab.active_pane_id.clone(),
+        panes,
+    };
     inner.closed_tabs = push(&inner.closed_tabs, closed);
 }
 
@@ -106,7 +125,9 @@ pub fn remember_if_last(inner: &mut Inner, pane_id: &str) {
 impl Daemon {
     fn reopen_pane(self: &Arc<Self>, inner: &mut Inner, tab_id: &str, worktree_id: &str, pane: &ClosedPane) -> anyhow::Result<Id> {
         match pane {
-            ClosedPane::Terminal { cwd, title } => self.create_pane(inner, tab_id, worktree_id, cwd.clone(), None, title.clone(), None, None, None, PaneOrigin::Live),
+            ClosedPane::Terminal { cwd, title } => {
+                self.create_pane(inner, tab_id, worktree_id, cwd.clone(), None, title.clone(), None, None, None, PaneOrigin::Live)
+            }
             ClosedPane::Browser { cwd, url } => Daemon::create_browser_pane(inner, tab_id, worktree_id, cwd.clone(), url.clone()),
             ClosedPane::Agent { cwd, title, kind, session_ref } => {
                 let plan = crate::providers::launch(&inner.config, *kind, Some(session_ref), &self.paths.integrations_dir, &[]);
@@ -123,7 +144,8 @@ impl Daemon {
         inner.closed_tabs = rest;
         let was_active = ordered_tabs(inner, worktree_id).into_iter().find(|t| t.is_active).map(|t| t.id);
         let tab = Daemon::create_tab(inner, worktree_id, Some(closed.title.clone()));
-        let ids: HashMap<Id, Id> = closed.panes.iter().filter_map(|(old, pane)| self.reopen_pane(inner, &tab.id, worktree_id, pane).ok().map(|new| (old.clone(), new))).collect();
+        let ids: HashMap<Id, Id> =
+            closed.panes.iter().filter_map(|(old, pane)| self.reopen_pane(inner, &tab.id, worktree_id, pane).ok().map(|new| (old.clone(), new))).collect();
         let Some(layout) = remap(&closed.layout, &ids) else {
             inner.tabs.remove(&tab.id);
             if let Some(t) = was_active.and_then(|id| inner.tabs.get_mut(&id)) {
@@ -207,12 +229,18 @@ mod tests {
     #[test]
     fn panes_come_back_by_kind_and_actions_never_rerun() {
         let cwd = PathBuf::from("/w");
-        assert_eq!(closed_pane(PaneKind::Browser, cwd.clone(), None, Some("http://localhost:3000".into()), None), ClosedPane::Browser { cwd: cwd.clone(), url: "http://localhost:3000".into() });
+        assert_eq!(
+            closed_pane(PaneKind::Browser, cwd.clone(), None, Some("http://localhost:3000".into()), None),
+            ClosedPane::Browser { cwd: cwd.clone(), url: "http://localhost:3000".into() }
+        );
         assert_eq!(
             closed_pane(PaneKind::Terminal, cwd.clone(), None, None, Some((AgentKind::Claude, Some("s1".into())))),
             ClosedPane::Agent { cwd: cwd.clone(), title: None, kind: AgentKind::Claude, session_ref: "s1".into() }
         );
-        assert_eq!(closed_pane(PaneKind::Terminal, cwd.clone(), None, None, Some((AgentKind::Codex, None))), ClosedPane::Terminal { cwd: cwd.clone(), title: None });
+        assert_eq!(
+            closed_pane(PaneKind::Terminal, cwd.clone(), None, None, Some((AgentKind::Codex, None))),
+            ClosedPane::Terminal { cwd: cwd.clone(), title: None }
+        );
         assert_eq!(closed_pane(PaneKind::Terminal, cwd.clone(), Some("App".into()), None, None), ClosedPane::Terminal { cwd, title: Some("App".into()) });
     }
 }

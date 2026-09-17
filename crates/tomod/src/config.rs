@@ -193,7 +193,22 @@ command = "rm -rf node_modules target dist .next .turbo .venv build"
 "#;
 
 pub const DEFAULT_FONT_FAMILY: &str = "CommitMono, Menlo, monospace";
-pub const THEME_TOKENS: [&str; 14] = ["bg", "surface", "surface_hover", "fg", "fg_muted", "fg_faint", "border", "border_strong", "accent", "accent_soft", "working", "waiting", "danger", "success"];
+pub const THEME_TOKENS: [&str; 14] = [
+    "bg",
+    "surface",
+    "surface_hover",
+    "fg",
+    "fg_muted",
+    "fg_faint",
+    "border",
+    "border_strong",
+    "accent",
+    "accent_soft",
+    "working",
+    "waiting",
+    "danger",
+    "success",
+];
 const BASE_THEMES: [&str; 5] = ["system", "murasaki-dark", "murasaki-light", "paper", "ink"];
 const ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
 const SETTABLE_KEYS: [&str; 14] = [
@@ -367,10 +382,7 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         agents,
         states,
         hooks,
-        notifications: NotificationSettings {
-            desktop: file.notifications.desktop.unwrap_or(true),
-            sounds: file.notifications.sounds.unwrap_or(false),
-        },
+        notifications: NotificationSettings { desktop: file.notifications.desktop.unwrap_or(true), sounds: file.notifications.sounds.unwrap_or(false) },
     };
     (cfg, [theme_issues, terminal_issues].concat())
 }
@@ -386,7 +398,10 @@ fn settle<T>(checked: Checked<T>) -> (T, Option<ConfigIssue>) {
 }
 
 fn unknown_keys<'a>(section: &'a str, table: &'a toml::Table, known: &'a [&'a str]) -> impl Iterator<Item = ConfigIssue> + 'a {
-    table.keys().filter(move |k| !known.contains(&k.as_str())).map(move |k| issue(IssueLevel::Warning, &format!("{section}.{k}"), "unknown key; Tomo ignores it"))
+    table
+        .keys()
+        .filter(move |k| !known.contains(&k.as_str()))
+        .map(move |k| issue(IssueLevel::Warning, &format!("{section}.{k}"), "unknown key; Tomo ignores it"))
 }
 
 fn theme_id(name: &str) -> Option<&'static str> {
@@ -407,7 +422,10 @@ fn theme_name_at(table: &toml::Table, key: &str, fallback: &str, allow_system: b
         None => Ok(fallback.to_string()),
         Some(toml::Value::String(s)) => match theme_id(s).filter(|id| allow_system || *id != "system") {
             Some(id) => Ok(id.to_string()),
-            None => refuse(format!("unknown theme {s:?}; use {}", BASE_THEMES.iter().filter(|t| allow_system || **t != "system").copied().collect::<Vec<_>>().join(", "))),
+            None => refuse(format!(
+                "unknown theme {s:?}; use {}",
+                BASE_THEMES.iter().filter(|t| allow_system || **t != "system").copied().collect::<Vec<_>>().join(", ")
+            )),
         },
         Some(v) => refuse(format!("must be a theme name, not {v}")),
     }
@@ -570,7 +588,9 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
     }
     match cfg.editor_command.first() {
         None => out.push(issue(IssueLevel::Error, "editor_command", "is empty")),
-        Some(first) if resolve_program(first).is_none() => out.push(issue(IssueLevel::Warning, "editor_command", format!("{first} not found on PATH; Tomo falls back to `open`"))),
+        Some(first) if resolve_program(first).is_none() => {
+            out.push(issue(IssueLevel::Warning, "editor_command", format!("{first} not found on PATH; Tomo falls back to `open`")))
+        }
         _ => {}
     }
     if let Some(dir) = &cfg.worktree_parent_dir {
@@ -623,7 +643,8 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
         }
         for (i, arg) in agent.args.iter().enumerate() {
             if let Some(dash) = unicode_dash(arg) {
-                let message = format!("{arg:?} starts with {dash:?}, which is not a dash. The agent reads the entry as text, not as a flag. Write the flag with --");
+                let message =
+                    format!("{arg:?} starts with {dash:?}, which is not a dash. The agent reads the entry as text, not as a flag. Write the flag with --");
                 out.push(issue(IssueLevel::Warning, &format!("agents.{name}.args[{i}]"), message));
             }
         }
@@ -700,7 +721,8 @@ mod tests {
 
     #[test]
     fn check_warns_when_an_agent_argument_starts_with_a_unicode_dash() {
-        let (cfg, _) = parse("[agents.claude]\ncommand = \"sh\"\nargs = [\"\u{2014}dangerously-skip-permissions\", \"--ok\", \"-p\", \"\u{2212}x\", \"plain\"]\n");
+        let (cfg, _) =
+            parse("[agents.claude]\ncommand = \"sh\"\nargs = [\"\u{2014}dangerously-skip-permissions\", \"--ok\", \"-p\", \"\u{2212}x\", \"plain\"]\n");
         let issues = check(&cfg);
         let keys: Vec<&str> = issue_keys(&issues).into_iter().filter(|k| k.starts_with("agents.claude.args")).collect();
         assert_eq!(keys, vec!["agents.claude.args[0]", "agents.claude.args[3]"], "{issues:?}");
