@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, File, Folder, RotateCw } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import { openMenu } from "./MenuHost";
-import { Combobox, IconButton, Select, SkeletonRows } from "./components/ui";
+import { Combobox, IconButton, plainTextInput, Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
@@ -45,7 +45,7 @@ function MetadataSection({ w }: { w: Worktree }) {
   const commit = (patch: Record<string, unknown>) => setMetadata(w.id, patch);
   return (
     <InspectorSection id="worktree">
-      <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
+      <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} {...plainTextInput} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label>
         <Combobox
           aria-label="Project"
@@ -67,7 +67,7 @@ function MetadataSection({ w }: { w: Worktree }) {
           options={[{ value: "", label: "no state" }, ...states.map((s) => ({ value: s.id, label: s.label })), ...(m.state && !states.some((s) => s.id === m.state) ? [{ value: m.state, label: m.state }] : [])]}
         />
       </div>
-      <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
+      <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" {...plainTextInput} onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
     </InspectorSection>
   );
 }

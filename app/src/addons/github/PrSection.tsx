@@ -7,18 +7,15 @@ import { useStore } from "../../store";
 import type { Worktree } from "../../types";
 import { prStatusOf, setPrStatus } from "./state";
 
-/**
- * Rows inside the core git section: a branch's pull request belongs with its branch.
- * It asks `pr_status` when it mounts and every 120 s while the inspector stays open, so
- * it needs no refresh control of its own.
- */
+const PR_POLL_MS = 120_000;
+
 export function PrDetail({ worktree: w }: { worktree: Worktree }) {
   const status = useStore((s) => prStatusOf(s, w.id));
   const load = () => rpc<PrStatusResult>("pr_status", { worktree_id: w.id }).then((r) => setPrStatus(w.id, r)).catch(() => {});
   useEffect(() => {
     if (!w.exists) return;
     load();
-    const t = window.setInterval(load, 120_000);
+    const t = window.setInterval(load, PR_POLL_MS);
     return () => window.clearInterval(t);
   }, [w.id, w.branch, w.exists]);
   const pr = status?.pr ?? null;

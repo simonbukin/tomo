@@ -21,14 +21,11 @@
 /* The top-left region keeps the traffic-light safe width when the left column is a rail or 0. */
 .topbar { grid-area: top; display: grid; grid-template-columns: max(var(--left-col), var(--top-left-min)) minmax(0, 1fr) max(var(--right-col), var(--top-right-min)); min-width: 0; background: var(--bg); border-bottom: 1px solid var(--line); transition: grid-template-columns var(--dur-open) var(--ease-out); }
 .top-left { display: flex; align-items: center; gap: 2px; min-width: 0; padding: 0 var(--sp-2) 0 var(--traffic-inset); }
-/* The brand sits tight against the traffic lights. The sidebar control rides the right
-   edge while the sidebar is open, and falls in beside the brand once the column narrows. */
 .top-brand { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 2px 4px; border-radius: var(--radius); background: none; color: var(--fg); }
 .top-brand:hover { background: var(--bg-1); }
 .top-left[data-mode="open"] .side-toggle { margin-left: auto; }
 .top-left:not([data-mode="open"]) .brand-wordmark { display: none; }
 
-/* A view arrives instead of appearing. One rule covers Home, the core views and every addon view. */
 .center > * { animation: view-in var(--dur-open) var(--ease-out); }
 @keyframes view-in { from { opacity: 0; } to { opacity: 1; } }
 .top-middle { display: flex; align-items: center; min-width: 0; }
@@ -94,12 +91,10 @@
 .proc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-files { flex: 1; display: flex; flex-direction: column; min-height: 200px; border-bottom: none; }
 
-/* A section folds from its heading. The chevron is the only thing the heading adds. */
 .section-fold { display: inline-flex; align-items: center; gap: var(--sp-1); flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
 .section-fold .chevron { width: 12px; height: 12px; flex: none; color: var(--fg-3); }
 .collapsible-panel { overflow: hidden; }
 
-/* Processes read as aligned columns. No value is joined to another by a separator. */
 .proc-total { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--sp-3); align-items: baseline; font-size: var(--fs-1); }
 .proc-total > span { display: inline-flex; flex-direction: column; min-width: 0; }
 .proc-total .proc-total-key { color: var(--fg-2); font-size: var(--fs-0); }

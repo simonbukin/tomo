@@ -55,7 +55,6 @@ export interface LayoutDndProps {
   onPaneToNewTab?: (paneId: Id) => void;
 }
 
-/** One drag context for the tab strip and the split layout, so a pane can drop on a pane, on a tab, or into a tab of its own. */
 export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane, onPaneToNewTab = paneToNewTab }: LayoutDndProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const [hover, setHover] = useState<Hover>(null);
@@ -99,7 +98,6 @@ function PaneDragOverlay() {
   return <DragOverlay dropAnimation={null}>{data?.kind === "pane" ? <div className="pane-drag-chip">{data.title || "pane"}</div> : null}</DragOverlay>;
 }
 
-/** A target beside the tabs that gives a dragged pane its own tab. It shows only during a pane drag, so the strip stays quiet. */
 export function NewTabDrop() {
   const dragging = dragData(useDndContext().active)?.kind === "pane";
   const { setNodeRef, isOver } = useDroppable({ id: "new-tab-drop", data: { kind: "new-tab" } satisfies DropData });
