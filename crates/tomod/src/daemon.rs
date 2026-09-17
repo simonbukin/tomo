@@ -1456,6 +1456,494 @@ impl Daemon {
         })
     }
 
+    async fn checkpoint_resolve(self: &Arc<Self>, id: Id) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let item = inner.store.attention_get(&id).map_err(internal)?.ok_or_else(|| err(ErrorCode::NotFound, "attention item not found"))?;
+        if item.resolved_at_ms.is_some() {
+            return ok(item);
+        }
+        let now = now_ms();
+        inner.store.attention_resolve(&id, now).map_err(internal)?;
+        let item = AttentionItem { resolved_at_ms: Some(now), ..item };
+        Self::emit(&mut inner, Event::AttentionResolved { id: id.clone() });
+        let mut ev = activity::event(CoreActivity::CheckpointResolved, Some(&item.worktree_id), format!("{} resolved", item.message));
+        ev.pane_id = item.pane_id.clone();
+        ev.agent_kind = item.agent_kind;
+        ev.payload = json!({ "kind": item.kind, "url": item.url });
+        ev.attention_id = Some(id);
+        Self::record(&mut inner, ev);
+        let mut hook = events::envelope(&inner, "checkpoint.resolved", Some(&item.worktree_id));
+        hook.attention = Some(item.clone());
+        hook.pane = item.pane_id.as_deref().and_then(|p| Self::hook_pane(&inner, p));
+        inner.hook_queue.push(hook);
+        ok(item)
+    }
+
+    async fn checkpoint_create(self: &Arc<Self>, spec: CheckpointSpec) -> Result<Value, RpcError> {
+        let message = spec.message.trim().to_string();
+        if message.is_empty() {
+            return Err(err(ErrorCode::BadRequest, "message is empty"));
+        }
+        let mut inner = self.lock();
+        let pane = spec.pane_id.as_deref().and_then(|p| inner.panes.get(p)).map(|p| (p.row.id.clone(), p.row.worktree_id.clone()));
+        let worktree_id = spec.worktree_id.clone().or_else(|| pane.as_ref().map(|(_, w)| w.clone())).ok_or_else(|| err(ErrorCode::BadRequest, "pane_id or worktree_id required"))?;
+        if !inner.worktrees.contains_key(&worktree_id) {
+            return Err(err(ErrorCode::NotFound, "worktree not found"));
+        }
+        let pane_id = pane.map(|(p, _)| p);
+        let agent = pane_id.as_deref().and_then(|p| inner.agents.get(p)).cloned();
+        let title = spec.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+        let item = AttentionItem {
+            id: new_id(),
+            worktree_id: worktree_id.clone(),
+            pane_id: pane_id.clone(),
+            level: AttentionLevel::Attention,
+            message: title.clone().unwrap_or_else(|| message.clone()),
+            created_at_ms: now_ms(),
+            viewed_at_ms: None,
+            kind: AttentionKind::Checkpoint,
+            url: spec.url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()),
+            agent_kind: agent.as_ref().map(|a| a.kind),
+            resolved_at_ms: None,
+        };
+        Self::push_attention(&mut inner, item.clone());
+        let mut ev = activity::event(CoreActivity::CheckpointCreated, Some(&worktree_id), item.message.clone());
+        ev.pane_id = pane_id.clone();
+        ev.agent_kind = item.agent_kind;
+        ev.detail = title.is_some().then_some(message);
+        ev.payload = json!({ "url": item.url });
+        ev.attention_id = Some(item.id.clone());
+        Self::record(&mut inner, ev);
+        let mut hook = events::envelope(&inner, "checkpoint.created", Some(&worktree_id));
+        hook.attention = Some(item.clone());
+        hook.pane = pane_id.as_deref().and_then(|p| Self::hook_pane(&inner, p));
+        hook.agent = agent.map(|a| HookAgent { kind: a.kind, state: a.state, session_ref: a.session_ref });
+        inner.hook_queue.push(hook);
+        ok(item)
+    }
+
+    async fn open_location(self: &Arc<Self>, path: PathBuf, line: Option<u32>, col: Option<u32>) -> Result<Value, RpcError> {
+        if !path.is_absolute() {
+            return Err(err(ErrorCode::BadRequest, "path must be absolute"));
+        }
+        if !path.exists() {
+            return Err(err(ErrorCode::NotFound, format!("{} does not exist", path.display())));
+        }
+        let editor_command = self.lock().config.editor_command.clone();
+        if let Some(message) = editor::open_location(&editor_command, &path, line, col) {
+            Self::emit(&mut self.lock(), Event::Notice { level: NoticeLevel::Warning, message });
+        }
+        Ok(Value::Null)
+    }
+
+    async fn open_external(self: &Arc<Self>, worktree_id: Id, rel_path: String, target: ExternalTarget) -> Result<Value, RpcError> {
+        let (root, editor) = {
+            let inner = self.lock();
+            let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+            (w.path.clone(), inner.config.editor_command.clone())
+        };
+        let path = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;
+        let argv: Vec<String> = match target {
+            ExternalTarget::Finder => vec!["open".into(), "-R".into(), path.to_string_lossy().into_owned()],
+            ExternalTarget::Editor => {
+                let mut argv: Vec<String> = editor.iter().map(|a| a.replace("{path}", &path.to_string_lossy())).collect();
+                if !editor.iter().any(|a| a.contains("{path}")) {
+                    argv.push(path.to_string_lossy().into_owned());
+                }
+                argv
+            }
+        };
+        if argv.is_empty() {
+            return Err(err(ErrorCode::BadRequest, "editor_command is empty"));
+        }
+        let launched = std::process::Command::new(&argv[0])
+            .args(&argv[1..])
+            .current_dir(&root)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        match launched {
+            Ok(_) => Ok(Value::Null),
+            Err(e) if target == ExternalTarget::Editor => {
+                let _ = std::process::Command::new("open").arg(&path).spawn();
+                let mut inner = self.lock();
+                Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{} not found ({e}); opened with the default app instead", argv[0]) });
+                Ok(Value::Null)
+            }
+            Err(e) => Err(err(ErrorCode::Io, format!("{}: {e}", argv[0]))),
+        }
+    }
+
+    async fn fs_list(self: &Arc<Self>, worktree_id: Id, rel_path: String) -> Result<Value, RpcError> {
+        let root = self.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+        let dir = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;
+        let mut entries: Vec<FsEntry> = std::fs::read_dir(&dir)
+            .map_err(|e| err(ErrorCode::Io, e.to_string()))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name() != ".git")
+            .map(|e| {
+                let meta = e.metadata().ok();
+                let name = e.file_name().to_string_lossy().into_owned();
+                let rel = if rel_path.is_empty() { name.clone() } else { format!("{}/{}", rel_path.trim_end_matches('/'), name) };
+                let modified_ms = meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+                FsEntry { is_dir: meta.as_ref().map_or(false, |m| m.is_dir()), size: meta.map_or(0, |m| m.len()), modified_ms, name, rel_path: rel }
+            })
+            .collect();
+        entries.sort_by(|a, b| (!a.is_dir, a.name.to_lowercase()).cmp(&(!b.is_dir, b.name.to_lowercase())));
+        ok(entries)
+    }
+
+    async fn notify(self: &Arc<Self>, pane_id: Option<Id>, worktree_id: Option<Id>, level: AttentionLevel, message: String) -> Result<Value, RpcError> {
+        let message = message.trim().to_string();
+        if message.is_empty() {
+            return Err(err(ErrorCode::BadRequest, "message is empty"));
+        }
+        let mut inner = self.lock();
+        let worktree_id = worktree_id
+            .or_else(|| pane_id.as_ref().and_then(|p| inner.panes.get(p)).map(|p| p.row.worktree_id.clone()))
+            .ok_or_else(|| err(ErrorCode::BadRequest, "pane_id or worktree_id required"))?;
+        if !inner.worktrees.contains_key(&worktree_id) {
+            return Err(err(ErrorCode::NotFound, "worktree not found"));
+        }
+        Self::add_attention(&mut inner, &worktree_id, pane_id.as_deref(), level, message);
+        Ok(Value::Null)
+    }
+
+    async fn process_kill_tree(self: &Arc<Self>, pid: u32) -> Result<Value, RpcError> {
+        let inner = self.lock();
+        let owned = crate::monitor::classify_all(&inner).into_iter().any(|p| p.pid == pid && p.ownership == Ownership::Owned);
+        if !owned {
+            return Err(err(ErrorCode::Unsupported, format!("pid {pid} is not owned by a Tomo pane; refusing to kill it")));
+        }
+        procs::kill_tree(&inner.proc_rows, pid);
+        Ok(Value::Null)
+    }
+
+    async fn agent_spawn(self: &Arc<Self>, spec: AgentSpawn) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let (worktree_id, cwd) = match (&spec.worktree_id, &spec.cwd, &spec.split_from) {
+            (None, None, Some(from)) => {
+                let p = inner.panes.get(from).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+                (p.row.worktree_id.clone(), p.row.cwd.clone())
+            }
+            _ => Self::worktree_for_spawn(&inner.worktrees, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
+        };
+        let plan = providers::launch(&inner.config, spec.kind, spec.resume.as_deref(), &self.paths.integrations_dir, &spec.extra_args);
+        let line = agents::shell_line(&plan.argv);
+        let tab_id = if spec.new_tab { Some(Self::create_tab(&mut inner, &worktree_id, Some(spec.kind.label().to_string())).id) } else { spec.tab_id.clone() };
+        let (tab_id, pane_id) = self.spawn_in_worktree(
+            &mut inner,
+            &worktree_id,
+            cwd,
+            tab_id.as_deref(),
+            spec.split_from.as_deref(),
+            SplitDirection::Horizontal,
+            None,
+            None,
+            Some((spec.kind, plan.session_ref, line)),
+        )?;
+        ok(SpawnResult { pane: Self::pane_of(&inner, &pane_id)?, tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
+    }
+
+    async fn pane_kill_tree(self: &Arc<Self>, pane_id: Id) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let pid = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid).ok_or_else(|| err(ErrorCode::NotFound, "pane not live"))?;
+        Self::set_stop_intent(&mut inner, &pane_id);
+        for child in procs::descendants(&inner.proc_rows, pid) {
+            procs::kill_tree(&inner.proc_rows, child);
+        }
+        Ok(Value::Null)
+    }
+
+    async fn pane_attach(self: &Arc<Self>, client_id: u64, pane_id: Id) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        Self::terminal_only(&inner, &pane_id)?;
+        let snapshot = crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
+        let view = Self::pane_view(&inner, &pane_id);
+        if let Some(c) = inner.clients.get_mut(&client_id) {
+            c.attached.insert(pane_id.clone());
+            let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id, data_base64: B64.encode(snapshot) } };
+            let _ = c.tx.send(serde_json::to_string(&frame).unwrap_or_default());
+        }
+        ok(view)
+    }
+
+    async fn pane_resize(self: &Arc<Self>, pane_id: Id, cols: u16, rows: u16) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        Self::terminal_only(&inner, &pane_id)?;
+        let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+        if pane.row.cols != cols || pane.row.rows != rows {
+            pane.row.cols = cols;
+            pane.row.rows = rows;
+            if let Some(pty) = &pane.pty {
+                let _ = pty.resize(cols.max(2), rows.max(2));
+            }
+            let row = pane.row.clone();
+            let _ = inner.store.pane_upsert(&row);
+        }
+        Ok(Value::Null)
+    }
+
+    async fn pane_focus(self: &Arc<Self>, pane_id: Id) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let (tab_id, worktree_id) = {
+            let p = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+            (p.row.tab_id.clone(), p.row.worktree_id.clone())
+        };
+        let changed: Vec<TabRow> = inner
+            .tabs
+            .values_mut()
+            .filter(|t| t.worktree_id == worktree_id)
+            .filter_map(|t| {
+                let active = t.id == tab_id;
+                let next_pane = if active { Some(pane_id.clone()) } else { t.active_pane_id.clone() };
+                if t.is_active == active && t.active_pane_id == next_pane {
+                    return None;
+                }
+                t.is_active = active;
+                t.active_pane_id = next_pane;
+                Some(t.clone())
+            })
+            .collect();
+        for t in &changed {
+            let _ = inner.store.tab_upsert(t);
+        }
+        Self::touch(&mut inner, &worktree_id);
+        for id in inner.store.attention_view_pane(&pane_id, now_ms()).unwrap_or_default() {
+            Self::emit(&mut inner, Event::AttentionViewed { id });
+        }
+        if !changed.is_empty() {
+            Self::emit_tabs(&mut inner, &worktree_id);
+        }
+        Self::emit(&mut inner, Event::FocusRequest { worktree_id, tab_id, pane_id });
+        Ok(Value::Null)
+    }
+
+    async fn pane_close(self: &Arc<Self>, pane_id: Id, force: bool) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let worktree_id = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.row.worktree_id.clone();
+        if !force && Self::pane_has_children(&inner, &pane_id) {
+            return Err(err(ErrorCode::Conflict, "pane has running processes"));
+        }
+        reopen::remember_if_last(&mut inner, &pane_id);
+        Self::set_stop_intent(&mut inner, &pane_id);
+        self.persist_scrollback(&inner, &pane_id);
+        Self::remove_pane(&mut inner, &pane_id);
+        Self::emit_tabs(&mut inner, &worktree_id);
+        Ok(Value::Null)
+    }
+
+    async fn layout_resize(self: &Arc<Self>, tab_id: Id, split_id: Id, ratio: f64) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
+        tab.layout = layout::resize(&tab.layout, &split_id, ratio);
+        let tab = tab.clone();
+        inner.store.tab_upsert(&tab).map_err(internal)?;
+        Self::emit_tabs(&mut inner, &tab.worktree_id);
+        Ok(Value::Null)
+    }
+
+    async fn tab_activate(self: &Arc<Self>, tab_id: Id) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let worktree_id = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.worktree_id.clone();
+        let changed: Vec<TabRow> = inner
+            .tabs
+            .values_mut()
+            .filter(|t| t.worktree_id == worktree_id && t.is_active != (t.id == tab_id))
+            .map(|t| {
+                t.is_active = t.id == tab_id;
+                t.clone()
+            })
+            .collect();
+        for t in &changed {
+            let _ = inner.store.tab_upsert(t);
+        }
+        if !changed.is_empty() {
+            Self::emit_tabs(&mut inner, &worktree_id);
+        }
+        Ok(Value::Null)
+    }
+
+    async fn tab_close(self: &Arc<Self>, tab_id: Id, force: bool) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let tab = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.clone();
+        let panes = layout::pane_ids(&tab.layout);
+        if !force && panes.iter().any(|p| Self::pane_has_children(&inner, p)) {
+            return Err(err(ErrorCode::Conflict, "tab has running processes"));
+        }
+        reopen::remember(&mut inner, &tab);
+        for p in &panes {
+            Self::set_stop_intent(&mut inner, p);
+            self.persist_scrollback(&inner, p);
+            Self::remove_pane(&mut inner, p);
+        }
+        inner.tabs.remove(&tab_id);
+        let _ = inner.store.tab_delete(&tab_id);
+        Self::emit_tabs(&mut inner, &tab.worktree_id);
+        Ok(Value::Null)
+    }
+
+    async fn tab_create(self: &Arc<Self>, worktree_id: Id, title: Option<String>) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let cwd = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+        let tab = Self::create_tab(&mut inner, &worktree_id, title);
+        for t in inner.tabs.values().filter(|t| t.worktree_id == worktree_id && t.id != tab.id).cloned().collect::<Vec<_>>() {
+            let _ = inner.store.tab_upsert(&t);
+        }
+        self.spawn_in_worktree(&mut inner, &worktree_id, cwd, Some(&tab.id), None, SplitDirection::Horizontal, None, None, None)?;
+        ok(Self::tab_view(&inner, &inner.tabs[&tab.id]))
+    }
+
+    async fn metadata_set(self: &Arc<Self>, worktree_id: Id, patch: MetadataPatch) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+        let mut next = patch.apply(&w.metadata);
+        next.display_name = next.display_name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+        next.project = next.project.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+        next.tags = next.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect();
+        next.state = next.state.map(|st| st.trim().to_string()).filter(|st| !st.is_empty());
+        if let Some(st) = &next.state {
+            if !inner.config.states.iter().any(|d| &d.id == st) {
+                let known: Vec<&str> = inner.config.states.iter().map(|d| d.id.as_str()).collect();
+                return Err(err(ErrorCode::BadRequest, format!("unknown state {st:?}; known states: {}", known.join(", "))));
+            }
+        }
+        let previous_state = w.metadata.state.clone();
+        let row = Self::meta_row_of(&inner, w, next.clone());
+        inner.store.meta_upsert(&row).map_err(internal)?;
+        inner.worktrees.get_mut(&worktree_id).unwrap().metadata = next.clone();
+        if previous_state != next.state {
+            let mut ev = events::envelope(&inner, "worktree.state_changed", Some(&worktree_id));
+            ev.previous_state = previous_state.clone();
+            inner.hook_queue.push(ev);
+            let mut ev = activity::event(CoreActivity::StateChanged, Some(&worktree_id), format!("state → {}", next.state.as_deref().unwrap_or("none")));
+            ev.detail = Some(Self::worktree_name(&inner, &worktree_id));
+            ev.payload = json!({ "state": next.state, "previous_state": previous_state });
+            Self::record(&mut inner, ev);
+        }
+        Self::emit(&mut inner, Event::MetadataChanged { worktree_id: worktree_id.clone(), metadata: next.clone() });
+        let worktrees = Self::worktree_views(&inner);
+        Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
+        ok(next)
+    }
+
+    async fn worktree_open(self: &Arc<Self>, worktree_id: Id) -> Result<Value, RpcError> {
+        let needs_pane = {
+            let inner = self.lock();
+            if !inner.worktrees.contains_key(&worktree_id) {
+                return Err(err(ErrorCode::NotFound, "worktree not found"));
+            }
+            !inner.tabs.values().any(|t| t.worktree_id == worktree_id)
+        };
+        let mut inner = self.lock();
+        if needs_pane {
+            let cwd = inner.worktrees[&worktree_id].path.clone();
+            self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, None, SplitDirection::Horizontal, None, None, None)?;
+        }
+        Self::touch(&mut inner, &worktree_id);
+        let w = Self::worktree_view(&inner, &inner.worktrees[&worktree_id]);
+        let tabs = Self::tabs_of(&inner, &worktree_id);
+        let handle = self.clone();
+        let id = worktree_id.clone();
+        tokio::spawn(async move {
+            handle.refresh_git(&id).await;
+        });
+        ok(WorktreeOpened { worktree: w, tabs })
+    }
+
+    async fn worktree_create(self: &Arc<Self>, spec: WorktreeCreate) -> Result<Value, RpcError> {
+        let (repo_path, parent_dir, branch_prefix, name) = {
+            let inner = self.lock();
+            let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+            let name = match (&spec.path, self.seams.worktree_namer) {
+                (None, Some(namer)) => namer(&inner.store, &spec)?,
+                _ => None,
+            };
+            (repo.path.clone(), inner.config.worktree_parent_dir.clone(), inner.config.branch_prefix.clone(), name)
+        };
+        let parent = config::worktree_parent(parent_dir.as_deref(), &repo_path);
+        let path = match (&spec.path, &name) {
+            (Some(p), _) => config::expand_tilde(p),
+            (None, Some(name)) => parent.join(name),
+            (None, None) => parent.join(spec.branch.replace('/', "-")),
+        };
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| err(ErrorCode::Io, format!("{}: {e}", dir.display())))?;
+        }
+        let wanted = spec.branch.trim();
+        let dir_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let branch = match wanted.is_empty() {
+            true => config::default_branch(&branch_prefix, &dir_name),
+            false => wanted.to_string(),
+        };
+        git::worktree_add(&repo_path, &path, &branch, spec.new_branch || wanted.is_empty(), spec.start_ref.as_deref())
+            .await
+            .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
+        self.discover(Summaries::All).await.map_err(internal)?;
+        let id = path_id(&canonical(&path));
+        let mut inner = self.lock();
+        let created = CreatedWorktree { id: id.clone(), repo_id: spec.repo_id.clone(), name };
+        for seam in &self.seams.worktree_created {
+            seam(&mut inner, &created)?;
+        }
+        let ev = events::envelope(&inner, "worktree.created", Some(&id));
+        inner.hook_queue.push(ev);
+        inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
+    }
+
+    async fn repo_remove(self: &Arc<Self>, repo_id: Id) -> Result<Value, RpcError> {
+        {
+            let mut inner = self.lock();
+            inner.store.repo_remove(&repo_id).map_err(internal)?;
+            let orphaned: Vec<Id> = inner.worktrees.values().filter(|w| w.repo_id == repo_id).map(|w| w.id.clone()).collect();
+            for id in orphaned {
+                let has_runtime = inner.tabs.values().any(|t| t.worktree_id == id);
+                if !has_runtime {
+                    inner.worktrees.remove(&id);
+                }
+            }
+        }
+        self.discover(Summaries::All).await.map_err(internal)?;
+        Ok(Value::Null)
+    }
+
+    async fn pane_zoom(self: &Arc<Self>, pane_id: Option<Id>, tab_id: Option<Id>) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let tab_id = match (&pane_id, tab_id) {
+            (Some(p), _) => inner.panes.get(p).map(|x| x.row.tab_id.clone()).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?,
+            (None, Some(t)) => t,
+            (None, None) => return Err(err(ErrorCode::BadRequest, "pane_id or tab_id required")),
+        };
+        Self::emit(&mut inner, Event::ZoomRequest { tab_id, pane_id });
+        Ok(Value::Null)
+    }
+
+    async fn pane_swap(self: &Arc<Self>, pane_a: Id, pane_b: Id) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let tab_id = inner.panes.get(&pane_a).map(|p| p.row.tab_id.clone()).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+        if inner.panes.get(&pane_b).map(|p| &p.row.tab_id) != Some(&tab_id) {
+            return Err(err(ErrorCode::BadRequest, "panes must be in the same tab"));
+        }
+        let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
+        tab.layout = layout::swap(&tab.layout, &pane_a, &pane_b);
+        let tab = tab.clone();
+        inner.store.tab_upsert(&tab).map_err(internal)?;
+        Self::emit_tabs(&mut inner, &tab.worktree_id);
+        ok(Self::tab_view(&inner, &tab))
+    }
+
+    async fn layout_rotate(self: &Arc<Self>, tab_id: Id, split_id: Option<Id>) -> Result<Value, RpcError> {
+        let mut inner = self.lock();
+        let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
+        let target = split_id.or_else(|| tab.active_pane_id.as_deref().and_then(|p| layout::split_of(&tab.layout, p))).ok_or_else(|| err(ErrorCode::BadRequest, "tab has no split to rotate"))?;
+        tab.layout = layout::rotate(&tab.layout, &target);
+        let tab = tab.clone();
+        inner.store.tab_upsert(&tab).map_err(internal)?;
+        Self::emit_tabs(&mut inner, &tab.worktree_id);
+        ok(Self::tab_view(&inner, &tab))
+    }
+
     pub async fn handle(self: &Arc<Self>, client_id: u64, call: Call) -> Result<Value, RpcError> {
         let result = self.handle_inner(client_id, call).await;
         self.flush_hooks();
@@ -1511,40 +1999,9 @@ impl Daemon {
                 Self::emit_tabs(&mut inner, &tab.worktree_id);
                 ok(Self::tab_view(&inner, &tab))
             }
-            Call::LayoutRotate { tab_id, split_id } => {
-                let mut inner = self.lock();
-                let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
-                let target = split_id.or_else(|| tab.active_pane_id.as_deref().and_then(|p| layout::split_of(&tab.layout, p))).ok_or_else(|| err(ErrorCode::BadRequest, "tab has no split to rotate"))?;
-                tab.layout = layout::rotate(&tab.layout, &target);
-                let tab = tab.clone();
-                inner.store.tab_upsert(&tab).map_err(internal)?;
-                Self::emit_tabs(&mut inner, &tab.worktree_id);
-                ok(Self::tab_view(&inner, &tab))
-            }
-            Call::PaneSwap { pane_a, pane_b } => {
-                let mut inner = self.lock();
-                let tab_id = inner.panes.get(&pane_a).map(|p| p.row.tab_id.clone()).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-                if inner.panes.get(&pane_b).map(|p| &p.row.tab_id) != Some(&tab_id) {
-                    return Err(err(ErrorCode::BadRequest, "panes must be in the same tab"));
-                }
-                let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
-                tab.layout = layout::swap(&tab.layout, &pane_a, &pane_b);
-                let tab = tab.clone();
-                inner.store.tab_upsert(&tab).map_err(internal)?;
-                Self::emit_tabs(&mut inner, &tab.worktree_id);
-                ok(Self::tab_view(&inner, &tab))
-            }
-            Call::PaneZoom { pane_id, tab_id } => {
-                let mut inner = self.lock();
-                let tab_id = match (&pane_id, tab_id) {
-                    (Some(p), _) => inner.panes.get(p).map(|x| x.row.tab_id.clone()).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?,
-                    (None, Some(t)) => t,
-                    (None, None) => return Err(err(ErrorCode::BadRequest, "pane_id or tab_id required")),
-                };
-                Self::emit(&mut inner, Event::ZoomRequest { tab_id, pane_id });
-                Ok(Value::Null)
-            }
-
+            Call::LayoutRotate { tab_id, split_id } => self.layout_rotate(tab_id, split_id).await,
+            Call::PaneSwap { pane_a, pane_b } => self.pane_swap(pane_a, pane_b).await,
+            Call::PaneZoom { pane_id, tab_id } => self.pane_zoom(pane_id, tab_id).await,
             Call::RepoList => ok(Self::repo_views(&self.lock())),
             Call::RepoAdd { path } => {
                 let top = git::toplevel(&config::expand_tilde(&path)).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
@@ -1554,21 +2011,7 @@ impl Daemon {
                 self.discover(Summaries::All).await.map_err(internal)?;
                 ok(repo_view(id, top).await)
             }
-            Call::RepoRemove { repo_id } => {
-                {
-                    let mut inner = self.lock();
-                    inner.store.repo_remove(&repo_id).map_err(internal)?;
-                    let orphaned: Vec<Id> = inner.worktrees.values().filter(|w| w.repo_id == repo_id).map(|w| w.id.clone()).collect();
-                    for id in orphaned {
-                        let has_runtime = inner.tabs.values().any(|t| t.worktree_id == id);
-                        if !has_runtime {
-                            inner.worktrees.remove(&id);
-                        }
-                    }
-                }
-                self.discover(Summaries::All).await.map_err(internal)?;
-                Ok(Value::Null)
-            }
+            Call::RepoRemove { repo_id } => self.repo_remove(repo_id).await,
             Call::RepoClone { url, dest } => {
                 let dest = config::expand_tilde(&dest);
                 git::clone(&url, &dest).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
@@ -1583,70 +2026,10 @@ impl Daemon {
                 self.discover(Summaries::All).await.map_err(internal)?;
                 ok(Self::worktree_views(&self.lock()))
             }
-            Call::WorktreeCreate(spec) => {
-                let (repo_path, parent_dir, branch_prefix, name) = {
-                    let inner = self.lock();
-                    let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
-                    let name = match (&spec.path, self.seams.worktree_namer) {
-                        (None, Some(namer)) => namer(&inner.store, &spec)?,
-                        _ => None,
-                    };
-                    (repo.path.clone(), inner.config.worktree_parent_dir.clone(), inner.config.branch_prefix.clone(), name)
-                };
-                let parent = config::worktree_parent(parent_dir.as_deref(), &repo_path);
-                let path = match (&spec.path, &name) {
-                    (Some(p), _) => config::expand_tilde(p),
-                    (None, Some(name)) => parent.join(name),
-                    (None, None) => parent.join(spec.branch.replace('/', "-")),
-                };
-                if let Some(dir) = path.parent() {
-                    std::fs::create_dir_all(dir).map_err(|e| err(ErrorCode::Io, format!("{}: {e}", dir.display())))?;
-                }
-                let wanted = spec.branch.trim();
-                let dir_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let branch = match wanted.is_empty() {
-                    true => config::default_branch(&branch_prefix, &dir_name),
-                    false => wanted.to_string(),
-                };
-                git::worktree_add(&repo_path, &path, &branch, spec.new_branch || wanted.is_empty(), spec.start_ref.as_deref())
-                    .await
-                    .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
-                self.discover(Summaries::All).await.map_err(internal)?;
-                let id = path_id(&canonical(&path));
-                let mut inner = self.lock();
-                let created = CreatedWorktree { id: id.clone(), repo_id: spec.repo_id.clone(), name };
-                for seam in &self.seams.worktree_created {
-                    seam(&mut inner, &created)?;
-                }
-                let ev = events::envelope(&inner, "worktree.created", Some(&id));
-                inner.hook_queue.push(ev);
-                inner.worktrees.get(&id).map(|w| Self::worktree_view(&inner, w)).ok_or_else(|| err(ErrorCode::Internal, "worktree created but not discovered")).and_then(ok)
-            }
+            Call::WorktreeCreate(spec) => self.worktree_create(spec).await,
             Call::WorktreeArchive { worktree_id, checkpoint } => self.archive_worktree(&worktree_id, checkpoint).await,
             Call::WorktreeRestore { worktree_id } => self.restore_worktree(&worktree_id).await,
-            Call::WorktreeOpen { worktree_id } => {
-                let needs_pane = {
-                    let inner = self.lock();
-                    if !inner.worktrees.contains_key(&worktree_id) {
-                        return Err(err(ErrorCode::NotFound, "worktree not found"));
-                    }
-                    !inner.tabs.values().any(|t| t.worktree_id == worktree_id)
-                };
-                let mut inner = self.lock();
-                if needs_pane {
-                    let cwd = inner.worktrees[&worktree_id].path.clone();
-                    self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, None, SplitDirection::Horizontal, None, None, None)?;
-                }
-                Self::touch(&mut inner, &worktree_id);
-                let w = Self::worktree_view(&inner, &inner.worktrees[&worktree_id]);
-                let tabs = Self::tabs_of(&inner, &worktree_id);
-                let handle = self.clone();
-                let id = worktree_id.clone();
-                tokio::spawn(async move {
-                    handle.refresh_git(&id).await;
-                });
-                ok(WorktreeOpened { worktree: w, tabs })
-            }
+            Call::WorktreeOpen { worktree_id } => self.worktree_open(worktree_id).await,
             Call::WorktreeResolve { path } => {
                 let inner = self.lock();
                 let id = Self::resolve_worktree(&inner.worktrees, &path).ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", path.display())))?;
@@ -1656,67 +2039,9 @@ impl Daemon {
                 let inner = self.lock();
                 inner.worktrees.get(&worktree_id).map(|w| w.metadata.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found")).and_then(ok)
             }
-            Call::MetadataSet { worktree_id, patch } => {
-                let mut inner = self.lock();
-                let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
-                let mut next = patch.apply(&w.metadata);
-                next.display_name = next.display_name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-                next.project = next.project.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-                next.tags = next.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect();
-                next.state = next.state.map(|st| st.trim().to_string()).filter(|st| !st.is_empty());
-                if let Some(st) = &next.state {
-                    if !inner.config.states.iter().any(|d| &d.id == st) {
-                        let known: Vec<&str> = inner.config.states.iter().map(|d| d.id.as_str()).collect();
-                        return Err(err(ErrorCode::BadRequest, format!("unknown state {st:?}; known states: {}", known.join(", "))));
-                    }
-                }
-                let previous_state = w.metadata.state.clone();
-                let row = Self::meta_row_of(&inner, w, next.clone());
-                inner.store.meta_upsert(&row).map_err(internal)?;
-                inner.worktrees.get_mut(&worktree_id).unwrap().metadata = next.clone();
-                if previous_state != next.state {
-                    let mut ev = events::envelope(&inner, "worktree.state_changed", Some(&worktree_id));
-                    ev.previous_state = previous_state.clone();
-                    inner.hook_queue.push(ev);
-                    let mut ev = activity::event(CoreActivity::StateChanged, Some(&worktree_id), format!("state → {}", next.state.as_deref().unwrap_or("none")));
-                    ev.detail = Some(Self::worktree_name(&inner, &worktree_id));
-                    ev.payload = json!({ "state": next.state, "previous_state": previous_state });
-                    Self::record(&mut inner, ev);
-                }
-                Self::emit(&mut inner, Event::MetadataChanged { worktree_id: worktree_id.clone(), metadata: next.clone() });
-                let worktrees = Self::worktree_views(&inner);
-                Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
-                ok(next)
-            }
-
-            Call::TabCreate { worktree_id, title } => {
-                let mut inner = self.lock();
-                let cwd = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
-                let tab = Self::create_tab(&mut inner, &worktree_id, title);
-                for t in inner.tabs.values().filter(|t| t.worktree_id == worktree_id && t.id != tab.id).cloned().collect::<Vec<_>>() {
-                    let _ = inner.store.tab_upsert(&t);
-                }
-                self.spawn_in_worktree(&mut inner, &worktree_id, cwd, Some(&tab.id), None, SplitDirection::Horizontal, None, None, None)?;
-                ok(Self::tab_view(&inner, &inner.tabs[&tab.id]))
-            }
-            Call::TabClose { tab_id, force } => {
-                let mut inner = self.lock();
-                let tab = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.clone();
-                let panes = layout::pane_ids(&tab.layout);
-                if !force && panes.iter().any(|p| Self::pane_has_children(&inner, p)) {
-                    return Err(err(ErrorCode::Conflict, "tab has running processes"));
-                }
-                reopen::remember(&mut inner, &tab);
-                for p in &panes {
-                    Self::set_stop_intent(&mut inner, p);
-                    self.persist_scrollback(&inner, p);
-                    Self::remove_pane(&mut inner, p);
-                }
-                inner.tabs.remove(&tab_id);
-                let _ = inner.store.tab_delete(&tab_id);
-                Self::emit_tabs(&mut inner, &tab.worktree_id);
-                Ok(Value::Null)
-            }
+            Call::MetadataSet { worktree_id, patch } => self.metadata_set(worktree_id, patch).await,
+            Call::TabCreate { worktree_id, title } => self.tab_create(worktree_id, title).await,
+            Call::TabClose { tab_id, force } => self.tab_close(tab_id, force).await,
             Call::TabRename { tab_id, title } => {
                 let mut inner = self.lock();
                 let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
@@ -1754,36 +2079,8 @@ impl Daemon {
                 let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
                 ok(pane.scrollback.plain_tail(lines.unwrap_or(8).clamp(1, 200) as usize))
             }
-            Call::TabActivate { tab_id } => {
-                let mut inner = self.lock();
-                let worktree_id = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.worktree_id.clone();
-                let changed: Vec<TabRow> = inner
-                    .tabs
-                    .values_mut()
-                    .filter(|t| t.worktree_id == worktree_id && t.is_active != (t.id == tab_id))
-                    .map(|t| {
-                        t.is_active = t.id == tab_id;
-                        t.clone()
-                    })
-                    .collect();
-                for t in &changed {
-                    let _ = inner.store.tab_upsert(t);
-                }
-                if !changed.is_empty() {
-                    Self::emit_tabs(&mut inner, &worktree_id);
-                }
-                Ok(Value::Null)
-            }
-            Call::LayoutResize { tab_id, split_id, ratio } => {
-                let mut inner = self.lock();
-                let tab = inner.tabs.get_mut(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?;
-                tab.layout = layout::resize(&tab.layout, &split_id, ratio);
-                let tab = tab.clone();
-                inner.store.tab_upsert(&tab).map_err(internal)?;
-                Self::emit_tabs(&mut inner, &tab.worktree_id);
-                Ok(Value::Null)
-            }
-
+            Call::TabActivate { tab_id } => self.tab_activate(tab_id).await,
+            Call::LayoutResize { tab_id, split_id, ratio } => self.layout_resize(tab_id, split_id, ratio).await,
             Call::PaneList { worktree_id } => ok(Self::pane_views(&self.lock(), worktree_id.as_deref())),
             Call::PaneCreate(spec) => {
                 let mut inner = self.lock();
@@ -1800,53 +2097,8 @@ impl Daemon {
                 let (tab_id, new_id) = self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, Some(&pane_id), direction, command.as_deref(), None, None)?;
                 ok(Self::pane_result(&inner, &new_id, &tab_id)?)
             }
-            Call::PaneClose { pane_id, force } => {
-                let mut inner = self.lock();
-                let worktree_id = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.row.worktree_id.clone();
-                if !force && Self::pane_has_children(&inner, &pane_id) {
-                    return Err(err(ErrorCode::Conflict, "pane has running processes"));
-                }
-                reopen::remember_if_last(&mut inner, &pane_id);
-                Self::set_stop_intent(&mut inner, &pane_id);
-                self.persist_scrollback(&inner, &pane_id);
-                Self::remove_pane(&mut inner, &pane_id);
-                Self::emit_tabs(&mut inner, &worktree_id);
-                Ok(Value::Null)
-            }
-            Call::PaneFocus { pane_id } => {
-                let mut inner = self.lock();
-                let (tab_id, worktree_id) = {
-                    let p = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-                    (p.row.tab_id.clone(), p.row.worktree_id.clone())
-                };
-                let changed: Vec<TabRow> = inner
-                    .tabs
-                    .values_mut()
-                    .filter(|t| t.worktree_id == worktree_id)
-                    .filter_map(|t| {
-                        let active = t.id == tab_id;
-                        let next_pane = if active { Some(pane_id.clone()) } else { t.active_pane_id.clone() };
-                        if t.is_active == active && t.active_pane_id == next_pane {
-                            return None;
-                        }
-                        t.is_active = active;
-                        t.active_pane_id = next_pane;
-                        Some(t.clone())
-                    })
-                    .collect();
-                for t in &changed {
-                    let _ = inner.store.tab_upsert(t);
-                }
-                Self::touch(&mut inner, &worktree_id);
-                for id in inner.store.attention_view_pane(&pane_id, now_ms()).unwrap_or_default() {
-                    Self::emit(&mut inner, Event::AttentionViewed { id });
-                }
-                if !changed.is_empty() {
-                    Self::emit_tabs(&mut inner, &worktree_id);
-                }
-                Self::emit(&mut inner, Event::FocusRequest { worktree_id, tab_id, pane_id });
-                Ok(Value::Null)
-            }
+            Call::PaneClose { pane_id, force } => self.pane_close(pane_id, force).await,
+            Call::PaneFocus { pane_id } => self.pane_focus(pane_id).await,
             Call::PaneRename { pane_id, title } => {
                 let mut inner = self.lock();
                 let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
@@ -1863,80 +2115,22 @@ impl Daemon {
                 pty.write(&data).map_err(internal)?;
                 Ok(Value::Null)
             }
-            Call::PaneResize { pane_id, cols, rows } => {
-                let mut inner = self.lock();
-                Self::terminal_only(&inner, &pane_id)?;
-                let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-                if pane.row.cols != cols || pane.row.rows != rows {
-                    pane.row.cols = cols;
-                    pane.row.rows = rows;
-                    if let Some(pty) = &pane.pty {
-                        let _ = pty.resize(cols.max(2), rows.max(2));
-                    }
-                    let row = pane.row.clone();
-                    let _ = inner.store.pane_upsert(&row);
-                }
-                Ok(Value::Null)
-            }
-            Call::PaneAttach { pane_id } => {
-                let mut inner = self.lock();
-                Self::terminal_only(&inner, &pane_id)?;
-                let snapshot = crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
-                let view = Self::pane_view(&inner, &pane_id);
-                if let Some(c) = inner.clients.get_mut(&client_id) {
-                    c.attached.insert(pane_id.clone());
-                    let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id, data_base64: B64.encode(snapshot) } };
-                    let _ = c.tx.send(serde_json::to_string(&frame).unwrap_or_default());
-                }
-                ok(view)
-            }
+            Call::PaneResize { pane_id, cols, rows } => self.pane_resize(pane_id, cols, rows).await,
+            Call::PaneAttach { pane_id } => self.pane_attach(client_id, pane_id).await,
             Call::PaneDetach { pane_id } => {
                 if let Some(c) = self.lock().clients.get_mut(&client_id) {
                     c.attached.remove(&pane_id);
                 }
                 Ok(Value::Null)
             }
-            Call::PaneKillTree { pane_id } => {
-                let mut inner = self.lock();
-                let pid = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid).ok_or_else(|| err(ErrorCode::NotFound, "pane not live"))?;
-                Self::set_stop_intent(&mut inner, &pane_id);
-                for child in procs::descendants(&inner.proc_rows, pid) {
-                    procs::kill_tree(&inner.proc_rows, child);
-                }
-                Ok(Value::Null)
-            }
-
+            Call::PaneKillTree { pane_id } => self.pane_kill_tree(pane_id).await,
             Call::AgentList { worktree_id } => {
                 let inner = self.lock();
                 let mut agents: Vec<AgentPresence> = inner.agents.values().filter(|a| worktree_id.as_deref().map_or(true, |w| a.worktree_id == w)).cloned().collect();
                 agents.sort_by(|a, b| (&a.worktree_id, &a.pane_id).cmp(&(&b.worktree_id, &b.pane_id)));
                 ok(agents)
             }
-            Call::AgentSpawn(spec) => {
-                let mut inner = self.lock();
-                let (worktree_id, cwd) = match (&spec.worktree_id, &spec.cwd, &spec.split_from) {
-                    (None, None, Some(from)) => {
-                        let p = inner.panes.get(from).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-                        (p.row.worktree_id.clone(), p.row.cwd.clone())
-                    }
-                    _ => Self::worktree_for_spawn(&inner.worktrees, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
-                };
-                let plan = providers::launch(&inner.config, spec.kind, spec.resume.as_deref(), &self.paths.integrations_dir, &spec.extra_args);
-                let line = agents::shell_line(&plan.argv);
-                let tab_id = if spec.new_tab { Some(Self::create_tab(&mut inner, &worktree_id, Some(spec.kind.label().to_string())).id) } else { spec.tab_id.clone() };
-                let (tab_id, pane_id) = self.spawn_in_worktree(
-                    &mut inner,
-                    &worktree_id,
-                    cwd,
-                    tab_id.as_deref(),
-                    spec.split_from.as_deref(),
-                    SplitDirection::Horizontal,
-                    None,
-                    None,
-                    Some((spec.kind, plan.session_ref, line)),
-                )?;
-                ok(SpawnResult { pane: Self::pane_of(&inner, &pane_id)?, tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
-            }
+            Call::AgentSpawn(spec) => self.agent_spawn(spec).await,
             Call::AgentHook { kind, pane_id, payload, at_ms } => {
                 let outcome = providers::hook_outcome(kind, &payload);
                 let mut inner = self.lock();
@@ -1963,31 +2157,8 @@ impl Daemon {
                 let infos = crate::monitor::classify_all(&inner);
                 ok(infos.into_iter().filter(|p| worktree_id.as_deref().map_or(true, |w| p.worktree_id.as_deref() == Some(w))).collect::<Vec<_>>())
             }
-            Call::ProcessKillTree { pid } => {
-                let inner = self.lock();
-                let owned = crate::monitor::classify_all(&inner).into_iter().any(|p| p.pid == pid && p.ownership == Ownership::Owned);
-                if !owned {
-                    return Err(err(ErrorCode::Unsupported, format!("pid {pid} is not owned by a Tomo pane; refusing to kill it")));
-                }
-                procs::kill_tree(&inner.proc_rows, pid);
-                Ok(Value::Null)
-            }
-
-            Call::Notify { pane_id, worktree_id, level, message } => {
-                let message = message.trim().to_string();
-                if message.is_empty() {
-                    return Err(err(ErrorCode::BadRequest, "message is empty"));
-                }
-                let mut inner = self.lock();
-                let worktree_id = worktree_id
-                    .or_else(|| pane_id.as_ref().and_then(|p| inner.panes.get(p)).map(|p| p.row.worktree_id.clone()))
-                    .ok_or_else(|| err(ErrorCode::BadRequest, "pane_id or worktree_id required"))?;
-                if !inner.worktrees.contains_key(&worktree_id) {
-                    return Err(err(ErrorCode::NotFound, "worktree not found"));
-                }
-                Self::add_attention(&mut inner, &worktree_id, pane_id.as_deref(), level, message);
-                Ok(Value::Null)
-            }
+            Call::ProcessKillTree { pid } => self.process_kill_tree(pid).await,
+            Call::Notify { pane_id, worktree_id, level, message } => self.notify(pane_id, worktree_id, level, message).await,
             Call::AttentionList => ok(self.lock().store.attention_list().map_err(internal)?),
             Call::AttentionNext => {
                 let inner = self.lock();
@@ -2016,76 +2187,9 @@ impl Daemon {
                 };
                 ok(git::list_branches(&repo_path, limit.unwrap_or(git::BRANCH_LIMIT)).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?)
             }
-            Call::FsList { worktree_id, rel_path } => {
-                let root = self.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
-                let dir = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;
-                let mut entries: Vec<FsEntry> = std::fs::read_dir(&dir)
-                    .map_err(|e| err(ErrorCode::Io, e.to_string()))?
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_name() != ".git")
-                    .map(|e| {
-                        let meta = e.metadata().ok();
-                        let name = e.file_name().to_string_lossy().into_owned();
-                        let rel = if rel_path.is_empty() { name.clone() } else { format!("{}/{}", rel_path.trim_end_matches('/'), name) };
-                        let modified_ms = meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
-                        FsEntry { is_dir: meta.as_ref().map_or(false, |m| m.is_dir()), size: meta.map_or(0, |m| m.len()), modified_ms, name, rel_path: rel }
-                    })
-                    .collect();
-                entries.sort_by(|a, b| (!a.is_dir, a.name.to_lowercase()).cmp(&(!b.is_dir, b.name.to_lowercase())));
-                ok(entries)
-            }
-            Call::OpenExternal { worktree_id, rel_path, target } => {
-                let (root, editor) = {
-                    let inner = self.lock();
-                    let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
-                    (w.path.clone(), inner.config.editor_command.clone())
-                };
-                let path = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;
-                let argv: Vec<String> = match target {
-                    ExternalTarget::Finder => vec!["open".into(), "-R".into(), path.to_string_lossy().into_owned()],
-                    ExternalTarget::Editor => {
-                        let mut argv: Vec<String> = editor.iter().map(|a| a.replace("{path}", &path.to_string_lossy())).collect();
-                        if !editor.iter().any(|a| a.contains("{path}")) {
-                            argv.push(path.to_string_lossy().into_owned());
-                        }
-                        argv
-                    }
-                };
-                if argv.is_empty() {
-                    return Err(err(ErrorCode::BadRequest, "editor_command is empty"));
-                }
-                let launched = std::process::Command::new(&argv[0])
-                    .args(&argv[1..])
-                    .current_dir(&root)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
-                match launched {
-                    Ok(_) => Ok(Value::Null),
-                    Err(e) if target == ExternalTarget::Editor => {
-                        let _ = std::process::Command::new("open").arg(&path).spawn();
-                        let mut inner = self.lock();
-                        Self::emit(&mut inner, Event::Notice { level: NoticeLevel::Warning, message: format!("{} not found ({e}); opened with the default app instead", argv[0]) });
-                        Ok(Value::Null)
-                    }
-                    Err(e) => Err(err(ErrorCode::Io, format!("{}: {e}", argv[0]))),
-                }
-            }
-
-            Call::OpenLocation { path, line, col } => {
-                if !path.is_absolute() {
-                    return Err(err(ErrorCode::BadRequest, "path must be absolute"));
-                }
-                if !path.exists() {
-                    return Err(err(ErrorCode::NotFound, format!("{} does not exist", path.display())));
-                }
-                let editor_command = self.lock().config.editor_command.clone();
-                if let Some(message) = editor::open_location(&editor_command, &path, line, col) {
-                    Self::emit(&mut self.lock(), Event::Notice { level: NoticeLevel::Warning, message });
-                }
-                Ok(Value::Null)
-            }
+            Call::FsList { worktree_id, rel_path } => self.fs_list(worktree_id, rel_path).await,
+            Call::OpenExternal { worktree_id, rel_path, target } => self.open_external(worktree_id, rel_path, target).await,
+            Call::OpenLocation { path, line, col } => self.open_location(path, line, col).await,
             Call::SessionList { worktree_id, limit } => {
                 let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
                 let home = dirs::home_dir().ok_or_else(|| err(ErrorCode::Internal, "no home directory"))?;
@@ -2102,70 +2206,8 @@ impl Daemon {
                 let waiting: Vec<Id> = inner.agents.values().filter(|a| a.state == AgentState::Waiting).map(|a| a.pane_id.clone()).collect();
                 ok(inner.store.activity_list(&query, &waiting).map_err(internal)?)
             }
-            Call::CheckpointCreate(spec) => {
-                let message = spec.message.trim().to_string();
-                if message.is_empty() {
-                    return Err(err(ErrorCode::BadRequest, "message is empty"));
-                }
-                let mut inner = self.lock();
-                let pane = spec.pane_id.as_deref().and_then(|p| inner.panes.get(p)).map(|p| (p.row.id.clone(), p.row.worktree_id.clone()));
-                let worktree_id = spec.worktree_id.clone().or_else(|| pane.as_ref().map(|(_, w)| w.clone())).ok_or_else(|| err(ErrorCode::BadRequest, "pane_id or worktree_id required"))?;
-                if !inner.worktrees.contains_key(&worktree_id) {
-                    return Err(err(ErrorCode::NotFound, "worktree not found"));
-                }
-                let pane_id = pane.map(|(p, _)| p);
-                let agent = pane_id.as_deref().and_then(|p| inner.agents.get(p)).cloned();
-                let title = spec.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-                let item = AttentionItem {
-                    id: new_id(),
-                    worktree_id: worktree_id.clone(),
-                    pane_id: pane_id.clone(),
-                    level: AttentionLevel::Attention,
-                    message: title.clone().unwrap_or_else(|| message.clone()),
-                    created_at_ms: now_ms(),
-                    viewed_at_ms: None,
-                    kind: AttentionKind::Checkpoint,
-                    url: spec.url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()),
-                    agent_kind: agent.as_ref().map(|a| a.kind),
-                    resolved_at_ms: None,
-                };
-                Self::push_attention(&mut inner, item.clone());
-                let mut ev = activity::event(CoreActivity::CheckpointCreated, Some(&worktree_id), item.message.clone());
-                ev.pane_id = pane_id.clone();
-                ev.agent_kind = item.agent_kind;
-                ev.detail = title.is_some().then_some(message);
-                ev.payload = json!({ "url": item.url });
-                ev.attention_id = Some(item.id.clone());
-                Self::record(&mut inner, ev);
-                let mut hook = events::envelope(&inner, "checkpoint.created", Some(&worktree_id));
-                hook.attention = Some(item.clone());
-                hook.pane = pane_id.as_deref().and_then(|p| Self::hook_pane(&inner, p));
-                hook.agent = agent.map(|a| HookAgent { kind: a.kind, state: a.state, session_ref: a.session_ref });
-                inner.hook_queue.push(hook);
-                ok(item)
-            }
-            Call::CheckpointResolve { id } => {
-                let mut inner = self.lock();
-                let item = inner.store.attention_get(&id).map_err(internal)?.ok_or_else(|| err(ErrorCode::NotFound, "attention item not found"))?;
-                if item.resolved_at_ms.is_some() {
-                    return ok(item);
-                }
-                let now = now_ms();
-                inner.store.attention_resolve(&id, now).map_err(internal)?;
-                let item = AttentionItem { resolved_at_ms: Some(now), ..item };
-                Self::emit(&mut inner, Event::AttentionResolved { id: id.clone() });
-                let mut ev = activity::event(CoreActivity::CheckpointResolved, Some(&item.worktree_id), format!("{} resolved", item.message));
-                ev.pane_id = item.pane_id.clone();
-                ev.agent_kind = item.agent_kind;
-                ev.payload = json!({ "kind": item.kind, "url": item.url });
-                ev.attention_id = Some(id);
-                Self::record(&mut inner, ev);
-                let mut hook = events::envelope(&inner, "checkpoint.resolved", Some(&item.worktree_id));
-                hook.attention = Some(item.clone());
-                hook.pane = item.pane_id.as_deref().and_then(|p| Self::hook_pane(&inner, p));
-                inner.hook_queue.push(hook);
-                ok(item)
-            }
+            Call::CheckpointCreate(spec) => self.checkpoint_create(spec).await,
+            Call::CheckpointResolve { id } => self.checkpoint_resolve(id).await,
             Call::BrowserOpen { worktree_id, url, tab_id } => self.browser_open(worktree_id, url, tab_id),
             Call::BrowserNavigate { pane_id, url } => self.browser_navigate(pane_id, url),
             Call::UiStateGet => {
