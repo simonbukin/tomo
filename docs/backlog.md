@@ -256,6 +256,52 @@ still waits for 2.1.
 and waits on a localhost callback, so the Tomo pane is not in that path. If it
 comes back, the first step is the callback port that the login prints.
 
+### 2.7 Git ingest: branch search, and a branch that is not required — M, core
+Two halves of one flow. The user reads a pull request, copies its branch name,
+and wants a worktree for it in one move. Today the dialog demands a branch, and
+nothing in Tomo lists branches: `git.rs` parses worktree lists, status, and
+numstat only.
+
+**Search.** Add a daemon call that lists branches for a repository, from
+`git for-each-ref refs/heads refs/remotes` with the short name, the commit
+date, and the upstream. Fold `origin/x` into a local `x`, order by newest
+commit, and cap the list. The branch field becomes a search box: typing filters,
+pasting a full name works with no search at all, choosing a branch that exists
+turns "create this branch" off, and choosing a remote-only branch creates a
+local branch that tracks it (`start_ref = origin/<name>`). Build it from the
+existing primitives; `docs/ui.md` forbids a hand-rolled combobox.
+
+**Optional branch.** A new config key `branch_prefix` (empty by default). With
+the box empty, the branch becomes `<branch_prefix><town>`, so a worktree is one
+click and still gets a real branch name. Orca on this machine names every
+worktree `simon/<slug>`, which is the shape this copies; Conductor uses bare
+names, which is why the prefix is a setting and not a rule. Show the computed
+name as the placeholder so the user sees what they will get, and keep the wire
+change as small as an empty string meaning "use the default".
+
+### 2.8 Startup that feels instant — M, measure first
+Goal: the window shows the last workspace with no visible wait. Two cases
+differ, so measure them apart: the usual start, where the daemon already runs
+and only the client mounts, and the cold start, where the daemon boots and
+discovers first.
+
+Known from `docs/addons-baseline.md`: the socket answers in 8 ms, worktrees
+become visible at 225 ms, and the summaries finish at 438 ms. The client mount
+and the first paint have never been measured, because that needs a window.
+
+Measure these three before changing anything: daemon boot and discovery, client
+mount to first useful paint, and pane restore (one PTY spawn per pane). Then the
+levers, in the order they are likely to pay:
+
+- Do not hold the first snapshot for git status. Send the worktrees, then fill
+  the summaries as they arrive.
+- Restore the focused pane first and the rest behind it.
+- Keep the daemon warm, so the usual start is connect and render.
+- Trim the main chunk (about 722 kB today) so parsing is not on the path to
+  first paint.
+
+Change one thing at a time, and keep the idle CPU gate from the baseline.
+
 ## 3. New features, each an addon
 
 | Idea | Shape | Effort |
