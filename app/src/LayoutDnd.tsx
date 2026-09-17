@@ -3,13 +3,13 @@ import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { sortableKeyboardCoordinates, useSortable, type SortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { movePane, moveTab, type PaneTarget } from "./commands/panes";
+import { movePane, moveTab, paneToNewTab, type PaneTarget } from "./commands/panes";
 import type { DropPlace } from "./generated";
 import { insertionSide, moveBoxes, stickyRegion, type Box, type Sticky } from "./layoutModel";
 import type { Id, LayoutNode } from "./types";
 
 type DragData = { kind: "tab"; tabId: Id } | { kind: "pane"; paneId: Id; tabId: Id; title: string };
-type DropData = { kind: "tab"; tabId: Id } | { kind: "pane-drop"; paneId: Id };
+type DropData = { kind: "tab"; tabId: Id } | { kind: "pane-drop"; paneId: Id } | { kind: "new-tab" };
 type Hover = { dragId: Id; paneId: Id; place: DropPlace } | null;
 type Anchor = { paneId: Id; at: Sticky } | null;
 
@@ -22,7 +22,7 @@ const collision: CollisionDetection = (args) => {
   const tabDrag = dragData(args.active)?.kind === "tab";
   const droppableContainers = args.droppableContainers.filter((c) => {
     const kind = dropData(c)?.kind;
-    return kind === "tab" || (!tabDrag && kind === "pane-drop");
+    return kind === "tab" || (!tabDrag && (kind === "pane-drop" || kind === "new-tab"));
   });
   return (tabDrag ? closestCenter : pointerWithin)({ ...args, droppableContainers });
 };
@@ -52,10 +52,11 @@ export interface LayoutDndProps {
   children: ReactNode;
   onTabMove?: (tabId: Id, position: number) => void;
   onPaneMove?: (paneId: Id, target: PaneTarget, place: DropPlace) => void;
+  onPaneToNewTab?: (paneId: Id) => void;
 }
 
-/** One drag context for the tab strip and the split layout, so a pane can drop on a pane or on a tab. */
-export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane }: LayoutDndProps) {
+/** One drag context for the tab strip and the split layout, so a pane can drop on a pane, on a tab, or into a tab of its own. */
+export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane, onPaneToNewTab = paneToNewTab }: LayoutDndProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const [hover, setHover] = useState<Hover>(null);
   const anchor = useRef<Anchor>(null);
@@ -82,6 +83,7 @@ export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane
       if (index !== undefined) onTabMove(from.tabId, index);
     }
     if (from?.kind === "pane" && to?.kind === "tab" && to.tabId !== from.tabId) onPaneMove(from.paneId, { tabId: to.tabId }, "right");
+    if (from?.kind === "pane" && to?.kind === "new-tab") onPaneToNewTab(from.paneId);
     if (from?.kind === "pane" && drop) onPaneMove(from.paneId, { paneId: drop.paneId }, drop.place);
   };
   return (
@@ -95,6 +97,18 @@ export function LayoutDnd({ children, onTabMove = moveTab, onPaneMove = movePane
 function PaneDragOverlay() {
   const data = dragData(useDndContext().active);
   return <DragOverlay dropAnimation={null}>{data?.kind === "pane" ? <div className="pane-drag-chip">{data.title || "pane"}</div> : null}</DragOverlay>;
+}
+
+/** A target beside the tabs that gives a dragged pane its own tab. It shows only during a pane drag, so the strip stays quiet. */
+export function NewTabDrop() {
+  const dragging = dragData(useDndContext().active)?.kind === "pane";
+  const { setNodeRef, isOver } = useDroppable({ id: "new-tab-drop", data: { kind: "new-tab" } satisfies DropData });
+  if (!dragging) return null;
+  return (
+    <div ref={setNodeRef} className={`tab-newdrop${isOver ? " tab-newdrop-over" : ""}`}>
+      new tab
+    </div>
+  );
 }
 
 export function useTabSortable(tabId: Id, disabled = false) {
