@@ -31,7 +31,7 @@ const mulberry32 = (state: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-type Params = {
+export type Params = {
   half: number;
   depth: number;
   bend: number;
@@ -40,6 +40,17 @@ type Params = {
   eyeGap: number;
   eyeR: number;
   eyeRise: number;
+};
+
+export const TOMO: Params = {
+  half: 29,
+  depth: 11,
+  bend: 0.25,
+  lean: -3,
+  stroke: 12,
+  eyeGap: 42.5,
+  eyeR: 7.4,
+  eyeRise: 19,
 };
 
 const draw = (seed: Seed): Params => {
@@ -82,8 +93,10 @@ const quad = (a: Point, c: Point, b: Point, t: number): Point => {
 const SAMPLES = 21;
 
 export function face(seed: Seed, size = 128): Face {
-  const p = size < SMALL_SIZE ? forSmall(draw(seed)) : draw(seed);
+  return faceFrom(size < SMALL_SIZE ? forSmall(draw(seed)) : draw(seed));
+}
 
+export function faceFrom(p: Params): Face {
   const start: Point = { x: -p.half, y: -p.lean };
   const end: Point = { x: p.half, y: p.lean };
   const control: Point = { x: p.bend * p.half, y: p.depth * 2 };
@@ -123,8 +136,15 @@ export function face(seed: Seed, size = 128): Face {
   };
 }
 
+export function tomoSvg(size: number, ink = "currentColor") {
+  return svgFor(faceFrom(TOMO), size, ink);
+}
+
 export function faceSvg(seed: Seed, size: number, ink = "currentColor") {
-  const f = face(seed, size);
+  return svgFor(face(seed, size), size, ink);
+}
+
+function svgFor(f: Face, size: number, ink: string) {
   const paths = f.paths.map((d) => `<path d="${d}"/>`).join("");
   const dots = f.dots.map((d) => `<circle cx="${d.cx}" cy="${d.cy}" r="${d.r}"/>`).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${BOX} ${BOX}" width="${size}" height="${size}" role="img" aria-label="tomo"><g fill="none" stroke="${ink}" stroke-width="${f.stroke}" stroke-linecap="round" stroke-linejoin="round">${paths}</g><g fill="${ink}">${dots}</g></svg>`;

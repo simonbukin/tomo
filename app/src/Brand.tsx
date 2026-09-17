@@ -1,7 +1,7 @@
-import { BOX, face, type Seed } from "./brandFace";
+import { BOX, face, faceFrom, TOMO, type Seed } from "./brandFace";
 
-export function Mark({ size = 16, seed = "tomo" }: { size?: number; seed?: Seed }) {
-  const f = face(seed, size);
+export function Mark({ size = 16, seed }: { size?: number; seed?: Seed }) {
+  const f = seed === undefined ? faceFrom(TOMO) : face(seed, size);
   return (
     <svg className="brand-mark" width={size} height={size} viewBox={`0 0 ${BOX} ${BOX}`} role="img" aria-label="tomo">
       <g fill="none" stroke="currentColor" strokeWidth={f.stroke} strokeLinecap="round" strokeLinejoin="round">

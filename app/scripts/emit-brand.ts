@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BOX, face, faceSvg, type Seed } from "../src/brandFace.ts";
+import { BOX, face, faceFrom, faceSvg, TOMO, tomoSvg, type Seed } from "../src/brandFace.ts";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "brand");
 const SEEDS: Seed[] = Array.from({ length: 64 }, (_, i) => i + 1);
@@ -18,8 +18,8 @@ const WORDMARK_INNER = `  <g fill="none" stroke="currentColor" stroke-width="2" 
 const wordmarkSvg = () =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 43 16" width="43" height="16" role="img" aria-label="tomo">\n${WORDMARK_INNER}\n</svg>\n`;
 
-const lockupSvg = (seed: Seed) => {
-  const f = face(seed, 16);
+const lockupSvg = () => {
+  const f = faceFrom(TOMO);
   const paths = f.paths.map((d) => `<path d="${d}"/>`).join("");
   const dots = f.dots.map((d) => `<circle cx="${d.cx}" cy="${d.cy}" r="${d.r}"/>`).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 20" width="70" height="20" role="img" aria-label="tomo">
@@ -176,12 +176,12 @@ ${ranked
 const ranked = SEEDS.map(score).sort((a, b) => b.total - a.total);
 const shortlist = ranked.slice(0, 8).map((r) => r.seed);
 const CHOSEN = ranked.slice(0, 5).map((r) => r.seed);
-const LOCKUP_SEED = CHOSEN[0];
 
 mkdirSync(OUT, { recursive: true });
+writeFileSync(join(OUT, "tomo-face.svg"), `${tomoSvg(128)}\n`);
 for (const seed of CHOSEN) writeFileSync(join(OUT, `tomo-face-${seed}.svg`), `${faceSvg(seed, 128)}\n`);
 writeFileSync(join(OUT, "tomo-wordmark.svg"), wordmarkSvg());
-writeFileSync(join(OUT, "tomo-lockup.svg"), lockupSvg(LOCKUP_SEED));
+writeFileSync(join(OUT, "tomo-lockup.svg"), lockupSvg());
 writeFileSync(join(OUT, "smiles.html"), html(shortlist, ranked));
 
 console.log("seed\teye\tgap\twidth\tdepth\tclear\tscore");
@@ -189,4 +189,4 @@ for (const r of ranked) {
   console.log([r.seed, r.eye, r.gap, r.width, r.depth, r.clearance, r.total].map((v) => (typeof v === "number" ? v.toFixed(2) : v)).join("\t"));
 }
 console.log("shortlist", shortlist.join(","));
-console.log("chosen", CHOSEN.join(","), "lockup", LOCKUP_SEED);
+console.log("chosen", CHOSEN.join(","), "lockup tomo-face.svg");
