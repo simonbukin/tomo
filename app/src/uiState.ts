@@ -4,7 +4,7 @@ import type { CoreSection, Filter, FilterKind, HomeOptions, HomeScope, Id, Sideb
 
 export const defaultHome: HomeOptions = { query: "", scope: { kind: "all" }, filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
-export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showMain: false, showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
+export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showMain: false, showArchivedInSidebar: false, collapsedRepos: [], collapsedSections: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
@@ -74,6 +74,7 @@ export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonView
     showMain: bool(s.showMain, defaultUi.showMain),
     showArchivedInSidebar: bool(s.showArchivedInSidebar, defaultUi.showArchivedInSidebar),
     collapsedRepos: strings(s.collapsedRepos),
+    collapsedSections: strings(s.collapsedSections),
     hiddenRepos: strings(s.hiddenRepos),
     showHiddenRepos: bool(s.showHiddenRepos, defaultUi.showHiddenRepos),
     home: sanitizeHome(s.home),

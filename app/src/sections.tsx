@@ -1,9 +1,10 @@
-import { Cpu, Folder, GitBranch, MessagesSquare, Tag } from "lucide-react";
+import { ChevronDown, ChevronRight, Cpu, Folder, GitBranch, MessagesSquare, Tag } from "lucide-react";
 import type { ReactNode } from "react";
-import { inspectorSections } from "./addons";
+import { gitMarkers, inspectorSections } from "./addons";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./components/ui";
 import type { InspectorSection } from "./addons/types";
 import { GLYPH, type Status } from "./glyphs";
-import type { State } from "./store";
+import { getState, setUi, useStore, type State } from "./store";
 import type { Worktree } from "./types";
 
 export interface RailMarker {
@@ -16,7 +17,8 @@ export type RailSection = Omit<InspectorSection, "component">;
 
 const BEFORE_ADDONS: readonly RailSection[] = [
   { id: "worktree", label: "Worktree", icon: Tag },
-  { id: "git", label: "Git", icon: GitBranch, marker: (_s, w) => (w.git?.dirty ? { glyph: "*", tone: "dirty", text: "dirty" } : null) },
+  // Trouble with the branch outranks a dirty tree, so an addon marker wins when it has one.
+  { id: "git", label: "Git", icon: GitBranch, marker: (s, w) => gitMarkers(s, w) ?? (w.git?.dirty ? { glyph: "*", tone: "dirty", text: "dirty" } : null) },
 ];
 
 const AFTER_ADDONS: readonly RailSection[] = [
@@ -50,5 +52,36 @@ export function SectionLabel({ id, children }: { id: string; children?: ReactNod
       {section?.label.toLowerCase() ?? id}
       {children}
     </div>
+  );
+}
+
+/** Folds a section away and remembers it. The id is the stable `data-section` value. */
+export function toggleSection(id: string, open: boolean): void {
+  const folded = getState().ui.collapsedSections ?? [];
+  setUi({ collapsedSections: open ? folded.filter((x) => x !== id) : [...new Set([...folded, id])] });
+}
+
+/**
+ * One inspector section: a heading that folds it away, an optional control beside the
+ * heading, and the body. Every section is built from this, so they behave alike.
+ */
+export function InspectorSection({ id, control, className, children }: { id: string; control?: ReactNode; className?: string; children: ReactNode }) {
+  const open = useStore((s) => !(s.ui.collapsedSections ?? []).includes(id));
+  const section = railSections().find((x) => x.id === id);
+  const Icon = section?.icon;
+  return (
+    <Collapsible open={open} onOpenChange={(next) => toggleSection(id, next)}>
+      <section className={className ? `side-section ${className}` : "side-section"} data-section={id}>
+        <div className="section-label">
+          <CollapsibleTrigger className="section-fold">
+            {open ? <ChevronDown className="icon chevron" aria-hidden /> : <ChevronRight className="icon chevron" aria-hidden />}
+            {Icon && <Icon className="icon" aria-hidden />}
+            {section?.label.toLowerCase() ?? id}
+          </CollapsibleTrigger>
+          {control}
+        </div>
+        <CollapsiblePanel>{children}</CollapsiblePanel>
+      </section>
+    </Collapsible>
   );
 }

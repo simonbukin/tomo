@@ -30,9 +30,9 @@ describe("open inspector headings", () => {
     const { container } = render(<RightSidebar worktree={wt} />);
     const sections = [...container.querySelectorAll(".side-section")];
     expect(sections.map((s) => s.getAttribute("data-section"))).toEqual(expect.arrayContaining(["worktree", "git", "processes", "sessions", "files"]));
-    for (const section of sections) expect(section.querySelector(".section-label")?.firstElementChild?.tagName).toBe("svg");
-    expect(container.querySelector('[data-section="git"] .section-label')?.textContent).toMatch(/^git/);
-    expect(container.querySelector('[data-section="processes"] .section-label')?.textContent).toMatch(/^processes/);
+    for (const section of sections) expect(section.querySelector(".section-fold")?.children[1]?.tagName).toBe("svg");
+    expect(container.querySelector('[data-section="git"] .section-fold')?.textContent).toMatch(/^git/);
+    expect(container.querySelector('[data-section="processes"] .section-fold')?.textContent).toMatch(/^processes/);
   });
 });
 

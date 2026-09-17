@@ -19,7 +19,7 @@ const wt = { id: "w1", name: "kobe", repo_id: "r1", path: "/src/kobe", branch: "
 const pr = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 12, title: "Add kobe", url: "https://github.com/acme/holly/pull/12", state: "open", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, ...patch });
 const prChanged = (value: PullRequest | null) => act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: value } } as Frame));
 const prCalls = () => vi.mocked(rpc).mock.calls.filter(([method]) => method === "pr_status");
-const section = () => document.querySelector('[data-section="pr"]');
+const section = () => document.querySelector('[data-section="git"]');
 const agent = (pane: string): AgentPresence => ({ pane_id: pane, worktree_id: "w1", kind: "claude", state: "working", session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null }) as AgentPresence;
 
 const initial = getState();
@@ -31,7 +31,7 @@ afterEach(() => {
   Object.keys(replies).forEach((k) => delete replies[k]);
 });
 
-describe("GitHub pull request inspector section", () => {
+describe("GitHub pull request rows inside the git section", () => {
   it("asks pr_status when it mounts and every 120 s while it stays mounted", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const { unmount } = render(<RightSidebar worktree={wt} />);
@@ -55,8 +55,8 @@ describe("GitHub pull request inspector section", () => {
     render(<RightSidebar worktree={wt} />);
     await screen.findByText("Add kobe");
     expect(section()).toHaveTextContent("#12");
-    expect(section()).toHaveTextContent("open · draft · changes requested");
-    expect(section()).toHaveTextContent("1 passed · 1 failed · 1 pending");
+    expect(section()).toHaveTextContent("open, draft, changes requested");
+    expect(section()).toHaveTextContent("1 passed, 1 failed, 1 pending");
     expect(section()).toHaveTextContent("mergeconflicting");
     expect(section()?.querySelector(".state.pr-open")).not.toBeNull();
     expect(section()?.querySelector(".state.check-failed")).not.toBeNull();
@@ -79,7 +79,7 @@ describe("GitHub pull request inspector section", () => {
   it("says when the branch has no pull request", async () => {
     replies.pr_status = { available: true, reason: null, pr: null };
     render(<RightSidebar worktree={wt} />);
-    expect(await screen.findByText("no pull request for feat/kobe")).toBeInTheDocument();
+    expect(await screen.findByText("none")).toBeInTheDocument();
   });
 
   it("replaces the pull request on screen when pr_changed arrives", async () => {
@@ -94,11 +94,11 @@ describe("GitHub pull request inspector section", () => {
 describe("GitHub marks outside the inspector", () => {
   it("marks failed checks before a merge on the right rail", () => {
     render(<RightRail worktree={wt} />);
-    expect(screen.getByRole("button", { name: "Pull request" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Git" })).toBeInTheDocument();
     prChanged(pr({ state: "merged", checks_failed: 1 }));
-    expect(screen.getByRole("button", { name: "Pull request, checks failed" })).toHaveTextContent("×");
+    expect(screen.getByRole("button", { name: "Git, checks failed" })).toHaveTextContent("×");
     prChanged(pr({ state: "merged" }));
-    expect(screen.getByRole("button", { name: "Pull request, merged" })).toHaveTextContent("✓");
+    expect(screen.getByRole("button", { name: "Git, merged" })).toHaveTextContent("✓");
   });
 
   it("shows a merged pull request or failed checks as the last NOW signal", () => {
