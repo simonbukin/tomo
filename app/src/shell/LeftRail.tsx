@@ -1,4 +1,4 @@
-import { History, House } from "lucide-react";
+import { Bot, History, House } from "lucide-react";
 import { Fragment } from "react";
 import type { Signal } from "../activityModel";
 import { addonViews } from "../addons";
@@ -53,6 +53,9 @@ export function LeftRail() {
       <IconButton label={count ? `Activity, ${count} need you` : "Activity"} shortcut={shortcut("activity")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("activity")} onClick={() => setUi({ view: "activity" })}>
         <History className="icon" />
         {count > 0 && <span className="rail-count" aria-hidden>{count}</span>}
+      </IconButton>
+      <IconButton label="Agents" shortcut={shortcut("agents")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("agents")} onClick={() => setUi({ view: "agents" })}>
+        <Bot className="icon" />
       </IconButton>
       {addonViews().map((v) => (
         <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current(v.id)} onClick={() => setUi({ view: v.id })}>

@@ -9,7 +9,7 @@ import type { SidebarMode, Worktree } from "../types";
 import { WorktreeHeader } from "../WorktreeHeader";
 import type { ShellLayout, Side } from "./sidebarMode";
 
-const VIEW_TITLE: Record<string, string> = { home: "home", activity: "activity", worktree: "worktree" };
+const VIEW_TITLE: Record<string, string> = { home: "home", activity: "activity", agents: "agents", worktree: "worktree" };
 const viewTitle = (view: string) => VIEW_TITLE[view] ?? addonViews().find((v) => v.id === view)?.title ?? "home";
 
 const TOGGLE_ICON: Record<Side, Record<SidebarMode, LucideIcon>> = {

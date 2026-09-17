@@ -94,7 +94,7 @@ export type RightSection = CoreSection | (string & {});
 
 export interface UiState {
   /** A core view, or the id of an addon view. */
-  view: "home" | "worktree" | "activity" | (string & {});
+  view: "home" | "worktree" | "activity" | "agents" | (string & {});
   activeWorktreeId: Id | null;
   /** `open` shows the full sidebar at its width, `minimal` a narrow rail, `closed` nothing. */
   leftMode: SidebarMode;

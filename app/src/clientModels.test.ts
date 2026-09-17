@@ -8,6 +8,7 @@ const PURE_CLIENT_MODELS = [
   "./homeQuery.ts",
   "./lenses.ts",
   "./homeScope.ts",
+  "./agentRoster.ts",
   "./layoutModel.ts",
   "./uiState.ts",
   "./shell/sidebarMode.ts",

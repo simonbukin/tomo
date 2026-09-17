@@ -12,6 +12,7 @@
 @import "./palette.css";
 @import "../addons/towns/towns.css";
 @import "./activity.css";
+@import "./agents.css";
 @import "./bottom.css";
 @import "./interaction.css";
 @import "./toast.css";

@@ -1,10 +1,11 @@
-import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Layers, Plus, RotateCw, Star } from "lucide-react";
+import { ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, Layers, Plus, RotateCw, Star } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { addonViews, repoAvatar } from "./addons";
 import { LENSES, LENS_LABEL, lensGroups, type LensGroup } from "./lenses";
+import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
@@ -30,6 +31,7 @@ export function Sidebar() {
   const states = useStore((s) => s.config?.states ?? []);
   const ui = useStore((s) => s.ui);
   const needCount = useStore((s) => needsMe(s).length);
+  const agentCount = rosterSize(Object.values(agents));
   const shortcut = useShortcuts();
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
   const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
@@ -81,6 +83,7 @@ export function Sidebar() {
       <div className="sidebar-top">
         <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
         <IconButton label={needCount ? `Activity, ${needCount} need you` : "Activity"} shortcut={shortcut("activity")} className={`side-btn side-activity${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" />{needCount > 0 && <span className="rail-count" aria-hidden>{needCount}</span>}</IconButton>
+        <IconButton label={agentCount ? `Agents, ${agentCount} running` : "Agents"} shortcut={shortcut("agents")} className={`side-btn${ui.view === "agents" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "agents" })}><Bot className="icon" />{agentCount > 0 && <span className="rail-count" aria-hidden>{agentCount}</span>}</IconButton>
         {addonViews().map((v) => (
           <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} className={`side-btn${ui.view === v.id ? " side-btn-active" : ""}`} onClick={() => setUi({ view: v.id })}><v.icon className="icon" /></IconButton>
         ))}

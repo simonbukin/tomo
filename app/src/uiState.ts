@@ -11,7 +11,7 @@ export const SIDEBAR_MAX_WIDTH = 480;
 
 const MODES: readonly SidebarMode[] = ["open", "minimal", "closed"];
 const CORE_SECTIONS: readonly CoreSection[] = ["worktree", "git", "processes", "sessions", "files"];
-const CORE_VIEWS: readonly string[] = ["home", "worktree", "activity"];
+const CORE_VIEWS: readonly string[] = ["home", "worktree", "activity", "agents"];
 const SORTS: readonly SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
 const FILTER_KINDS: readonly FilterKind[] = ["state", "repo", "project", "tag", "agent", "archived", "attention"];
 
