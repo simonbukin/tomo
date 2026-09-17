@@ -5,7 +5,4 @@
 import type { Tab } from "./Tab";
 import type { Worktree } from "./Worktree";
 
-/**
- * The reply of `worktree_open`.
- */
 export type WorktreeOpened = { worktree: Worktree, tabs: Array<Tab>, };

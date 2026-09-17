@@ -20,11 +20,6 @@ export async function rpc<T = unknown>(method: string, params?: unknown): Promis
   }
 }
 
-/**
- * A daemon reply, parsed at the boundary. Core code then works with a value of the type it
- * claims, so nothing downstream has to guard the shape. A reply that does not match is an
- * `RpcFailure` like any other, so an existing failure path already handles it.
- */
 export async function rpcParsed<T>(method: string, schema: ZodType<T>, params?: unknown): Promise<T> {
   const raw = await rpc<unknown>(method, params);
   const parsed = schema.safeParse(raw);

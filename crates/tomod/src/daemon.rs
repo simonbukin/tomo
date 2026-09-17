@@ -427,8 +427,6 @@ impl Daemon {
         })
     }
 
-    /// The view of a pane that must exist. A handler that just made one uses this, so a
-    /// pane that vanished is an error to the caller and never a panic in the daemon.
     fn pane_of(inner: &Inner, pane_id: &str) -> Result<Pane, RpcError> {
         Self::pane_view(inner, pane_id).ok_or_else(|| err(ErrorCode::Internal, "the pane vanished as it was made"))
     }
@@ -2272,7 +2270,6 @@ async fn futures_summaries(found: &[(Repo, Vec<git::WorktreeEntry>, PathBuf)]) -
     out
 }
 
-/// What an archive needs from the state.
 pub struct ArchiveTarget {
     pub path: PathBuf,
     pub repo_path: PathBuf,
@@ -2280,15 +2277,12 @@ pub struct ArchiveTarget {
     pub head: String,
 }
 
-/// What a restore needs from the state.
 pub struct RestoreTarget {
     pub path: PathBuf,
     pub repo_path: PathBuf,
     pub branch: String,
 }
 
-/// Every reason a restore must not start, decided from state alone. Git is asked for the
-/// branch only after this returns a target.
 pub fn restore_target(w: &WorktreeState, repos: &[Repo], row: &MetaRow) -> Result<RestoreTarget, RpcError> {
     let branch = row
         .archived_branch
@@ -2302,9 +2296,6 @@ pub fn restore_target(w: &WorktreeState, repos: &[Repo], row: &MetaRow) -> Resul
     Ok(RestoreTarget { path: w.path.clone(), repo_path, branch })
 }
 
-/// Every reason an archive must not start, decided from state alone: no lock, no clock, and
-/// no IO. The caller marks the worktree in flight only after this returns a target, so a
-/// refusal cannot leave an id behind in `archiving` and block the worktree for the session.
 pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>) -> Result<ArchiveTarget, RpcError> {
     if w.is_main {
         return Err(err(ErrorCode::BadRequest, "the main worktree cannot be archived"));

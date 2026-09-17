@@ -89,7 +89,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
         }
     }
 
-    let resources = procs::aggregate(&classify_all(inner));
+    let resources = procs::worktrees_by_weight(&classify_all(inner));
     let changed = resources.len() != inner.resources.len()
         || resources.iter().zip(&inner.resources).any(|(a, b)| a.worktree_id != b.worktree_id || a.rss_bytes.abs_diff(b.rss_bytes) > 8 * 1024 * 1024 || (a.cpu_percent - b.cpu_percent).abs() > 2.0 || a.process_count != b.process_count);
     inner.resources = resources;

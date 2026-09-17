@@ -997,7 +997,6 @@ pub struct PaneResult {
     pub tab: Tab,
 }
 
-/// The reply of `worktree_open`.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorktreeOpened {
     pub worktree: Worktree,
