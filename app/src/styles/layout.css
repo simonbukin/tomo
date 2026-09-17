@@ -104,7 +104,7 @@ body.resizing-v { cursor: row-resize; }
 body.resizing-h .xterm, body.resizing-v .xterm { pointer-events: none; }
 
 .brand-mark { flex: none; color: var(--fg); }
-.brand-wordmark { color: var(--fg); }
+.brand-wordmark { color: var(--fg); font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
 
 /* ---- sessions and process icons */
 .session-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--sp-2); min-height: 24px; font-size: var(--fs-1); }

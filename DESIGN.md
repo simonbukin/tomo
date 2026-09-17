@@ -52,15 +52,29 @@ CSS against the tokens and it works in both.
 
 ## Typography
 
-- Inter (`--font-ui`) for the interface. Geist Mono (`--mono`) for
-  terminal-adjacent text: branches, paths, ids, commands, process rows,
-  shortcuts, and numbers.
+Two faces. Do not add a third.
+
+- **Hiragino Sans** (`--font-ui`) is the human face: navigation, headings,
+  labels, buttons, body copy, and Japanese text. It ships with macOS.
+- **Commit Mono** (`--mono`) is the technical face: paths, branch names,
+  ports, ids, commands, timestamps, and code.
+
+Neither font is bundled. Tomo does not ship font files and does not depend on
+one at startup. Each token falls back on its own: `--font-ui` to
+`-apple-system` and `system-ui`, `--mono` to `ui-monospace` and `SF Mono`. A
+machine without Commit Mono gets a clean monospace and loses nothing but the
+preferred shape.
+
+- Use mono where machine-ness helps hierarchy. Do not push every piece of
+  metadata into mono.
 - The scale is four sizes: `--fs-0` 11 px, `--fs-1` 12 px, `--fs-2` 13 px
   (the body), `--fs-3` 14 px. A bigger size needs a reason.
 - Weight goes to 500 or 600 for a name or a title. Nothing is bold for
   emphasis alone.
 - Labels are lowercase. Numbers use tabular figures so columns line up.
-- Do not add a font file for branding.
+- The wordmark is the word `tomo`, set in `--font-ui` at weight 700. The mark
+  is the locked smile in `app/src/brandFace.ts`. There is no third brand
+  object, and no font file for branding.
 
 ## Spacing and density
 
@@ -120,6 +134,14 @@ are a coincidence, four are a pattern.
 
 The design system exists to make a new surface easy, not to make every
 surface the same.
+
+**Tomo is a good default, not a rigid design system.** Every rule here is a
+starting point that works, not a law.
+
+**Agents are allowed to change the design.** Restyle a surface, replace a
+token value, rewrite a feature CSS file, or propose a new direction in this
+document. Keep accessibility, focus behavior, and the semantic state meanings.
+Change the rest when you have a reason.
 
 ## Three degrees of freedom
 
