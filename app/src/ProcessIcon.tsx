@@ -62,15 +62,16 @@ export function brandFor(agent: AgentKind | null | undefined, cmd: string | null
 }
 
 /** A small brand mark for whatever runs in a pane: the agent, or the newest child of the shell. */
-export function ProcessIcon({ agent, cmd, size = 12 }: { agent?: AgentKind | null; cmd?: string | null; size?: number }) {
+export function ProcessIcon({ agent, cmd, size = 12, className }: { agent?: AgentKind | null; cmd?: string | null; size?: number; className?: string }) {
   const box = { width: size, height: size };
-  if (agent === "pi") return <Pi className="icon proc-icon" style={box} aria-label="Pi" />;
-  if (agent === "codex") return <Hexagon className="icon proc-icon" style={box} aria-label="Codex" />;
-  if (/\bplaywright\b/.test((cmd ?? "").toLowerCase())) return <Drama className="icon proc-icon" style={box} aria-label="Playwright" />;
+  const cls = className ? `icon proc-icon ${className}` : "icon proc-icon";
+  if (agent === "pi") return <Pi className={cls} style={box} aria-label="Pi" />;
+  if (agent === "codex") return <Hexagon className={cls} style={box} aria-label="Codex" />;
+  if (/\bplaywright\b/.test((cmd ?? "").toLowerCase())) return <Drama className={cls} style={box} aria-label="Playwright" />;
   const brand = brandFor(agent, cmd);
-  if (!brand) return <TerminalSquare className="icon proc-icon" style={{ width: size, height: size }} aria-hidden />;
+  if (!brand) return <TerminalSquare className={cls} style={box} aria-hidden />;
   return (
-    <svg className="icon proc-icon" viewBox="0 0 24 24" width={size} height={size} role="img" aria-label={brand.title} style={{ width: size, height: size }}>
+    <svg className={cls} viewBox="0 0 24 24" width={size} height={size} role="img" aria-label={brand.title} style={box}>
       <path d={brand.path} fill="currentColor" />
     </svg>
   );

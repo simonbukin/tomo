@@ -68,6 +68,13 @@
 .card-title { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); font-weight: 500; font-size: var(--fs-2); line-height: 1.5; }
 .card-title .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 .card-sub { padding-left: 22px; color: var(--fg-2); font-size: var(--fs-0); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-branch { display: flex; align-items: center; gap: 6px; padding-left: 22px; min-width: 0; font-size: var(--fs-0); font-family: var(--mono); color: var(--fg-1); }
+.card-branch .icon { flex: none; width: 12px; height: 12px; }
+.card-branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-dirty { flex: none; color: var(--fg-3); }
+.card-agents { display: flex; align-items: center; gap: var(--sp-2); padding-left: 22px; margin-top: 3px; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 22px; margin-top: 4px; }
+.tag-chip { padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-1); color: var(--fg-2); font-size: var(--fs-0); line-height: 16px; }
 .card-sub.tags { font-family: var(--font-ui); font-size: var(--fs-1); }
 .card-signals { padding-left: 22px; display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); margin-top: 3px; }
 .card-foot { padding-left: 22px; display: flex; align-items: center; gap: var(--sp-3); margin-top: 3px; font-size: var(--fs-0); color: var(--fg-2); min-height: 16px; font-variant-numeric: tabular-nums; }
