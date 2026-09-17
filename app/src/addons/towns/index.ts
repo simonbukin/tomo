@@ -11,8 +11,8 @@ import { TownSuggest } from "./TownSuggest";
 
 export const towns: Addon = {
   id: "towns",
-  views: [{ id: "towns", title: "japan", label: "Japan map", icon: MapIcon, component: lazy(() => import("./Towns").then((m) => ({ default: m.Towns }))), fallback: MapLoading }],
-  commands: [{ id: "towns", label: "Open Japan map", group: "Navigation", run: () => setUi({ view: "towns" }) }],
+  views: [{ id: "towns", title: "map", label: "Map", icon: MapIcon, component: lazy(() => import("./Towns").then((m) => ({ default: m.Towns }))), fallback: MapLoading }],
+  commands: [{ id: "towns", label: "Open map", group: "Navigation", run: () => setUi({ view: "towns" }) }],
   worktreeNameField: TownSuggest,
   mount: TownReveal,
   onSnapshot: () => {
