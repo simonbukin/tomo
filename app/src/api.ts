@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { ZodType } from "zod";
 import type { Frame, Id } from "./types";
 
 export class RpcFailure extends Error {
@@ -17,6 +18,20 @@ export async function rpc<T = unknown>(method: string, params?: unknown): Promis
     const err = e as { code?: string; message?: string };
     throw new RpcFailure(err?.code ?? "internal", err?.message ?? String(e));
   }
+}
+
+/**
+ * A daemon reply, parsed at the boundary. Core code then works with a value of the type it
+ * claims, so nothing downstream has to guard the shape. A reply that does not match is an
+ * `RpcFailure` like any other, so an existing failure path already handles it.
+ */
+export async function rpcParsed<T>(method: string, schema: ZodType<T>, params?: unknown): Promise<T> {
+  const raw = await rpc<unknown>(method, params);
+  const parsed = schema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  const first = parsed.error.issues[0];
+  const at = first?.path.length ? ` at ${first.path.join(".")}` : "";
+  throw new RpcFailure("malformed", `${method} replied with an unexpected shape${at}: ${first?.message ?? "no detail"}`);
 }
 
 type PaneSink = (bytes: Uint8Array) => void;

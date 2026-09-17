@@ -49,6 +49,8 @@ export type {
   SpawnResult,
   SplitDirection,
   StateDef,
+  Ownership,
+  ProcessInfo,
   Status,
   SystemStats,
   Tab,
@@ -62,23 +64,6 @@ export type {
 import type { AgentKind } from "./generated";
 
 export type Id = string;
-
-export type Ownership = "owned" | "observed" | "unknown";
-
-export interface ProcessInfo {
-  pid: number;
-  ppid: number | null;
-  name: string;
-  cmd: string;
-  cwd: string | null;
-  cpu_percent: number;
-  rss_bytes: number;
-  start_time_s: number;
-  worktree_id: Id | null;
-  pane_id: Id | null;
-  ownership: Ownership;
-  depth: number;
-}
 
 export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" | "manual";
 

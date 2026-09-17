@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MenuItem } from "./components/ui";
 import type { FsEntry, Worktree } from "./types";
 
-vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
+vi.mock("./api", async (importOriginal) => (await import("./test-api")).mockApi(await importOriginal<typeof import("./api")>(), vi.fn(() => Promise.resolve(null))));
 
 const { rpc } = await import("./api");
 const { RightSidebar, ago, sortEntries } = await import("./RightSidebar");

@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "build:agentation": "vite build --config vite.agentation.config.ts",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:schemas": "node scripts/gen-schemas.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
@@ -19,6 +20,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^30.0.1",
+    "ts-to-zod": "^5.1.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.0"
@@ -41,6 +43,7 @@
     "lucide-react": "^1.46.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "simple-icons": "^16.31.0"
+    "simple-icons": "^16.31.0",
+    "zod": "^4.6.5"
   }
 }

@@ -1,5 +1,7 @@
 import { useRef, useSyncExternalStore } from "react";
-import { rpc } from "./api";
+import { z } from "zod";
+import { rpc, rpcParsed } from "./api";
+import { configIssueSchema } from "./generated/schemas";
 import { mergeActivity, needsMeItems } from "./activityModel";
 import { announceAttention } from "./attention";
 import { attentionToastKey } from "./notifyRoute";
@@ -10,7 +12,6 @@ import type { Diagnostic, DiagnosticLevel,
   AgentPresence,
   AttentionItem,
   Config,
-  ConfigIssue,
   Frame,
   Id,
   Pane,
@@ -190,7 +191,7 @@ export function applySnapshot(snap: Snapshot): void {
 function checkHealthOnce(): void {
   if (state.healthChecked) return;
   setState({ healthChecked: true });
-  rpc<ConfigIssue[]>("config_check")
+  rpcParsed("config_check", z.array(configIssueSchema))
     .then((issues) => {
       const errors = issues.filter((i) => i.level === "error");
       if (errors.length) toast({ key: "config", level: "warning", title: "Config problem", detail: `${errors[0].key}: ${errors[0].message}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`, actions: [{ label: "Check", run: () => setState({ dialog: { kind: "config-check" } }) }] });

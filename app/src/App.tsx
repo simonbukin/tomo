@@ -1,7 +1,8 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { addonViews, builtins } from "./addons";
-import { onConnection, onFrame, rpc, startEventPump } from "./api";
+import { onConnection, onFrame, rpc, rpcParsed, startEventPump } from "./api";
+import { snapshotSchema } from "./generated/schemas";
 import { applyZoom, runAction } from "./actions";
 import { zoomKey } from "./appearance";
 import { applyTheme, useResolvedTheme } from "./theme";
@@ -26,7 +27,6 @@ import { activeTab, applyFrame, applySnapshot, getState, keyBindings, setState, 
 import { TabBar } from "./Tabs";
 import { LayoutDnd } from "./LayoutDnd";
 import { focusTerminal } from "./terminals";
-import type { Snapshot } from "./types";
 import { CheckpointBanner } from "./WorktreeHeader";
 import { BottomStrip } from "./shell/BottomStrip";
 import { LeftRail } from "./shell/LeftRail";
@@ -81,7 +81,7 @@ function Shell() {
     const offFrame = onFrame(applyFrame);
     const offConn = onConnection((up) => {
       setState((s) => ({ connected: up, daemonHealth: up ? "healthy" : "reconnecting", connectionNonce: up ? s.connectionNonce + 1 : s.connectionNonce }));
-      if (up) rpc<Snapshot>("subscribe").then(applySnapshot).catch(() => {});
+      if (up) rpcParsed("subscribe", snapshotSchema).then(applySnapshot).catch(() => {});
     });
     startEventPump();
     return () => {

@@ -1,8 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect } from "react";
-import { rpc } from "../../api";
+import { rpcParsed } from "../../api";
+import { prStatusResultSchema } from "../../generated/schemas";
 import { SkeletonRows } from "../../components/ui";
-import type { PrStatusResult } from "../../generated";
 import { useStore } from "../../store";
 import type { Worktree } from "../../types";
 import { prStatusOf, setPrStatus } from "./state";
@@ -11,7 +11,7 @@ const PR_POLL_MS = 120_000;
 
 export function PrDetail({ worktree: w }: { worktree: Worktree }) {
   const status = useStore((s) => prStatusOf(s, w.id));
-  const load = () => rpc<PrStatusResult>("pr_status", { worktree_id: w.id }).then((r) => setPrStatus(w.id, r)).catch(() => {});
+  const load = () => rpcParsed("pr_status", prStatusResultSchema, { worktree_id: w.id }).then((r) => setPrStatus(w.id, r)).catch(() => {});
   useEffect(() => {
     if (!w.exists) return;
     load();
