@@ -1,67 +1,86 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist-mono";
 
-/*
- * Theme tokens. The names match the [theme] keys in config.toml (snake_case becomes kebab-case).
- * theme.ts sets them on :root from the chosen theme; the values here are the Murasaki first paint.
- * Custom CSS can override any token on :root. The short names below derive from the tokens.
+/* Tokens: the whole design system, in one file, in the groups DESIGN.md names.
+ * The 14 color names are the [theme] contract from config.toml (snake_case becomes
+ * kebab-case). theme.ts sets them on :root at runtime, so the values here are the
+ * Murasaki first paint only. Everything else derives from them or is a plain scale.
+ * The short derived names (--bg-1, --fg-2, --line) keep their old spelling: the app
+ * reads them about 250 times, and a rename buys nothing that the groups below do not.
+ * Local CSS owns everything smaller than these. Do not add a component token here.
  */
 :root {
+  /* surfaces */
   --bg: #ffffff;
   --surface: #f5f6f8;
   --surface-hover: #e8e8ee;
+  --bg-1: var(--surface);
+  --bg-2: var(--surface-hover);
+
+  /* text */
   --fg: #17171c;
   --fg-muted: #7a7a86;
   --fg-faint: #a8a8b3;
+  --fg-1: color-mix(in srgb, var(--fg) 55%, var(--fg-muted));
+  --fg-2: var(--fg-muted);
+  --fg-3: var(--fg-faint);
+
+  /* borders */
   --border: #e3e3e9;
   --border-strong: #c8c8d2;
+  --line: var(--border);
+  --line-strong: var(--border-strong);
+
+  /* identity: selection, focus, and active state. Never a large painted area. */
   --accent: #7d4dff;
   --accent-soft: #ede7ff;
+
+  /* semantic state: one vocabulary for agents, git, checks, and runtimes */
   --working: #2a9d5c;
   --waiting: #d98a1a;
   --danger: #d9433b;
   --success: #2a9d5c;
-
-  --bg-1: var(--surface);
-  --bg-2: var(--surface-hover);
-  --bg-3: color-mix(in srgb, var(--surface-hover) 62%, var(--border-strong));
-  --fg-1: color-mix(in srgb, var(--fg) 55%, var(--fg-muted));
-  --fg-2: var(--fg-muted);
-  --fg-3: var(--fg-faint);
-  --line: var(--border);
-  --line-strong: var(--border-strong);
   --waiting-soft: color-mix(in srgb, var(--waiting) 12%, var(--bg));
-  --hot: var(--danger);
-  --hot-soft: color-mix(in srgb, var(--danger) 13%, var(--bg));
-  --ins: var(--success);
-  --del: var(--danger);
-  --term-bg: var(--bg);
+  --danger-soft: color-mix(in srgb, var(--danger) 13%, var(--bg));
 
+  /* floating surfaces: menu, popover, dialog, preview, toast. Flat everywhere else. */
   --shadow-pop: 0 8px 24px rgba(20, 20, 30, 0.18), 0 1px 2px rgba(20, 20, 30, 0.1);
   --shadow-dialog: 0 16px 48px rgba(20, 20, 30, 0.28), 0 1px 2px rgba(20, 20, 30, 0.1);
   --backdrop: rgba(20, 20, 30, 0.3);
+  --z-float: 80;
+  --z-dialog: 90;
 
+  /* typography */
   --font-ui: "Inter Variable", -apple-system, "SF Pro Text", system-ui, sans-serif;
   --mono: "Geist Mono Variable", "SF Mono", Menlo, monospace;
   --fs-0: 11px;
   --fs-1: 12px;
   --fs-2: 13px;
   --fs-3: 14px;
-  --fs-4: 16px;
+
+  /* spacing */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-5: 24px;
-  --radius: 4px;
+
+  /* shape */
   --radius-sm: 3px;
+  --radius: 4px;
   --radius-md: 6px;
+
+  /* motion: three durations, two curves, one press */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --dur-fast: 80ms;
-  --dur: 140ms;
-  --title-h: 38px;
-  --bar-h: 30px;
-  --z-float: 80;
-  --z-dialog: 90;
+  --dur-hover: 100ms;
+  --dur-open: 140ms;
+  --press-scale: 0.97;
+
+  /* the smallest clickable area, whatever the control looks like */
+  --hit-min: 24px;
+
   color-scheme: light;
 }
 
@@ -82,7 +101,7 @@
     --danger: #f26b63;
     --success: #4cc57e;
     --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
-    --hot-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
+    --danger-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
     --backdrop: rgba(0, 0, 0, 0.45);
@@ -106,27 +125,13 @@
   --danger: #f26b63;
   --success: #4cc57e;
   --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
-  --hot-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
+  --danger-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
   --backdrop: rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }
-/* ==== motion and interaction tokens (QOL delight). No colors here: theme tokens stay above. ====
-   --dur-fast (80ms) and --dur (140ms) above stay the base. These add curves and named moments. */
-:root {
-  --ease-out: cubic-bezier(0.2, 0, 0, 1);
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --dur-hover: 100ms;
-  --dur-press: 80ms;
-  --dur-open: 140ms;
-  --dur-close: 100ms;
-  --dur-reveal: 150ms;
-  --press-scale: 0.97;
-  --hit-min: 24px;
-  --focus-ring-width: 2px;
-}
+
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-hover: 0ms; --dur-press: 0ms; --dur-open: 0ms; --dur-close: 0ms; --dur-reveal: 0ms; --press-scale: 1; }
+  :root { --dur-fast: 0ms; --dur-hover: 0ms; --dur-open: 0ms; --press-scale: 1; }
 }
-/* ==== end motion and interaction tokens ==== */

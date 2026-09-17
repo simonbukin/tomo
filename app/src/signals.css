@@ -1,0 +1,19 @@
+/* Signals
+ * The NOW line that Signals.tsx renders: at most three items for one worktree.
+ * Shared by the sidebar row, Home, and the rails, so it stays one vocabulary.
+ * Dots and colors come from the status classes in styles/base.css. No new colors.
+ */
+
+.agent-line { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); }
+.agent-line .agent-kind { color: var(--fg-2); }
+.agent-line .agent-state { color: var(--fg-1); }
+.agent-line.is-waiting .agent-state { color: var(--waiting); }
+.agent-line.is-working .agent-state { color: var(--working); }
+
+.signals { display: inline-flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.signal { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-1); color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.signal .icon { width: 11px; height: 11px; color: var(--fg-2); }
+.signal-attention { color: var(--waiting); }
+.signal-crash, .signal-warn { color: var(--danger); }
+.signal-glyph { font-weight: 600; }
+.signal-runtime { color: var(--fg-2); font-variant-numeric: tabular-nums; }
