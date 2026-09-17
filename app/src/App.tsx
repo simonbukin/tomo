@@ -23,7 +23,7 @@ import { useAppMenu } from "./appMenu";
 import { ShortcutReference } from "./ShortcutReference";
 import { opensShortcutHelp } from "./shortcuts";
 import { Sidebar } from "./Sidebar";
-import { activeTab, applyFrame, applySnapshot, getState, keyBindings, setState, useStore } from "./store";
+import {activeTab, applyFrame, applySnapshot, failQuietly, getState, keyBindings, setState, useStore} from "./store";
 import { TabBar } from "./Tabs";
 import { LayoutDnd } from "./LayoutDnd";
 import { focusTerminal } from "./terminals";
@@ -81,7 +81,7 @@ function Shell() {
     const offFrame = onFrame(applyFrame);
     const offConn = onConnection((up) => {
       setState((s) => ({ connected: up, daemonHealth: up ? "healthy" : "reconnecting", connectionNonce: up ? s.connectionNonce + 1 : s.connectionNonce }));
-      if (up) rpcParsed("subscribe", snapshotSchema).then(applySnapshot).catch(() => {});
+      if (up) rpcParsed("subscribe", snapshotSchema).then(applySnapshot).catch(failQuietly("subscribe"));
     });
     startEventPump();
     return () => {
@@ -123,7 +123,7 @@ function Shell() {
   }, []);
 
   useEffect(() => {
-    if (ui.view === "worktree" && worktree && loaded && !tab) rpc("worktree_open", { worktree_id: worktree.id }).catch(() => {});
+    if (ui.view === "worktree" && worktree && loaded && !tab) rpc("worktree_open", { worktree_id: worktree.id }).catch(failQuietly("worktree_open"));
   }, [ui.view, worktree?.id, loaded, tab?.id]);
 
   const appearance = ui.appearance;

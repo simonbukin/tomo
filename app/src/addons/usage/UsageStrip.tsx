@@ -1,3 +1,4 @@
+import { failQuietly } from "../../store";
 import { resetsIn } from "../../activityModel";
 import { rpcParsed } from "../../api";
 import { usageSnapshotSchema } from "../../schemas";
@@ -9,7 +10,7 @@ import { bucketTone, headlineBucket, microBar, percentText, resetShort, usageIss
 import { setUsage, useUsage } from "./state";
 
 function refreshUsage(): void {
-  rpcParsed("usage_get", z.array(usageSnapshotSchema), { refresh: true }).then(setUsage).catch(() => {});
+  rpcParsed("usage_get", z.array(usageSnapshotSchema), { refresh: true }).then(setUsage).catch(failQuietly("usage_get"));
 }
 
 function MicroBar({ fraction, width }: { fraction: number | null; width?: number }) {

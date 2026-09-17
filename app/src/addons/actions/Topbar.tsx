@@ -5,7 +5,7 @@ import { rpcParsed } from "../../api";
 import { Button, IconButton, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "../../components/ui";
 import { describeBinding } from "../../keys";
 import { openMenu } from "../../MenuHost";
-import { useStore } from "../../store";
+import {failQuietly, useStore} from "../../store";
 import { sourceMarks } from "../index";
 import type { TopbarProps } from "../types";
 import { runningActionIds, runningActionItems, runWorktreeAction, SOURCE_KIND } from "./commands";
@@ -18,7 +18,7 @@ export function ActionButtons({ worktree: w }: TopbarProps) {
     if (set) return;
     rpcParsed("action_list", actionSetSchema, { worktree_id: w.id })
       .then(putActionSet)
-      .catch(() => {});
+      .catch(failQuietly("action_list"));
   }, [w.id, set === null]);
   const running = useStore((s) => runningActionIds(s, w.id));
   const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");

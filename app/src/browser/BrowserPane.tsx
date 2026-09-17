@@ -9,7 +9,7 @@ import { IconButton } from "../components/ui";
 import { openMenu } from "../MenuHost";
 import { browserMenu, isLastPane } from "../menus";
 import { useShortcuts } from "../shortcuts";
-import { getState, useStore } from "../store";
+import {failQuietly, getState, useStore} from "../store";
 import type { Id } from "../types";
 import { browserCommand, browserHostFailed, browserPaneIds, normalizeUrl } from "./browser";
 
@@ -93,7 +93,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
       if (st.title !== undefined) setTitle(st.title);
       if (st.url !== undefined && st.url !== urlRef.current) {
         setUrl(st.url);
-        rpc("browser_navigate", { pane_id: paneId, url: st.url }).catch(() => {});
+        rpc("browser_navigate", { pane_id: paneId, url: st.url }).catch(failQuietly("browser_navigate"));
       }
     });
     return () => {
@@ -121,7 +121,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
     setDraft(null);
     setUrl(next);
     invoke("browser_navigate", { paneId, url: next }).catch(browserHostFailed("browser_navigate", "Navigation failed"));
-    rpc("browser_navigate", { pane_id: paneId, url: next }).catch(() => {});
+    rpc("browser_navigate", { pane_id: paneId, url: next }).catch(failQuietly("browser_navigate"));
   };
 
   const legendTitle = pane?.user_title ?? (title || hostOf(url));

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Map as MapIcon } from "lucide-react";
 import { lazy } from "react";
 import { rpcParsed } from "../../api";
-import { setUi } from "../../store";
+import {failQuietly, setUi} from "../../store";
 import type { Addon } from "../types";
 import { MapLoading } from "./MapLoading";
 import { applyTownFrame, setTownState } from "./state";
@@ -19,7 +19,7 @@ export const towns: Addon = {
   onSnapshot: () => {
     rpcParsed("town_list", z.object({ unlocks: z.array(townUnlockSchema) }), undefined)
       .then((r) => setTownState({ unlocks: r.unlocks ?? [] }))
-      .catch(() => {});
+      .catch(failQuietly("town_list"));
   },
   onFrame: applyTownFrame,
 };

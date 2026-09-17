@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { rpc } from "./api";
-import { paneIds, useStore } from "./store";
+import {failQuietly, paneIds, useStore} from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
 import { BrowserPane } from "./browser/BrowserPane";
 import { LayoutPreview } from "./LayoutDnd";
@@ -45,7 +45,7 @@ function Split({ node, tabId, activePane }: { node: Extract<LayoutNode, { type: 
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
       document.body.classList.remove(horizontal ? "resizing-h" : "resizing-v");
-      if (latest !== node.ratio) rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: latest }).catch(() => {});
+      if (latest !== node.ratio) rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: latest }).catch(failQuietly("layout_resize"));
       setDrag(null);
     };
     document.body.classList.add(horizontal ? "resizing-h" : "resizing-v");
@@ -54,7 +54,7 @@ function Split({ node, tabId, activePane }: { node: Extract<LayoutNode, { type: 
   };
 
   const equalize = () => {
-    if (node.ratio !== 0.5) rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: 0.5 }).catch(() => {});
+    if (node.ratio !== 0.5) rpc("layout_resize", { tab_id: tabId, split_id: node.id, ratio: 0.5 }).catch(failQuietly("layout_resize"));
   };
   return (
     <div ref={ref} className={`split split-${node.direction}`}>
