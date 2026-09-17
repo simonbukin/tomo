@@ -127,8 +127,16 @@ export interface Filter {
   value: string;
 }
 
+/** Which slice of the workspace Home shows. A scope filters; it names no new object. */
+export type HomeScope =
+  | { kind: "all" }
+  | { kind: "repo"; repoId: Id }
+  | { kind: "project"; project: string }
+  | { kind: "tag"; tag: string };
+
 export interface HomeOptions {
   query: string;
+  scope: HomeScope;
   filters: Filter[];
   view: "list" | "board";
   sort: "state" | "recent" | "created" | "name";
