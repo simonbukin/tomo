@@ -24,8 +24,6 @@ describe("face", () => {
   it("gives a different face for a different seed", () => {
     const drawn = SEEDS.map((seed) => JSON.stringify(face(seed, 128)));
     expect(new Set(drawn).size).toBe(SEEDS.length);
-    const strokes = new Set(SEEDS.map((seed) => face(seed, 128).stroke));
-    expect(strokes.size).toBeGreaterThan(SEEDS.length / 2);
   });
 
   it("accepts a string seed and a number seed", () => {
@@ -33,12 +31,42 @@ describe("face", () => {
     expect(face(7, 128)).toEqual(face("7", 128));
   });
 
-  it("draws an extra mark for some seeds at a normal size", () => {
-    const extras = SEEDS.filter((seed) => {
+  it("draws two eyes and one mouth, and nothing else", () => {
+    for (const size of [16, 128]) {
+      for (const seed of SEEDS) {
+        const f = face(seed, size);
+        expect(f.dots).toHaveLength(2);
+        expect(f.paths).toHaveLength(1);
+      }
+    }
+  });
+
+  it("gives the two eyes the same size and keeps them level", () => {
+    for (const size of [16, 128]) {
+      for (const seed of SEEDS) {
+        const [left, right] = face(seed, size).dots;
+        expect(left.r).toBe(right.r);
+        expect(left.cy).toBe(right.cy);
+      }
+    }
+  });
+
+  it("draws the mouth as a single arc", () => {
+    for (const seed of SEEDS) {
+      const [d] = face(seed, 128).paths;
+      expect(d).toMatch(/^M[\d .-]+Q[\d .-]+$/);
+      expect(d.match(/[QC]/g)).toHaveLength(1);
+    }
+  });
+
+  it("bends the mouth down in the middle", () => {
+    for (const seed of SEEDS) {
       const f = face(seed, 128);
-      return f.dots.length > 2 || f.paths.length > 1;
-    });
-    expect(extras.length).toBeGreaterThan(0);
+      const ends = (f.mouth[0].y + f.mouth[f.mouth.length - 1].y) / 2;
+      const middle = f.mouth[Math.floor(f.mouth.length / 2)].y;
+      expect(middle).toBeGreaterThan(ends);
+      for (const dot of f.dots) expect(dot.cy).toBeLessThan(Math.min(...f.mouth.map((m) => m.y)));
+    }
   });
 
   it("keeps every face inside the box", () => {
@@ -61,37 +89,40 @@ describe("face", () => {
       }
     }
   });
+
+  it("centres the face in the box", () => {
+    for (const seed of SEEDS) {
+      const f = face(seed, 128);
+      const xs = [...f.mouth.map((m) => m.x), ...f.dots.flatMap((d) => [d.cx - d.r, d.cx + d.r])];
+      const ys = [...f.mouth.map((m) => m.y), ...f.dots.flatMap((d) => [d.cy - d.r, d.cy + d.r])];
+      expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(BOX, 0);
+      expect(Math.min(...ys) + Math.max(...ys)).toBeCloseTo(BOX, 0);
+    }
+  });
 });
 
 describe("small size mode", () => {
-  it("thickens the stroke below the threshold", () => {
+  it("keeps the stroke chunky below the threshold", () => {
     for (const seed of SEEDS) {
       const small = face(seed, SMALL_SIZE - 1);
-      expect(small.stroke).toBeGreaterThanOrEqual(7);
-      expect(small.stroke).toBeLessThanOrEqual(9);
-      expect(px(small.stroke, 16)).toBeGreaterThanOrEqual(1);
-    }
-  });
-
-  it("drops the extra mark below the threshold", () => {
-    for (const seed of SEEDS) {
-      const small = face(seed, SMALL_SIZE - 1);
-      expect(small.dots).toHaveLength(2);
-      expect(small.paths).toHaveLength(1);
+      expect(small.stroke).toBeGreaterThanOrEqual(9.5);
+      expect(small.stroke).toBeLessThanOrEqual(12);
+      expect(px(small.stroke, 16)).toBeGreaterThanOrEqual(1.5);
     }
   });
 
   it("keeps two eyes apart and readable at 16 px", () => {
     for (const seed of SEEDS) {
       const [left, right] = face(seed, 16).dots;
-      const gap = Math.hypot(right.cx - left.cx, right.cy - left.cy) - left.r - right.r;
-      expect(px(2 * Math.min(left.r, right.r), 16)).toBeGreaterThanOrEqual(1.5);
+      const gap = right.cx - left.cx - left.r - right.r;
+      expect(px(2 * left.r, 16)).toBeGreaterThanOrEqual(1.5);
       expect(px(gap, 16)).toBeGreaterThanOrEqual(1);
     }
   });
 
-  it("leaves the face unclamped at and above the threshold", () => {
-    const light = SEEDS.filter((seed) => face(seed, SMALL_SIZE).stroke < 7);
-    expect(light.length).toBeGreaterThan(0);
+  it("leaves the stroke unclamped at and above the threshold", () => {
+    const strokes = SEEDS.map((seed) => face(seed, SMALL_SIZE).stroke);
+    expect(strokes.filter((s) => s < 9.5).length).toBeGreaterThan(0);
+    expect(strokes.filter((s) => s > 12).length).toBeGreaterThan(0);
   });
 });
