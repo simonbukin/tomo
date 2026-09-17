@@ -1,10 +1,10 @@
-import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Plus, RotateCw, Star } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, Ellipsis, History, Layers, Plus, RotateCw, Star } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { addonViews, repoAvatar } from "./addons";
-import { byManualOrder } from "./order";
+import { LENSES, LENS_LABEL, lensGroups, type LensGroup } from "./lenses";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
@@ -13,7 +13,7 @@ import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
-import { needsAttention, sortWorktrees, stateLabel } from "./homeQuery";
+import { needsAttention, stateLabel } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
@@ -35,13 +35,12 @@ export function Sidebar() {
   const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
   const shown = worktrees.filter((w) => ui.showArchivedInSidebar || !w.archived_at_ms);
   const manual = ui.sidebarSort === "manual";
-  const orderedRepos = manual ? byManualOrder(repos, ui.repoOrder, (r) => r.id) : repos;
-  const grouped = orderedRepos.map((r) => ({ repo: r, items: sortWorktrees(shown.filter((w) => w.repo_id === r.id), ui.sidebarSort, ctx, ui.manualOrder[r.id] ?? []) })).filter((g) => g.items.length || !g.repo.exists);
-  const orphans = sortWorktrees(shown.filter((w) => !repos.some((r) => r.id === w.repo_id)), ui.sidebarSort, ctx);
+  const draggable = ui.lens === "repo";
+  const groups = lensGroups(shown, ui.lens, ctx, { repos, sort: ui.sidebarSort, manualOrder: ui.manualOrder, repoOrder: ui.repoOrder });
   const listRef = useRef<HTMLDivElement>(null);
-  const order = [...grouped.flatMap((g) => g.items), ...orphans].map((w) => w.id).join(",");
+  const order = groups.flatMap((g) => g.items).map((w) => w.id).join(",");
   const [dropped, setDropped] = useState(false);
-  useFlip(listRef, [order, grouped.map((g) => g.repo.id).join(","), ui.collapsedRepos.join(","), selectionSize], !dropped);
+  useFlip(listRef, [order, groups.map((g) => g.key).join(","), ui.collapsedRepos.join(","), selectionSize], !dropped);
   useEffect(() => {
     if (dropped) setDropped(false);
   }, [dropped]);
@@ -51,8 +50,8 @@ export function Sidebar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const currentOrder = (): Record<string, Id[]> => (manual ? ui.manualOrder : Object.fromEntries(grouped.map((g) => [g.repo.id, g.items.map((w) => w.id)])));
-  const currentRepoOrder = () => grouped.map((g) => g.repo.id);
+  const currentOrder = (): Record<string, Id[]> => (manual ? ui.manualOrder : Object.fromEntries(groups.map((g) => [g.key, g.items.map((w) => w.id)])));
+  const currentRepoOrder = () => groups.map((g) => g.key);
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     const from = active.data.current as DragData | undefined;
     const to = over?.data.current as DragData | undefined;
@@ -64,11 +63,12 @@ export function Sidebar() {
       return;
     }
     if (from.kind === "worktree" && to.kind === "worktree" && from.repoId === to.repoId) {
-      const ids = grouped.find((g) => g.repo.id === from.repoId)?.items.map((w) => w.id) ?? [];
+      const ids = groups.find((g) => g.key === from.repoId)?.items.map((w) => w.id) ?? [];
       setDropped(true);
       setUi({ sidebarSort: "manual", manualOrder: { ...currentOrder(), [from.repoId]: arrayMove(ids, ids.indexOf(from.id), ids.indexOf(to.id)) }, repoOrder: currentRepoOrder() });
     }
   };
+  const lensMenu = (): MenuItem[] => LENSES.map((l) => ({ label: LENS_LABEL[l], checked: ui.lens === l, run: () => setUi({ lens: l }) }));
   const sortMenu = (): MenuItem[] => [
     ...SORTS.map((s) => ({ label: s === "manual" ? "manual (drag rows)" : s, checked: ui.sidebarSort === s, run: () => setUi({ sidebarSort: s }) })),
     { separator: true },
@@ -86,6 +86,10 @@ export function Sidebar() {
         ))}
         <span className="spacer" />
         <DropdownMenu>
+          <DropdownMenuTrigger render={<IconButton label={`Group by: ${LENS_LABEL[ui.lens]}`} />}><Layers className="icon" /></DropdownMenuTrigger>
+          <DropdownMenuContent align="end"><MenuItems items={lensMenu} /></DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
         </DropdownMenu>
@@ -100,13 +104,12 @@ export function Sidebar() {
           </div>
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]} onDragEnd={onDragEnd}>
-          <SortableContext items={grouped.map((g) => repoKey(g.repo.id))} strategy={verticalListSortingStrategy}>
-            {grouped.map(({ repo, items }) => (
-              <RepoGroup key={repo.id} repo={repo} items={items} active={active} sortable />
+          <SortableContext items={groups.map((g) => repoKey(g.key))} strategy={verticalListSortingStrategy}>
+            {groups.map((g) => (
+              <Group key={g.key} group={g} active={active} sortable={draggable} />
             ))}
           </SortableContext>
         </DndContext>
-        {orphans.length > 0 && <RepoGroup repo={{ id: "", name: "other", path: "", exists: true, remote_url: null }} items={orphans} active={active} />}
         {repos.length === 0 && (
           <div className="sidebar-empty">
             No repositories yet. Add one with the plus button or run <code>tomo repo add &lt;path&gt;</code>.
@@ -121,32 +124,37 @@ type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: I
 
 const repoKey = (id: Id) => `repo:${id}`;
 
-function RepoGroup({ repo, items, active, sortable = false }: { repo: Repo; items: Worktree[]; active: string | null; sortable?: boolean }) {
-  const drag = useSortable({ id: repoKey(repo.id), data: { kind: "repo", id: repo.id } satisfies DragData, disabled: !sortable || !repo.id });
-  const collapsed = useStore((s) => s.ui.collapsedRepos.includes(repo.id));
-  const hidden = useStore((s) => s.ui.hiddenRepos.includes(repo.id));
+function Group({ group, active, sortable = false }: { group: LensGroup; active: string | null; sortable?: boolean }) {
+  const { repo, items } = group;
+  const drag = useSortable({ id: repoKey(group.key), data: { kind: "repo", id: group.key } satisfies DragData, disabled: !sortable || !group.key });
+  const collapsed = useStore((s) => s.ui.collapsedRepos.includes(group.key));
+  const hidden = useStore((s) => (repo ? s.ui.hiddenRepos.includes(repo.id) : false));
   const attention = useStore((s) => items.some((w) => needsAttention(w, queryContext(s))));
-  const toggle = () => repo.id && toggleRepoCollapsed(repo.id);
+  const toggle = () => group.key && toggleRepoCollapsed(group.key);
   const shortcut = useShortcuts();
+  const rows = items.map((w) => (
+    <WorktreeRow key={w.id} sortId={sortable ? w.id : `${group.key}:${w.id}`} w={w} active={w.id === active} siblings={items} sortable={sortable} />
+  ));
   return (
     <div ref={drag.setNodeRef} className={`repo-group${drag.isDragging ? " is-dragging" : ""}`} style={{ transform: CSS.Translate.toString(drag.transform), transition: drag.transition }}>
-      <div ref={drag.setActivatorNodeRef} className="section-label repo-head" {...drag.attributes} {...drag.listeners} onContextMenu={(e) => repo.id && openMenu(e, repoMenu(repo))}>
+      <div ref={drag.setActivatorNodeRef} className="section-label repo-head" {...drag.attributes} {...drag.listeners} onContextMenu={(e) => repo?.id && openMenu(e, repoMenu(repo))}>
         <span className="repo-toggle" onClick={toggle}>{collapsed ? <ChevronRight className="icon chevron" /> : <ChevronDown className="icon chevron" />}</span>
-        <RepoAvatar repo={repo} />
-        <span className="repo-name" onClick={toggle}>{repo.name}</span>
-        {!repo.exists && <span className="faint">missing</span>}
+        {repo && <RepoAvatar repo={repo} />}
+        <span className="repo-name" onClick={toggle}>{group.label}</span>
+        {repo && !repo.exists && <span className="faint">missing</span>}
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
         {collapsed && attention && <span className={dotClass("needs")} />}
-        {repo.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
+        {repo?.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
       </div>
-      {!collapsed && (
-        <SortableContext items={items.filter((w) => !w.is_main && !w.archived_at_ms).map((w) => w.id)} strategy={verticalListSortingStrategy}>
-          {items.map((w) => (
-            <WorktreeRow key={w.id} w={w} active={w.id === active} siblings={items} sortable={sortable} />
-          ))}
-        </SortableContext>
-      )}
+      {!collapsed &&
+        (sortable ? (
+          <SortableContext items={items.filter((w) => !w.is_main && !w.archived_at_ms).map((w) => w.id)} strategy={verticalListSortingStrategy}>
+            {rows}
+          </SortableContext>
+        ) : (
+          rows
+        ))}
     </div>
   );
 }
@@ -185,8 +193,8 @@ export function summarizeState(agents: AgentPresence[], attention: boolean): Age
   return "none";
 }
 
-export function WorktreeRow({ w, active, siblings = [], sortable = false }: { w: Worktree; active: boolean; siblings?: Worktree[]; sortable?: boolean }) {
-  const drag = useSortable({ id: w.id, data: { kind: "worktree", id: w.id, repoId: w.repo_id } satisfies DragData, disabled: !sortable || w.is_main || !!w.archived_at_ms });
+export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId }: { w: Worktree; active: boolean; siblings?: Worktree[]; sortable?: boolean; sortId?: string }) {
+  const drag = useSortable({ id: sortId ?? w.id, data: { kind: "worktree", id: w.id, repoId: w.repo_id } satisfies DragData, disabled: !sortable || w.is_main || !!w.archived_at_ms });
   const selected = useStore((s) => s.selection.has(w.id));
   const agents = useStore((s) => agentsOf(s, w.id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
