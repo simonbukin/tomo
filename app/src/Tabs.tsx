@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { rpc } from "./api";
 import { activateTab, closeTab } from "./actions";
 import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./components/ui";
-import { keepInPlace, useTabSortable } from "./LayoutDnd";
+import { keepInPlace, NewTabDrop, useTabSortable } from "./LayoutDnd";
 import { openMenu } from "./MenuHost";
 import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
@@ -48,6 +48,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
           <MenuItems items={() => spawnMenu(worktreeId)} />
         </DropdownMenuContent>
       </DropdownMenu>
+      <NewTabDrop />
     </div>
   );
 }
