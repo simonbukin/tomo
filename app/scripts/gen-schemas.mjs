@@ -1,9 +1,5 @@
-// Generates runtime schemas for every wire type from the TypeScript that ts-rs already emits,
-// so Rust stays the one source of truth and a schema cannot drift from its type.
-//
 // ts-to-zod reads one file at a time and turns a cross-file import into `z.any()`, so the
 // generated types are first flattened into one input file, which is deleted afterwards.
-// The output lives outside src/generated, which holds exactly what ts-rs writes and nothing else.
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

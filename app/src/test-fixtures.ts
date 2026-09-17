@@ -1,9 +1,5 @@
 import type { Branch, Pane, PaneResult, Tab, Worktree, WorktreeOpened } from "./generated";
 
-/**
- * Daemon replies for a test. Each one is a whole value, because the boundary parses a reply
- * before a caller sees it: a partial fixture is a shape the daemon would never send.
- */
 export const aWorktree = (patch: Partial<Worktree> = {}): Worktree => ({
   id: "w1",
   repo_id: "r1",

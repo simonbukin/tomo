@@ -134,12 +134,6 @@ function shallowEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-/**
- * The cached value holds only while the state and the selector are both the same one. A
- * selector that reads a prop is a new function on the next render, so keying on the state
- * alone handed back the value of the earlier prop. `shallowEqual` keeps the reference
- * stable, so a selector that builds a fresh array does not re-render for ever.
- */
 export function useStore<T>(selector: (s: State) => T): T {
   const cache = useRef<{ state: State; selector: (s: State) => T; value: T } | null>(null);
   const read = () => {
@@ -433,11 +427,6 @@ export const failToast =
   (e: unknown): void =>
     toast({ level: "error", title, detail: errorText(e) });
 
-/**
- * A daemon call that failed where the person has nothing to decide: a poll, a save, a
- * keystroke that did not land. It records the failure under the name of the call, so
- * Diagnostics can show it, and nothing interrupts the work on screen.
- */
 export const failQuietly =
   (source: string) =>
   (e: unknown): void =>

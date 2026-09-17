@@ -172,8 +172,7 @@ pub fn classify(rows: &[ProcRow], roots: &[Root], worktree_paths: &[(Id, PathBuf
     out
 }
 
-/// Heaviest worktree first. A tie breaks on the id, so the order is the same on every poll.
-pub fn aggregate(infos: &[ProcessInfo]) -> Vec<WorktreeResources> {
+pub fn worktrees_by_weight(infos: &[ProcessInfo]) -> Vec<WorktreeResources> {
     infos
         .iter()
         .filter_map(|info| info.worktree_id.clone().map(|wt| (wt, info)))
@@ -225,7 +224,7 @@ mod tests {
         assert_eq!(find(13).depth, 3);
         assert_eq!(find(20).ownership, Ownership::Observed);
         assert!(infos.iter().all(|i| i.pid != 30));
-        let agg = aggregate(&infos);
+        let agg = worktrees_by_weight(&infos);
         assert_eq!(agg[0].rss_bytes, 1065);
         assert_eq!(agg[0].process_count, 5);
     }
@@ -258,7 +257,7 @@ mod tests {
         let ids: Vec<u32> = infos.iter().map(|i| i.pid).collect();
         let unique: std::collections::HashSet<u32> = ids.iter().copied().collect();
         assert_eq!(ids.len(), unique.len(), "no pid twice");
-        let agg = aggregate(&infos);
+        let agg = worktrees_by_weight(&infos);
         assert_eq!(agg[0].rss_bytes, 1 + 10 + 20 + 300 + 300 + 50 + 5);
         assert_eq!(agg[0].process_count, 7);
     }
