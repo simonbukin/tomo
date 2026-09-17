@@ -312,6 +312,46 @@ levers, in the order they are likely to pay:
 
 Change one thing at a time, and keep the idle CPU gate from the baseline.
 
+### 2.9 Brand and the design system — done
+The PRD asked for a brand definition, a small design system, logo studies, and
+a copy pass, and explicitly not a redesign.
+
+**Copy.** `README.md` opens with `tomo`, "A little workspace for my coding
+agents.", and what Tomo does not replace. The About copy and the fork line sit
+at the end of the README, because the app's About is the native macOS panel
+with no metadata and the PRD did not ask for a new surface. Six user-visible
+strings got shorter; the long confirm-dialog bodies stayed, because each word
+there is a consequence of a destructive action.
+
+**Design system.** `DESIGN.md` (189 lines) holds the stationery idea, the
+principles, the three degrees of freedom, the exemplars, the agent workflow,
+and an honest visual-review section for a repo where an agent cannot open the
+app. `tokens.css` is 49 names in the PRD's groups; `base.css` keeps only global
+rules. Duplicate tokens collapsed (`--hot` to `--danger`, `--ins` to
+`--success`, seven durations to three), every swap value-identical.
+
+**The PRD's token renames were refused on evidence.** `--text`, `--attention`,
+and `--warning` would break the `[theme]` contract, because `theme.ts` builds
+those names from the `config.toml` keys. The theme names stayed and the file
+header says why.
+
+**CSS Modules are reversed** (PRD 14, replacing the earlier pilot decision).
+`WorktreeRow.module.css` is plain `.wt-*` CSS, the 42 px row is unchanged, and
+the rule test that forbids color, font, and motion literals now reads the new
+file. `generateScopedName` is gone from `vite.config.ts`.
+
+**Logo studies** are in `brand/`: three marks, a wordmark, a lockup, and
+`comparison.html` at 16, 32, and 128 px, light and dark, color and mono. The
+recommendation is mark A, the abstract `t`. Nobody has looked at the rendered
+sheet, so every claim about 16 px comes from the pixel grid.
+
+**Open:** the app icon waits for a chosen mark, and `Brand.tsx` still draws the
+older 4 unit mark, so the shipped mark and `tomo-mark-a.svg` disagree until one
+of them moves. `::selection` now tints with the accent, which is a deliberate
+visual change nobody has seen. A change that spans surfaces, such as "make
+every dense row taller", is still a hunt across three CSS files, because a
+row-height token was ruled out on purpose.
+
 ## 3. New features, each an addon
 
 | Idea | Shape | Effort |
