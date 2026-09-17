@@ -108,16 +108,18 @@ reflow says "this is the same place, sorted differently".
 | hover, acknowledgement | 80 ms `--dur-fast` |
 | state mark | 100 ms `--dur-hover` |
 | palette, group expand, sidebar mode | 140 ms `--dur-open` |
-| page reveal, theme | 200 ms `--dur-reveal` |
+| page reveal, theme | 280 ms `--dur-reveal` |
 | lens reshuffle | 200 ms (`useFlip`) |
 
-- Two curves: `--ease-out` for hover, press, open, and reveal; `--ease-in`
-  for close.
-- No routine motion over 250 ms. No springs, no bounce, no parallax, no
-  full-page fade to black.
-- The reveal edge is the union of three circles offset in proportion to the
-  radius, so it reads as ink spreading rather than a CSS circle. It is not a
-  splash; keep it subtle.
+- Three curves: `--ease-out` for hover, press, and open; `--ease-in` for
+  close; `--ease-reveal` for the reveal, which has a long tail so the edge
+  leaves quickly and settles slowly. A short reveal on `--ease-out` reads as
+  linear, because the eye only sees the fast part.
+- No springs, no bounce, no parallax, no full-page fade to black.
+- The reveal is one `clip-path` ellipse, a little wider than it is tall, so
+  the edge is not a plain circle and the compositor still has one shape to
+  clip. A mask of several gradients re-rasterises the whole screen on every
+  frame; do not reach for one without measuring first.
 - Motion is an enhancement. Where the browser cannot do a view transition the
   state still changes at once. Under `prefers-reduced-motion` the reveal
   becomes an 80 ms cross-fade and the reflow is instant.

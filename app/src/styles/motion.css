@@ -2,18 +2,14 @@
    place. See DESIGN.md. Every rule here is an enhancement: with no View Transition support the
    state still changes, and nothing moves. */
 
-@property --reveal-r {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-
 :root {
   --reveal-x: 50vw;
   --reveal-y: 50vh;
   --reveal-radius: 100vmax;
-  --dur-reveal: 200ms;
-  --dur-fade: 80ms;
+  --dur-reveal: 280ms;
+  --dur-fade: 90ms;
+  /* A long tail: the edge leaves quickly and settles slowly, which is what reads as eased. */
+  --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* The default cross-fade is replaced everywhere: Tomo says what changed by how it changes. */
@@ -23,31 +19,21 @@
   mix-blend-mode: normal;
 }
 
-/* The old surface stays put and the new one is uncovered over it. The three circles are offset
-   in proportion to the radius, so their union has a soft irregular edge instead of a hard ring. */
+/* The old surface stays put and the new one is uncovered over it. `clip-path` keeps this to one
+   shape the compositor can clip; a mask of several gradients re-rasterised the whole screen on
+   every frame. The ellipse is slightly wider than it is tall, so the edge is not a plain circle. */
 :root[data-transition="reveal"]::view-transition-new(root),
 :root[data-transition="theme"]::view-transition-new(root) {
-  animation: tomo-reveal var(--dur-reveal) var(--ease-out) forwards;
-  mask-image:
-    radial-gradient(circle at var(--reveal-x) var(--reveal-y), #000 var(--reveal-r), #0000 var(--reveal-r)),
-    radial-gradient(
-      circle at calc(var(--reveal-x) + var(--reveal-r) * 0.035) calc(var(--reveal-y) - var(--reveal-r) * 0.025),
-      #000 calc(var(--reveal-r) * 0.97),
-      #0000 calc(var(--reveal-r) * 0.97)
-    ),
-    radial-gradient(
-      circle at calc(var(--reveal-x) - var(--reveal-r) * 0.025) calc(var(--reveal-y) + var(--reveal-r) * 0.04),
-      #000 calc(var(--reveal-r) * 0.98),
-      #0000 calc(var(--reveal-r) * 0.98)
-    );
+  animation: tomo-reveal var(--dur-reveal) var(--ease-reveal) forwards;
+  will-change: clip-path;
 }
 
 @keyframes tomo-reveal {
   from {
-    --reveal-r: 0px;
+    clip-path: ellipse(0px 0px at var(--reveal-x) var(--reveal-y));
   }
   to {
-    --reveal-r: var(--reveal-radius);
+    clip-path: ellipse(calc(var(--reveal-radius) * 1.06) calc(var(--reveal-radius) * 0.99) at var(--reveal-x) var(--reveal-y));
   }
 }
 
@@ -63,8 +49,7 @@
 /* Reduced motion keeps the continuity and drops the travel. */
 @media (prefers-reduced-motion: reduce) {
   :root[data-transition]::view-transition-new(root) {
-    mask-image: none;
     animation: tomo-fade var(--dur-fade) linear forwards;
+    clip-path: none;
   }
-
 }

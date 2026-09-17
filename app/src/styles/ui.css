@@ -125,7 +125,7 @@ select { appearance: none; padding-right: 22px; background-image: url("data:imag
 .settings-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-1); }
 .settings { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--sp-4); align-items: start; margin-top: var(--sp-3); }
 .settings-nav { display: flex; flex-direction: column; gap: 2px; }
-.settings-tab { text-align: left; padding: 3px 8px; border: none; border-radius: var(--radius); background: transparent; color: var(--fg-2); font-size: var(--fs-2); }
+.settings-tab { display: flex; justify-content: flex-start; width: 100%; padding: 3px 8px; border: none; border-radius: var(--radius); background: transparent; color: var(--fg-2); font-size: var(--fs-2); }
 .settings-tab:hover { background: var(--bg-1); color: var(--fg); }
 .settings-tab[aria-current="page"] { background: var(--accent-soft); color: var(--fg); }
 .settings-body { min-width: 0; padding-right: var(--sp-1); }
