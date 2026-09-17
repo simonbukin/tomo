@@ -4,13 +4,14 @@
   addons-bench.py setup                  new data dir: 5 repos, 25 linked worktrees, 12 panes with 1 MB scrollback
   addons-bench.py ops [trials]           reattach, worktree_open, worktree_refresh, ps round trips
   addons-bench.py idle <secs> <0|1>      daemon CPU and RSS over an idle window, without or with a subscriber
+  addons-bench.py startup [trials]       cold start: socket, first subscribe, worktrees, summaries, pane restore
 
-Env: TOMO_DATA_DIR (must start with /tmp/tomo-addons-), TOMO_BIN, TOMO_DAEMON_BIN.
+Env: TOMO_DATA_DIR (must start with /tmp/tomo-addons- or /tmp/tomo-startup-), TOMO_BIN, TOMO_DAEMON_BIN.
 """
 import base64, json, os, socket, statistics, subprocess, sys, threading, time
 
 D = os.environ["TOMO_DATA_DIR"]
-assert D.startswith("/tmp/tomo-addons-"), D
+assert D.startswith(("/tmp/tomo-addons-", "/tmp/tomo-startup-")), D
 T = os.environ["TOMO_BIN"]
 REPOS = D + "-repos"
 SOCK = os.path.join(D, "tomod.sock")
@@ -164,6 +165,112 @@ def idle(secs, subscribed):
     print(f"idle subscribed={subscribed} {secs}s: cpu {(c1 - c0) / secs * 100:.2f} %  cpu-seconds {c1 - c0:.2f}  rss start {r0 / 1024:.1f} MB end {r1 / 1024:.1f} MB")
 
 
+def connect_until(deadline):
+    while time.perf_counter() < deadline:
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.connect(SOCK)
+            return s
+        except OSError:
+            time.sleep(0.001)
+    raise SystemExit("socket never accepted")
+
+
+def stop_daemon():
+    subprocess.run([T, "daemon", "stop"], capture_output=True, env=os.environ)
+    for _ in range(200):
+        if not os.path.exists(SOCK):
+            return
+        time.sleep(0.05)
+
+
+def startup_trial():
+    """One cold boot. Every time is milliseconds after the tomod process starts."""
+    stop_daemon()
+    daemon_bin = os.environ["TOMO_DAEMON_BIN"]
+    t0 = time.perf_counter()
+    p = subprocess.Popen([daemon_bin], stderr=open(D + "/startup.log", "w"), env=os.environ)
+    s = connect_until(t0 + 30)
+    t_connect = time.perf_counter()
+    buf = b""
+
+    def frames():
+        nonlocal buf
+        while True:
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                if line.strip():
+                    yield time.perf_counter(), json.loads(line)
+            chunk = s.recv(1 << 20)
+            if not chunk:
+                raise SystemExit("socket closed")
+            buf += chunk
+
+    def call(method, params=None):
+        s.sendall((json.dumps({"id": 1, "method": method} | ({"params": params} if params else {})) + "\n").encode())
+        for at, f in frames():
+            if f.get("id") == 1:
+                if "error" in f:
+                    raise SystemExit(f"{method}: {f['error']}")
+                return at, f.get("result")
+
+    t_hello, _ = call("hello", {"protocol": 3, "client": "startup-bench"})
+    t_sub, snap = call("subscribe")
+    wts = snap["worktrees"]
+    panes = snap["panes"]
+    terminals = [x for x in panes if x.get("kind", "terminal") == "terminal"]
+    t_wts = t_sub if wts else None
+    t_summ = t_sub if wts and all(w.get("git") for w in wts) else None
+    seen = len(wts)
+    if t_summ is None:
+        for at, f in frames():
+            if f.get("event") != "worktrees_changed":
+                continue
+            ws = f["data"]["worktrees"]
+            seen = max(seen, len(ws))
+            if t_wts is None and ws:
+                t_wts = at
+            if ws and all(w.get("git") for w in ws):
+                t_summ = at
+                break
+    out = {
+        "connect": (t_connect - t0) * 1000,
+        "hello": (t_hello - t0) * 1000,
+        "subscribe": (t_sub - t0) * 1000,
+        "worktrees visible": (t_wts - t0) * 1000,
+        "summaries done": (t_summ - t0) * 1000,
+    }
+    snapshot = {
+        "kb": len(json.dumps(snap)) / 1024,
+        "worktrees": len(wts),
+        "with git": sum(1 for w in wts if w.get("git")),
+        "panes": len(panes),
+        "live panes": sum(1 for x in terminals if x.get("live")),
+        "distinct pids": len({x["pid"] for x in terminals if x.get("pid")}),
+        "worktrees at end": seen,
+    }
+    s.close()
+    stop_daemon()
+    p.wait(timeout=30)
+    return out, snapshot
+
+
+def startup(trials):
+    rows, snaps = [], []
+    for n in range(trials):
+        out, snap = startup_trial()
+        rows.append(out)
+        snaps.append(snap)
+        print(f"--- trial {n + 1}  " + "  ".join(f"{k} {v:.1f}" for k, v in out.items()))
+    print("--- median ms after the tomod process starts")
+    for name in rows[0]:
+        s = [r[name] for r in rows]
+        print(f"{name:20s} {statistics.median(s):8.1f} ms  (min {min(s):.1f}  max {max(s):.1f})")
+    print("--- first snapshot (median over trials)")
+    for name in snaps[0]:
+        print(f"{name:20s} {statistics.median(x[name] for x in snaps):8.1f}")
+
+
 if __name__ == "__main__":
     mode = sys.argv[1]
     if mode == "setup":
@@ -172,3 +279,5 @@ if __name__ == "__main__":
         ops(int(sys.argv[2]) if len(sys.argv) > 2 else 3)
     elif mode == "idle":
         idle(int(sys.argv[2]), sys.argv[3] == "1")
+    elif mode == "startup":
+        startup(int(sys.argv[2]) if len(sys.argv) > 2 else 5)
