@@ -201,7 +201,7 @@ commented copy when the file is missing.
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
 | `max_panes_per_tab`   | `4`                                       | Spawns without a target open a new tab once a tab holds this many panes |
 | `[theme]`             | `name = "system"`, Murasaki light and dark | Base theme, `light`/`dark` for system mode, and color overrides. See [theming.md](theming.md) |
-| `[terminal]`          | `font_family = "Geist Mono Variable, Menlo, monospace"`, `font_size = 13` | Terminal font. The older top-level `font_family`, `font_size`, and `theme = "dark"` still work |
+| `[terminal]`          | `font_family = "CommitMono, Menlo, monospace"`, `font_size = 13` | Terminal font. The older top-level `font_family`, `font_size`, and `theme = "dark"` still work |
 | `[notifications]`     | `desktop = true`, `sounds = false`        | Desktop notifications and rare sounds   |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |

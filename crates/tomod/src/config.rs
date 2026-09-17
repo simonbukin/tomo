@@ -188,7 +188,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # accent = "sora"
 
 # [terminal]
-# font_family = "Geist Mono Variable, Menlo, monospace"
+# font_family = "CommitMono, Menlo, monospace"
 # font_size = 13
 
 # [notifications]
@@ -196,7 +196,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # sounds = false
 "#;
 
-pub const DEFAULT_FONT_FAMILY: &str = "Geist Mono Variable, Menlo, monospace";
+pub const DEFAULT_FONT_FAMILY: &str = "CommitMono, Menlo, monospace";
 pub const THEME_TOKENS: [&str; 14] = ["bg", "surface", "surface_hover", "fg", "fg_muted", "fg_faint", "border", "border_strong", "accent", "accent_soft", "working", "waiting", "danger", "success"];
 const BASE_THEMES: [&str; 5] = ["system", "murasaki-dark", "murasaki-light", "paper", "ink"];
 const ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
