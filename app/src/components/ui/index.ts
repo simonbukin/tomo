@@ -1,4 +1,5 @@
 export { Button, IconButton, type ButtonProps, type ButtonSize, type ButtonVariant, type IconButtonProps } from "./button";
+export { Collapsible, CollapsiblePanel, CollapsibleTrigger, type CollapsibleProps } from "./collapsible";
 export { Combobox, type ComboboxProps } from "./combobox";
 export { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
 export { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "./context-menu";

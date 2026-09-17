@@ -111,6 +111,8 @@ export interface UiState {
   showArchivedInSidebar: boolean;
   /** Collapsed group keys: a repo id in the repository lens, a lens-prefixed key in the others. */
   collapsedRepos: string[];
+  /** Inspector section ids the person folded away. The ids are the stable `data-section` values. */
+  collapsedSections: string[];
   hiddenRepos: string[];
   showHiddenRepos: boolean;
   home: HomeOptions;

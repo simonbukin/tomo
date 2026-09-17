@@ -1,15 +1,15 @@
-import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from "lucide-react";
+import { ChevronDown, ChevronRight, File, Folder, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import { openMenu } from "./MenuHost";
-import { Combobox, Select, SkeletonRows } from "./components/ui";
+import { Combobox, IconButton, Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
-import { SectionLabel } from "./sections";
+import { InspectorSection } from "./sections";
 import { failToast, formatBytes, useStore } from "./store";
-import { inspectorSections } from "./addons";
+import { gitDetails, inspectorSections } from "./addons";
 import type { AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
 
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
@@ -44,8 +44,7 @@ function MetadataSection({ w }: { w: Worktree }) {
   }, [w.id, m.display_name, m.project, m.tags.join(",")]);
   const commit = (patch: Record<string, unknown>) => setMetadata(w.id, patch);
   return (
-    <section className="side-section" data-section="worktree">
-      <SectionLabel id="worktree" />
+    <InspectorSection id="worktree">
       <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
       <div className="kv"><label>project</label>
         <Combobox
@@ -69,7 +68,7 @@ function MetadataSection({ w }: { w: Worktree }) {
         />
       </div>
       <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
-    </section>
+    </InspectorSection>
   );
 }
 
@@ -81,8 +80,7 @@ function GitSection({ w }: { w: Worktree }) {
     return () => window.clearInterval(t);
   }, [w.id]);
   return (
-    <section className="side-section" data-section="git">
-      <SectionLabel id="git"><button className="link" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}>refresh</button></SectionLabel>
+    <InspectorSection id="git" control={<IconButton label="Refresh git status" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}><RotateCw className="icon" /></IconButton>}>
       <div className="kv"><label>branch</label><span className="mono">{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
       {g ? (
         <>
@@ -95,43 +93,43 @@ function GitSection({ w }: { w: Worktree }) {
       ) : (
         <div className="muted">{w.exists ? "no status yet" : "worktree directory is missing"}</div>
       )}
-    </section>
+      {gitDetails().map(({ id, component: Detail }) => <Detail key={id} worktree={w} />)}
+    </InspectorSection>
   );
 }
 
 function ProcessSection({ w }: { w: Worktree }) {
   const res = useStore((s) => s.resources[w.id]);
-  const [open, setOpen] = useState(false);
   const [procs, setProcs] = useState<ProcessInfo[]>([]);
   useEffect(() => {
-    if (!open) return;
-    const load = () => rpc<ProcessInfo[]>("ps", { worktree_id: w.id }).then(setProcs).catch(() => {});
+    const load = () => rpc<ProcessInfo[]>("ps", { worktree_id: w.id }).then((rows) => setProcs(Array.isArray(rows) ? rows : [])).catch(() => {});
     load();
     const t = window.setInterval(load, 3000);
     return () => window.clearInterval(t);
-  }, [open, w.id]);
+  }, [w.id]);
   const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch(failToast("Kill failed"));
   return (
-    <section className="side-section" data-section="processes">
-      <SectionLabel id="processes"><button className="link" onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button></SectionLabel>
+    <InspectorSection id="processes">
       {res ? (
-        <div className="kv"><label>total</label><span>{res.process_count} proc · {res.cpu_percent.toFixed(0)}% cpu · {formatBytes(res.rss_bytes)}</span></div>
+        <div className="proc-total">
+          <span><span className="proc-total-key">processes</span><span className="proc-total-value">{res.process_count}</span></span>
+          <span><span className="proc-total-key">cpu</span><span className="proc-total-value">{res.cpu_percent.toFixed(0)}%</span></span>
+          <span><span className="proc-total-key">memory</span><span className="proc-total-value">{formatBytes(res.rss_bytes)}</span></span>
+        </div>
       ) : (
         <div className="muted">nothing running</div>
       )}
-      {open && (
-        <div className="proc-list">
-          {[...procs].sort((a, b) => b.rss_bytes - a.rss_bytes).slice(0, 25).map((p) => (
-            <div key={p.pid} className="proc-row" title={p.cmd}>
-              <span className="num">{p.pid}</span>
-              <span className="proc-name" style={{ paddingLeft: p.depth * 8 }}>{p.name}{p.ownership === "observed" ? <span className="muted"> (observed)</span> : null}</span>
-              <span className="num">{formatBytes(p.rss_bytes)}</span>
-              {p.ownership === "owned" && p.depth > 0 && <button className="link" title="Kill this process and its children" onClick={() => kill(p.pid)}>kill</button>}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+      <div className="proc-list">
+        {[...procs].sort((a, b) => b.rss_bytes - a.rss_bytes).slice(0, 25).map((p) => (
+          <div key={p.pid} className="proc-row" title={p.cmd}>
+            <span className="num">{p.pid}</span>
+            <span className="proc-name" style={{ paddingLeft: p.depth * 8 }}>{p.name}{p.ownership === "observed" ? <span className="muted"> (observed)</span> : null}</span>
+            <span className="num">{formatBytes(p.rss_bytes)}</span>
+            {p.ownership === "owned" && p.depth > 0 && <button className="link" title="Kill this process and its children" onClick={() => kill(p.pid)}>kill</button>}
+          </div>
+        ))}
+      </div>
+    </InspectorSection>
   );
 }
 
@@ -157,8 +155,7 @@ function SessionsSection({ w }: { w: Worktree }) {
   }, [w.id, w.exists, live.join(",")]);
   const resumable = (items ?? []).filter((s) => !live.includes(s.id));
   return (
-    <section className="side-section" data-section="sessions">
-      <SectionLabel id="sessions">{items && items.length > 0 && <span className="right">{items.length}</span>}</SectionLabel>
+    <InspectorSection id="sessions" control={items && items.length > 0 ? <span className="right">{items.length}</span> : undefined}>
       {items === null && w.exists && <SkeletonRows count={2} className="compact" label="looking for sessions" />}
       {items?.length === 0 && <div className="muted">no agent sessions rooted here</div>}
       {resumable.map((s) => (
@@ -169,7 +166,7 @@ function SessionsSection({ w }: { w: Worktree }) {
           <button className="link" onClick={() => spawnAgent(s.kind, w.id, { resume: s.id, newTab: true })}>resume</button>
         </div>
       ))}
-    </section>
+    </InspectorSection>
   );
 }
 
@@ -201,8 +198,6 @@ function FilesSection({ w }: { w: Worktree }) {
     }
     setOpenDirs(next);
   };
-  const act = (target: "finder" | "editor") => rpc("open_external", { worktree_id: w.id, rel_path: selected, target }).catch(failToast("Could not open"));
-  const copy = () => navigator.clipboard.writeText(selected ? `${w.path}/${selected}` : w.path).catch(() => {});
   const render = (rel: string, depth: number): React.ReactNode =>
     sortEntries(dirs[rel] ?? [], sort).map((e) => (
       <div key={e.rel_path}>
@@ -215,18 +210,12 @@ function FilesSection({ w }: { w: Worktree }) {
       </div>
     ));
   return (
-    <section className="side-section side-files" data-section="files">
-      <SectionLabel id="files"><button className="link" title={sort === "recent" ? "Sorted by change time. Click to sort by name." : "Sorted by name. Click to sort by change time."} onClick={() => setSort(sort === "recent" ? "name" : "recent")}>{sort}</button></SectionLabel>
-      <div className="file-actions">
-        <button className="link" onClick={() => act("finder")}><Eye className="icon" /> reveal</button>
-        <button className="link" onClick={copy}><Copy className="icon" /> copy path</button>
-        <button className="link" onClick={() => act("editor")}><ExternalLink className="icon" /> editor</button>
-      </div>
+    <InspectorSection id="files" className="side-files" control={<button className="link" title={sort === "recent" ? "Sorted by change time. Click to sort by name." : "Sorted by name. Click to sort by change time."} onClick={() => setSort(sort === "recent" ? "name" : "recent")}>{sort}</button>}>
       <div className="file-tree">
         <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")} onContextMenu={(ev) => { setSelected(""); openMenu(ev, fileMenu(w, "")); }}><Folder className="icon" /> {w.name}/</div>
         {render("", 1)}
       </div>
-    </section>
+    </InspectorSection>
   );
 }
 

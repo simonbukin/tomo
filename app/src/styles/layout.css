@@ -93,6 +93,17 @@
 .proc-row .num { text-align: right; color: var(--fg-2); font-variant-numeric: tabular-nums; }
 .proc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-files { flex: 1; display: flex; flex-direction: column; min-height: 200px; border-bottom: none; }
+
+/* A section folds from its heading. The chevron is the only thing the heading adds. */
+.section-fold { display: inline-flex; align-items: center; gap: var(--sp-1); flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.section-fold .chevron { width: 12px; height: 12px; flex: none; color: var(--fg-3); }
+.collapsible-panel { overflow: hidden; }
+
+/* Processes read as aligned columns. No value is joined to another by a separator. */
+.proc-total { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--sp-3); align-items: baseline; font-size: var(--fs-1); }
+.proc-total > span { display: inline-flex; flex-direction: column; min-width: 0; }
+.proc-total .proc-total-key { color: var(--fg-2); font-size: var(--fs-0); }
+.proc-total .proc-total-value { color: var(--fg-1); font-variant-numeric: tabular-nums; }
 .file-actions { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-1); }
 .file-tree { flex: 1; overflow: auto; font-size: var(--fs-1); font-family: var(--mono); margin: 0 calc(var(--sp-2) * -1); }
 .file-row { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 var(--sp-2); white-space: nowrap; border-radius: var(--radius-sm); color: var(--fg-1); transition: background-color var(--dur-fast) ease-out; }
@@ -101,7 +112,9 @@
 .file-row .file-age { margin-left: auto; padding-left: var(--sp-2); color: var(--fg-3); font-size: var(--fs-0); }
 .file-row:hover { background: var(--bg-1); }
 .file-selected { background: var(--accent-soft); color: var(--accent); }
-.pr-title { color: var(--fg); cursor: default; }
+.pr-title { display: inline-flex; gap: 6px; min-width: 0; color: var(--fg); cursor: default; }
+.pr-title > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.pr-number { flex: none; color: var(--fg-3); font-family: var(--mono); }
 .pr-title:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---- resize handles: body row only, a 10 px hit area over a 2 px line */

@@ -120,6 +120,10 @@ export interface Addon {
   appUrl?: (s: State, worktreeId: Id) => string | null;
   /** Rows for the Apps view. Core owns the view but finds no running app by itself, so an addon that watches for one fills these in. */
   apps?: (s: State) => readonly AppRow[];
+  /** Rows inside the core git section, for an addon that knows more about the branch than git does. It draws no section and no heading of its own. */
+  gitDetail?: ComponentType<{ worktree: Worktree }>;
+  /** The git rail marker for exceptional branch state, such as a failed check. It reads the store and starts no work. */
+  gitMarker?: (s: State, w: Worktree) => RailMarker | null;
   /** Palette entries for one worktree: `context` is true in the root list for the worktree on screen, and false in its sub-list. */
   paletteEntries?: (s: State, w: Worktree, context: boolean) => PaletteEntry[];
   /** Commands with a key binding in this state. Read on each key press and by the shortcut reference. */
