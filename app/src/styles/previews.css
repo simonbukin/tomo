@@ -7,7 +7,7 @@
 .glyph { flex: none; width: 1em; text-align: center; font-family: var(--mono); }
 .glyph-working { color: var(--working); }
 .glyph-needs { color: var(--waiting); }
-.glyph-failed { color: var(--hot); }
+.glyph-failed { color: var(--danger); }
 .glyph-dirty { color: var(--waiting); }
-.glyph-complete { color: var(--ins); }
+.glyph-complete { color: var(--success); }
 .glyph-idle, .glyph-unknown { color: var(--fg-3); }

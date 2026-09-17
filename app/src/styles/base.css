@@ -1,3 +1,9 @@
+/* Base
+ * Global rules only: reset, body, text defaults, selection, focus, and the one
+ * status vocabulary that every dense surface draws.
+ * Feature styling lives with its feature. Do not grow this file one.
+ */
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
@@ -13,26 +19,22 @@ body {
   user-select: none;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+::selection { background: var(--accent-soft); color: var(--fg); }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 
+/* ---- text defaults and the small shared helpers */
 .mono { font-family: var(--mono); font-feature-settings: "kern" 1, "liga" 0, "calt" 0, "tnum" 1; }
 code { font-family: var(--mono); font-size: 0.92em; background: var(--bg-2); padding: 1px 4px; border-radius: var(--radius-sm); }
 svg.icon { width: 14px; height: 14px; flex: none; }
 .muted { color: var(--fg-2); }
 .faint { color: var(--fg-3); }
 .spacer { flex: 1; }
-.ins { color: var(--ins); }
-.del { color: var(--del); }
-.hot { color: var(--hot); }
+.ins { color: var(--success); }
+.del { color: var(--danger); }
+.hot { color: var(--danger); }
 .accent { color: var(--accent); }
-.kbd { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 0 5px; line-height: 16px; }
-
-input, select, textarea { background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 4px 8px; min-width: 0; line-height: 1.5; }
-input::placeholder { color: var(--fg-3); }
-select { appearance: none; padding-right: 22px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237f7f8c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 7px center; }
-.check { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-1); white-space: nowrap; }
-.check input { margin: 0; accent-color: var(--accent); }
 
 .section-label { display: flex; align-items: center; gap: var(--sp-2); height: 26px; font-size: var(--fs-1); color: var(--fg-2); }
 .section-label .right { margin-left: auto; color: var(--fg-3); font-variant-numeric: tabular-nums; }
@@ -52,29 +54,14 @@ select { appearance: none; padding-right: 22px; background-image: url("data:imag
 .state-partial, .state-warning, .check-pending { background: var(--waiting); border-color: var(--waiting); }
 .state-process_only { border-color: var(--waiting); }
 .state-unavailable { border-color: var(--fg-3); }
-.state-fail, .state-error, .pr-closed, .check-failed { background: var(--hot); border-color: var(--hot); }
+.state-fail, .state-error, .pr-closed, .check-failed { background: var(--danger); border-color: var(--danger); }
 .pr-merged { background: var(--accent); border-color: var(--accent); }
 .check-none { border-color: var(--line-strong); }
 
-.agent-line { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); }
-.agent-line .agent-kind { color: var(--fg-2); }
-.agent-line .agent-state { color: var(--fg-1); }
-.agent-line.is-waiting .agent-state { color: var(--waiting); }
-.agent-line.is-working .agent-state { color: var(--working); }
-
-/* ---- NOW signals: at most three per worktree, same dots and colors */
-.signals { display: inline-flex; align-items: center; gap: var(--sp-3); min-width: 0; }
-.signal { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-1); color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.signal .icon { width: 11px; height: 11px; color: var(--fg-2); }
-.signal-attention { color: var(--waiting); }
-.signal-crash, .signal-warn { color: var(--hot); }
-.signal-glyph { font-weight: 600; }
-.signal-runtime { color: var(--fg-2); font-variant-numeric: tabular-nums; }
-
-/* ---- motion */
+/* ---- motion: the shared keyframes and the reduced-motion guard */
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-.rise { animation: rise var(--dur) ease-out both; }
+.rise { animation: rise var(--dur-open) ease-out both; }
 .no-anim * { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

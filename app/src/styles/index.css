@@ -1,8 +1,10 @@
 @import "./tokens.css";
 @import "./base.css";
+@import "../signals.css";
 @import "./ui.css";
 @import "./layout.css";
 @import "./sidebar.css";
+@import "../WorktreeRow.css";
 @import "./home.css";
 @import "./terminal.css";
 @import "../browser/browser.css";
