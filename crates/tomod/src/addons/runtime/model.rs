@@ -146,7 +146,20 @@ mod tests {
     use super::*;
 
     fn ep(pid: u32, port: u16, wt: &str) -> RuntimeEndpoint {
-        RuntimeEndpoint { id: format!("{pid}:{port}"), worktree_id: wt.into(), pane_id: Some("p".into()), action_id: None, pid, process: "node".into(), protocol: RuntimeProtocol::Tcp, host: "localhost".into(), port, label: None, discovered_at_ms: 0, source: None }
+        RuntimeEndpoint {
+            id: format!("{pid}:{port}"),
+            worktree_id: wt.into(),
+            pane_id: Some("p".into()),
+            action_id: None,
+            pid,
+            process: "node".into(),
+            protocol: RuntimeProtocol::Tcp,
+            host: "localhost".into(),
+            port,
+            label: None,
+            discovered_at_ms: 0,
+            source: None,
+        }
     }
 
     #[test]

@@ -24,13 +24,9 @@ pub fn contains(node: &LayoutNode, pane_id: &str) -> bool {
 
 pub fn split(node: &LayoutNode, target: &str, direction: SplitDirection, new_pane: &str, split_id: &str) -> LayoutNode {
     match node {
-        LayoutNode::Leaf { pane_id } if pane_id == target => LayoutNode::Split {
-            id: split_id.to_string(),
-            direction,
-            ratio: 0.5,
-            first: Box::new(node.clone()),
-            second: Box::new(leaf(new_pane)),
-        },
+        LayoutNode::Leaf { pane_id } if pane_id == target => {
+            LayoutNode::Split { id: split_id.to_string(), direction, ratio: 0.5, first: Box::new(node.clone()), second: Box::new(leaf(new_pane)) }
+        }
         LayoutNode::Leaf { .. } => node.clone(),
         LayoutNode::Split { id, direction: d, ratio, first, second } => LayoutNode::Split {
             id: id.clone(),
@@ -47,20 +43,12 @@ pub fn remove(node: &LayoutNode, target: &str) -> Option<LayoutNode> {
     match node {
         LayoutNode::Leaf { pane_id } if pane_id == target => None,
         LayoutNode::Leaf { .. } => Some(node.clone()),
-        LayoutNode::Split { id, direction, ratio, first, second } => {
-            match (remove(first, target), remove(second, target)) {
-                (None, Some(s)) => Some(s),
-                (Some(f), None) => Some(f),
-                (Some(f), Some(s)) => Some(LayoutNode::Split {
-                    id: id.clone(),
-                    direction: *direction,
-                    ratio: *ratio,
-                    first: Box::new(f),
-                    second: Box::new(s),
-                }),
-                (None, None) => None,
-            }
-        }
+        LayoutNode::Split { id, direction, ratio, first, second } => match (remove(first, target), remove(second, target)) {
+            (None, Some(s)) => Some(s),
+            (Some(f), None) => Some(f),
+            (Some(f), Some(s)) => Some(LayoutNode::Split { id: id.clone(), direction: *direction, ratio: *ratio, first: Box::new(f), second: Box::new(s) }),
+            (None, None) => None,
+        },
     }
 }
 
@@ -90,7 +78,13 @@ pub fn equalize(node: &LayoutNode) -> LayoutNode {
         LayoutNode::Leaf { .. } => node.clone(),
         LayoutNode::Split { id, direction, first, second, .. } => {
             let (a, b) = (leaf_count(first) as f64, leaf_count(second) as f64);
-            LayoutNode::Split { id: id.clone(), direction: *direction, ratio: a / (a + b), first: Box::new(equalize(first)), second: Box::new(equalize(second)) }
+            LayoutNode::Split {
+                id: id.clone(),
+                direction: *direction,
+                ratio: a / (a + b),
+                first: Box::new(equalize(first)),
+                second: Box::new(equalize(second)),
+            }
         }
     }
 }
@@ -100,13 +94,9 @@ pub fn swap(node: &LayoutNode, a: &str, b: &str) -> LayoutNode {
         LayoutNode::Leaf { pane_id } if pane_id == a => leaf(b),
         LayoutNode::Leaf { pane_id } if pane_id == b => leaf(a),
         LayoutNode::Leaf { .. } => node.clone(),
-        LayoutNode::Split { id, direction, ratio, first, second } => LayoutNode::Split {
-            id: id.clone(),
-            direction: *direction,
-            ratio: *ratio,
-            first: Box::new(swap(first, a, b)),
-            second: Box::new(swap(second, a, b)),
-        },
+        LayoutNode::Split { id, direction, ratio, first, second } => {
+            LayoutNode::Split { id: id.clone(), direction: *direction, ratio: *ratio, first: Box::new(swap(first, a, b)), second: Box::new(swap(second, a, b)) }
+        }
     }
 }
 
@@ -134,9 +124,9 @@ pub fn rotate(node: &LayoutNode, split_id: &str) -> LayoutNode {
 pub fn split_of(node: &LayoutNode, pane_id: &str) -> Option<Id> {
     match node {
         LayoutNode::Leaf { .. } => None,
-        LayoutNode::Split { id, first, second, .. } => split_of(first, pane_id)
-            .or_else(|| split_of(second, pane_id))
-            .or_else(|| contains(node, pane_id).then(|| id.clone())),
+        LayoutNode::Split { id, first, second, .. } => {
+            split_of(first, pane_id).or_else(|| split_of(second, pane_id)).or_else(|| contains(node, pane_id).then(|| id.clone()))
+        }
     }
 }
 
@@ -402,7 +392,13 @@ mod tests {
                     }
                 }
                 _ => {
-                    tree = if next() % 2 == 0 { equalize(&tree) } else if let Some(sid) = split_of(&tree, &pick(next())) { resize(&tree, &sid, (next() % 100) as f64 / 100.0) } else { tree };
+                    tree = if next() % 2 == 0 {
+                        equalize(&tree)
+                    } else if let Some(sid) = split_of(&tree, &pick(next())) {
+                        resize(&tree, &sid, (next() % 100) as f64 / 100.0)
+                    } else {
+                        tree
+                    };
                 }
             }
             assert!(is_valid(&tree), "step {step}: {tree:?}");

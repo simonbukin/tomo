@@ -212,16 +212,18 @@ impl Daemon {
         let exports: String = env.iter().map(|(k, v)| format!("export {}={}; ", k, crate::agents::shell_quote(v))).collect();
         let line = format!("{exports}{}", hook.command);
         let title = format!("hook: {}", event.event);
-        if let Err(e) = self.spawn_in_worktree(&mut inner, &w.id, w.path.clone(), None, None, SplitDirection::Horizontal, None, Some(title), None).map(|(_, pane_id)| {
-            if let Some(pane) = inner.panes.get_mut(&pane_id) {
-                pane.pending_line = Some(line);
-            }
-            if let Some(pane) = inner.panes.get(&pane_id) {
-                if pane.pty.is_some() {
-                    self.type_pending_when_quiet(pane_id.clone());
+        if let Err(e) =
+            self.spawn_in_worktree(&mut inner, &w.id, w.path.clone(), None, None, SplitDirection::Horizontal, None, Some(title), None).map(|(_, pane_id)| {
+                if let Some(pane) = inner.panes.get_mut(&pane_id) {
+                    pane.pending_line = Some(line);
                 }
-            }
-        }) {
+                if let Some(pane) = inner.panes.get(&pane_id) {
+                    if pane.pty.is_some() {
+                        self.type_pending_when_quiet(pane_id.clone());
+                    }
+                }
+            })
+        {
             tracing::warn!("pane hook for {}: {}", event.event, e.message);
         }
     }
@@ -256,7 +258,17 @@ mod tests {
     }
 
     fn wt(state: Option<&str>) -> HookWorktree {
-        HookWorktree { id: "w".into(), path: "/tmp".into(), repo_id: "r".into(), repo_path: "/tmp".into(), branch: None, name: "w".into(), state: state.map(String::from), project: None, tags: vec![] }
+        HookWorktree {
+            id: "w".into(),
+            path: "/tmp".into(),
+            repo_id: "r".into(),
+            repo_path: "/tmp".into(),
+            branch: None,
+            name: "w".into(),
+            state: state.map(String::from),
+            project: None,
+            tags: vec![],
+        }
     }
 
     #[test]
@@ -272,12 +284,33 @@ mod tests {
     #[tokio::test]
     async fn run_process_reports_exit_timeout_and_missing_program() {
         let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(None)), ..Default::default() };
-        let ok = run_process(&HookDef { command: "test \"$TOMO_EVENT\" = worktree.created && cat >/dev/null".into(), ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
+        let ok = run_process(
+            &HookDef { command: "test \"$TOMO_EVENT\" = worktree.created && cat >/dev/null".into(), ..hook("worktree.created", None) },
+            &ev,
+            None,
+            Path::new("/tmp/s"),
+            Path::new("tomo"),
+        )
+        .await;
         assert!(ok.ok, "{:?}", ok.output_tail);
-        let bad = run_process(&HookDef { command: "echo boom >&2; exit 3".into(), ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
+        let bad = run_process(
+            &HookDef { command: "echo boom >&2; exit 3".into(), ..hook("worktree.created", None) },
+            &ev,
+            None,
+            Path::new("/tmp/s"),
+            Path::new("tomo"),
+        )
+        .await;
         assert_eq!(bad.exit_code, Some(3));
         assert!(bad.output_tail.contains("boom"));
-        let slow = run_process(&HookDef { command: "sleep 5".into(), timeout_s: 1, ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
+        let slow = run_process(
+            &HookDef { command: "sleep 5".into(), timeout_s: 1, ..hook("worktree.created", None) },
+            &ev,
+            None,
+            Path::new("/tmp/s"),
+            Path::new("tomo"),
+        )
+        .await;
         assert!(!slow.ok && slow.output_tail.contains("timed out"));
     }
 
@@ -298,7 +331,8 @@ mod tests {
         let marker = std::env::temp_dir().join(format!("tomo-hook-tree-{}", std::process::id()));
         let cmd = format!("(sh -c 'sleep 30; touch {m}' &) ; sleep 30; touch {m}", m = marker.display());
         let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(None)), ..Default::default() };
-        let run = run_process(&HookDef { command: cmd, timeout_s: 1, ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
+        let run =
+            run_process(&HookDef { command: cmd, timeout_s: 1, ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
         assert!(!run.ok && run.output_tail.contains("killed"));
         let out = std::process::Command::new("pgrep").args(["-f", &format!("touch {}", marker.display())]).output().unwrap();
         assert!(out.stdout.is_empty(), "grandchild survived: {}", String::from_utf8_lossy(&out.stdout));
@@ -310,7 +344,19 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("tomo-hooklog-{}", std::process::id()));
         let _ = std::fs::remove_file(&dir);
         for i in 0..5 {
-            append_log(&dir, &HookRun { event: format!("e{i}"), command: "c".into(), worktree_id: None, started_at_ms: i, duration_ms: 0, exit_code: Some(0), ok: true, output_tail: String::new() });
+            append_log(
+                &dir,
+                &HookRun {
+                    event: format!("e{i}"),
+                    command: "c".into(),
+                    worktree_id: None,
+                    started_at_ms: i,
+                    duration_ms: 0,
+                    exit_code: Some(0),
+                    ok: true,
+                    output_tail: String::new(),
+                },
+            );
         }
         let runs = read_log(&dir, 2);
         assert_eq!(runs.iter().map(|r| r.event.as_str()).collect::<Vec<_>>(), vec!["e3", "e4"]);

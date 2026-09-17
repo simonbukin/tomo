@@ -62,14 +62,59 @@ mod tests {
     const OWNED_NOUNS: [(&str, &[&str]); 6] = [
         (
             "runtime",
-            &["runtimeendpoint", "runtimeprotocol", "runtimeactivity", "runtime_list", "runtimelist", "endpoints_changed", "endpointschanged", "scan_endpoints", "endpoint_gone", "endpoints_at", "endpoint_repeat", "inner.endpoints", "lsof"],
+            &[
+                "runtimeendpoint",
+                "runtimeprotocol",
+                "runtimeactivity",
+                "runtime_list",
+                "runtimelist",
+                "endpoints_changed",
+                "endpointschanged",
+                "scan_endpoints",
+                "endpoint_gone",
+                "endpoints_at",
+                "endpoint_repeat",
+                "inner.endpoints",
+                "lsof",
+            ],
         ),
         ("towns", &["town"]),
         ("github", &["github", "pullrequest", "prstatus", "pr_status", "prchanged", "pr_changed", "review_decision", "checks_failed", "mergeable"]),
-        ("usage", &["mod usage", "crate::usage", ".usage", "usage:", "usagesnapshot", "usagebucket", "usage_get", "usageget", "usage_changed", "usagechanged", "weekly", "5-hour", "allowance"]),
+        (
+            "usage",
+            &[
+                "mod usage",
+                "crate::usage",
+                ".usage",
+                "usage:",
+                "usagesnapshot",
+                "usagebucket",
+                "usage_get",
+                "usageget",
+                "usage_changed",
+                "usagechanged",
+                "weekly",
+                "5-hour",
+                "allowance",
+            ],
+        ),
         (
             "actions",
-            &["actiondef", "actionset", "actionrunresult", "actionmode", "actionshow", "actionactivity", "tomo.toml", "features::actions", "inner.actions", "run_action", "stop_action", "reload_actions", "action_def"],
+            &[
+                "actiondef",
+                "actionset",
+                "actionrunresult",
+                "actionmode",
+                "actionshow",
+                "actionactivity",
+                "tomo.toml",
+                "features::actions",
+                "inner.actions",
+                "run_action",
+                "stop_action",
+                "reload_actions",
+                "action_def",
+            ],
         ),
         ("agentation", &["agentation", "evidencebundle", "evidence_text", "evidence_title", "annotationssend", "annotations_send", "annotation.sent"]),
     ];
@@ -137,7 +182,16 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let repo = dir.join("repo");
         std::fs::create_dir_all(&repo).unwrap();
-        let git = |args: &[&str]| assert!(std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(&repo).output().unwrap().status.success());
+        let git = |args: &[&str]| {
+            assert!(std::process::Command::new("git")
+                .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+                .args(args)
+                .current_dir(&repo)
+                .output()
+                .unwrap()
+                .status
+                .success())
+        };
         git(&["init", "-q"]);
         git(&["commit", "-q", "--allow-empty", "-m", "init"]);
         std::fs::write(repo.join(".tomo.toml"), "[[actions]]\nid = \"serve\"\ncommand = \"true\"\n").unwrap();
@@ -151,9 +205,34 @@ mod tests {
         let worktree_id = a.lock().worktrees.keys().next().unwrap().clone();
         let usage = UsageSnapshot { provider: AgentKind::Claude, available: true, reason: None, buckets: vec![], fetched_at_ms: now_ms() };
         super::usage::remember(&mut a.lock(), vec![usage]);
-        let pr = PullRequest { number: 7, title: "t".into(), url: "u".into(), state: "open".into(), draft: false, review_decision: None, mergeable: None, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: now_ms() };
+        let pr = PullRequest {
+            number: 7,
+            title: "t".into(),
+            url: "u".into(),
+            state: "open".into(),
+            draft: false,
+            review_decision: None,
+            mergeable: None,
+            checks_passed: 0,
+            checks_failed: 0,
+            checks_pending: 0,
+            fetched_at_ms: now_ms(),
+        };
         super::github::remember(&mut a.lock(), worktree_id.clone(), PrStatusResult { available: true, reason: None, pr: Some(pr) });
-        let endpoint = RuntimeEndpoint { id: "1:3000".into(), worktree_id: worktree_id.clone(), pane_id: None, action_id: None, pid: 1, process: "node".into(), protocol: RuntimeProtocol::Tcp, host: "localhost".into(), port: 3000, label: None, discovered_at_ms: now_ms(), source: None };
+        let endpoint = RuntimeEndpoint {
+            id: "1:3000".into(),
+            worktree_id: worktree_id.clone(),
+            pane_id: None,
+            action_id: None,
+            pid: 1,
+            process: "node".into(),
+            protocol: RuntimeProtocol::Tcp,
+            host: "localhost".into(),
+            port: 3000,
+            label: None,
+            discovered_at_ms: now_ms(),
+            source: None,
+        };
         super::runtime::remember(&mut a.lock(), vec![endpoint], now_ms());
 
         let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);

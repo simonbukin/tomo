@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -148,9 +148,15 @@ fn query_len(b: &[u8]) -> Option<usize> {
         }
         b']' => {
             let inner = &rest[1..];
-            let st = inner.iter().take(64).position(|&c| c == 0x07).map(|p| p + 1).or_else(|| inner.windows(2).take(64).position(|w| w == b"\x1b\\").map(|p| p + 2))?;
+            let st = inner
+                .iter()
+                .take(64)
+                .position(|&c| c == 0x07)
+                .map(|p| p + 1)
+                .or_else(|| inner.windows(2).take(64).position(|w| w == b"\x1b\\").map(|p| p + 2))?;
             let body = &inner[..st];
-            let is_query = body.starts_with(b"10;?") || body.starts_with(b"11;?") || body.starts_with(b"12;?") || body.starts_with(b"4;") && body.contains(&b'?');
+            let is_query =
+                body.starts_with(b"10;?") || body.starts_with(b"11;?") || body.starts_with(b"12;?") || body.starts_with(b"4;") && body.contains(&b'?');
             is_query.then_some(1 + 1 + st)
         }
         b'P' => {
@@ -187,9 +193,7 @@ pub struct PtySession {
 impl PtySession {
     pub fn spawn(spec: Spawn<'_>, on_output: OutputSink, on_exit: ExitSink) -> Result<Self> {
         let pty = native_pty_system();
-        let pair = pty
-            .openpty(PtySize { rows: spec.rows, cols: spec.cols, pixel_width: 0, pixel_height: 0 })
-            .context("openpty")?;
+        let pair = pty.openpty(PtySize { rows: spec.rows, cols: spec.cols, pixel_width: 0, pixel_height: 0 }).context("openpty")?;
         let mut cmd = CommandBuilder::new(spec.program);
         cmd.args(spec.args);
         cmd.cwd(spec.cwd);
@@ -219,11 +223,7 @@ impl PtySession {
             on_exit(code);
         })?;
 
-        Ok(PtySession {
-            pid,
-            master: Mutex::new(pair.master),
-            writer: Mutex::new(writer),
-        })
+        Ok(PtySession { pid, master: Mutex::new(pair.master), writer: Mutex::new(writer) })
     }
 
     pub fn write(&self, data: &[u8]) -> Result<()> {
@@ -234,11 +234,7 @@ impl PtySession {
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
-        self.master
-            .lock()
-            .unwrap()
-            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
-            .context("resize pty")
+        self.master.lock().unwrap().resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).context("resize pty")
     }
 
     pub fn hangup(&self) {

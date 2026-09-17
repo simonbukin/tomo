@@ -193,7 +193,13 @@ fn codex_buckets(result: &Value) -> Vec<UsageBucket> {
                 let window = snapshot.get(position)?;
                 let percent = window.get("usedPercent")?.as_f64()?;
                 let base = codex_window_label(window, position);
-                Some(UsageBucket { label: base, fraction_used: Some(percent / 100.0), resets_at_ms: window.get("resetsAt").and_then(Value::as_u64).map(|s| s * 1000), detail: None, scope: scope.clone() })
+                Some(UsageBucket {
+                    label: base,
+                    fraction_used: Some(percent / 100.0),
+                    resets_at_ms: window.get("resetsAt").and_then(Value::as_u64).map(|s| s * 1000),
+                    detail: None,
+                    scope: scope.clone(),
+                })
             })
         })
         .collect()
@@ -308,7 +314,15 @@ pub fn crossings(before: &[UsageSnapshot], after: &[UsageSnapshot]) -> Vec<Strin
             let now = bucket.fraction_used?;
             let was = fraction_of(before, provider, bucket);
             let crossed = THRESHOLDS.iter().any(|t| was < *t && now >= *t);
-            crossed.then(|| format!("{} {}{} allowance {}%", provider.label(), bucket.scope.as_deref().map(|s| format!("{s} ")).unwrap_or_default(), bucket.label, (now * 100.0).round() as u64))
+            crossed.then(|| {
+                format!(
+                    "{} {}{} allowance {}%",
+                    provider.label(),
+                    bucket.scope.as_deref().map(|s| format!("{s} ")).unwrap_or_default(),
+                    bucket.label,
+                    (now * 100.0).round() as u64
+                )
+            })
         })
         .collect()
 }
@@ -406,7 +420,10 @@ mod tests {
         let body = br#"{"limits":[{"kind":"session","percent":36,"severity":"normal","resets_at":"2026-09-14T23:50:00Z"}]}"#;
         let s = parse_claude(body, NOW);
         assert!(s.available);
-        assert_eq!(s.buckets, vec![UsageBucket { label: "5-hour".into(), fraction_used: Some(0.36), resets_at_ms: Some(1_789_429_800_000), detail: None, scope: None }]);
+        assert_eq!(
+            s.buckets,
+            vec![UsageBucket { label: "5-hour".into(), fraction_used: Some(0.36), resets_at_ms: Some(1_789_429_800_000), detail: None, scope: None }]
+        );
     }
 
     #[test]
@@ -464,7 +481,10 @@ mod tests {
         let s = parse_codex(line, NOW);
         assert!(s.available);
         assert_eq!(s.buckets.len(), 2);
-        assert_eq!(s.buckets[0], UsageBucket { label: "5-hour".into(), fraction_used: Some(0.0), resets_at_ms: Some(1_789_440_999_000), detail: None, scope: None });
+        assert_eq!(
+            s.buckets[0],
+            UsageBucket { label: "5-hour".into(), fraction_used: Some(0.0), resets_at_ms: Some(1_789_440_999_000), detail: None, scope: None }
+        );
         assert_eq!(s.buckets[1].label, "weekly");
         assert_eq!(s.buckets[1].fraction_used, Some(0.06));
     }
@@ -513,7 +533,10 @@ mod tests {
 
     #[test]
     fn first_sight_above_threshold_fires_and_unknown_fraction_is_silent() {
-        let after = vec![snapshot(AgentKind::Codex, vec![bucket("5-hour", 0.90), UsageBucket { label: "weekly".into(), fraction_used: None, resets_at_ms: None, detail: None, scope: None }])];
+        let after = vec![snapshot(
+            AgentKind::Codex,
+            vec![bucket("5-hour", 0.90), UsageBucket { label: "weekly".into(), fraction_used: None, resets_at_ms: None, detail: None, scope: None }],
+        )];
         assert_eq!(crossings(&[], &after), vec!["Codex 5-hour allowance 90%"]);
     }
 

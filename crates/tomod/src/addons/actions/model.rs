@@ -178,7 +178,11 @@ mod tests {
 
         write(&worktree, "[[actions]]\nid = \"test\"\ncommand = \"pnpm test\"\n");
         let (actions, _, from_repo) = load(&worktree, Some(&repo));
-        assert_eq!((actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), from_repo), (vec!["test"], false), "the worktree file wins whole; the two never merge");
+        assert_eq!(
+            (actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), from_repo),
+            (vec!["test"], false),
+            "the worktree file wins whole; the two never merge"
+        );
 
         let (actions, _, from_repo) = load(&repo, Some(&repo));
         assert_eq!((actions.len(), from_repo), (1, false), "the repository root reads its own file as a worktree");

@@ -51,7 +51,13 @@ fn runtime_label(inner: &Inner, worktree_id: &str, bundle: &EvidenceBundle) -> S
     bundle
         .action_id
         .as_deref()
-        .and_then(|a| inner.panes.values().filter(|p| p.row.worktree_id == worktree_id).find_map(|p| p.source.as_ref().filter(|s| PaneSource::action_id(Some(s)).as_deref() == Some(a))))
+        .and_then(|a| {
+            inner
+                .panes
+                .values()
+                .filter(|p| p.row.worktree_id == worktree_id)
+                .find_map(|p| p.source.as_ref().filter(|s| PaneSource::action_id(Some(s)).as_deref() == Some(a)))
+        })
         .map(|s| s.label.clone())
         .or_else(|| bundle.url.clone())
         .unwrap_or_else(|| "-".to_string())
@@ -96,8 +102,20 @@ mod tests {
             url: Some("http://localhost:1420/".into()),
             action_id: None,
             annotations: vec![
-                Annotation { text: "wrong color".into(), url: "http://localhost:1420/".into(), selector: Some("#save".into()), element_text: Some("Save".into()), rect: None },
-                Annotation { text: "cut off".into(), url: "http://localhost:1420/".into(), selector: None, element_text: None, rect: Some([1.0, 2.0, 3.0, 4.0]) },
+                Annotation {
+                    text: "wrong color".into(),
+                    url: "http://localhost:1420/".into(),
+                    selector: Some("#save".into()),
+                    element_text: Some("Save".into()),
+                    rect: None,
+                },
+                Annotation {
+                    text: "cut off".into(),
+                    url: "http://localhost:1420/".into(),
+                    selector: None,
+                    element_text: None,
+                    rect: Some([1.0, 2.0, 3.0, 4.0]),
+                },
             ],
             instruction: "Review and address these annotations.".into(),
             markdown: None,

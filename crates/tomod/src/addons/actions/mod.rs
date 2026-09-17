@@ -34,7 +34,14 @@ fn def(inner: &Inner, worktree_id: &str, action_id: &str) -> Result<ActionDef, R
 }
 
 fn def_or_placeholder(inner: &Inner, worktree_id: &str, action_id: &str) -> ActionDef {
-    def(inner, worktree_id, action_id).unwrap_or_else(|_| ActionDef { id: action_id.to_string(), label: action_id.to_string(), command: String::new(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None })
+    def(inner, worktree_id, action_id).unwrap_or_else(|_| ActionDef {
+        id: action_id.to_string(),
+        label: action_id.to_string(),
+        command: String::new(),
+        mode: ActionMode::Pane,
+        show: ActionShow::Menu,
+        shortcut: None,
+    })
 }
 
 fn source_of(action: &ActionDef) -> PaneSource {
@@ -45,16 +52,29 @@ fn running_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id>
     inner
         .panes
         .values()
-        .find(|p| p.row.worktree_id == worktree_id && p.source.as_ref().is_some_and(|s| s.kind == ACTION_SOURCE_KIND && s.id == action_id) && p.pty.is_some() && p.exit_code.is_none())
+        .find(|p| {
+            p.row.worktree_id == worktree_id
+                && p.source.as_ref().is_some_and(|s| s.kind == ACTION_SOURCE_KIND && s.id == action_id)
+                && p.pty.is_some()
+                && p.exit_code.is_none()
+        })
         .map(|p| p.row.id.clone())
 }
 
 fn hook(inner: &Inner, event: &str, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>) -> HookEvent {
-    HookEvent { action: Some(HookAction { id: action.id.clone(), label: action.label.clone() }), pane: pane_id.and_then(|p| Daemon::hook_pane(inner, p)), ..events::envelope(inner, event, Some(worktree_id)) }
+    HookEvent {
+        action: Some(HookAction { id: action.id.clone(), label: action.label.clone() }),
+        pane: pane_id.and_then(|p| Daemon::hook_pane(inner, p)),
+        ..events::envelope(inner, event, Some(worktree_id))
+    }
 }
 
 fn activity_event(kind: ActionActivity, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>, verb: &str) -> ActivityEvent {
-    ActivityEvent { pane_id: pane_id.map(str::to_string), payload: json!({ "action_id": action.id, "pane_id": pane_id }), ..activity::event(kind, Some(worktree_id), format!("{} {verb}", action.label)) }
+    ActivityEvent {
+        pane_id: pane_id.map(str::to_string),
+        payload: json!({ "action_id": action.id, "pane_id": pane_id }),
+        ..activity::event(kind, Some(worktree_id), format!("{} {verb}", action.label))
+    }
 }
 
 /// The root of each repository: its main worktree, or the recorded repo path.
@@ -178,7 +198,7 @@ pub fn restart(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Resu
 fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<ActionRunResult, RpcError> {
     let mut inner = daemon.lock();
     let action = def(&inner, worktree_id, action_id)?;
-    let path =inner.worktrees.get(worktree_id).filter(|w| w.exists).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+    let path = inner.worktrees.get(worktree_id).filter(|w| w.exists).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
     let pane_id = match action.mode {
         ActionMode::External => {
             std::process::Command::new("sh")
@@ -203,7 +223,17 @@ fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Act
                 return Ok(ActionRunResult { action, pane, reused: true });
             }
             let argv = [inner.config.shell.clone(), "-lc".into(), action.command.clone()];
-            let (_, pane_id) = daemon.spawn_in_worktree(&mut inner, worktree_id, path, None, None, SplitDirection::Horizontal, Some(&argv), Some(action.label.clone()), None)?;
+            let (_, pane_id) = daemon.spawn_in_worktree(
+                &mut inner,
+                worktree_id,
+                path,
+                None,
+                None,
+                SplitDirection::Horizontal,
+                Some(&argv),
+                Some(action.label.clone()),
+                None,
+            )?;
             if let Some(pane) = inner.panes.get_mut(&pane_id) {
                 pane.source = Some(source_of(&action));
             }

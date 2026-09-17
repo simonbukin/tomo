@@ -8,7 +8,14 @@ use std::time::Duration;
 use tomo_proto::*;
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(dir).output().unwrap().status.success());
+    assert!(std::process::Command::new("git")
+        .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap()
+        .status
+        .success());
 }
 
 async fn call(daemon: &Arc<Daemon>, call: Call) -> Value {
@@ -101,9 +108,19 @@ async fn a_pane_listener_is_labelled_from_its_source_recorded_once_and_removed_a
     wait_for_list("the http probe", &daemon, &worktree_id, |l| l.iter().any(|e| e.port == port && e.protocol == RuntimeProtocol::Http)).await;
 
     let snapshot = call(&daemon, Call::Subscribe).await;
-    assert!(snapshot["endpoints"].as_array().unwrap().iter().any(|v| v["id"] == e.id.as_str() && v["action_id"] == "serve"), "the snapshot lists the endpoint: {}", snapshot["endpoints"]);
-    let sent: Vec<Value> = std::iter::from_fn(|| frames.try_recv().ok()).filter_map(|t| serde_json::from_str::<Value>(&t).ok()).filter(|v| v["event"] == "endpoints_changed").collect();
-    assert!(sent.iter().any(|v| v["data"]["worktree_id"] == worktree_id.as_str() && v["data"]["endpoints"][0]["protocol"] == "tcp"), "endpoints_changed on discovery: {sent:?}");
+    assert!(
+        snapshot["endpoints"].as_array().unwrap().iter().any(|v| v["id"] == e.id.as_str() && v["action_id"] == "serve"),
+        "the snapshot lists the endpoint: {}",
+        snapshot["endpoints"]
+    );
+    let sent: Vec<Value> = std::iter::from_fn(|| frames.try_recv().ok())
+        .filter_map(|t| serde_json::from_str::<Value>(&t).ok())
+        .filter(|v| v["event"] == "endpoints_changed")
+        .collect();
+    assert!(
+        sent.iter().any(|v| v["data"]["worktree_id"] == worktree_id.as_str() && v["data"]["endpoints"][0]["protocol"] == "tcp"),
+        "endpoints_changed on discovery: {sent:?}"
+    );
     assert!(sent.iter().any(|v| v["data"]["endpoints"][0]["protocol"] == "http"), "endpoints_changed after the probe: {sent:?}");
 
     let discovered = |d: &Arc<Daemon>| -> Vec<ActivityEvent> {
@@ -112,10 +129,16 @@ async fn a_pane_listener_is_labelled_from_its_source_recorded_once_and_removed_a
     };
     let recorded = discovered(&daemon);
     assert_eq!(recorded.len(), 1);
-    assert_eq!((recorded[0].title.clone(), recorded[0].detail.clone(), recorded[0].pane_id.as_deref()), (format!("Serve listens on {port}"), Some(format!("localhost:{port}")), Some(first.as_str())));
+    assert_eq!(
+        (recorded[0].title.clone(), recorded[0].detail.clone(), recorded[0].pane_id.as_deref()),
+        (format!("Serve listens on {port}"), Some(format!("localhost:{port}")), Some(first.as_str()))
+    );
     assert_eq!(recorded[0].payload, serde_json::json!({ "port": port, "host": "localhost", "pid": e.pid, "action_id": "serve", "endpoint_id": e.id }));
     let hook = wait_for_hooks(&log, "runtime.endpoint_discovered", 1).await.remove(0);
-    assert_eq!((hook.action.map(|a| (a.id, a.label)), hook.pane.map(|p| p.id), hook.worktree.map(|w| w.id)), (Some(("serve".into(), "Serve".into())), Some(first.clone()), Some(worktree_id.clone())));
+    assert_eq!(
+        (hook.action.map(|a| (a.id, a.label)), hook.pane.map(|p| p.id), hook.worktree.map(|w| w.id)),
+        (Some(("serve".into(), "Serve".into())), Some(first.clone()), Some(worktree_id.clone()))
+    );
 
     assert!(std::process::Command::new("kill").arg(e.pid.to_string()).status().unwrap().success());
     tokio::time::sleep(Duration::from_millis(300)).await;

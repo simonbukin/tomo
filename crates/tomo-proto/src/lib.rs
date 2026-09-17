@@ -45,9 +45,19 @@ pub struct Request {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Frame {
-    Response { id: u64, result: Value },
-    Error { id: u64, error: RpcError },
-    Event { seq: u64, #[serde(flatten)] event: Event },
+    Response {
+        id: u64,
+        result: Value,
+    },
+    Error {
+        id: u64,
+        error: RpcError,
+    },
+    Event {
+        seq: u64,
+        #[serde(flatten)]
+        event: Event,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -72,113 +82,293 @@ pub enum ErrorCode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "snake_case")]
 pub enum Call {
-    Hello { protocol: u32, client: String },
+    Hello {
+        protocol: u32,
+        client: String,
+    },
     Status,
     Subscribe,
     ConfigGet,
     ConfigCheck,
     /// Edits one dotted key in config.toml in place and keeps comments. A null `value` removes the key.
-    ConfigSet { key: String, value: Value },
+    ConfigSet {
+        key: String,
+        value: Value,
+    },
     /// Opens config.toml with `editor_command`, else the default text editor.
     ConfigOpen,
     DaemonStop,
     IntegrationsInstall,
     IntegrationsStatus,
-    HookLog { limit: Option<usize> },
+    HookLog {
+        limit: Option<usize>,
+    },
 
     RepoList,
-    RepoAdd { path: PathBuf },
-    RepoRemove { repo_id: Id },
-    RepoClone { url: String, dest: PathBuf },
+    RepoAdd {
+        path: PathBuf,
+    },
+    RepoRemove {
+        repo_id: Id,
+    },
+    RepoClone {
+        url: String,
+        dest: PathBuf,
+    },
 
     WorktreeList,
     WorktreeRefresh,
     WorktreeCreate(WorktreeCreate),
-    WorktreeArchive { worktree_id: Id, #[serde(default)] checkpoint: CheckpointMode },
-    WorktreeRestore { worktree_id: Id },
-    WorktreeOpen { worktree_id: Id },
-    WorktreeResolve { path: PathBuf },
-    MetadataGet { worktree_id: Id },
-    MetadataSet { worktree_id: Id, patch: MetadataPatch },
+    WorktreeArchive {
+        worktree_id: Id,
+        #[serde(default)]
+        checkpoint: CheckpointMode,
+    },
+    WorktreeRestore {
+        worktree_id: Id,
+    },
+    WorktreeOpen {
+        worktree_id: Id,
+    },
+    WorktreeResolve {
+        path: PathBuf,
+    },
+    MetadataGet {
+        worktree_id: Id,
+    },
+    MetadataSet {
+        worktree_id: Id,
+        patch: MetadataPatch,
+    },
 
-    TabCreate { worktree_id: Id, title: Option<String> },
-    TabClose { tab_id: Id, force: bool },
-    TabRename { tab_id: Id, title: String },
+    TabCreate {
+        worktree_id: Id,
+        title: Option<String>,
+    },
+    TabClose {
+        tab_id: Id,
+        force: bool,
+    },
+    TabRename {
+        tab_id: Id,
+        title: String,
+    },
     /// Moves a tab to `position` among its worktree's tabs (0-based); the others shift.
-    TabMove { tab_id: Id, position: u32 },
+    TabMove {
+        tab_id: Id,
+        position: u32,
+    },
     /// Moves a pane next to `target_pane_id` (`place` picks the side, `center` swaps), or into tab `tab_id`.
-    PaneMove { pane_id: Id, #[serde(default)] target_pane_id: Option<Id>, #[serde(default)] tab_id: Option<Id>, place: DropPlace },
-    TabActivate { tab_id: Id },
+    PaneMove {
+        pane_id: Id,
+        #[serde(default)]
+        target_pane_id: Option<Id>,
+        #[serde(default)]
+        tab_id: Option<Id>,
+        place: DropPlace,
+    },
+    TabActivate {
+        tab_id: Id,
+    },
     /// Reopens the most recently closed tab of the worktree from a bounded stack.
-    TabReopen { worktree_id: Id },
-    LayoutResize { tab_id: Id, split_id: Id, ratio: f64 },
-    LayoutEqualize { tab_id: Id },
-    LayoutRotate { tab_id: Id, split_id: Option<Id> },
-    PaneSwap { pane_a: Id, pane_b: Id },
-    PaneZoom { pane_id: Option<Id>, tab_id: Option<Id> },
+    TabReopen {
+        worktree_id: Id,
+    },
+    LayoutResize {
+        tab_id: Id,
+        split_id: Id,
+        ratio: f64,
+    },
+    LayoutEqualize {
+        tab_id: Id,
+    },
+    LayoutRotate {
+        tab_id: Id,
+        split_id: Option<Id>,
+    },
+    PaneSwap {
+        pane_a: Id,
+        pane_b: Id,
+    },
+    PaneZoom {
+        pane_id: Option<Id>,
+        tab_id: Option<Id>,
+    },
 
-    PaneList { worktree_id: Option<Id> },
+    PaneList {
+        worktree_id: Option<Id>,
+    },
     PaneCreate(PaneCreate),
-    PaneSplit { pane_id: Id, direction: SplitDirection, command: Option<Vec<String>> },
-    PaneClose { pane_id: Id, force: bool },
-    PaneFocus { pane_id: Id },
-    PaneRename { pane_id: Id, title: Option<String> },
-    PaneSend { pane_id: Id, data_base64: String },
-    PaneResize { pane_id: Id, cols: u16, rows: u16 },
-    PaneAttach { pane_id: Id },
-    PaneDetach { pane_id: Id },
-    PaneKillTree { pane_id: Id },
+    PaneSplit {
+        pane_id: Id,
+        direction: SplitDirection,
+        command: Option<Vec<String>>,
+    },
+    PaneClose {
+        pane_id: Id,
+        force: bool,
+    },
+    PaneFocus {
+        pane_id: Id,
+    },
+    PaneRename {
+        pane_id: Id,
+        title: Option<String>,
+    },
+    PaneSend {
+        pane_id: Id,
+        data_base64: String,
+    },
+    PaneResize {
+        pane_id: Id,
+        cols: u16,
+        rows: u16,
+    },
+    PaneAttach {
+        pane_id: Id,
+    },
+    PaneDetach {
+        pane_id: Id,
+    },
+    PaneKillTree {
+        pane_id: Id,
+    },
     /// The last `lines` (default 8, at most 200) non-empty lines of pane output as plain text.
-    PaneTail { pane_id: Id, #[serde(default)] lines: Option<u32> },
+    PaneTail {
+        pane_id: Id,
+        #[serde(default)]
+        lines: Option<u32>,
+    },
 
-    AgentList { worktree_id: Option<Id> },
+    AgentList {
+        worktree_id: Option<Id>,
+    },
     AgentSpawn(AgentSpawn),
-    AgentHook { kind: AgentKind, pane_id: Id, payload: Value, at_ms: u64 },
+    AgentHook {
+        kind: AgentKind,
+        pane_id: Id,
+        payload: Value,
+        at_ms: u64,
+    },
     AgentReport(AgentReport),
 
-    Ps { worktree_id: Option<Id> },
-    ProcessKillTree { pid: u32 },
+    Ps {
+        worktree_id: Option<Id>,
+    },
+    ProcessKillTree {
+        pid: u32,
+    },
 
-    Notify { pane_id: Option<Id>, worktree_id: Option<Id>, level: AttentionLevel, message: String },
+    Notify {
+        pane_id: Option<Id>,
+        worktree_id: Option<Id>,
+        level: AttentionLevel,
+        message: String,
+    },
     AttentionList,
     AttentionNext,
-    AttentionView { id: Id },
+    AttentionView {
+        id: Id,
+    },
     AttentionClear,
 
-    GitSummary { worktree_id: Id },
+    GitSummary {
+        worktree_id: Id,
+    },
     /// Branches of a repository, newest commit first. A remote branch folds into its local branch.
-    BranchList { repo_id: Id, #[serde(default)] limit: Option<usize> },
-    PrStatus { worktree_id: Id },
-    FsList { worktree_id: Id, rel_path: String },
-    OpenExternal { worktree_id: Id, rel_path: String, target: ExternalTarget },
+    BranchList {
+        repo_id: Id,
+        #[serde(default)]
+        limit: Option<usize>,
+    },
+    PrStatus {
+        worktree_id: Id,
+    },
+    FsList {
+        worktree_id: Id,
+        rel_path: String,
+    },
+    OpenExternal {
+        worktree_id: Id,
+        rel_path: String,
+        target: ExternalTarget,
+    },
     /// Opens an absolute `path` at `line` and `col` in the configured editor.
-    OpenLocation { path: PathBuf, #[serde(default)] line: Option<u32>, #[serde(default)] col: Option<u32> },
+    OpenLocation {
+        path: PathBuf,
+        #[serde(default)]
+        line: Option<u32>,
+        #[serde(default)]
+        col: Option<u32>,
+    },
 
     UiStateGet,
-    UiStateSet { state: Value },
+    UiStateSet {
+        state: Value,
+    },
 
     TownList,
     TownPick,
     /// Facts about one unlocked town: its worktree, branch, status, final commit, PR, and archive date.
-    TownHistory { slug: String },
-    SessionList { worktree_id: Id, #[serde(default)] limit: Option<usize> },
-    RuntimeList { #[serde(default)] worktree_id: Option<Id> },
+    TownHistory {
+        slug: String,
+    },
+    SessionList {
+        worktree_id: Id,
+        #[serde(default)]
+        limit: Option<usize>,
+    },
+    RuntimeList {
+        #[serde(default)]
+        worktree_id: Option<Id>,
+    },
     ActivityList(ActivityQuery),
     CheckpointCreate(CheckpointSpec),
-    CheckpointResolve { id: Id },
-    UsageGet { #[serde(default)] refresh: bool },
+    CheckpointResolve {
+        id: Id,
+    },
+    UsageGet {
+        #[serde(default)]
+        refresh: bool,
+    },
     /// Recent diagnostics, newest first: what Tomo itself did or noticed.
-    DiagnosticsList { #[serde(default)] limit: Option<u32> },
+    DiagnosticsList {
+        #[serde(default)]
+        limit: Option<u32>,
+    },
     /// Machine pressure now: CPU, memory, optional GPU, the daemon's own memory, and the heaviest worktree.
     SystemStats,
-    BrowserOpen { worktree_id: Id, #[serde(default)] url: Option<String>, #[serde(default)] tab_id: Option<Id> },
-    BrowserNavigate { pane_id: Id, url: String },
-    AnnotationsSend { pane_id: Id, bundle: EvidenceBundle },
+    BrowserOpen {
+        worktree_id: Id,
+        #[serde(default)]
+        url: Option<String>,
+        #[serde(default)]
+        tab_id: Option<Id>,
+    },
+    BrowserNavigate {
+        pane_id: Id,
+        url: String,
+    },
+    AnnotationsSend {
+        pane_id: Id,
+        bundle: EvidenceBundle,
+    },
 
-    ActionList { worktree_id: Id },
-    ActionRun { worktree_id: Id, action_id: String },
-    ActionStop { worktree_id: Id, action_id: String },
-    ActionRestart { worktree_id: Id, action_id: String },
+    ActionList {
+        worktree_id: Id,
+    },
+    ActionRun {
+        worktree_id: Id,
+        action_id: String,
+    },
+    ActionStop {
+        worktree_id: Id,
+        action_id: String,
+    },
+    ActionRestart {
+        worktree_id: Id,
+        action_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -259,35 +449,99 @@ pub enum ExternalTarget {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "event", content = "data", rename_all = "snake_case")]
 pub enum Event {
-    EndpointsChanged { worktree_id: Id, endpoints: Vec<RuntimeEndpoint> },
-    ActivityAdded { event: ActivityEvent },
-    AttentionResolved { id: Id },
-    UsageChanged { snapshots: Vec<UsageSnapshot> },
-    ReposChanged { repos: Vec<Repo> },
-    WorktreesChanged { worktrees: Vec<Worktree> },
-    MetadataChanged { worktree_id: Id, metadata: WorktreeMetadata },
-    WorktreeArchiving { worktree_id: Id },
-    TabsChanged { worktree_id: Id, tabs: Vec<Tab> },
-    PaneOutput { pane_id: Id, data_base64: String },
-    PaneChanged { pane: Pane },
-    PaneExited { pane_id: Id, exit_code: Option<i32> },
-    AgentChanged { agent: AgentPresence },
-    AgentRemoved { pane_id: Id },
-    AttentionAdded { item: AttentionItem },
-    AttentionViewed { id: Id },
+    EndpointsChanged {
+        worktree_id: Id,
+        endpoints: Vec<RuntimeEndpoint>,
+    },
+    ActivityAdded {
+        event: ActivityEvent,
+    },
+    AttentionResolved {
+        id: Id,
+    },
+    UsageChanged {
+        snapshots: Vec<UsageSnapshot>,
+    },
+    ReposChanged {
+        repos: Vec<Repo>,
+    },
+    WorktreesChanged {
+        worktrees: Vec<Worktree>,
+    },
+    MetadataChanged {
+        worktree_id: Id,
+        metadata: WorktreeMetadata,
+    },
+    WorktreeArchiving {
+        worktree_id: Id,
+    },
+    TabsChanged {
+        worktree_id: Id,
+        tabs: Vec<Tab>,
+    },
+    PaneOutput {
+        pane_id: Id,
+        data_base64: String,
+    },
+    PaneChanged {
+        pane: Pane,
+    },
+    PaneExited {
+        pane_id: Id,
+        exit_code: Option<i32>,
+    },
+    AgentChanged {
+        agent: AgentPresence,
+    },
+    AgentRemoved {
+        pane_id: Id,
+    },
+    AttentionAdded {
+        item: AttentionItem,
+    },
+    AttentionViewed {
+        id: Id,
+    },
     AttentionCleared,
-    Resources { worktrees: Vec<WorktreeResources> },
-    FocusRequest { worktree_id: Id, tab_id: Id, pane_id: Id },
-    ZoomRequest { tab_id: Id, pane_id: Option<Id> },
-    Notice { level: NoticeLevel, message: String },
-    TownUnlocked { unlock: TownUnlock },
-    PrChanged { worktree_id: Id, pr: Option<PullRequest> },
-    HookRan { run: HookRun },
-    ActionsChanged { set: ActionSet },
-    ConfigChanged { config: Config },
-    Diagnostic { diagnostic: Diagnostic },
+    Resources {
+        worktrees: Vec<WorktreeResources>,
+    },
+    FocusRequest {
+        worktree_id: Id,
+        tab_id: Id,
+        pane_id: Id,
+    },
+    ZoomRequest {
+        tab_id: Id,
+        pane_id: Option<Id>,
+    },
+    Notice {
+        level: NoticeLevel,
+        message: String,
+    },
+    TownUnlocked {
+        unlock: TownUnlock,
+    },
+    PrChanged {
+        worktree_id: Id,
+        pr: Option<PullRequest>,
+    },
+    HookRan {
+        run: HookRun,
+    },
+    ActionsChanged {
+        set: ActionSet,
+    },
+    ConfigChanged {
+        config: Config,
+    },
+    Diagnostic {
+        diagnostic: Diagnostic,
+    },
     /// Pushed every few seconds while a client is subscribed.
-    SystemStats { stats: SystemStats },
+    SystemStats {
+        stats: SystemStats,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1033,10 +1287,7 @@ pub struct Snapshot {
 }
 
 pub fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -1065,8 +1316,10 @@ mod tests {
 
     #[test]
     fn worktree_create_accepts_the_old_town_slug_field() {
-        let old: WorktreeCreate = serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"town_slug":"aogashima"}"#).unwrap();
-        let new: WorktreeCreate = serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"name_hint":"aogashima"}"#).unwrap();
+        let old: WorktreeCreate =
+            serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"town_slug":"aogashima"}"#).unwrap();
+        let new: WorktreeCreate =
+            serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"name_hint":"aogashima"}"#).unwrap();
         assert_eq!((old.name_hint.as_deref(), new.name_hint.as_deref()), (Some("aogashima"), Some("aogashima")));
     }
 

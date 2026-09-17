@@ -1,7 +1,7 @@
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use itertools::Itertools;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tomo_proto::{Id, Ownership, ProcessInfo, WorktreeResources};
 
@@ -76,7 +76,11 @@ impl ProcMonitor {
         self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, cheap);
         if !roots.is_empty() {
             let pids: Vec<sysinfo::Pid> = roots.iter().map(|p| sysinfo::Pid::from_u32(*p)).collect();
-            self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), false, ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always).with_exe(UpdateKind::Always));
+            self.sys.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&pids),
+                false,
+                ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always).with_exe(UpdateKind::Always),
+            );
         }
         self.sys
             .processes()
@@ -203,7 +207,17 @@ mod tests {
     use super::*;
 
     fn row(pid: u32, ppid: u32, name: &str, cwd: &str, rss: u64) -> ProcRow {
-        ProcRow { pid, ppid: Some(ppid), name: name.into(), exe: None, cmd: name.into(), cwd: Some(PathBuf::from(cwd)), cpu_percent: 1.0, rss_bytes: rss, start_time_s: 0 }
+        ProcRow {
+            pid,
+            ppid: Some(ppid),
+            name: name.into(),
+            exe: None,
+            cmd: name.into(),
+            cwd: Some(PathBuf::from(cwd)),
+            cpu_percent: 1.0,
+            rss_bytes: rss,
+            start_time_s: 0,
+        }
     }
 
     #[test]
@@ -230,7 +244,17 @@ mod tests {
     }
 
     fn row_at(pid: u32, ppid: u32, name: &str, cwd: Option<&str>, rss: u64) -> ProcRow {
-        ProcRow { pid, ppid: Some(ppid), name: name.into(), exe: None, cmd: name.into(), cwd: cwd.map(PathBuf::from), cpu_percent: 0.5, rss_bytes: rss, start_time_s: 0 }
+        ProcRow {
+            pid,
+            ppid: Some(ppid),
+            name: name.into(),
+            exe: None,
+            cmd: name.into(),
+            cwd: cwd.map(PathBuf::from),
+            cpu_percent: 0.5,
+            rss_bytes: rss,
+            start_time_s: 0,
+        }
     }
 
     #[test]

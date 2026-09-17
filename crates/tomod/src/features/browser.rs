@@ -35,7 +35,19 @@ impl Daemon {
         let hook_pane = HookPane { id: row.id.clone(), tab_id: row.tab_id.clone(), cwd: row.cwd.clone() };
         inner.panes.insert(
             id.clone(),
-            PaneState { row, pty: None, origin: PaneOrigin::Live, exit_code: None, process_title: None, process_cmd: None, stop_intent: false, pending_line: None, last_output_ms: 0, scrollback: Scrollback::default(), source: None },
+            PaneState {
+                row,
+                pty: None,
+                origin: PaneOrigin::Live,
+                exit_code: None,
+                process_title: None,
+                process_cmd: None,
+                stop_intent: false,
+                pending_line: None,
+                last_output_ms: 0,
+                scrollback: Scrollback::default(),
+                source: None,
+            },
         );
         let mut ev = events::envelope(inner, "pane.created", Some(worktree_id));
         ev.pane = Some(hook_pane);

@@ -47,7 +47,11 @@ pub fn closed(app: &AppHandle, pane_id: &str) {
 pub async fn browser_set_annotate(app: AppHandle, annotate: State<'_, AnnotatePanes>, pane_id: String, enabled: bool) -> Result<(), String> {
     {
         let mut panes = annotate.0.lock().unwrap();
-        if enabled { panes.insert(pane_id.clone()) } else { panes.remove(&pane_id) };
+        if enabled {
+            panes.insert(pane_id.clone())
+        } else {
+            panes.remove(&pane_id)
+        };
     }
     let wv = browser_webview(&app, &pane_id)?;
     wv.eval(agentation_script(enabled)).map_err(|e| e.to_string())?;
@@ -74,7 +78,14 @@ fn feedback_pane<'a>(label: &'a str, kind: &str, annotating: impl Fn(&str) -> bo
 
 /// Called by the page inside a browser webview. The pane comes from the webview label, never from the page.
 #[tauri::command]
-pub fn browser_feedback(app: AppHandle, webview: Webview, annotate: State<'_, AnnotatePanes>, kind: String, count: u32, markdown: String) -> Result<(), String> {
+pub fn browser_feedback(
+    app: AppHandle,
+    webview: Webview,
+    annotate: State<'_, AnnotatePanes>,
+    kind: String,
+    count: u32,
+    markdown: String,
+) -> Result<(), String> {
     let pane_id = feedback_pane(webview.label(), &kind, |p| annotate.contains(p))?;
     app.emit_to("main", "browser://feedback", json!({ "pane_id": pane_id, "kind": kind, "count": count, "markdown": markdown })).map_err(|e| e.to_string())
 }

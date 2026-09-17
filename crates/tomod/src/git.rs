@@ -23,14 +23,7 @@ pub fn parse_worktree_list(text: &str) -> Vec<WorktreeEntry> {
     text.split("\n\n")
         .filter(|block| !block.trim().is_empty())
         .filter_map(|block| {
-            let mut entry = WorktreeEntry {
-                path: PathBuf::new(),
-                head: String::new(),
-                branch: None,
-                detached: false,
-                bare: false,
-                prunable: false,
-            };
+            let mut entry = WorktreeEntry { path: PathBuf::new(), head: String::new(), branch: None, detached: false, bare: false, prunable: false };
             for line in block.lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {
                     entry.path = PathBuf::from(p);
@@ -246,7 +239,8 @@ mod tests {
 
     #[test]
     fn parses_status_v2_headers_and_counts() {
-        let text = "# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 a b src/x.rs\n? new.txt\n";
+        let text =
+            "# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 a b src/x.rs\n? new.txt\n";
         let s = parse_status(text);
         assert_eq!(s.branch.as_deref(), Some("main"));
         assert_eq!(s.ahead, Some(2));

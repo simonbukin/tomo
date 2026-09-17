@@ -51,7 +51,11 @@ pub fn parse_session(path: &Path, cwd: &Path) -> Option<AgentSession> {
         if user_message || user_item {
             turns += 1;
             if title.is_none() {
-                let text = if user_message { p.and_then(|p| p.get("message")).and_then(Value::as_str).map(str::to_string) } else { p.and_then(|p| p.get("content")).and_then(text_of) };
+                let text = if user_message {
+                    p.and_then(|p| p.get("message")).and_then(Value::as_str).map(str::to_string)
+                } else {
+                    p.and_then(|p| p.get("content")).and_then(text_of)
+                };
                 title = text.filter(|t| super::is_prompt(t)).map(|t| super::clip(&t));
             }
         }
@@ -91,7 +95,11 @@ fn hooks_trusted(home: &Path) -> Option<bool> {
                 continue;
             }
             ours += 1;
-            let snake: String = event.chars().enumerate().map(|(i, c)| if c.is_uppercase() && i > 0 { format!("_{}", c.to_lowercase()) } else { c.to_lowercase().to_string() }).collect();
+            let snake: String = event
+                .chars()
+                .enumerate()
+                .map(|(i, c)| if c.is_uppercase() && i > 0 { format!("_{}", c.to_lowercase()) } else { c.to_lowercase().to_string() })
+                .collect();
             if config.contains(&format!("hooks.json:{snake}:{idx}:0\"")) {
                 trusted += 1;
             }
@@ -115,7 +123,9 @@ mod tests {
         let file = codex_dir.join("hooks.json");
         std::fs::write(&file, hooks.to_string()).unwrap();
         assert_eq!(hooks_trusted(&home), Some(false));
-        let trust = |entries: &[(&str, usize)]| entries.iter().map(|(event, idx)| format!("\"{}:{event}:{idx}:0\" = \"trusted\"\n", file.display())).collect::<String>();
+        let trust = |entries: &[(&str, usize)]| {
+            entries.iter().map(|(event, idx)| format!("\"{}:{event}:{idx}:0\" = \"trusted\"\n", file.display())).collect::<String>()
+        };
         let ours = [("permission_request", 0), ("post_tool_use", 0), ("pre_tool_use", 0), ("session_start", 0), ("stop", 1), ("user_prompt_submit", 0)];
         std::fs::write(codex_dir.join("config.toml"), trust(&ours[..5])).unwrap();
         assert_eq!(hooks_trusted(&home), Some(false));

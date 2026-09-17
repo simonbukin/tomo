@@ -127,7 +127,10 @@ mod tests {
 
     #[test]
     fn discrete_gpu_reports_the_busiest_device_and_vram() {
-        assert_eq!(parse_ioreg(INTEL_WITH_AMD), Gpu { percent: Some(61.0), vram_used_bytes: Some(1932735283), vram_total_bytes: Some(1932735283 + 6653214925) });
+        assert_eq!(
+            parse_ioreg(INTEL_WITH_AMD),
+            Gpu { percent: Some(61.0), vram_used_bytes: Some(1932735283), vram_total_bytes: Some(1932735283 + 6653214925) }
+        );
     }
 
     #[test]

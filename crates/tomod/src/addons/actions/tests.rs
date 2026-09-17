@@ -35,7 +35,8 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let ok = std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(dir).output().unwrap().status.success();
+    let ok =
+        std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(dir).output().unwrap().status.success();
     assert!(ok, "git {args:?}");
 }
 
@@ -87,11 +88,14 @@ async fn eventually(what: &str, check: impl Fn() -> bool) {
 
 impl Fixture {
     async fn run(&self, action_id: &str) -> Result<ActionRunResult, RpcError> {
-        call(&self.daemon, Call::ActionRun { worktree_id: self.worktree_id.clone(), action_id: action_id.into() }).await.map(|v| serde_json::from_value(v).unwrap())
+        call(&self.daemon, Call::ActionRun { worktree_id: self.worktree_id.clone(), action_id: action_id.into() })
+            .await
+            .map(|v| serde_json::from_value(v).unwrap())
     }
 
     async fn restart(&self, action_id: &str) -> ActionRunResult {
-        serde_json::from_value(call(&self.daemon, Call::ActionRestart { worktree_id: self.worktree_id.clone(), action_id: action_id.into() }).await.unwrap()).unwrap()
+        serde_json::from_value(call(&self.daemon, Call::ActionRestart { worktree_id: self.worktree_id.clone(), action_id: action_id.into() }).await.unwrap())
+            .unwrap()
     }
 
     async fn stop(&self, action_id: &str) {
@@ -135,12 +139,15 @@ impl Fixture {
 async fn list_run_reuse_stop_restart_and_exit_outcomes() {
     let f = fixture("run").await;
     let set: ActionSet = serde_json::from_value(call(&f.daemon, Call::ActionList { worktree_id: f.worktree_id.clone() }).await.unwrap()).unwrap();
-    assert_eq!(set.actions.iter().map(|a| (a.id.as_str(), a.label.as_str(), a.mode, a.show)).collect::<Vec<_>>(), [
-        ("serve", "Serve", ActionMode::Pane, ActionShow::Topbar),
-        ("quick", "quick", ActionMode::Pane, ActionShow::Menu),
-        ("fail", "fail", ActionMode::Pane, ActionShow::Menu),
-        ("mark", "mark", ActionMode::External, ActionShow::Menu),
-    ]);
+    assert_eq!(
+        set.actions.iter().map(|a| (a.id.as_str(), a.label.as_str(), a.mode, a.show)).collect::<Vec<_>>(),
+        [
+            ("serve", "Serve", ActionMode::Pane, ActionShow::Topbar),
+            ("quick", "quick", ActionMode::Pane, ActionShow::Menu),
+            ("fail", "fail", ActionMode::Pane, ActionShow::Menu),
+            ("mark", "mark", ActionMode::External, ActionShow::Menu),
+        ]
+    );
     let snapshot: Snapshot = serde_json::from_value(call(&f.daemon, Call::Subscribe).await.unwrap()).unwrap();
     assert_eq!(snapshot.actions.iter().map(|s| (s.worktree_id.as_str(), s.actions.len())).collect::<Vec<_>>(), [(f.worktree_id.as_str(), 4)]);
 
@@ -165,9 +172,15 @@ async fn list_run_reuse_stop_restart_and_exit_outcomes() {
     eventually("fail to exit", || f.pane(&failed.id).and_then(|p| p.exit_code) == Some(3)).await;
     eventually("the crash activity", || f.kinds("fail").len() == 2).await;
     let crash = f.attention().into_iter().find(|a| a.kind == AttentionKind::Crash).expect("crash attention");
-    assert_eq!((crash.message.as_str(), crash.pane_id.as_deref(), crash.level), ("fail exited with code 3", Some(failed.id.as_str()), AttentionLevel::Attention));
+    assert_eq!(
+        (crash.message.as_str(), crash.pane_id.as_deref(), crash.level),
+        ("fail exited with code 3", Some(failed.id.as_str()), AttentionLevel::Attention)
+    );
     let crashed = f.activity().into_iter().find(|e| e.kind.as_str() == "action_crashed").unwrap();
-    assert_eq!((crashed.title.as_str(), crashed.detail.as_deref(), crashed.attention_id.as_deref()), ("fail crashed", Some("exit code 3"), Some(crash.id.as_str())));
+    assert_eq!(
+        (crashed.title.as_str(), crashed.detail.as_deref(), crashed.attention_id.as_deref()),
+        ("fail crashed", Some("exit code 3"), Some(crash.id.as_str()))
+    );
     assert_eq!(crashed.payload, serde_json::json!({ "action_id": "fail", "exit_code": 3, "pane_id": failed.id }));
     assert_eq!(f.pane(&failed.id).map(|p| p.live), Some(false), "a non-zero exit keeps the pane");
 
@@ -184,9 +197,19 @@ async fn list_run_reuse_stop_restart_and_exit_outcomes() {
     assert_eq!(f.run("nope").await.unwrap_err().code, ErrorCode::NotFound);
     assert_eq!(f.attention().iter().filter(|a| a.kind == AttentionKind::Crash).count(), 1, "stop and exit 0 raise no crash");
 
-    eventually("the hook events", || f.hook_events().iter().any(|(e, _, _)| e == "action.crashed") && f.hook_events().iter().filter(|(e, a, _)| e == "action.exited" && a == "quick:quick").count() == 1).await;
+    eventually("the hook events", || {
+        f.hook_events().iter().any(|(e, _, _)| e == "action.crashed")
+            && f.hook_events().iter().filter(|(e, a, _)| e == "action.exited" && a == "quick:quick").count() == 1
+    })
+    .await;
     let events = f.hook_events();
-    for expected in [("action.started", "serve:Serve", true), ("action.exited", "serve:Serve", true), ("action.exited", "fail:fail", true), ("action.crashed", "fail:fail", true), ("action.started", "mark:mark", false)] {
+    for expected in [
+        ("action.started", "serve:Serve", true),
+        ("action.exited", "serve:Serve", true),
+        ("action.exited", "fail:fail", true),
+        ("action.crashed", "fail:fail", true),
+        ("action.started", "mark:mark", false),
+    ] {
         assert!(events.contains(&(expected.0.to_string(), expected.1.to_string(), expected.2)), "missing {expected:?} in {events:?}");
     }
     assert!(!events.iter().any(|(e, a, _)| e == "action.exited" && a == "mark:mark"), "an external action has no exit event");
@@ -201,7 +224,12 @@ async fn a_sibling_worktree_reads_the_repo_file_until_it_has_one_of_its_own() {
     let f = fixture("repo-file").await;
     let repo_id = f.daemon.lock().worktrees.get(&f.worktree_id).unwrap().repo_id.clone();
     let path = f.dir.join("feat-x");
-    call(&f.daemon, Call::WorktreeCreate(WorktreeCreate { repo_id, branch: "feat/x".into(), new_branch: true, start_ref: None, path: Some(path.clone()), name_hint: None })).await.unwrap();
+    call(
+        &f.daemon,
+        Call::WorktreeCreate(WorktreeCreate { repo_id, branch: "feat/x".into(), new_branch: true, start_ref: None, path: Some(path.clone()), name_hint: None }),
+    )
+    .await
+    .unwrap();
     call(&f.daemon, Call::WorktreeRefresh).await.unwrap();
     let worktrees: Vec<Worktree> = serde_json::from_value(call(&f.daemon, Call::WorktreeList).await.unwrap()).unwrap();
     let sibling = worktrees.iter().find(|w| !w.is_main).expect("the second worktree").id.clone();
@@ -222,7 +250,16 @@ async fn closing_an_action_pane_records_nothing_and_a_shell_exit_is_no_crash() {
     let f = fixture("close").await;
     let pane = f.run("serve").await.unwrap().pane.unwrap();
     call(&f.daemon, Call::PaneClose { pane_id: pane.id.clone(), force: true }).await.unwrap();
-    let shell: Value = call(&f.daemon, Call::PaneCreate(PaneCreate { worktree_id: Some(f.worktree_id.clone()), command: Some(vec!["/bin/sh".into(), "-c".into(), "exit 1".into()]), ..Default::default() })).await.unwrap();
+    let shell: Value = call(
+        &f.daemon,
+        Call::PaneCreate(PaneCreate {
+            worktree_id: Some(f.worktree_id.clone()),
+            command: Some(vec!["/bin/sh".into(), "-c".into(), "exit 1".into()]),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
     let shell_id = shell["pane"]["id"].as_str().unwrap().to_string();
     eventually("the shell to exit", || f.pane(&shell_id).and_then(|p| p.exit_code) == Some(1)).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -244,8 +281,12 @@ async fn a_restored_action_pane_is_a_shell_that_does_not_rerun() {
     daemon.restore().unwrap();
     call(&daemon, Call::WorktreeRefresh).await.unwrap();
     let restored = Daemon::pane_view(&daemon.lock(), &pane.id).expect("restored pane");
-    assert_eq!((restored.origin, restored.action_id.as_deref(), restored.source, restored.user_title.as_deref()), (PaneOrigin::Restored, None, None, Some("Serve")));
-    let rerun: ActionRunResult = serde_json::from_value(call(&daemon, Call::ActionRun { worktree_id: f.worktree_id.clone(), action_id: "serve".into() }).await.unwrap()).unwrap();
+    assert_eq!(
+        (restored.origin, restored.action_id.as_deref(), restored.source, restored.user_title.as_deref()),
+        (PaneOrigin::Restored, None, None, Some("Serve"))
+    );
+    let rerun: ActionRunResult =
+        serde_json::from_value(call(&daemon, Call::ActionRun { worktree_id: f.worktree_id.clone(), action_id: "serve".into() }).await.unwrap()).unwrap();
     assert!(!rerun.reused && rerun.pane.unwrap().id != pane.id, "the restored shell is not the running action");
     let stored = daemon.lock().store.panes().unwrap();
     assert!(stored.iter().any(|p| p.id == pane.id), "the restored pane row stays");

@@ -188,7 +188,8 @@ pub fn installed() -> Integrations {
 /// An installed agent that works only in part is a diagnostic. A missing binary is not a problem.
 pub fn record_health(inner: &mut crate::daemon::Inner, list: &[IntegrationStatus]) {
     for s in list {
-        let problem = matches!(s.level, IntegrationLevel::Partial | IntegrationLevel::ProcessOnly).then(|| s.reason.clone().unwrap_or_else(|| "partial integration".to_string()));
+        let problem = matches!(s.level, IntegrationLevel::Partial | IntegrationLevel::ProcessOnly)
+            .then(|| s.reason.clone().unwrap_or_else(|| "partial integration".to_string()));
         crate::daemon::Daemon::diagnostic_on_change(inner, "integrations", &s.kind.label().to_lowercase(), problem);
     }
 }
@@ -253,7 +254,14 @@ pub fn status(config: &Config) -> Vec<IntegrationStatus> {
             let command = config.agents.get(&key).map(|a| a.command.clone()).unwrap_or(key);
             let binary = crate::config::resolve_program(&command);
             if binary.is_none() {
-                return IntegrationStatus { kind, level: IntegrationLevel::Unavailable, binary, lifecycle: false, resume: false, reason: Some(format!("{command} not found on PATH")) };
+                return IntegrationStatus {
+                    kind,
+                    level: IntegrationLevel::Unavailable,
+                    binary,
+                    lifecycle: false,
+                    resume: false,
+                    reason: Some(format!("{command} not found on PATH")),
+                };
             }
             match (p.gap)(&home) {
                 None => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
@@ -293,12 +301,20 @@ mod tests {
 
     #[test]
     fn detect_agent_reads_argv0_and_misses_launcher_paths() {
-        assert_eq!(detect("2.1.273", "claude --settings /d/claude-hooks.json --session-id s"), Some(AgentKind::Claude), "a versioned native binary is found by argv[0]");
+        assert_eq!(
+            detect("2.1.273", "claude --settings /d/claude-hooks.json --session-id s"),
+            Some(AgentKind::Claude),
+            "a versioned native binary is found by argv[0]"
+        );
         assert_eq!(detect("node", "/Users/me/.local/bin/claude --resume s"), Some(AgentKind::Claude));
         assert_eq!(detect("codex-aarch64-apple-darwin", "/x/codex-aarch64-apple-darwin resume abc"), Some(AgentKind::Codex));
         assert_eq!(detect("node", "node /opt/homebrew/bin/codex resume abc"), None, "an npm shim is found only through its native child");
         assert_eq!(detect("node", "pi"), Some(AgentKind::Pi), "process.title rewrites argv[0] to pi");
-        assert_eq!(detect("node", "node /opt/homebrew/bin/pi -e /d/tomo-status.ts --session-id s"), None, "before process.title runs, the npm symlink path hides pi");
+        assert_eq!(
+            detect("node", "node /opt/homebrew/bin/pi -e /d/tomo-status.ts --session-id s"),
+            None,
+            "before process.title runs, the npm symlink path hides pi"
+        );
         assert_eq!(detect("claude-trace", "claude-trace"), None);
         assert_eq!(detect("pip", "pip install x"), None);
     }
@@ -308,7 +324,11 @@ mod tests {
         assert_eq!(detect("vim", "vim /src/pi-coding-agent/README.md"), None);
         assert_eq!(detect("codexbar", "codexbar"), None);
         assert_eq!(detect("codex", "codex"), Some(AgentKind::Codex), "the plain binary name still counts");
-        assert_eq!(detect("node", "node --max-old-space-size=8192 /x/pi-coding-agent/dist/cli.js"), Some(AgentKind::Pi), "a runtime flag before the script still counts");
+        assert_eq!(
+            detect("node", "node --max-old-space-size=8192 /x/pi-coding-agent/dist/cli.js"),
+            Some(AgentKind::Pi),
+            "a runtime flag before the script still counts"
+        );
     }
 
     fn rust_files(dir: &Path) -> Vec<PathBuf> {
@@ -327,7 +347,19 @@ mod tests {
     #[test]
     fn only_provider_modules_branch_on_a_provider() {
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let nouns = ["agentkind::claude", "agentkind::codex", "agentkind::pi", "hook claude", "hook codex", "claudecode", "codex_thread", "pi_coding_agent", ".claude/", ".codex/", ".pi/"];
+        let nouns = [
+            "agentkind::claude",
+            "agentkind::codex",
+            "agentkind::pi",
+            "hook claude",
+            "hook codex",
+            "claudecode",
+            "codex_thread",
+            "pi_coding_agent",
+            ".claude/",
+            ".codex/",
+            ".pi/",
+        ];
         let hits: Vec<String> = rust_files(&src)
             .into_iter()
             .filter(|p| !p.starts_with(src.join("providers")) && !p.starts_with(src.join("addons/usage")) && !p.ends_with("store.rs"))
@@ -395,7 +427,8 @@ mod tests {
 
     #[test]
     fn claude_hook_mapping() {
-        let waiting = hook_outcome(AgentKind::Claude, &serde_json::json!({"hook_event_name":"Notification","notification_type":"permission_prompt","session_id":"s1"}));
+        let waiting =
+            hook_outcome(AgentKind::Claude, &serde_json::json!({"hook_event_name":"Notification","notification_type":"permission_prompt","session_id":"s1"}));
         assert_eq!(waiting.state, Some(AgentState::Waiting));
         assert_eq!(waiting.session_ref.as_deref(), Some("s1"));
         let idle = hook_outcome(AgentKind::Codex, &serde_json::json!({"hook_event_name":"Stop"}));
@@ -541,7 +574,11 @@ mod tests {
         assert_eq!(claude_file["hooks"]["Stop"][0]["hooks"][0]["command"], "'/opt/My Tomo/tomo' hook claude");
         let codex_file = codex::hooks_entries(Path::new("/usr/local/bin/tomo"));
         let codex_events = sorted_keys(&codex_file);
-        assert_eq!(codex_events, ["PermissionRequest", "PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"], "no SessionEnd: only the process monitor sees Codex exit");
+        assert_eq!(
+            codex_events,
+            ["PermissionRequest", "PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"],
+            "no SessionEnd: only the process monitor sees Codex exit"
+        );
         assert_eq!(codex_file["Stop"][0]["hooks"][0]["command"], "/usr/local/bin/tomo hook codex");
         for event in claude_events.iter().filter(|e| *e != "Notification").chain(&codex_events) {
             assert!(state_of(AgentKind::Claude, serde_json::json!({ "hook_event_name": event })).is_some(), "{event}");

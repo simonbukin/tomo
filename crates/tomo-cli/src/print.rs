@@ -64,7 +64,13 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
         let tags = if w.metadata.tags.is_empty() { String::new() } else { format!(" #{}", w.metadata.tags.join(" #")) };
         let branch = if w.detached { "detached".to_string() } else { w.branch.clone().unwrap_or_default() };
         let dirty = w.git.as_ref().map_or("", |g| if g.dirty { " *" } else { "" });
-        let missing = if w.archived_at_ms.is_some() { " (archived)" } else if w.exists { "" } else { " (missing)" };
+        let missing = if w.archived_at_ms.is_some() {
+            " (archived)"
+        } else if w.exists {
+            ""
+        } else {
+            " (missing)"
+        };
         let project = w.metadata.project.as_deref().map(|p| format!(" [{p}]")).unwrap_or_default();
         println!("{}  {} / {}{}{}{}  {}{}{}", w.id, repo, w.name, project, prio, tags, branch, dirty, missing);
         println!("    {}", w.path.display());
@@ -156,15 +162,16 @@ pub fn ps(procs: &[ProcessInfo], ws: &[Worktree], json: bool) {
 }
 
 fn truncate(s: &str, n: usize) -> String {
-    if s.chars().count() <= n { s.to_string() } else { format!("{}...", s.chars().take(n.saturating_sub(3)).collect::<String>()) }
+    if s.chars().count() <= n {
+        s.to_string()
+    } else {
+        format!("{}...", s.chars().take(n.saturating_sub(3)).collect::<String>())
+    }
 }
 
 pub fn towns(towns: &[Town], unlocks: &[TownUnlock], only_unlocked: bool, json: bool) {
-    let rows: Vec<(&Town, Option<&TownUnlock>)> = towns
-        .iter()
-        .map(|t| (t, unlocks.iter().find(|u| u.slug == t.slug)))
-        .filter(|(_, u)| !only_unlocked || u.is_some())
-        .collect();
+    let rows: Vec<(&Town, Option<&TownUnlock>)> =
+        towns.iter().map(|t| (t, unlocks.iter().find(|u| u.slug == t.slug))).filter(|(_, u)| !only_unlocked || u.is_some()).collect();
     if json {
         let v: Vec<Value> = rows.iter().map(|(t, u)| serde_json::json!({ "town": t, "unlock": u })).collect();
         return emit_json(&v);
@@ -180,7 +187,13 @@ pub fn attention(items: &[AttentionItem], json: bool) {
         return emit_json(&items);
     }
     for i in items {
-        let seen = if i.resolved_at_ms.is_some() { "done" } else if i.viewed_at_ms.is_some() { "seen" } else { "NEW " };
+        let seen = if i.resolved_at_ms.is_some() {
+            "done"
+        } else if i.viewed_at_ms.is_some() {
+            "seen"
+        } else {
+            "NEW "
+        };
         let kind = format!("{:?}", i.kind).to_lowercase();
         let url = i.url.as_deref().map(|u| format!("  {u}")).unwrap_or_default();
         println!("{}  {seen}  {:<10} {:?}  wt {}  pane {}  {}{url}", i.id, kind, i.level, i.worktree_id, i.pane_id.as_deref().unwrap_or("-"), i.message);
@@ -203,7 +216,15 @@ pub fn runtime(list: &[RuntimeEndpoint], json: bool) {
     }
     for e in list {
         let protocol = format!("{:?}", e.protocol).to_lowercase();
-        println!("{:<6} {:<5} {:<7} {:<16} {:<14} {}", e.port, protocol, e.pid, truncate(&e.process, 16), e.action_id.as_deref().unwrap_or("-"), e.pane_id.as_deref().unwrap_or("-"));
+        println!(
+            "{:<6} {:<5} {:<7} {:<16} {:<14} {}",
+            e.port,
+            protocol,
+            e.pid,
+            truncate(&e.process, 16),
+            e.action_id.as_deref().unwrap_or("-"),
+            e.pane_id.as_deref().unwrap_or("-")
+        );
     }
 }
 
@@ -299,7 +320,13 @@ pub fn hook_runs(runs: &[HookRun], json: bool) {
     }
     for r in runs {
         let status = if r.ok { "ok" } else { "FAIL" };
-        println!("{status:<5} {:<26} {:>6} ms  exit {:<4} {}", r.event, r.duration_ms, r.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "-".into()), r.command);
+        println!(
+            "{status:<5} {:<26} {:>6} ms  exit {:<4} {}",
+            r.event,
+            r.duration_ms,
+            r.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "-".into()),
+            r.command
+        );
         if !r.ok && !r.output_tail.is_empty() {
             for line in r.output_tail.lines().rev().take(3).collect::<Vec<_>>().into_iter().rev() {
                 println!("      {line}");
@@ -378,7 +405,14 @@ mod tests {
             worktree_id: "w1".into(),
             actions: actions
                 .iter()
-                .map(|id| ActionDef { id: (*id).into(), label: (*id).into(), command: "true".into(), mode: ActionMode::Pane, show: ActionShow::Menu, shortcut: None })
+                .map(|id| ActionDef {
+                    id: (*id).into(),
+                    label: (*id).into(),
+                    command: "true".into(),
+                    mode: ActionMode::Pane,
+                    show: ActionShow::Menu,
+                    shortcut: None,
+                })
                 .collect(),
             error: error.map(String::from),
             from_repo,

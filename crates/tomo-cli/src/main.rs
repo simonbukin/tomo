@@ -179,7 +179,9 @@ enum WorktreeCmd {
         town: Option<String>,
     },
     #[command(about = "Open a worktree: make sure it has a terminal and focus it in the GUI")]
-    Open { worktree: String },
+    Open {
+        worktree: String,
+    },
     #[command(about = "Stop its processes, remove build dirs, and remove the worktree; the branch stays")]
     Archive {
         worktree: String,
@@ -189,14 +191,18 @@ enum WorktreeCmd {
         discard: bool,
     },
     #[command(about = "Re-create an archived worktree from its branch")]
-    Restore { worktree: String },
+    Restore {
+        worktree: String,
+    },
     #[command(subcommand)]
     Metadata(MetadataCmd),
 }
 
 #[derive(Subcommand)]
 enum MetadataCmd {
-    Get { worktree: Option<String> },
+    Get {
+        worktree: Option<String>,
+    },
     Set {
         worktree: Option<String>,
         #[arg(long)]
@@ -248,10 +254,17 @@ enum PaneCmd {
         command: Vec<String>,
     },
     #[command(about = "Swap two panes in the same tab")]
-    Swap { pane_a: String, pane_b: String },
+    Swap {
+        pane_a: String,
+        pane_b: String,
+    },
     #[command(about = "Toggle zoom on a pane in the GUI")]
-    Zoom { pane: Option<String> },
-    Focus { pane: Option<String> },
+    Zoom {
+        pane: Option<String>,
+    },
+    Focus {
+        pane: Option<String>,
+    },
     Send {
         text: String,
         #[arg(long)]
@@ -270,27 +283,38 @@ enum PaneCmd {
         pane: Option<String>,
     },
     #[command(about = "Kill every process under the pane's shell")]
-    KillTree { pane: Option<String> },
+    KillTree {
+        pane: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
 enum TabCmd {
-    List { worktree: Option<String> },
+    List {
+        worktree: Option<String>,
+    },
     Create {
         worktree: Option<String>,
         #[arg(long)]
         title: Option<String>,
     },
-    Rename { tab: String, title: String },
+    Rename {
+        tab: String,
+        title: String,
+    },
     Close {
         tab: String,
         #[arg(long)]
         force: bool,
     },
     #[command(about = "Give every pane in the tab the same size")]
-    Equalize { tab: Option<String> },
+    Equalize {
+        tab: Option<String>,
+    },
     #[command(about = "Flip the split around the active pane")]
-    Rotate { tab: Option<String> },
+    Rotate {
+        tab: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -487,21 +511,38 @@ async fn run() -> Result<()> {
         }
         Cmd::Worktree(WorktreeCmd::Create { repo, branch, new, from, path, town }) => {
             let repo_id = resolve_repo_id(&c, &repo).await?;
-            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch: branch.unwrap_or_default(), new_branch: new, start_ref: from, path, name_hint: town })).await?;
+            let w: Worktree = c
+                .call(Call::WorktreeCreate(WorktreeCreate {
+                    repo_id,
+                    branch: branch.unwrap_or_default(),
+                    new_branch: new,
+                    start_ref: from,
+                    path,
+                    name_hint: town,
+                }))
+                .await?;
             let repos: Vec<Repo> = c.call(Call::RepoList).await?;
             print::worktrees(&[w], &repos, &[], json);
         }
         Cmd::Worktree(WorktreeCmd::Open { worktree }) => {
             let id = resolve_worktree_id(&c, Some(worktree)).await?;
             let v: Value = c.call(Call::WorktreeOpen { worktree_id: id }).await?;
-            if let Some(pane) = v["tabs"].as_array().and_then(|t| t.iter().find(|t| t["is_active"] == true).or(t.first())).and_then(|t| t["active_pane_id"].as_str()) {
+            if let Some(pane) =
+                v["tabs"].as_array().and_then(|t| t.iter().find(|t| t["is_active"] == true).or(t.first())).and_then(|t| t["active_pane_id"].as_str())
+            {
                 let _: Value = c.call(Call::PaneFocus { pane_id: pane.to_string() }).await?;
             }
             print::value(&v, json);
         }
         Cmd::Worktree(WorktreeCmd::Archive { worktree, no_checkpoint, discard }) => {
             let id = resolve_worktree_id(&c, Some(worktree)).await?;
-            let checkpoint = if discard { CheckpointMode::Discard } else if no_checkpoint { CheckpointMode::RequireClean } else { CheckpointMode::Checkpoint };
+            let checkpoint = if discard {
+                CheckpointMode::Discard
+            } else if no_checkpoint {
+                CheckpointMode::RequireClean
+            } else {
+                CheckpointMode::Checkpoint
+            };
             let r: ArchiveResult = c.call(Call::WorktreeArchive { worktree_id: id, checkpoint }).await?;
             print::archive_result(&r, json);
         }
@@ -576,7 +617,8 @@ async fn run() -> Result<()> {
                 (None, Some(_)) => None,
             };
             let cwd = cwd.map(|p| std::fs::canonicalize(&p).unwrap_or(p));
-            let v: Value = c.call(Call::PaneCreate(PaneCreate { worktree_id, tab_id: tab, cwd, command: (!command.is_empty()).then_some(command), title })).await?;
+            let v: Value =
+                c.call(Call::PaneCreate(PaneCreate { worktree_id, tab_id: tab, cwd, command: (!command.is_empty()).then_some(command), title })).await?;
             print::pane_result(&v, json);
         }
         Cmd::Pane(PaneCmd::Split { pane, down, vertical, right: _, command }) => {
@@ -652,7 +694,8 @@ async fn run() -> Result<()> {
                 (None, None, None) => Some(resolve_worktree_id(&c, None).await?),
                 _ => None,
             };
-            let r: SpawnResult = c.call(Call::AgentSpawn(AgentSpawn { kind, worktree_id, cwd, tab_id: None, split_from, resume, new_tab: false, extra_args: args })).await?;
+            let r: SpawnResult =
+                c.call(Call::AgentSpawn(AgentSpawn { kind, worktree_id, cwd, tab_id: None, split_from, resume, new_tab: false, extra_args: args })).await?;
             print::spawn(&r, json);
         }
         Cmd::Browser(BrowserCmd::Open { worktree, url }) => {
