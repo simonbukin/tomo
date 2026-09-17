@@ -1,7 +1,7 @@
 import { PanelLeft, PanelLeftDashed, PanelLeftOpen, PanelRight, PanelRightDashed, PanelRightOpen, type LucideIcon } from "lucide-react";
 import { runAction } from "../actions";
 import { addonViews } from "../addons";
-import { Mark } from "../Brand";
+import { Mark, Wordmark } from "../Brand";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
 import { useStore } from "../store";
@@ -33,9 +33,10 @@ export function TopLeft({ mode }: { mode: SidebarMode }) {
   const shortcut = useShortcuts();
   return (
     <div className="top-left" data-tauri-drag-region>
-      <IconButton label="Home" shortcut={shortcut("home")} className="top-mark" onClick={() => runAction("home")}>
+      <button type="button" className="top-brand" aria-label="Home" title={shortcut("home") ? `Home · ${shortcut("home")}` : "Home"} onClick={() => runAction("home")}>
         <Mark size={15} />
-      </IconButton>
+        <Wordmark height={13} />
+      </button>
       <SidebarToggle side="left" mode={mode} />
     </div>
   );

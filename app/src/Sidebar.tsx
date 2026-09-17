@@ -1,5 +1,4 @@
-import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, RotateCw, Search, Settings, Star, type LucideIcon } from "lucide-react";
-import { Mark, Wordmark } from "./Brand";
+import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, RotateCw, Star, type LucideIcon } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -82,12 +81,6 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-top">
-        <Mark size={15} />
-        <Wordmark height={15} />
-        <span className="spacer" />
-        <IconButton label="Add repository" shortcut={shortcut("add_repo")} onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
-      </div>
       <nav className="side-nav" aria-label="Views">
         <Destination id="home" label="home" icon={House} current={ui.view === "home"} shortcut={shortcut("home")} />
         <Destination id="activity" label="activity" icon={History} count={needCount} current={ui.view === "activity"} shortcut={shortcut("activity")} />
@@ -97,8 +90,9 @@ export function Sidebar() {
           <Destination key={v.id} id={v.id} label={v.label.toLowerCase()} icon={v.icon} current={ui.view === v.id} shortcut={shortcut(v.id)} />
         ))}
       </nav>
-      <div className="side-section">
+      <div className="side-lens">
         <span>{LENS_LABEL[ui.lens]}</span>
+        <IconButton label="Add repository" shortcut={shortcut("add_repo")} onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label={`Group by: ${LENS_LABEL[ui.lens]}`} />}><Layers className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={lensMenu} /></DropdownMenuContent>
@@ -128,18 +122,6 @@ export function Sidebar() {
             No repositories yet. Add one with the plus button or run <code>tomo repo add &lt;path&gt;</code>.
           </div>
         )}
-      </div>
-      <div className="side-foot">
-        <button type="button" className="side-row" onClick={() => runAction("palette")}>
-          <Search className="icon" />
-          <span>search</span>
-          <span className="side-row-key">{shortcut("palette") ?? ""}</span>
-        </button>
-        <button type="button" className="side-row" onClick={() => setState({ dialog: { kind: "settings" } })}>
-          <Settings className="icon" />
-          <span>settings</span>
-          <span />
-        </button>
       </div>
     </aside>
   );
@@ -175,15 +157,22 @@ function Group({ group, active, sortable = false }: { group: LensGroup; active: 
   ));
   return (
     <div ref={drag.setNodeRef} className={`repo-group${drag.isDragging ? " is-dragging" : ""}`} style={{ transform: CSS.Translate.toString(drag.transform), transition: drag.transition }}>
-      <div ref={drag.setActivatorNodeRef} className="section-label repo-head" {...drag.attributes} {...drag.listeners} onContextMenu={(e) => repo?.id && openMenu(e, repoMenu(repo))}>
-        <span className="repo-toggle" onClick={toggle}>{collapsed ? <ChevronRight className="icon chevron" /> : <ChevronDown className="icon chevron" />}</span>
+      <div
+        ref={drag.setActivatorNodeRef}
+        className="section-label repo-head"
+        {...drag.attributes}
+        {...drag.listeners}
+        onClick={() => (repo?.id ? openRepoHome(repo.id) : toggle())}
+        onContextMenu={(e) => repo?.id && openMenu(e, repoMenu(repo))}
+      >
+        <span className="repo-toggle" onClick={(e) => { e.stopPropagation(); toggle(); }}>{collapsed ? <ChevronRight className="icon chevron" /> : <ChevronDown className="icon chevron" />}</span>
         {repo && <RepoAvatar repo={repo} />}
-        <span className="repo-name" onClick={repo?.id ? () => openRepoHome(repo.id) : toggle}>{group.label}</span>
+        <span className="repo-name">{group.label}</span>
         {repo && !repo.exists && <span className="faint">missing</span>}
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
         {collapsed && attention && <span className={dotClass("needs")} />}
-        {repo?.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={() => setState({ dialog: { kind: "create-worktree", repoId: repo.id } })}><Plus className="icon" /></IconButton>}
+        {repo?.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={(e) => { e.stopPropagation(); setState({ dialog: { kind: "create-worktree", repoId: repo.id } }); }}><Plus className="icon" /></IconButton>}
       </div>
       {!collapsed &&
         (sortable ? (
