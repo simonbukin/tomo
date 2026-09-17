@@ -1,6 +1,3 @@
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/geist-mono";
-
 /* Tokens: the whole design system, in one file, in the groups DESIGN.md names.
  * The 14 color names are the [theme] contract from config.toml (snake_case becomes
  * kebab-case). theme.ts sets them on :root at runtime, so the values here are the
@@ -51,8 +48,8 @@
   --z-dialog: 90;
 
   /* typography */
-  --font-ui: "Inter Variable", -apple-system, "SF Pro Text", system-ui, sans-serif;
-  --mono: "Geist Mono Variable", "SF Mono", Menlo, monospace;
+  --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
+  --mono: "Commit Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --fs-0: 11px;
   --fs-1: 12px;
   --fs-2: 13px;
