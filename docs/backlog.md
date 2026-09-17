@@ -279,6 +279,16 @@ names, which is why the prefix is a setting and not a rule. Show the computed
 name as the placeholder so the user sees what they will get, and keep the wire
 change as small as an empty string meaning "use the default".
 
+**Done.** `branch_list { repo_id, limit? }` returns `Branch { name, remote,
+upstream, committed_at_ms }` from `for-each-ref`, folded, newest first, capped
+at 200, and run off the state lock. `config::default_branch(prefix, name)`
+gives `<branch_prefix><town>`, with `branch_prefix` empty by default, and
+`Repo.branch_prefix` carries it to the placeholder. An empty `branch` on the
+wire means "use the default". A name that already exists still fails with git's
+own message, shown inline. The field is the new `combobox.tsx` primitive (Base
+UI Autocomplete). Set the prefix with `tomo config set branch_prefix "simon/"`;
+there is no Settings field yet, and no `tomo branch list` subcommand.
+
 ### 2.8 Startup that feels instant — M, measure first
 Goal: the window shows the last workspace with no visible wait. Two cases
 differ, so measure them apart: the usual start, where the daemon already runs
