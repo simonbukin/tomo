@@ -461,19 +461,29 @@ impl Daemon {
 
     pub async fn discover(self: &Arc<Self>, summaries: Summaries) -> Result<()> {
         let rows = self.lock().store.repos()?;
-        let mut repos: Vec<Repo> = Vec::with_capacity(rows.len());
-        for r in rows {
-            repos.push(repo_view(r.id, r.path).await);
-        }
+        let probes: Vec<_> = rows
+            .into_iter()
+            .map(|r| {
+                tokio::spawn(async move {
+                    let repo = repo_view(r.id, r.path).await;
+                    let probe = match repo.exists {
+                        true => Some(tokio::join!(git::list_worktrees(&repo.path), git::common_dir(&repo.path))),
+                        false => None,
+                    };
+                    (repo, probe)
+                })
+            })
+            .collect();
+        let mut repos: Vec<Repo> = Vec::with_capacity(probes.len());
         let mut found: Vec<(Repo, Vec<git::WorktreeEntry>, PathBuf)> = Vec::new();
-        for repo in &repos {
-            if !repo.exists {
-                continue;
+        for probe in probes {
+            let (repo, probe) = probe.await?;
+            match probe {
+                Some((Ok(entries), Ok(common))) => found.push((repo.clone(), entries, common)),
+                Some((Err(e), _)) | Some((_, Err(e))) => tracing::warn!("discover {}: {e}", repo.path.display()),
+                None => {}
             }
-            match (git::list_worktrees(&repo.path).await, git::common_dir(&repo.path).await) {
-                (Ok(entries), Ok(common)) => found.push((repo.clone(), entries, common)),
-                (Err(e), _) | (_, Err(e)) => tracing::warn!("discover {}: {e}", repo.path.display()),
-            }
+            repos.push(repo);
         }
         let summaries = match summaries {
             Summaries::All => futures_summaries(&found).await,
