@@ -704,10 +704,9 @@ impl Daemon {
         Some(summary)
     }
 
-    pub fn resolve_worktree(inner: &Inner, path: &Path) -> Option<Id> {
+    pub fn resolve_worktree(worktrees: &HashMap<Id, WorktreeState>, path: &Path) -> Option<Id> {
         let path = canonical(path);
-        inner
-            .worktrees
+        worktrees
             .values()
             .filter(|w| path.starts_with(&w.path))
             .max_by_key(|w| w.path.as_os_str().len())
@@ -1029,13 +1028,13 @@ impl Daemon {
         let _ = inner.store.tab_upsert(&tab);
     }
 
-    fn worktree_for_spawn(inner: &Inner, worktree_id: Option<&str>, cwd: Option<&Path>) -> Result<(Id, PathBuf), RpcError> {
+    fn worktree_for_spawn(worktrees: &HashMap<Id, WorktreeState>, worktree_id: Option<&str>, cwd: Option<&Path>) -> Result<(Id, PathBuf), RpcError> {
         if let Some(id) = worktree_id {
-            let w = inner.worktrees.get(id).ok_or_else(|| err(ErrorCode::NotFound, format!("worktree {id} not found")))?;
+            let w = worktrees.get(id).ok_or_else(|| err(ErrorCode::NotFound, format!("worktree {id} not found")))?;
             return Ok((w.id.clone(), cwd.map(Path::to_path_buf).unwrap_or_else(|| w.path.clone())));
         }
         let cwd = cwd.ok_or_else(|| err(ErrorCode::BadRequest, "worktree_id or cwd required"))?;
-        let id = Self::resolve_worktree(inner, cwd).ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", cwd.display())))?;
+        let id = Self::resolve_worktree(worktrees, cwd).ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", cwd.display())))?;
         Ok((id, cwd.to_path_buf()))
     }
 
@@ -1390,14 +1389,13 @@ impl Daemon {
     }
 
     async fn restore_worktree(self: &Arc<Self>, worktree_id: &str) -> Result<Value, RpcError> {
-        let (path, repo_path, branch, row) = {
+        let (target, row) = {
             let inner = self.lock();
             let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
             let row = Self::meta_row_of(&inner, w, w.metadata.clone());
-            let branch = row.archived_branch.clone().ok_or_else(|| err(ErrorCode::BadRequest, "worktree is not archived or has no branch to restore"))?;
-            let repo_path = inner.repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
-            (w.path.clone(), repo_path, branch, row)
+            (restore_target(w, &inner.repos, &row)?, row)
         };
+        let RestoreTarget { path, repo_path, branch } = target;
         if !git::branch_exists(&repo_path, &branch).await {
             return Err(err(ErrorCode::Git, format!("branch {branch} no longer exists; create the worktree again from another ref")));
         }
@@ -1651,7 +1649,7 @@ impl Daemon {
             }
             Call::WorktreeResolve { path } => {
                 let inner = self.lock();
-                let id = Self::resolve_worktree(&inner, &path).ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", path.display())))?;
+                let id = Self::resolve_worktree(&inner.worktrees, &path).ok_or_else(|| err(ErrorCode::NotFound, format!("{} is not inside a known worktree", path.display())))?;
                 ok(Self::worktree_view(&inner, &inner.worktrees[&id]))
             }
             Call::MetadataGet { worktree_id } => {
@@ -1789,7 +1787,7 @@ impl Daemon {
             Call::PaneList { worktree_id } => ok(Self::pane_views(&self.lock(), worktree_id.as_deref())),
             Call::PaneCreate(spec) => {
                 let mut inner = self.lock();
-                let (worktree_id, cwd) = Self::worktree_for_spawn(&inner, spec.worktree_id.as_deref(), spec.cwd.as_deref())?;
+                let (worktree_id, cwd) = Self::worktree_for_spawn(&inner.worktrees, spec.worktree_id.as_deref(), spec.cwd.as_deref())?;
                 let (tab_id, pane_id) = self.spawn_in_worktree(&mut inner, &worktree_id, cwd, spec.tab_id.as_deref(), None, SplitDirection::Horizontal, spec.command.as_deref(), spec.title, None)?;
                 ok(Self::pane_result(&inner, &pane_id, &tab_id)?)
             }
@@ -1921,7 +1919,7 @@ impl Daemon {
                         let p = inner.panes.get(from).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
                         (p.row.worktree_id.clone(), p.row.cwd.clone())
                     }
-                    _ => Self::worktree_for_spawn(&inner, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
+                    _ => Self::worktree_for_spawn(&inner.worktrees, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
                 };
                 let plan = providers::launch(&inner.config, spec.kind, spec.resume.as_deref(), &self.paths.integrations_dir, &spec.extra_args);
                 let line = agents::shell_line(&plan.argv);
@@ -2240,6 +2238,28 @@ pub struct ArchiveTarget {
     pub head: String,
 }
 
+/// What a restore needs from the state.
+pub struct RestoreTarget {
+    pub path: PathBuf,
+    pub repo_path: PathBuf,
+    pub branch: String,
+}
+
+/// Every reason a restore must not start, decided from state alone. Git is asked for the
+/// branch only after this returns a target.
+pub fn restore_target(w: &WorktreeState, repos: &[Repo], row: &MetaRow) -> Result<RestoreTarget, RpcError> {
+    let branch = row
+        .archived_branch
+        .clone()
+        .ok_or_else(|| err(ErrorCode::BadRequest, "worktree is not archived or has no branch to restore"))?;
+    let repo_path = repos
+        .iter()
+        .find(|r| r.id == w.repo_id)
+        .map(|r| r.path.clone())
+        .ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+    Ok(RestoreTarget { path: w.path.clone(), repo_path, branch })
+}
+
 /// Every reason an archive must not start, decided from state alone: no lock, no clock, and
 /// no IO. The caller marks the worktree in flight only after this returns a target, so a
 /// refusal cannot leave an id behind in `archiving` and block the worktree for the session.
@@ -2265,29 +2285,89 @@ pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>
 mod tests {
     use super::*;
 
+    fn a_repo() -> Repo {
+        Repo { id: "r1".into(), path: PathBuf::from("/repo"), name: "repo".into(), exists: true, remote_url: None, worktree_parent: None, branch_prefix: None }
+    }
+
+    fn a_worktree() -> WorktreeState {
+        WorktreeState {
+            id: "w1".into(),
+            repo_id: "r1".into(),
+            path: PathBuf::from("/repo/wt"),
+            branch: Some("feat/x".into()),
+            head: "abc1234".into(),
+            detached: false,
+            is_main: false,
+            exists: true,
+            gitdir: None,
+            git: None,
+            metadata: WorktreeMetadata::default(),
+            last_active_ms: None,
+            first_seen_ms: None,
+            archived_at_ms: None,
+        }
+    }
+
+    fn wt(patch: fn(&mut WorktreeState)) -> WorktreeState {
+        let mut w = a_worktree();
+        patch(&mut w);
+        w
+    }
+
+    fn a_row(branch: Option<&str>) -> MetaRow {
+        MetaRow {
+            id: "w1".into(),
+            repo_id: "r1".into(),
+            path: PathBuf::from("/repo/wt"),
+            gitdir: None,
+            metadata: WorktreeMetadata::default(),
+            last_active_ms: None,
+            first_seen_ms: None,
+            archived_at_ms: Some(1),
+            archived_branch: branch.map(str::to_string),
+        }
+    }
+
+    fn worktrees(list: Vec<WorktreeState>) -> HashMap<Id, WorktreeState> {
+        list.into_iter().map(|w| (w.id.clone(), w)).collect()
+    }
+
+    #[test]
+    fn a_restore_decides_every_rule_before_it_asks_git() {
+        let code = |r: Result<RestoreTarget, RpcError>| r.err().map(|e| e.code);
+        let target = restore_target(&a_worktree(), &[a_repo()], &a_row(Some("feat/x"))).expect("an archived worktree restores");
+        assert_eq!(target.branch, "feat/x");
+        assert_eq!(target.repo_path, PathBuf::from("/repo"));
+        assert_eq!(code(restore_target(&a_worktree(), &[a_repo()], &a_row(None))), Some(ErrorCode::BadRequest), "nothing to restore without a branch");
+        assert_eq!(code(restore_target(&a_worktree(), &[], &a_row(Some("feat/x")))), Some(ErrorCode::NotFound), "a missing repo refuses");
+    }
+
+    #[test]
+    fn a_spawn_finds_its_worktree_by_id_or_by_the_directory_it_starts_in() {
+        let deep = wt(|w| {
+            w.id = "w2".into();
+            w.path = PathBuf::from("/repo/wt/sub");
+        });
+        let all = worktrees(vec![a_worktree(), deep]);
+
+        let (id, cwd) = Daemon::worktree_for_spawn(&all, Some("w1"), None).unwrap();
+        assert_eq!((id.as_str(), cwd), ("w1", PathBuf::from("/repo/wt")));
+
+        let (_, cwd) = Daemon::worktree_for_spawn(&all, Some("w1"), Some(Path::new("/elsewhere"))).unwrap();
+        assert_eq!(cwd, PathBuf::from("/elsewhere"), "a named worktree keeps the directory it was given");
+
+        let (id, _) = Daemon::worktree_for_spawn(&all, None, Some(Path::new("/repo/wt/sub/deeper"))).unwrap();
+        assert_eq!(id, "w2", "the longest matching path wins, not the first");
+
+        assert_eq!(Daemon::worktree_for_spawn(&all, Some("gone"), None).err().map(|e| e.code), Some(ErrorCode::NotFound));
+        assert_eq!(Daemon::worktree_for_spawn(&all, None, None).err().map(|e| e.code), Some(ErrorCode::BadRequest));
+        assert_eq!(Daemon::worktree_for_spawn(&all, None, Some(Path::new("/tmp"))).err().map(|e| e.code), Some(ErrorCode::NotFound));
+        assert_eq!(Daemon::resolve_worktree(&all, Path::new("/tmp")), None);
+    }
+
     #[test]
     fn an_archive_refuses_before_it_marks_the_worktree_in_flight() {
-        let repo = Repo { id: "r1".into(), path: PathBuf::from("/repo"), name: "repo".into(), exists: true, remote_url: None, worktree_parent: None, branch_prefix: None };
-        let wt = |patch: fn(&mut WorktreeState)| {
-            let mut w = WorktreeState {
-                id: "w1".into(),
-                repo_id: "r1".into(),
-                path: PathBuf::from("/repo/wt"),
-                branch: Some("feat/x".into()),
-                head: "abc1234".into(),
-                detached: false,
-                is_main: false,
-                exists: true,
-                gitdir: None,
-                git: None,
-                metadata: WorktreeMetadata::default(),
-                last_active_ms: None,
-                first_seen_ms: None,
-                archived_at_ms: None,
-            };
-            patch(&mut w);
-            w
-        };
+        let repo = a_repo();
         let none = HashSet::new();
 
         let target = archive_target(&wt(|_| {}), &[repo.clone()], &none).expect("a plain worktree archives");
