@@ -47,7 +47,7 @@ describe("sanitizeUi", () => {
     expect(ui.view).toBe("home");
     expect(ui.activeWorktreeId).toBe("late");
     expect(sanitizeUi({ view: "worktree", activeWorktreeId: 7 }, []).activeWorktreeId).toBeNull();
-    expect(sanitizeUi({ view: "settings" }, []).view).toBe("home");
+    expect(sanitizeUi({ view: "no-such-view" }, []).view).toBe("home");
   });
 
   it("drops bad Home filters, lists, and enum values", () => {

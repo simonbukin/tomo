@@ -24,7 +24,6 @@ import type { Diagnostic, DiagnosticLevel,
   WorktreeResources,
 } from "./types";
 import type { MenuAnchor, MenuItem } from "./components/ui";
-import type { SettingsSection } from "./settingsModel";
 import type { QueryContext } from "./homeQuery";
 
 export interface State {
@@ -74,7 +73,6 @@ export type Dialog =
   | { kind: "integrations" }
   | { kind: "config-check" }
   | { kind: "hook-log" }
-  | { kind: "settings"; section?: SettingsSection }
   | { kind: "diagnostics" };
 
 export { defaultHome } from "./uiState";

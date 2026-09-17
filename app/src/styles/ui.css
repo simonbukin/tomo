@@ -120,17 +120,17 @@ select { appearance: none; padding-right: 22px; background-image: url("data:imag
 .separator-vertical { width: 1px; align-self: stretch; }
 
 /* ---- settings */
-.dialog.settings-dialog { top: 8vh; max-height: 84vh; }
+.settings-page { padding: var(--sp-4) var(--sp-4) var(--sp-5); max-width: 760px; }
 .settings-file { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
 .settings-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-1); }
-.settings { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--sp-4); min-height: 380px; }
+.settings { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--sp-4); align-items: start; margin-top: var(--sp-3); }
 .settings-nav { display: flex; flex-direction: column; gap: 2px; }
 .settings-tab { text-align: left; padding: 3px 8px; border: none; border-radius: var(--radius); background: transparent; color: var(--fg-2); font-size: var(--fs-2); }
 .settings-tab:hover { background: var(--bg-1); color: var(--fg); }
 .settings-tab[aria-current="page"] { background: var(--accent-soft); color: var(--fg); }
-.settings-body { min-width: 0; max-height: 62vh; overflow: auto; padding-right: var(--sp-1); }
+.settings-body { min-width: 0; padding-right: var(--sp-1); }
 .settings-grid { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; row-gap: var(--sp-3); column-gap: var(--sp-3); }
-.dialog .settings-grid > label { margin: 0; }
+.settings-grid > label { margin: 0; justify-self: start; }
 .settings-control { min-width: 0; display: flex; align-items: center; }
 .settings-control > input { flex: 1; }
 .settings-note { grid-column: 2; margin-top: calc(-1 * var(--sp-2)); font-size: var(--fs-0); color: var(--fg-3); }
