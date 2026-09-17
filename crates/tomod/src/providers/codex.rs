@@ -108,34 +108,6 @@ fn hooks_trusted(home: &Path) -> Option<bool> {
     Some(ours > 0 && trusted == ours)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn codex_trust_needs_every_tomo_entry_in_config() {
-        let home = std::env::temp_dir().join(format!("tomo-codex-trust-{}", std::process::id()));
-        let codex_dir = home.join(".codex");
-        std::fs::create_dir_all(&codex_dir).unwrap();
-        assert_eq!(hooks_trusted(&home), None);
-        let mut hooks = serde_json::json!({ "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "other" } ] } ] } });
-        super::super::merge_hooks(&mut hooks, &hooks_entries(Path::new("/bin/tomo")), "hook codex");
-        let file = codex_dir.join("hooks.json");
-        std::fs::write(&file, hooks.to_string()).unwrap();
-        assert_eq!(hooks_trusted(&home), Some(false));
-        let trust = |entries: &[(&str, usize)]| {
-            entries.iter().map(|(event, idx)| format!("\"{}:{event}:{idx}:0\" = \"trusted\"\n", file.display())).collect::<String>()
-        };
-        let ours = [("permission_request", 0), ("post_tool_use", 0), ("pre_tool_use", 0), ("session_start", 0), ("stop", 1), ("user_prompt_submit", 0)];
-        std::fs::write(codex_dir.join("config.toml"), trust(&ours[..5])).unwrap();
-        assert_eq!(hooks_trusted(&home), Some(false));
-        std::fs::write(codex_dir.join("config.toml"), trust(&ours)).unwrap();
-        assert_eq!(hooks_trusted(&home), Some(true));
-        assert!(gap(&home).is_none(), "trusted hooks leave no gap");
-        let _ = std::fs::remove_dir_all(&home);
-    }
-}
-
 fn detects(p: &Program) -> bool {
     is_codex(p.name) || is_codex(p.argv0)
 }
@@ -163,4 +135,32 @@ pub fn hooks_entries(tomo_bin: &Path) -> Value {
         map.insert(name.to_string(), serde_json::json!([hook.clone()]));
     }
     Value::Object(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codex_trust_needs_every_tomo_entry_in_config() {
+        let home = std::env::temp_dir().join(format!("tomo-codex-trust-{}", std::process::id()));
+        let codex_dir = home.join(".codex");
+        std::fs::create_dir_all(&codex_dir).unwrap();
+        assert_eq!(hooks_trusted(&home), None);
+        let mut hooks = serde_json::json!({ "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "other" } ] } ] } });
+        super::super::merge_hooks(&mut hooks, &hooks_entries(Path::new("/bin/tomo")), "hook codex");
+        let file = codex_dir.join("hooks.json");
+        std::fs::write(&file, hooks.to_string()).unwrap();
+        assert_eq!(hooks_trusted(&home), Some(false));
+        let trust = |entries: &[(&str, usize)]| {
+            entries.iter().map(|(event, idx)| format!("\"{}:{event}:{idx}:0\" = \"trusted\"\n", file.display())).collect::<String>()
+        };
+        let ours = [("permission_request", 0), ("post_tool_use", 0), ("pre_tool_use", 0), ("session_start", 0), ("stop", 1), ("user_prompt_submit", 0)];
+        std::fs::write(codex_dir.join("config.toml"), trust(&ours[..5])).unwrap();
+        assert_eq!(hooks_trusted(&home), Some(false));
+        std::fs::write(codex_dir.join("config.toml"), trust(&ours)).unwrap();
+        assert_eq!(hooks_trusted(&home), Some(true));
+        assert!(gap(&home).is_none(), "trusted hooks leave no gap");
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }

@@ -133,17 +133,6 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
     HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string) }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn claude_dir_encoding_matches_claude_code() {
-        assert_eq!(project_dir(Path::new("/h"), Path::new("/Users/me/Projects/tomo")), PathBuf::from("/h/.claude/projects/-Users-me-Projects-tomo"));
-        assert_eq!(project_dir(Path::new("/h"), Path::new("/a/b.c")), PathBuf::from("/h/.claude/projects/-a-b-c"));
-    }
-}
-
 pub fn hooks_settings(tomo_bin: &Path) -> Value {
     let command = format!("{} hook claude", shell_quote(&tomo_bin.to_string_lossy()));
     let hook = |matcher: Option<&str>| {
@@ -165,4 +154,15 @@ pub fn hooks_settings(tomo_bin: &Path) -> Value {
             "Stop": hook(None),
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claude_dir_encoding_matches_claude_code() {
+        assert_eq!(project_dir(Path::new("/h"), Path::new("/Users/me/Projects/tomo")), PathBuf::from("/h/.claude/projects/-Users-me-Projects-tomo"));
+        assert_eq!(project_dir(Path::new("/h"), Path::new("/a/b.c")), PathBuf::from("/h/.claude/projects/-a-b-c"));
+    }
 }

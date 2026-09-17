@@ -172,7 +172,7 @@ pub fn classify(rows: &[ProcRow], roots: &[Root], worktree_paths: &[(Id, PathBuf
             depth,
         });
     }
-    out.sort_by(|a, b| (a.ownership as u8, a.depth, a.pid).cmp(&(b.ownership as u8, b.depth, b.pid)));
+    out.sort_by_key(|a| (a.ownership as u8, a.depth, a.pid));
     out
 }
 

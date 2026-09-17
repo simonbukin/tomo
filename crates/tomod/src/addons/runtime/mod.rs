@@ -66,7 +66,7 @@ fn program_of(inner: &Inner, pid: u32) -> Option<String> {
 /// root is judged by the program it runs now, because a shell that exec'd a
 /// server keeps its pid.
 fn candidate_pids(inner: &Inner) -> Vec<u32> {
-    owned(inner).into_iter().filter(|p| p.depth > 0 || !program_of(inner, p.pid).map_or(true, |n| is_shell(&n))).map(|p| p.pid).collect()
+    owned(inner).into_iter().filter(|p| p.depth > 0 || !program_of(inner, p.pid).is_none_or(|n| is_shell(&n))).map(|p| p.pid).collect()
 }
 
 fn observe(inner: &Inner, listeners: &[Listener], now: u64) -> Vec<RuntimeEndpoint> {
@@ -187,7 +187,7 @@ pub async fn list(daemon: &Arc<Daemon>, worktree_id: Option<Id>) -> Result<Value
         let _ = tokio::task::spawn_blocking(move || monitor::poll_and_scan(&d, false)).await;
     }
     let inner = daemon.lock();
-    let mut list: Vec<RuntimeEndpoint> = state(&inner).list.iter().filter(|e| worktree_id.as_deref().map_or(true, |w| e.worktree_id == w)).cloned().collect();
+    let mut list: Vec<RuntimeEndpoint> = state(&inner).list.iter().filter(|e| worktree_id.as_deref().is_none_or(|w| e.worktree_id == w)).cloned().collect();
     list.sort_by(|a, b| (&a.worktree_id, a.port, a.pid).cmp(&(&b.worktree_id, b.port, b.pid)));
     ok(list)
 }

@@ -44,6 +44,9 @@ pub struct Request {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+// A frame is built and written to the socket at once, so its size costs one stack move.
+// Boxing the event would trade that for an allocation on every event.
+#[allow(clippy::large_enum_variant)]
 pub enum Frame {
     Response {
         id: u64,
@@ -1404,7 +1407,7 @@ mod bindings {
         std::fs::read_dir(dir)
             .map(|rd| {
                 rd.filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |x| x == "ts"))
+                    .filter(|e| e.path().extension().is_some_and(|x| x == "ts"))
                     .map(|e| (e.file_name().to_string_lossy().into_owned(), std::fs::read_to_string(e.path()).unwrap_or_default()))
                     .collect()
             })

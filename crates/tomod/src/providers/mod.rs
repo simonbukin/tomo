@@ -17,10 +17,11 @@ use serde_json::{Map, Value};
 use std::path::Path;
 use std::path::PathBuf;
 use tomo_proto::{AgentCommand, AgentKind, AgentSession, AgentState, Config, IntegrationLevel, IntegrationStatus, Integrations};
+pub type ProviderFlags = fn(resume: Option<&str>, launch_dir: &Path) -> (Vec<String>, Option<String>);
 
 pub struct Provider {
     pub kind: AgentKind,
-    pub flags: fn(resume: Option<&str>, launch_dir: &Path) -> (Vec<String>, Option<String>),
+    pub flags: ProviderFlags,
     pub resume_without_session: Option<&'static str>,
     pub hook_outcome: fn(&Value) -> HookOutcome,
     pub detects: fn(&Program) -> bool,

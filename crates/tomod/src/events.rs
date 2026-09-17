@@ -5,7 +5,7 @@
 //! `TOMO_EVENT_JSON`. Only `worktree.before_archive` is awaited; it is a gate.
 //! Everything else runs detached so the daemon never waits on user scripts.
 
-use crate::daemon::{Daemon, Inner, WorktreeState};
+use crate::daemon::{Daemon, Inner, SpawnSpec, WorktreeState};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -213,7 +213,7 @@ impl Daemon {
         let line = format!("{exports}{}", hook.command);
         let title = format!("hook: {}", event.event);
         if let Err(e) =
-            self.spawn_in_worktree(&mut inner, &w.id, w.path.clone(), None, None, SplitDirection::Horizontal, None, Some(title), None).map(|(_, pane_id)| {
+            self.spawn_in_worktree(&mut inner, &w.id, w.path.clone(), SpawnSpec { title: Some(title), ..SpawnSpec::default() }).map(|(_, pane_id)| {
                 if let Some(pane) = inner.panes.get_mut(&pane_id) {
                     pane.pending_line = Some(line);
                 }
