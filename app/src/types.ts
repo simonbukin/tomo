@@ -82,6 +82,9 @@ export interface ProcessInfo {
 
 export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" | "manual";
 
+/** How the sidebar arranges the same worktrees. A lens never changes worktree state. */
+export type SidebarLens = "repo" | "project" | "tag" | "focus";
+
 export type SidebarMode = "open" | "minimal" | "closed";
 
 export type CoreSection = "worktree" | "git" | "processes" | "sessions" | "files";
@@ -102,7 +105,9 @@ export interface UiState {
   /** The inspector section that the right rail asked to show. */
   rightSection: RightSection | null;
   sidebarSort: SidebarSort;
+  lens: SidebarLens;
   showArchivedInSidebar: boolean;
+  /** Collapsed group keys: a repo id in the repository lens, a lens-prefixed key in the others. */
   collapsedRepos: string[];
   hiddenRepos: string[];
   showHiddenRepos: boolean;

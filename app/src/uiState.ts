@@ -1,9 +1,10 @@
 import { defaultAppearance, sanitizeAppearance } from "./appearance";
+import { LENSES } from "./lenses";
 import type { CoreSection, Filter, FilterKind, HomeOptions, Id, SidebarMode, SidebarSort, UiState } from "./types";
 
 export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
-export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
+export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
@@ -60,6 +61,7 @@ export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonView
     rightWidth: width(s.rightWidth, defaultUi.rightWidth),
     rightSection: typeof s.rightSection === "string" && [...CORE_SECTIONS, ...addonSectionIds].includes(s.rightSection) ? s.rightSection : null,
     sidebarSort: oneOf(SORTS, s.sidebarSort, defaultUi.sidebarSort),
+    lens: oneOf(LENSES, s.lens, defaultUi.lens),
     showArchivedInSidebar: bool(s.showArchivedInSidebar, defaultUi.showArchivedInSidebar),
     collapsedRepos: strings(s.collapsedRepos),
     hiddenRepos: strings(s.hiddenRepos),
