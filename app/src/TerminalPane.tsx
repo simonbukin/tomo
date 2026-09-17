@@ -161,7 +161,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
           <ProcessIcon agent={agent?.kind} cmd={pane?.process_cmd} />
           <strong>{title}</strong>
           {agent && <span className="agent-state">{agent.state}</span>}
-          {zoomed && <span className="pane-note pane-zoomed" title="Only this pane is shown. Choose unzoom in the pane menu or press the zoom key again.">zoomed</span>}
+          {zoomed && <span className="pane-note pane-zoomed" title="Only this pane is shown. Press the zoom key again to unzoom.">zoomed</span>}
           {originNote && <span className="pane-note" title="This pane was rebuilt after a daemon restart">{originNote}</span>}
           {pane && !pane.live && <span className="pane-note">exited {pane.exit_code ?? ""}</span>}
         </span>

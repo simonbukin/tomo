@@ -1,10 +1,9 @@
-# Tomo
+# tomo
 
-Tomo is a small, fast macOS desktop tool for local development work that is
-spread across Git repositories, Git worktrees, terminals, and coding agents.
+A little workspace for my coding agents.
 
-Tomo is not an IDE and not an agent orchestrator. It answers these questions
-at a glance:
+Tomo keeps worktrees, terminals, agents, running apps, and the things that
+need attention in one quiet place. It answers these questions at a glance:
 
 - What repositories and worktrees exist?
 - Which ones am I working on?
@@ -12,6 +11,9 @@ at a glance:
 - Which agents need my attention?
 - Which worktree consumes my machine?
 - After a restart, how do I get back to where I was?
+
+It does not replace Git, your editor, your shell, or your agents. It keeps
+the room organized.
 
 The worktree is the unit of context. Terminals, agents, processes, resource
 use, metadata, and attention all roll up to a worktree.
@@ -75,7 +77,7 @@ hooks do nothing outside a Tomo terminal. See
 Configuration lives in `~/Library/Application Support/tomo/config.toml`. Tomo
 writes a commented default file on the first start.
 
-## Five useful commands
+## Useful commands
 
 ```bash
 tomo status                          # daemon, counts, integration state
@@ -146,3 +148,14 @@ worktrees unlocks towns; `tomo towns list --unlocked` shows the collection.
   Tomo (protocol types are generated from Rust; see there)
 - [docs/data-model.md](docs/data-model.md) — SQLite tables, identities, and
   config keys
+
+## About
+
+tomo
+
+made for work in progress.
+
+A small local workspace for Git worktrees, terminals, coding agents, and
+everything they leave running.
+
+Don't like it? Fork it and ask your agent to change it.
