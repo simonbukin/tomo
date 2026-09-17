@@ -142,7 +142,7 @@ export interface HomeOptions {
   filters: Filter[];
   view: "list" | "board";
   sort: "state" | "recent" | "created" | "name";
-  group: "state" | "repo" | "project" | "none";
+  group: "state" | "repo" | "project" | "tag" | "none";
   showArchived: boolean;
 }
 

@@ -20,6 +20,14 @@ function load(beforeMs: number | null): Promise<ActivityEvent[]> {
     .catch(() => []);
 }
 
+/** Loads one page of activity into the store and reports how many events arrived. */
+export function fetchActivity(beforeMs: number | null): Promise<number> {
+  return load(beforeMs).then((list) => {
+    setState((s) => ({ activity: mergeActivity(s.activity, list) }));
+    return list.length;
+  });
+}
+
 export function Activity() {
   const activity = useStore((s) => s.activity);
   const openIds = useStore((s) => s.attention.filter((a) => needsMeItem(a, Object.values(s.agents))).map((a) => a.id));
@@ -27,19 +35,15 @@ export function Activity() {
   const [more, setMore] = useState(true);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    load(null).then((list) => {
+    fetchActivity(null).then((count) => {
       setLoading(false);
-      setMore(list.length >= PAGE);
-      setState((s) => ({ activity: mergeActivity(s.activity, list) }));
+      setMore(count >= PAGE);
     });
   }, []);
   const loadMore = () => {
     const last = activity[activity.length - 1];
     if (!last) return;
-    load(last.occurred_at_ms).then((list) => {
-      setMore(list.length >= PAGE && activity.length + list.length < 500);
-      setState((s) => ({ activity: mergeActivity(s.activity, list) }));
-    });
+    fetchActivity(last.occurred_at_ms).then((count) => setMore(count >= PAGE && activity.length + count < 500));
   };
   const shown = activity.filter((e) => (filter === "needs_me" ? !!e.attention_id && openIds.includes(e.attention_id) : true));
   const filters: { id: Filter; label: string }[] = [{ id: "all", label: "All" }, { id: "needs_me", label: "Needs me" }];
@@ -64,7 +68,7 @@ export function Activity() {
   );
 }
 
-function EventRow({ e }: { e: ActivityEvent }) {
+export function EventRow({ e }: { e: ActivityEvent }) {
   const view = activityView(e.kind);
   const who = useStore((s) => (e.agent_kind ? KIND_LABEL[e.agent_kind] : (view.who?.(e, s) ?? "")));
   const worktreeName = useStore((s) => s.worktrees.find((w) => w.id === e.worktree_id)?.name ?? null);

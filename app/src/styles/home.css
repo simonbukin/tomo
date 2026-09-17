@@ -17,12 +17,24 @@
 .home-group { margin-bottom: var(--sp-4); }
 
 /* ---- scope header and the repository overview */
-.scope-head { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
+/* The home page of one repository, project, or tag: what it is, then what is in it. */
+.scope-home { display: grid; gap: 2px; margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--line); }
 .scope-kind { font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); }
-.scope-title { font-size: var(--fs-3); font-weight: 600; color: var(--fg); }
-.scope-path { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-name { margin: 0; font-size: var(--fs-4); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--fg); }
+.scope-path { font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-tagline { margin: var(--sp-1) 0 0; color: var(--fg-1); }
+.scope-actions { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-3); }
+
+.home-lenses { margin-bottom: var(--sp-3); }
+
+.scope-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3); }
+.card-new { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 84px; border: 1px dashed var(--line-strong); border-radius: var(--radius); background: none; color: var(--fg-3); font: inherit; transition: border-color var(--dur-fast) ease-out, color var(--dur-fast) ease-out; }
+.card-new:hover { border-color: var(--accent); color: var(--accent); }
+.card-new .icon { width: 14px; height: 14px; }
+
+.scope-activity { margin-top: var(--sp-4); }
 .home-greet { margin-bottom: var(--sp-4); }
-.home-hello { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
+.home-hello { margin: 0; font-size: var(--fs-4); font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
 .home-status { margin: 2px 0 0; color: var(--fg-2); font-size: var(--fs-2); }
 .repo-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .repo-list-head, .repo-list-row { display: grid; grid-template-columns: 16px minmax(120px, 2fr) 90px 90px 90px minmax(90px, 1fr); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); }
