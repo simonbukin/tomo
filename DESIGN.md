@@ -87,13 +87,40 @@ Tomo is compact and information-rich. Do not add whitespace to look modern.
 
 ## Motion
 
-Motion confirms a change. It never entertains.
+**Motion preserves spatial memory. Reflow the same things; reveal new layers
+from where the person acted. With no pointing action, use the centre. Motion
+must make Tomo easier to understand, never slower to use.**
 
-- Three durations: `--dur-fast` 80 ms (press, small state), `--dur-hover`
-  100 ms (hover and close), `--dur-open` 140 ms (open and arrival).
-- Two curves: `--ease-out` for hover, press, and open; `--ease-in` for close.
-- No springs, no bounce, no parallax. Under `prefers-reduced-motion` every
-  duration is 0 and the press scale is 1.
+Two grammars, and the difference is the whole point:
+
+- **Reveal** is for a new layer: another view, a repository or worktree, the
+  palette, a theme. The destination is already underneath, and the old
+  surface clears away from the point of interaction. `transition()` in
+  `motion.ts` does this with the View Transition API.
+- **Reflow** is for the same objects in a new arrangement: a lens change in
+  the sidebar. Rows move to their new places. `useFlip` does this.
+
+Never reveal what should reflow. A reveal says "this is somewhere else"; a
+reflow says "this is the same place, sorted differently".
+
+| What | Duration |
+|---|---|
+| hover, acknowledgement | 80 ms `--dur-fast` |
+| state mark | 100 ms `--dur-hover` |
+| palette, group expand, sidebar mode | 140 ms `--dur-open` |
+| page reveal, theme | 200 ms `--dur-reveal` |
+| lens reshuffle | 200 ms (`useFlip`) |
+
+- Two curves: `--ease-out` for hover, press, open, and reveal; `--ease-in`
+  for close.
+- No routine motion over 250 ms. No springs, no bounce, no parallax, no
+  full-page fade to black.
+- The reveal edge is the union of three circles offset in proportion to the
+  radius, so it reads as ink spreading rather than a CSS circle. It is not a
+  splash; keep it subtle.
+- Motion is an enhancement. Where the browser cannot do a view transition the
+  state still changes at once. Under `prefers-reduced-motion` the reveal
+  becomes an 80 ms cross-fade and the reflow is instant.
 
 ## Interaction
 

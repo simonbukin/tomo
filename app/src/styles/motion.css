@@ -1,0 +1,70 @@
+/* Motion grammar: reveal a new layer from where the person acted; reflow the same objects in
+   place. See DESIGN.md. Every rule here is an enhancement: with no View Transition support the
+   state still changes, and nothing moves. */
+
+@property --reveal-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+:root {
+  --reveal-x: 50vw;
+  --reveal-y: 50vh;
+  --reveal-radius: 100vmax;
+  --dur-reveal: 200ms;
+  --dur-fade: 80ms;
+}
+
+/* The default cross-fade is replaced everywhere: Tomo says what changed by how it changes. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* The old surface stays put and the new one is uncovered over it. The three circles are offset
+   in proportion to the radius, so their union has a soft irregular edge instead of a hard ring. */
+:root[data-transition="reveal"]::view-transition-new(root),
+:root[data-transition="theme"]::view-transition-new(root) {
+  animation: tomo-reveal var(--dur-reveal) var(--ease-out) forwards;
+  mask-image:
+    radial-gradient(circle at var(--reveal-x) var(--reveal-y), #000 var(--reveal-r), #0000 var(--reveal-r)),
+    radial-gradient(
+      circle at calc(var(--reveal-x) + var(--reveal-r) * 0.035) calc(var(--reveal-y) - var(--reveal-r) * 0.025),
+      #000 calc(var(--reveal-r) * 0.97),
+      #0000 calc(var(--reveal-r) * 0.97)
+    ),
+    radial-gradient(
+      circle at calc(var(--reveal-x) - var(--reveal-r) * 0.025) calc(var(--reveal-y) + var(--reveal-r) * 0.04),
+      #000 calc(var(--reveal-r) * 0.98),
+      #0000 calc(var(--reveal-r) * 0.98)
+    );
+}
+
+@keyframes tomo-reveal {
+  from {
+    --reveal-r: 0px;
+  }
+  to {
+    --reveal-r: var(--reveal-radius);
+  }
+}
+
+@keyframes tomo-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Reduced motion keeps the continuity and drops the travel. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-transition]::view-transition-new(root) {
+    mask-image: none;
+    animation: tomo-fade var(--dur-fade) linear forwards;
+  }
+
+}
