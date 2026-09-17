@@ -1,4 +1,5 @@
-import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, Layers, Plus, RotateCw, Star } from "lucide-react";
+import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, RotateCw, Search, Settings, Star, type LucideIcon } from "lucide-react";
+import { Mark, Wordmark } from "./Brand";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -82,14 +83,22 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
-        <button className={`side-btn${ui.view === "home" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "home" })}>home</button>
-        <IconButton label={needCount ? `Activity, ${needCount} need you` : "Activity"} shortcut={shortcut("activity")} className={`side-btn side-activity${ui.view === "activity" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "activity" })}><History className="icon" />{needCount > 0 && <span className="rail-count" aria-hidden>{needCount}</span>}</IconButton>
-        <IconButton label={agentCount ? `Agents, ${agentCount} running` : "Agents"} shortcut={shortcut("agents")} className={`side-btn${ui.view === "agents" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "agents" })}><Bot className="icon" />{agentCount > 0 && <span className="rail-count" aria-hidden>{agentCount}</span>}</IconButton>
-        <IconButton label={appCount ? `Apps, ${appCount} running` : "Apps"} shortcut={shortcut("apps")} className={`side-btn${ui.view === "apps" ? " side-btn-active" : ""}`} onClick={() => setUi({ view: "apps" })}><AppWindow className="icon" />{appCount > 0 && <span className="rail-count" aria-hidden>{appCount}</span>}</IconButton>
-        {addonViews().map((v) => (
-          <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} className={`side-btn${ui.view === v.id ? " side-btn-active" : ""}`} onClick={() => setUi({ view: v.id })}><v.icon className="icon" /></IconButton>
-        ))}
+        <Mark size={15} />
+        <Wordmark height={15} />
         <span className="spacer" />
+        <IconButton label="Add repository" shortcut={shortcut("add_repo")} onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
+      </div>
+      <nav className="side-nav" aria-label="Views">
+        <Destination id="home" label="home" icon={House} current={ui.view === "home"} shortcut={shortcut("home")} />
+        <Destination id="activity" label="activity" icon={History} count={needCount} current={ui.view === "activity"} shortcut={shortcut("activity")} />
+        <Destination id="agents" label="agents" icon={Bot} count={agentCount} current={ui.view === "agents"} shortcut={shortcut("agents")} />
+        <Destination id="apps" label="apps" icon={AppWindow} count={appCount} current={ui.view === "apps"} shortcut={shortcut("apps")} />
+        {addonViews().map((v) => (
+          <Destination key={v.id} id={v.id} label={v.label.toLowerCase()} icon={v.icon} current={ui.view === v.id} shortcut={shortcut(v.id)} />
+        ))}
+      </nav>
+      <div className="side-section">
+        <span>{LENS_LABEL[ui.lens]}</span>
         <DropdownMenu>
           <DropdownMenuTrigger render={<IconButton label={`Group by: ${LENS_LABEL[ui.lens]}`} />}><Layers className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={lensMenu} /></DropdownMenuContent>
@@ -98,7 +107,6 @@ export function Sidebar() {
           <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
         </DropdownMenu>
-        <IconButton label="Add repository" shortcut={shortcut("add_repo")} onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
         <IconButton label="Refresh repositories and worktrees" shortcut={shortcut("refresh")} onClick={() => runAction("refresh")}><RotateCw className="icon" /></IconButton>
       </div>
       <div className="sidebar-scroll" ref={listRef}>
@@ -121,7 +129,30 @@ export function Sidebar() {
           </div>
         )}
       </div>
+      <div className="side-foot">
+        <button type="button" className="side-row" onClick={() => runAction("palette")}>
+          <Search className="icon" />
+          <span>search</span>
+          <span className="side-row-key">{shortcut("palette") ?? ""}</span>
+        </button>
+        <button type="button" className="side-row" onClick={() => setState({ dialog: { kind: "settings" } })}>
+          <Settings className="icon" />
+          <span>settings</span>
+          <span />
+        </button>
+      </div>
     </aside>
+  );
+}
+
+/** One place to go. The id is the view id, so the row and its command agree. */
+function Destination({ id, label, icon: Icon, count = 0, current, shortcut }: { id: string; label: string; icon: LucideIcon; count?: number; current: boolean; shortcut?: string }) {
+  return (
+    <button type="button" className="side-row" aria-current={current ? "page" : undefined} title={shortcut ? `${label} · ${shortcut}` : label} onClick={() => setUi({ view: id })}>
+      <Icon className="icon" />
+      <span>{label}</span>
+      {count > 0 ? <span className="side-row-count">{count}</span> : <span />}
+    </button>
   );
 }
 
