@@ -108,13 +108,16 @@ describe("Activity view", () => {
     expect([...document.querySelectorAll(".activity-day .section-label")].map((n) => n.textContent)).toEqual(["today"]);
   });
 
-  it("filters by Needs me and by This worktree", async () => {
+  it("filters by Needs me", async () => {
     const user = userEvent.setup();
     await show();
     await user.click(screen.getByRole("button", { name: "Needs me" }));
     expect(titles()).toEqual(["agent_waiting", "checkpoint_created", "action_crashed"]);
-    await user.click(screen.getByRole("button", { name: "This worktree" }));
-    expect(titles()).toEqual(EVENTS.map(([kind]) => kind).filter((k) => k !== "hook_failed"));
+  });
+
+  it("offers no per-worktree filter, because the view is the whole workspace", async () => {
+    await show();
+    expect([...document.querySelectorAll(".activity-bar .seg")].map((n) => n.textContent)).toEqual(["All", "Needs me"]);
   });
 
   it("drops a waiting row from Needs me and its Resolve button once its agent moves on", async () => {

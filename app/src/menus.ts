@@ -43,7 +43,7 @@ function tagItems(s: State, w: Worktree): MenuItem[] {
   return [
     ...known.map((tag) => ({ label: tag, checked: w.metadata.tags.includes(tag), run: () => setMetadata(w.id, { tags: toggledTag(w.metadata.tags, tag) }) })),
     ...(known.length ? [sep] : []),
-    { label: "edit tags…", run: () => promptMetadata("tags", w.id) },
+    { label: "edit tags...", run: () => promptMetadata("tags", w.id) },
   ];
 }
 
@@ -52,7 +52,7 @@ export function worktreeMenu(w: Worktree, s: State = getState()): MenuItem[] {
   const busy = w.archiving;
   const live = w.exists && !archived && !busy;
   return [
-    { label: busy ? "archiving…" : "open", disabled: !w.exists || archived || busy, run: () => openWorktree(w.id) },
+    { label: busy ? "archiving..." : "open", disabled: !w.exists || archived || busy, run: () => openWorktree(w.id) },
     { label: "new tab", disabled: !live, run: () => newTabIn(w.id) },
     { label: "new terminal", disabled: !live, run: () => newTerminalIn(w.id) },
     { label: "new claude", disabled: !live, run: () => spawnAgent("claude", w.id) },
@@ -69,8 +69,8 @@ function worktreeDetailItems(w: Worktree, s: State): MenuItem[] {
   return [
     { label: "state", disabled: busy, submenu: stateItems(s, w.metadata.state, (state) => setMetadata(w.id, { state })) },
     { label: "tags", disabled: busy, submenu: tagItems(s, w) },
-    { label: "set project…", disabled: busy, run: () => promptMetadata("project", w.id) },
-    { label: "rename…", disabled: busy, run: () => promptMetadata("display_name", w.id) },
+    { label: "set project...", disabled: busy, run: () => promptMetadata("project", w.id) },
+    { label: "rename...", disabled: busy, run: () => promptMetadata("display_name", w.id) },
     sep,
     { label: `open in ${editorName(s.config?.editor_command)}`, disabled: !w.exists || busy, run: () => openExternalFor(w.id, "editor") },
     { label: "reveal in finder", disabled: !w.exists || busy, run: () => openExternalFor(w.id, "finder") },
@@ -82,7 +82,7 @@ function worktreeDetailItems(w: Worktree, s: State): MenuItem[] {
     sep,
     archived
       ? { label: "restore", disabled: busy, run: () => restoreWorktree(w.id) }
-      : { label: "archive…", danger: true, disabled: w.is_main || busy, run: () => archiveWorktree(w.id) },
+      : { label: "archive...", danger: true, disabled: w.is_main || busy, run: () => archiveWorktree(w.id) },
   ];
 }
 
@@ -107,7 +107,7 @@ export function overflowMenu(w: Worktree, s: State = getState()): MenuItem[] {
 export function repoMenu(r: Repo, s: State = getState()): MenuItem[] {
   const hidden = s.ui.hiddenRepos.includes(r.id);
   return [
-    { label: "new worktree…", run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }) },
+    { label: "new worktree...", run: () => setState({ dialog: { kind: "create-worktree", repoId: r.id } }) },
     sep,
     { label: "reveal in finder", run: () => revealRepo(r) },
     { label: "copy path", run: () => copyText(r.path) },
@@ -126,11 +126,11 @@ export function bulkMenu(ids: Id[]): MenuItem[] {
     { label: `${ids.length} worktrees`, disabled: true },
     sep,
     { label: "state", submenu: stateItems(s, shared === undefined ? "" : shared, (state) => bulkMetadata(ids, { state })) },
-    { label: "set project…", run: () => bulkPrompt("project", ids) },
-    { label: "set tags…", run: () => bulkPrompt("tags", ids) },
-    { label: "add tag…", run: () => bulkAddTag(ids) },
+    { label: "set project...", run: () => bulkPrompt("project", ids) },
+    { label: "set tags...", run: () => bulkPrompt("tags", ids) },
+    { label: "add tag...", run: () => bulkAddTag(ids) },
     sep,
-    { label: "archive…", danger: true, run: () => bulkArchive(ids) },
+    { label: "archive...", danger: true, run: () => bulkArchive(ids) },
     ...(anyArchived ? [{ label: "restore", run: () => bulkRestore(ids) } as MenuItem] : []),
     sep,
     { label: "clear selection", run: clearSelection },
@@ -212,7 +212,7 @@ export function paneMenu(paneId: Id, s: State = getState()): MenuItem[] {
     sep,
     sendToItem(s, pane),
     sep,
-    { label: "rename pane…", run: () => renamePane(paneId) },
+    { label: "rename pane...", run: () => renamePane(paneId) },
     copyMenu([
       ["CWD", pane?.cwd],
       ["Session ID", pane?.agent?.session_ref],

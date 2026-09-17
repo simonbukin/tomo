@@ -71,7 +71,9 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       className={cx("tab", t.is_active && "tab-active", drag.className)}
       onMouseDown={(e) => {
         if (e.button === 1) closeTab(t.id);
-        else if (!editing) activateTab(t.id);
+      }}
+      onClick={() => {
+        if (!editing) activateTab(t.id);
       }}
       onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
       onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
@@ -134,7 +136,7 @@ function TabTail({ paneId, title }: { paneId: Id; title: string }) {
   return (
     <>
       <div className="popover-title">{title}</div>
-      <pre className="tab-tail-lines">{lines === null ? "…" : lines.length ? lines.join("\n") : "no output yet"}</pre>
+      <pre className="tab-tail-lines">{lines === null ? "..." : lines.length ? lines.join("\n") : "no output yet"}</pre>
     </>
   );
 }

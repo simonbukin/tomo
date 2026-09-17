@@ -22,7 +22,6 @@ function load(beforeMs: number | null): Promise<ActivityEvent[]> {
 
 export function Activity() {
   const activity = useStore((s) => s.activity);
-  const activeId = useStore((s) => (s.ui.activeWorktreeId && s.worktrees.some((w) => w.id === s.ui.activeWorktreeId) ? s.ui.activeWorktreeId : null));
   const openIds = useStore((s) => s.attention.filter((a) => needsMeItem(a, Object.values(s.agents))).map((a) => a.id));
   const [filter, setFilter] = useState<Filter>("all");
   const [more, setMore] = useState(true);
@@ -42,12 +41,11 @@ export function Activity() {
       setState((s) => ({ activity: mergeActivity(s.activity, list) }));
     });
   };
-  const shown = activity.filter((e) => (filter === "worktree" ? e.worktree_id === activeId : filter === "needs_me" ? !!e.attention_id && openIds.includes(e.attention_id) : true));
-  const filters: { id: Filter; label: string }[] = [{ id: "all", label: "All" }, { id: "needs_me", label: "Needs me" }, ...(activeId ? [{ id: "worktree" as Filter, label: "This worktree" }] : [])];
+  const shown = activity.filter((e) => (filter === "needs_me" ? !!e.attention_id && openIds.includes(e.attention_id) : true));
+  const filters: { id: Filter; label: string }[] = [{ id: "all", label: "All" }, { id: "needs_me", label: "Needs me" }];
   return (
     <div className="activity">
       <div className="activity-bar">
-        <span className="activity-title">activity</span>
         <span className="segmented">
           {filters.map((f) => (
             <button key={f.id} className={`seg${filter === f.id ? " seg-active" : ""}`} onClick={() => setFilter(f.id)}>{f.label}</button>

@@ -156,7 +156,7 @@ pub fn ps(procs: &[ProcessInfo], ws: &[Worktree], json: bool) {
 }
 
 fn truncate(s: &str, n: usize) -> String {
-    if s.chars().count() <= n { s.to_string() } else { format!("{}…", s.chars().take(n).collect::<String>()) }
+    if s.chars().count() <= n { s.to_string() } else { format!("{}...", s.chars().take(n.saturating_sub(3)).collect::<String>()) }
 }
 
 pub fn towns(towns: &[Town], unlocks: &[TownUnlock], only_unlocked: bool, json: bool) {

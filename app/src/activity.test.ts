@@ -107,7 +107,7 @@ describe("text helpers", () => {
   it("truncates long messages at 80 chars", () => {
     expect(truncate("x".repeat(80))).toHaveLength(80);
     expect(truncate("x".repeat(81))).toHaveLength(80);
-    expect(truncate("x".repeat(81)).endsWith("…")).toBe(true);
+    expect(truncate("x".repeat(81)).endsWith("...")).toBe(true);
   });
   it("draws usage sparks", () => {
     expect(sparkCells(0.48)).toEqual({ filled: 5, empty: 5 });

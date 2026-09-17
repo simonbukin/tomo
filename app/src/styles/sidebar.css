@@ -18,7 +18,7 @@
 .side-row[aria-current] .side-row-count { color: var(--accent); }
 /* The lens label above the tree. Not .side-section: the right inspector owns that name. */
 .side-lens { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-1); font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); }
-.side-lens .btn-icon { margin-left: auto; }
+.side-lens-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
 
 .repo-group { padding: var(--sp-1) 0; }
 .repo-head { padding: 0 var(--sp-1) 0 var(--sp-2); cursor: default; }

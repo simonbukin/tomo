@@ -25,7 +25,7 @@ export function openConfigFile(): void {
 }
 
 export const commands: Action[] = [
-  { id: "settings", label: "Settings…", group: "General", run: () => openSettings() },
+  { id: "settings", label: "Settings...", group: "General", run: () => openSettings() },
   { id: "open_config", label: "Open config file", group: "General", run: openConfigFile },
   ...(["system", ...BASE_THEMES] as ThemeName[]).map((name) => ({ id: `theme_${name}`, label: `Theme: ${THEME_LABELS[name]}`, group: "General" as const, run: () => void setConfig("theme.name", name).then((ok) => ok && showStatus("Theme changed")) })),
 ];

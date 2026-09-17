@@ -1,4 +1,4 @@
-import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, RotateCw, Star, type LucideIcon } from "lucide-react";
+import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, Star, type LucideIcon } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -71,7 +71,12 @@ export function Sidebar() {
       setUi({ sidebarSort: "manual", manualOrder: { ...currentOrder(), [from.repoId]: arrayMove(ids, ids.indexOf(from.id), ids.indexOf(to.id)) }, repoOrder: currentRepoOrder() });
     }
   };
-  const lensMenu = (): MenuItem[] => LENSES.map((l) => ({ label: LENS_LABEL[l], checked: ui.lens === l, run: () => setUi({ lens: l }) }));
+  const lensMenu = (): MenuItem[] => [
+    ...LENSES.map((l) => ({ label: LENS_LABEL[l], checked: ui.lens === l, run: () => setUi({ lens: l }) })),
+    { separator: true },
+    { label: "add repository...", run: () => setState({ dialog: { kind: "add-repo" } }) },
+    { label: "refresh", run: () => runAction("refresh") },
+  ];
   const sortMenu = (): MenuItem[] => [
     ...SORTS.map((s) => ({ label: s === "manual" ? "manual (drag rows)" : s, checked: ui.sidebarSort === s, run: () => setUi({ sidebarSort: s }) })),
     { separator: true },
@@ -92,16 +97,16 @@ export function Sidebar() {
       </nav>
       <div className="side-lens">
         <span>{LENS_LABEL[ui.lens]}</span>
-        <IconButton label="Add repository" shortcut={shortcut("add_repo")} onClick={() => setState({ dialog: { kind: "add-repo" } })}><Plus className="icon" /></IconButton>
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<IconButton label={`Group by: ${LENS_LABEL[ui.lens]}`} />}><Layers className="icon" /></DropdownMenuTrigger>
-          <DropdownMenuContent align="end"><MenuItems items={lensMenu} /></DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
-          <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
-        </DropdownMenu>
-        <IconButton label="Refresh repositories and worktrees" shortcut={shortcut("refresh")} onClick={() => runAction("refresh")}><RotateCw className="icon" /></IconButton>
+        <span className="side-lens-actions">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<IconButton label={`Group by: ${LENS_LABEL[ui.lens]}`} />}><Layers className="icon" /></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><MenuItems items={lensMenu} /></DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
+          </DropdownMenu>
+        </span>
       </div>
       <div className="sidebar-scroll" ref={listRef}>
         {selectionSize > 0 && (
@@ -258,7 +263,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
       </span>
       <span className="wt-sub">
         <span className="wt-branch" title={w.path}>
-          {busy ? <span className="wt-state">archiving… · </span> : archived ? "archived · " : state ? <span className="wt-state">{state} · </span> : null}{branch}
+          {busy ? <span className="wt-state">archiving... · </span> : archived ? "archived · " : state ? <span className="wt-state">{state} · </span> : null}{branch}
           {w.git?.dirty ? " *" : ""}
           {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
         </span>
