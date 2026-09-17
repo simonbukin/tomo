@@ -205,7 +205,6 @@ commented copy when the file is missing.
 | `[notifications]`     | `desktop = true`, `sounds = false`        | Desktop notifications and rare sounds   |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
-| `[archive] cleanup`   | `["node_modules","target","dist",".next",".turbo",".venv","build"]` | Direct children deleted by `worktree archive`; plain names only |
 | `[[states]]`          | exploring, active, waiting-review, merged | `id`, `label` (default: humanized id), `order` (default: position × 10) |
 | `[[hooks]]`           | none                                      | `event`, `command`, optional `state`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
 | `[notifications] desktop` | `true`                                | A desktop notification for a new attention item while the Tomo window is not focused. See [ui.md](ui.md) |

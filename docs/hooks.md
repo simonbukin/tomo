@@ -158,12 +158,23 @@ An archive runs these steps in this order:
 2. Checkpoint commit when the tree is dirty (see
    [state-and-recovery.md](state-and-recovery.md)).
 3. Close the worktree's panes and kill the processes they own.
-4. Delete the `[archive] cleanup` directories.
-5. `git worktree remove --force`.
-6. `worktree.archived`.
+4. `git worktree remove --force`.
+5. `worktree.archived`.
 
 The gate runs before the checkpoint, so a gate script that inspects
 `git status` sees the tree as the user left it.
+
+Tomo has no archive cleanup setting. The default config does the cleanup
+with a gate hook, which runs in the worktree:
+
+```toml
+[[hooks]]
+event = "worktree.before_archive"
+command = "rm -rf node_modules target dist .next .turbo .venv build"
+```
+
+Change the list, or delete the hook to keep the directories. A hook that
+must not stop an archive has to exit 0.
 
 ## Timeouts and logging
 

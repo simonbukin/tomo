@@ -245,7 +245,6 @@ mod tests {
             max_panes_per_tab: 4,
             keybindings: Default::default(),
             agents: Default::default(),
-            archive_cleanup: vec![],
             states: vec![],
             hooks,
             notifications: Default::default(),

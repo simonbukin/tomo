@@ -7,8 +7,8 @@ view and the file edit the same values.
 ## Source of truth
 
 - `config.toml` holds the theme, the accent, the color overrides, the
-  terminal font, keybindings, agents, notifications, archive cleanup, and
-  the editor command.
+  terminal font, keybindings, agents, notifications, hooks, and the editor
+  command.
 - The Settings view writes to `config.toml` through the daemon call
   `config_set`. The daemon edits the file in place with `toml_edit`, so
   comments, key order, and formatting stay as they are.
@@ -119,7 +119,6 @@ strip, or `Settings…` in the palette. Sections:
 - **agents**: command and arguments for each agent. Arguments are separated
   by spaces.
 - **notifications**: `[notifications] desktop` and `sounds`.
-- **archive**: `[archive] cleanup`.
 - **integrations**: `editor_command` and the agent hook status.
 
 The header shows the config path, the number of config issues, and

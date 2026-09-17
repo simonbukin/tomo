@@ -195,7 +195,6 @@ pub struct ArchiveResult {
     pub worktree_id: Id,
     pub branch: Option<String>,
     pub checkpoint_commit: Option<String>,
-    pub cleanup_removed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -523,8 +522,6 @@ pub struct Config {
     pub max_panes_per_tab: u32,
     pub keybindings: BTreeMap<String, String>,
     pub agents: BTreeMap<String, AgentCommand>,
-    #[serde(default)]
-    pub archive_cleanup: Vec<String>,
     #[serde(default)]
     pub states: Vec<StateDef>,
     #[serde(default)]

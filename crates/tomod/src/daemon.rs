@@ -1298,10 +1298,6 @@ impl Daemon {
         Self::emit_tabs(inner, worktree_id);
     }
 
-    fn remove_cleanup_dirs(path: &Path, names: &[String]) -> Vec<String> {
-        names.iter().filter(|n| path.join(n).is_dir()).filter(|n| std::fs::remove_dir_all(path.join(n)).is_ok()).cloned().collect()
-    }
-
     /// Makes every non-ignored change recoverable from the branch before the tree goes away.
     async fn archive_checkpoint(path: &Path, mode: CheckpointMode) -> Result<Option<String>, RpcError> {
         if mode == CheckpointMode::Discard {
@@ -1378,9 +1374,6 @@ impl Daemon {
             let mut inner = self.lock();
             Self::close_worktree_panes(&mut inner, worktree_id);
         }
-        let cleanup = self.lock().config.archive_cleanup.clone();
-        let dir = path.to_path_buf();
-        let removed = tokio::task::spawn_blocking(move || Self::remove_cleanup_dirs(&dir, &cleanup)).await.unwrap_or_default();
         git::worktree_remove(repo_path, path).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
         {
             let inner = self.lock();
@@ -1391,7 +1384,7 @@ impl Daemon {
             inner.store.meta_upsert(&row).map_err(internal)?;
         }
         self.discover(Summaries::Cached).await.map_err(internal)?;
-        Ok(ArchiveResult { worktree_id: worktree_id.to_string(), branch: (!branch.is_empty()).then(|| branch.to_string()), checkpoint_commit, cleanup_removed: removed })
+        Ok(ArchiveResult { worktree_id: worktree_id.to_string(), branch: (!branch.is_empty()).then(|| branch.to_string()), checkpoint_commit })
     }
 
     async fn restore_worktree(self: &Arc<Self>, worktree_id: &str) -> Result<Value, RpcError> {

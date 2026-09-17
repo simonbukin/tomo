@@ -326,9 +326,6 @@ pub fn archive_result(r: &ArchiveResult, json: bool) {
         Some(c) => println!("checkpoint {} tomo: archive checkpoint", &c[..c.len().min(7)]),
         None => println!("checkpoint not needed (clean)"),
     }
-    if !r.cleanup_removed.is_empty() {
-        println!("removed {}", r.cleanup_removed.join(", "));
-    }
     if let Some(b) = &r.branch {
         println!("branch kept: {b}");
     }

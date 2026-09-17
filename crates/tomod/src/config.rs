@@ -66,8 +66,6 @@ struct FileConfig {
     #[serde(default)]
     agents: BTreeMap<String, AgentCommandFile>,
     #[serde(default)]
-    archive: ArchiveFile,
-    #[serde(default)]
     states: Vec<StateFile>,
     #[serde(default)]
     hooks: Vec<HookFile>,
@@ -86,11 +84,6 @@ struct AgentCommandFile {
     command: String,
     #[serde(default)]
     args: Vec<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct ArchiveFile {
-    cleanup: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,8 +154,11 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # state = "merged"
 # command = "~/.config/tomo/hooks/merged"
 
-# [archive]
-# cleanup = ["node_modules", "target", "dist", ".next", ".turbo", ".venv", "build"]
+# Archive deletes the heavy build directories before it removes the worktree.
+# The hook runs in the worktree. Change the list, or delete the hook to keep them.
+[[hooks]]
+event = "worktree.before_archive"
+command = "rm -rf node_modules target dist .next .turbo .venv build"
 
 # [keybindings]
 # home = "mod+h"
@@ -200,7 +196,7 @@ pub const DEFAULT_FONT_FAMILY: &str = "CommitMono, Menlo, monospace";
 pub const THEME_TOKENS: [&str; 14] = ["bg", "surface", "surface_hover", "fg", "fg_muted", "fg_faint", "border", "border_strong", "accent", "accent_soft", "working", "waiting", "danger", "success"];
 const BASE_THEMES: [&str; 5] = ["system", "murasaki-dark", "murasaki-light", "paper", "ink"];
 const ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
-const SETTABLE_KEYS: [&str; 15] = [
+const SETTABLE_KEYS: [&str; 14] = [
     "shell",
     "editor_command",
     "worktree_parent_dir",
@@ -214,7 +210,6 @@ const SETTABLE_KEYS: [&str; 15] = [
     "terminal",
     "keybindings",
     "agents",
-    "archive",
     "notifications",
 ];
 
@@ -261,10 +256,6 @@ fn default_agents() -> BTreeMap<String, AgentCommand> {
             (name.clone(), AgentCommand { command: name, args: vec![] })
         })
         .collect()
-}
-
-pub fn default_archive_cleanup() -> Vec<String> {
-    ["node_modules", "target", "dist", ".next", ".turbo", ".venv", "build"].into_iter().map(String::from).collect()
 }
 
 pub fn default_states() -> Vec<StateDef> {
@@ -314,7 +305,7 @@ pub fn load_checked(path: &Path) -> Result<(Config, Vec<ConfigIssue>)> {
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let _ = std::fs::write(path, DEFAULT_CONFIG_TOML);
-            Ok(merge(FileConfig::default()))
+            Ok(parse(DEFAULT_CONFIG_TOML))
         }
         Err(e) => Err(e.into()),
     }
@@ -374,7 +365,6 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         max_panes_per_tab: file.max_panes_per_tab.unwrap_or(4).max(1),
         keybindings,
         agents,
-        archive_cleanup: file.archive.cleanup.unwrap_or_else(default_archive_cleanup),
         states,
         hooks,
         notifications: NotificationSettings {
@@ -627,11 +617,6 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
             out.push(issue(IssueLevel::Error, "keybindings", format!("{action}: {binding:?} is not a valid binding")));
         }
     }
-    for entry in &cfg.archive_cleanup {
-        if entry.is_empty() || entry.contains('/') || entry == "." || entry == ".." {
-            out.push(issue(IssueLevel::Error, "archive.cleanup", format!("{entry:?} must be a plain directory name")));
-        }
-    }
     for (name, agent) in &cfg.agents {
         if resolve_program(&agent.command).is_none() {
             out.push(issue(IssueLevel::Warning, &format!("agents.{name}"), format!("{} not found on PATH", agent.command)));
@@ -664,7 +649,6 @@ mod tests {
         assert_eq!(cfg.resource_warning_bytes, 2 * 1024 * 1024 * 1024);
         assert_eq!(cfg.states.len(), 4);
         assert!(cfg.hooks.is_empty());
-        assert!(cfg.archive_cleanup.contains(&"node_modules".to_string()));
     }
 
     #[test]
@@ -673,6 +657,9 @@ mod tests {
         assert!(issues.is_empty(), "{issues:?}");
         assert_eq!(cfg.theme, ThemeConfig::default());
         assert_eq!(cfg.font_size, 13);
+        let archive = cfg.hooks.iter().find(|h| h.event == "worktree.before_archive").expect("the default config cleans up on archive");
+        assert_eq!(archive.mode, HookMode::Async, "the gate runs async hooks only");
+        assert!(archive.command.contains("node_modules"), "{}", archive.command);
     }
 
     #[test]
@@ -695,22 +682,20 @@ mod tests {
 
     #[test]
     fn states_and_hooks_parse_with_defaults() {
-        let (cfg, _) = parse("[[states]]\nid = \"in-flight\"\n\n[[hooks]]\nevent = \"worktree.created\"\ncommand = \"echo hi\"\nmode = \"pane\"\n\n[archive]\ncleanup = [\"dist\"]\n");
+        let (cfg, _) = parse("[[states]]\nid = \"in-flight\"\n\n[[hooks]]\nevent = \"worktree.created\"\ncommand = \"echo hi\"\nmode = \"pane\"\n");
         assert_eq!(cfg.states[0].label, "In flight");
         assert_eq!(cfg.states[0].order, 10);
         assert_eq!(cfg.hooks[0].mode, HookMode::Pane);
         assert_eq!(cfg.hooks[0].timeout_s, 60);
-        assert_eq!(cfg.archive_cleanup, vec!["dist".to_string()]);
     }
 
     #[test]
-    fn check_reports_unknown_events_duplicate_states_and_bad_cleanup() {
-        let (cfg, _) = parse("[[states]]\nid = \"a\"\n[[states]]\nid = \"a\"\n[[hooks]]\nevent = \"nope.event\"\ncommand = \"sh\"\n[archive]\ncleanup = [\"../x\"]\n");
+    fn check_reports_unknown_events_and_duplicate_states() {
+        let (cfg, _) = parse("[[states]]\nid = \"a\"\n[[states]]\nid = \"a\"\n[[hooks]]\nevent = \"nope.event\"\ncommand = \"sh\"\n");
         let issues = check(&cfg);
         let messages: Vec<String> = issues.iter().map(|i| i.message.clone()).collect();
         assert!(messages.iter().any(|m| m.contains("duplicate state id a")), "{messages:?}");
         assert!(messages.iter().any(|m| m.contains("unknown event")), "{messages:?}");
-        assert!(messages.iter().any(|m| m.contains("plain directory name")), "{messages:?}");
     }
 
     #[test]
