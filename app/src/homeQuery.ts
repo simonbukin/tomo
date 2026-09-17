@@ -10,6 +10,7 @@ export interface QueryContext {
 }
 
 export const NO_STATE = "no state";
+export const NO_TAG = "no tag";
 
 export function orderedStates(states: StateDef[]): StateDef[] {
   return [...states].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
@@ -113,9 +114,17 @@ export function groupKey(w: Worktree, group: HomeOptions["group"], ctx: QueryCon
       return repoName(ctx.repos, w.repo_id);
     case "project":
       return w.metadata.project ?? "no project";
+    case "tag":
+      return w.metadata.tags[0] ? `#${w.metadata.tags[0]}` : NO_TAG;
     case "none":
       return "";
   }
+}
+
+/** A worktree belongs to one group of every lens but tags, where it belongs to each of its tags. */
+export function groupKeys(w: Worktree, group: HomeOptions["group"], ctx: QueryContext): string[] {
+  if (group !== "tag") return [groupKey(w, group, ctx)];
+  return w.metadata.tags.length > 0 ? w.metadata.tags.map((t) => `#${t}`) : [NO_TAG];
 }
 
 export function groupWorktrees(list: Worktree[], group: HomeOptions["group"], ctx: QueryContext): { key: string; items: Worktree[] }[] {
@@ -123,8 +132,7 @@ export function groupWorktrees(list: Worktree[], group: HomeOptions["group"], ct
   const map = new Map<string, Worktree[]>();
   if (group === "state") for (const key of order ?? []) map.set(key, []);
   for (const w of list) {
-    const key = groupKey(w, group, ctx);
-    map.set(key, [...(map.get(key) ?? []), w]);
+    for (const key of groupKeys(w, group, ctx)) map.set(key, [...(map.get(key) ?? []), w]);
   }
   const keys = [...map.keys()].sort((a, b) => {
     if (order) {

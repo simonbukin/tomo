@@ -1,8 +1,9 @@
-import { GitBranch, ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { GitBranch, ListFilter, Plus, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { addonApps, branchMark } from "./addons";
 import { Wordmark } from "./Brand";
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { EventRow, fetchActivity } from "./Activity";
 import { openWorktree, setMetadata } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { homeEmpty } from "./emptyStates";
@@ -10,7 +11,7 @@ import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
-import { greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
+import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
@@ -21,8 +22,17 @@ import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
 
+const SCOPE_EVENTS = 8;
+
 /** A card draws its agents as tinted provider icons, so the signal list leaves them out. */
 const AGENT_SIGNALS = ["agent"] as const;
+
+const LENS_TABS: readonly { group: HomeOptions["group"]; label: string }[] = [
+  { group: "none", label: "All" },
+  { group: "repo", label: "Repositories" },
+  { group: "project", label: "Projects" },
+  { group: "tag", label: "Tags" },
+];
 
 const KIND_LABEL: Record<FilterKind, string> = { state: "state", repo: "repo", project: "project", tag: "tag", agent: "agent", archived: "archived", attention: "attention" };
 
@@ -37,6 +47,7 @@ export function Home() {
   const visible = sortWorktrees(filterWorktrees(inScope, o, ctx), o.sort, ctx);
   const searching = o.query.trim().length > 0 || o.filters.length > 0;
   const overview = o.scope.kind === "all" && !searching;
+  const scopePage = o.scope.kind !== "all" && !searching;
   const apps = addonApps(s);
   const counts = tally(inScope, ctx, apps);
   const scope = o.scope;
@@ -82,7 +93,7 @@ export function Home() {
     }));
   const displayMenu = (): MenuItem[] => [
     { label: "view", submenu: (["list", "board"] as const).map((v) => ({ label: v, checked: o.view === v, run: () => set({ view: v }) })) },
-    { label: "group by", submenu: (["state", "repo", "project", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
+    { label: "group by", submenu: (["state", "repo", "project", "tag", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
     { label: "sort", submenu: (["state", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
     { separator: true },
     { label: "show main worktree", checked: s.ui.showMain, run: () => setUi({ showMain: !s.ui.showMain }) },
@@ -118,15 +129,24 @@ export function Home() {
         <span className="spacer" />
         <span className="faint">{visible.length} of {s.worktrees.length}</span>
       </div>
-      {o.scope.kind !== "all" && (
-        <div className="scope-head">
-          <span className="scope-kind">{scopeKind(o.scope)}</span>
-          <span className="scope-title">{scopeTitle(o.scope, s.repos)}</span>
-          {scopeRepo && <span className="scope-path">{scopeRepo.path}</span>}
-          <span className="spacer" />
-          <span className="faint">{counts.worktrees} worktrees · {counts.agents} agents{counts.attention > 0 ? ` · ${counts.attention} need you` : ""}</span>
-          <button className="link" onClick={() => set({ scope: { kind: "all" } })}>all work</button>
-        </div>
+      <div className="home-lenses">
+        <span className="segmented">
+          {LENS_TABS.map((t) => (
+            <button key={t.group} className={`seg${o.group === t.group ? " seg-active" : ""}`} onClick={() => set({ group: t.group })}>{t.label}</button>
+          ))}
+        </span>
+      </div>
+      {scope.kind !== "all" && (
+        <header className="scope-home">
+          <span className="scope-kind">{scopeKind(scope)}</span>
+          <h1 className="scope-name">{scopeTitle(scope, s.repos)}</h1>
+          {scopeRepo && <div className="scope-path mono">{scopeRepo.path}</div>}
+          <p className="scope-tagline">{statusLine(counts)}</p>
+          <div className="scope-actions">
+            <Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>New worktree</Button>
+            <button className="link" onClick={() => set({ scope: ALL })}>all work</button>
+          </div>
+        </header>
       )}
       {overview && repos.length > 0 && (
         <div className="repo-ledger">
@@ -158,7 +178,18 @@ export function Home() {
       {o.scope.kind === "all" && empty === "no-worktrees" && <EmptyState title="No active worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>} />}
       {o.scope.kind !== "all" && visible.length === 0 && !searching && <EmptyState title="No worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>New worktree</Button>} />}
       {searching && visible.length === 0 && <EmptyState title="No worktrees match." action={<Button variant="link" onClick={() => set({ query: "", filters: [] })}>clear search and filters</Button>} />}
-      {!overview && (o.view === "board" ? (
+      {scopePage && visible.length > 0 && (
+        <>
+          <div className="scope-cards">
+            {visible.map((w) => <Card key={w.id} w={w} />)}
+            <button type="button" className="card-new" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>
+              <Plus className="icon" /> create worktree
+            </button>
+          </div>
+          <ScopeActivity worktreeIds={visible.map((w) => w.id)} />
+        </>
+      )}
+      {!overview && !scopePage && (o.view === "board" ? (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragged(null)}>
           <div className="board">
             {groups.map((g) => (
@@ -185,6 +216,26 @@ export function Home() {
         ))
       ))}
     </div>
+  );
+}
+
+/**
+ * The activity of one scope. It filters outside the selector, because `useStore` caches on
+ * the state alone: a selector that closed over `worktreeIds` would return a stale list.
+ */
+function ScopeActivity({ worktreeIds }: { worktreeIds: readonly string[] }) {
+  const activity = useStore((x) => x.activity);
+  useEffect(() => {
+    fetchActivity(null);
+  }, []);
+  const ids = new Set(worktreeIds);
+  const events = useMemo(() => activity.filter((e) => e.worktree_id && ids.has(e.worktree_id)).slice(0, SCOPE_EVENTS), [activity, worktreeIds]);
+  if (!events.length) return null;
+  return (
+    <section className="scope-activity">
+      <div className="section-label">recent activity</div>
+      {events.map((e) => <EventRow key={e.id} e={e} />)}
+    </section>
   );
 }
 
