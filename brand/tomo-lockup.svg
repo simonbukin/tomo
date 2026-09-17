@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 20" width="70" height="20" role="img" aria-label="tomo">
   <g transform="scale(0.2)">
-    <g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.13 63.57 C11.75 66.23 19.04 75.66 24.88 79.49 C30.71 83.33 37.21 87.51 44.13 86.58 C51.05 85.65 59.05 80.46 66.38 73.9 C73.71 67.34 84.5 51.65 88.13 47.2"/></g>
-    <g fill="currentColor"><circle cx="21.03" cy="17.53" r="7.88"/><circle cx="74.77" cy="18.24" r="9.4"/></g>
+    <g fill="none" stroke="currentColor" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.01 54.69 Q53.41 118.49 84.99 57.34"/></g>
+    <g fill="currentColor"><circle cx="24.87" cy="21.71" r="8.96"/><circle cx="75.13" cy="21.71" r="8.96"/></g>
   </g>
   <g transform="translate(27 2)">
   <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
