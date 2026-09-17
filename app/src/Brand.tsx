@@ -1,22 +1,19 @@
-const MARK = [
-  { x: 0.75, y: 0, w: 1, h: 3.5 },
-  { x: 0, y: 1, w: 2.5, h: 1 },
-  { x: 1.25, y: 3, w: 2, h: 1 },
-];
+import { BOX, face, type Seed } from "./brandFace";
 
-export function Mark({ size = 16, tile = false }: { size?: number; tile?: boolean }) {
-  const u = tile ? size * 0.115 : size / 4;
-  const ox = tile ? (size - 3.5 * u) / 2 : 0;
-  const oy = tile ? (size - 4 * u) / 2 : 0;
-  const r = u * 0.09;
-  const ink = tile ? "#ffffff" : "currentColor";
+export function Mark({ size = 16, seed = "tomo" }: { size?: number; seed?: Seed }) {
+  const f = face(seed, size);
   return (
-    <svg className="brand-mark" width={tile ? size : size * 0.875} height={size} viewBox={`0 0 ${tile ? size : size * 0.875} ${size}`} aria-label="tomo">
-      {tile && <rect width={size} height={size} rx={size * 0.225} fill="#0f0f12" />}
-      {MARK.map((p, i) => (
-        <rect key={i} x={ox + p.x * u} y={oy + p.y * u} width={p.w * u} height={p.h * u} rx={r} fill={ink} />
-      ))}
-      <rect x={ox + 2.5 * u} y={oy} width={u} height={u} rx={r} fill="#7d4dff" />
+    <svg className="brand-mark" width={size} height={size} viewBox={`0 0 ${BOX} ${BOX}`} role="img" aria-label="tomo">
+      <g fill="none" stroke="currentColor" strokeWidth={f.stroke} strokeLinecap="round" strokeLinejoin="round">
+        {f.paths.map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </g>
+      <g fill="currentColor">
+        {f.dots.map((d) => (
+          <circle key={`${d.cx},${d.cy},${d.r}`} cx={d.cx} cy={d.cy} r={d.r} />
+        ))}
+      </g>
     </svg>
   );
 }
