@@ -9,7 +9,9 @@ import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
-import { worktreeMenu } from "./menus";
+import { repoSummaries, scopeKind, scopeTitle, scopeWorktrees, tally } from "./homeScope";
+import { durationLabel } from "./previewModel";
+import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
 import { agentStatus, dotClass } from "./glyphs";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
@@ -25,7 +27,14 @@ export function Home() {
   const set = (patch: Partial<HomeOptions>) => setUi({ home: { ...o, ...patch } });
   const ctx = useMemo(() => queryContext(s), [s.repos, s.agents, s.attention, s.config?.states]);
   const repos = visibleRepos(s);
-  const visible = sortWorktrees(filterWorktrees(s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)), o, ctx), o.sort, ctx);
+  const known = s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id));
+  const inScope = scopeWorktrees(known, o.scope);
+  const visible = sortWorktrees(filterWorktrees(inScope, o, ctx), o.sort, ctx);
+  const searching = o.query.trim().length > 0 || o.filters.length > 0;
+  const overview = o.scope.kind === "all" && !searching;
+  const counts = tally(inScope, ctx);
+  const scope = o.scope;
+  const scopeRepo = scope.kind === "repo" ? repos.find((r) => r.id === scope.repoId) : undefined;
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
   const empty = homeEmpty(s.repos.length, s.worktrees.filter((w) => !w.archived_at_ms).length, visible.length);
@@ -102,15 +111,43 @@ export function Home() {
         <span className="spacer" />
         <span className="faint">{visible.length} of {s.worktrees.length}</span>
       </div>
+      {o.scope.kind !== "all" && (
+        <div className="scope-head">
+          <span className="scope-kind">{scopeKind(o.scope)}</span>
+          <span className="scope-title">{scopeTitle(o.scope, s.repos)}</span>
+          {scopeRepo && <span className="scope-path">{scopeRepo.path}</span>}
+          <span className="spacer" />
+          <span className="faint">{counts.worktrees} worktrees · {counts.agents} agents{counts.attention > 0 ? ` · ${counts.attention} need you` : ""}</span>
+          <button className="link" onClick={() => set({ scope: { kind: "all" } })}>all work</button>
+        </div>
+      )}
+      {overview && repos.length > 0 && (
+        <div className="repo-ledger">
+          <div className="home-summary">{repos.length} repositories · {counts.worktrees} worktrees · {counts.agents} agents{counts.attention > 0 ? ` · ${counts.attention} need you` : ""}</div>
+          <div className="repo-list">
+            <div className="repo-list-head"><span /><span>repository</span><span>worktrees</span><span>agents</span><span>last activity</span></div>
+            {repoSummaries(inScope, repos, ctx).map((r) => (
+              <div key={r.repo.id} className="repo-list-row" title={r.repo.path} onClick={() => set({ scope: { kind: "repo", repoId: r.repo.id } })} onContextMenu={(e) => openMenu(e, repoMenu(r.repo))}>
+                <RepoAvatar repo={r.repo} />
+                <span className="name">{r.repo.name}{!r.repo.exists && <span className="faint"> · missing</span>}</span>
+                <span className="num">{r.worktrees}</span>
+                <span className="num">{r.agents}{r.attention > 0 && <span className={dotClass("needs")} />}</span>
+                <span className="muted">{r.lastActiveMs === null ? "—" : `${durationLabel(r.lastActiveMs)} ago`}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {empty === "no-repos" && (
         <div className="home-empty rise">
           <Wordmark height={28} />
           <EmptyState title="No repositories yet." detail="Add a Git repository. Tomo finds its worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "add-repo" } })}>Add repository</Button>} />
         </div>
       )}
-      {empty === "no-worktrees" && <EmptyState title="No active worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>} />}
-      {empty === "no-matches" && <EmptyState title="No worktrees match." action={<Button variant="link" onClick={() => set({ query: "", filters: [] })}>clear search and filters</Button>} />}
-      {o.view === "board" ? (
+      {o.scope.kind === "all" && empty === "no-worktrees" && <EmptyState title="No active worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>} />}
+      {o.scope.kind !== "all" && visible.length === 0 && !searching && <EmptyState title="No worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>New worktree</Button>} />}
+      {searching && visible.length === 0 && <EmptyState title="No worktrees match." action={<Button variant="link" onClick={() => set({ query: "", filters: [] })}>clear search and filters</Button>} />}
+      {!overview && (o.view === "board" ? (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragged(null)}>
           <div className="board">
             {groups.map((g) => (
@@ -135,7 +172,7 @@ export function Home() {
             <div className="wt-list">{g.items.map((w) => <Row key={w.id} w={w} />)}</div>
           </section>
         ))
-      )}
+      ))}
     </div>
   );
 }
