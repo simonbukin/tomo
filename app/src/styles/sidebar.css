@@ -6,11 +6,22 @@
 .sidebar { grid-area: left; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--line); overflow: hidden; }
 .sidebar-top { display: flex; align-items: center; gap: 2px; height: var(--bar-h); padding: 0 var(--sp-1) 0 var(--sp-3); border-bottom: 1px solid var(--line); }
 .sidebar-top .brand-mark { margin-right: var(--sp-1); }
-.side-btn { background: none; color: var(--fg-2); padding: 2px 8px; font-size: var(--fs-1); }
-.side-btn-active { background: var(--accent-soft); color: var(--accent); }
 .sidebar-scroll { overflow-y: auto; flex: 1; padding: var(--sp-1) 0 var(--sp-5); }
 .sidebar-empty { padding: var(--sp-4); color: var(--fg-2); line-height: 1.6; font-size: var(--fs-1); }
 .selection-bar { display: flex; align-items: center; gap: var(--sp-2); height: 26px; padding: 0 var(--sp-3); margin: 0 0 var(--sp-1); font-size: var(--fs-1); color: var(--accent); background: var(--accent-soft); }
+
+/* ---- destinations: one row per place, above the worktree tree */
+.side-nav { display: flex; flex-direction: column; flex: none; padding: var(--sp-1); }
+.side-foot { display: flex; flex-direction: column; flex: none; padding: var(--sp-1); border-top: 1px solid var(--line); }
+.side-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); height: 26px; padding: 0 var(--sp-2); border-radius: var(--radius); background: none; color: var(--fg-1); font-size: var(--fs-1); text-align: left; }
+.side-row:hover { background: var(--bg-1); color: var(--fg); }
+.side-row[aria-current] { background: var(--accent-soft); color: var(--accent); }
+.side-row .icon { width: 14px; height: 14px; }
+.side-row-count { font-variant-numeric: tabular-nums; font-size: var(--fs-0); color: var(--fg-3); }
+.side-row[aria-current] .side-row-count { color: var(--accent); }
+.side-row-key { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); }
+.side-section { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-1); font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); }
+.side-section .btn-icon { margin-left: auto; }
 
 .repo-group { padding: var(--sp-1) 0; }
 .repo-head { padding: 0 var(--sp-1) 0 var(--sp-2); cursor: default; }
@@ -33,7 +44,6 @@
 .wt-row[aria-roledescription="sortable"]:focus-visible, .repo-head[aria-roledescription="sortable"]:focus-visible { outline-offset: -2px; }
 
 /* ---- minimal rails: left navigation and right inspector */
-.side-activity { position: relative; }
 .rail { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: var(--sp-1) 0; background: var(--bg); overflow: hidden; }
 .rail-left { grid-area: left; border-right: 1px solid var(--line); }
 .rail-right { grid-area: right; border-left: 1px solid var(--line); }
