@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ALL, repoSummaries, sameScope, scopeTitle, scopeWorktrees, tally } from "./homeScope";
+import { ALL, greeting, repoSummaries, sameScope, scopeTitle, scopeWorktrees, statusLine, tally, type Tally } from "./homeScope";
+import type { AppRow } from "./appsModel";
 import type { QueryContext } from "./homeQuery";
 import type { AgentPresence, AgentState, HomeScope, Repo, Worktree } from "./types";
 
@@ -29,6 +30,8 @@ const agent = (worktree_id: string, state: AgentState) =>
   ({ pane_id: `p-${worktree_id}-${state}`, worktree_id, kind: "claude", state, session_ref: null, updated_at_ms: 0, pid: null }) as unknown as AgentPresence;
 
 const ctx = (over: Partial<QueryContext> = {}): QueryContext => ({ repos: [], agents: [], attention: [], states: [], ...over });
+
+const app = (worktreeId: string): AppRow => ({ id: `${worktreeId}-app`, worktreeId, paneId: null, label: "web", url: null, port: null, detail: null, source: null });
 
 describe("scopeWorktrees", () => {
   const list = [
@@ -78,7 +81,17 @@ describe("tally", () => {
   it("counts live worktrees, agents, and attention, and takes the newest activity", () => {
     const list = [wt({ id: "a", last_active_ms: 100 }), wt({ id: "b", last_active_ms: 900 }), wt({ id: "old", archived_at_ms: 1, last_active_ms: 5000 })];
     const t = tally(list, ctx({ agents: [agent("a", "working"), agent("b", "waiting")] }));
-    expect(t).toEqual({ worktrees: 2, agents: 2, attention: 1, lastActiveMs: 900 });
+    expect(t).toEqual({ worktrees: 2, agents: 2, apps: 0, attention: 1, lastActiveMs: 900 });
+  });
+
+  it("counts the apps of the worktrees it covers, and no others", () => {
+    const list = [wt({ id: "a" }), wt({ id: "gone", archived_at_ms: 1 })];
+    const apps = [app("a"), app("a"), app("elsewhere"), app("gone")];
+    expect(tally(list, ctx(), apps).apps).toBe(2);
+  });
+
+  it("counts no apps when the caller passes none", () => {
+    expect(tally([wt({ id: "a" })], ctx()).apps).toBe(0);
   });
 
   it("ignores an exited agent", () => {
@@ -90,7 +103,7 @@ describe("tally", () => {
   });
 
   it("counts nothing for an empty list", () => {
-    expect(tally([], ctx())).toEqual({ worktrees: 0, agents: 0, attention: 0, lastActiveMs: null });
+    expect(tally([], ctx())).toEqual({ worktrees: 0, agents: 0, apps: 0, attention: 0, lastActiveMs: null });
   });
 });
 
@@ -111,6 +124,39 @@ describe("repoSummaries", () => {
     const summaries = repoSummaries(list, repos, ctx({ agents: [agent("a", "working")] }));
     expect(summaries.find((r) => r.repo.name === "tomo")).toMatchObject({ worktrees: 1, agents: 1 });
     expect(summaries.find((r) => r.repo.name === "labor")).toMatchObject({ worktrees: 1, agents: 0 });
+  });
+});
+
+describe("greeting", () => {
+  it("changes with the hour", () => {
+    expect(greeting(2)).toBe("Still up.");
+    expect(greeting(9)).toBe("Good morning.");
+    expect(greeting(14)).toBe("Good afternoon.");
+    expect(greeting(21)).toBe("Good evening.");
+  });
+
+  it("covers every hour of the day", () => {
+    for (let h = 0; h < 24; h++) expect(greeting(h)).toMatch(/\.$/);
+  });
+});
+
+describe("statusLine", () => {
+  const t = (over: Partial<Tally> = {}): Tally => ({ worktrees: 0, agents: 0, apps: 0, attention: 0, lastActiveMs: null, ...over });
+
+  it("says nothing is active when nothing is", () => {
+    expect(statusLine(t())).toBe("Nothing active.");
+  });
+
+  it("counts the active worktrees", () => {
+    expect(statusLine(t({ worktrees: 4 }))).toBe("4 worktrees active.");
+  });
+
+  it("adds the attention count", () => {
+    expect(statusLine(t({ worktrees: 4, attention: 2 }))).toBe("4 worktrees active. 2 need your attention.");
+  });
+
+  it("keeps the singular right", () => {
+    expect(statusLine(t({ worktrees: 1, attention: 1 }))).toBe("1 worktree active. 1 needs your attention.");
   });
 });
 

@@ -21,11 +21,13 @@
 .scope-kind { font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); }
 .scope-title { font-size: var(--fs-3); font-weight: 600; color: var(--fg); }
 .scope-path { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-summary { color: var(--fg-2); font-size: var(--fs-1); margin-bottom: var(--sp-3); }
+.home-greet { margin-bottom: var(--sp-4); }
+.home-hello { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
+.home-status { margin: 2px 0 0; color: var(--fg-2); font-size: var(--fs-2); }
 .repo-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-.repo-list-head, .repo-list-row { display: grid; grid-template-columns: 16px minmax(120px, 2fr) 90px 90px minmax(90px, 1fr); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); }
+.repo-list-head, .repo-list-row { display: grid; grid-template-columns: 16px minmax(120px, 2fr) 90px 90px 90px minmax(90px, 1fr); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); }
 .repo-list-head { height: 22px; font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); border-bottom: 1px solid var(--line); }
-.repo-list-head > :nth-child(3), .repo-list-head > :nth-child(4) { text-align: right; }
+.repo-list-head > :nth-child(3), .repo-list-head > :nth-child(4), .repo-list-head > :nth-child(5) { text-align: right; }
 .repo-list-row { height: 30px; border-bottom: 1px solid var(--line); font-size: var(--fs-1); color: var(--fg-1); cursor: pointer; transition: background-color var(--dur-fast) ease-out; }
 .repo-list-row:hover { background: var(--bg-1); }
 .repo-list-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
