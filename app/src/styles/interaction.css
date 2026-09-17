@@ -2,22 +2,21 @@
    Durations come from the motion block in tokens.css. The reduced-motion guard in base.css and tokens.css applies. */
 
 /* ---- hover, press, open, close */
-button, .btn { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out), transform var(--dur-press) var(--ease-out), opacity var(--dur-hover) var(--ease-out); }
+button, .btn { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur-hover) var(--ease-out); }
 button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disabled):not(.btn-link):active { transform: scale(var(--press-scale)); }
 .wt-row, .wt-list-row, .card, .town-row, .activity-row, .file-row, .session-row { transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
 .wt-row:active, .wt-list-row:active, .town-row:active, .file-row:active { background: var(--bg-2); }
 .tab { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), box-shadow var(--dur-open) var(--ease-out); }
 .tab:active { background: var(--bg-1); }
 .seg { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
-.menu-item, .select-item { transition: background-color var(--dur-press) var(--ease-out), color var(--dur-press) var(--ease-out); }
+.menu-item, .select-item { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .menu-popup, .popover, .select-popup, .dialog, .dialog-backdrop { transition-timing-function: var(--ease-out); transition-duration: var(--dur-open); }
-.menu-popup[data-ending-style], .popover[data-ending-style], .select-popup[data-ending-style], .dialog[data-ending-style], .dialog-backdrop[data-ending-style], .tip[data-ending-style] { transition-duration: var(--dur-close); transition-timing-function: var(--ease-in); }
+.menu-popup[data-ending-style], .popover[data-ending-style], .select-popup[data-ending-style], .dialog[data-ending-style], .dialog-backdrop[data-ending-style], .tip[data-ending-style] { transition-duration: var(--dur-hover); transition-timing-function: var(--ease-in); }
 .board-col { transition: outline-color var(--dur-hover) var(--ease-out), background-color var(--dur-hover) var(--ease-out); }
 .board-col-over { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .signal-attention { animation: rise var(--dur-open) var(--ease-out) both; }
 
-/* ---- focus: a subtle Murasaki ring on every control; a clear border on the focused pane */
-:focus-visible { outline: var(--focus-ring-width) solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
+/* ---- focus: the ring itself is in base.css; here is what each surface does with it */
 .wt-row:focus-visible, .wt-list-row:focus-visible, .town-row:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
 .pane { border-color: var(--line); transition: border-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out); }
 .pane-active { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -52,7 +51,7 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .empty-title { color: var(--fg-1); font-size: var(--fs-3); }
 .empty-detail { font-size: var(--fs-1); color: var(--fg-2); max-width: 360px; }
 .empty-state.compact { align-items: flex-start; text-align: left; padding: var(--sp-3) 0; }
-.inline-error { margin: 0; padding: var(--sp-1) var(--sp-2); border-left: 2px solid var(--hot); background: var(--hot-soft); color: var(--hot); font-size: var(--fs-1); user-select: text; word-break: break-word; }
-.row-error { background: none; border: none; padding: 0 4px; font-size: var(--fs-0); color: var(--hot); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.row-error:hover { background: var(--hot-soft); }
+.inline-error { margin: 0; padding: var(--sp-1) var(--sp-2); border-left: 2px solid var(--danger); background: var(--danger-soft); color: var(--danger); font-size: var(--fs-1); user-select: text; word-break: break-word; }
+.row-error { background: none; border: none; padding: 0 4px; font-size: var(--fs-0); color: var(--danger); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.row-error:hover { background: var(--danger-soft); }
 
