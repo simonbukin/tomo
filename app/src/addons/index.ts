@@ -1,4 +1,5 @@
 import type { AddonSignal } from "../activityModel";
+import { mergeApps, type AppRow } from "../appsModel";
 import type { State } from "../store";
 import type { Id } from "../types";
 import type { ComponentType } from "react";
@@ -26,6 +27,9 @@ export const addonSignals = (s: State, worktreeId: Id): AddonSignal[] => builtin
 export const signalLine = (className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Line ?? null;
 
 export const appUrl = (s: State, worktreeId: Id): string | null => builtins.reduce<string | null>((url, a) => url ?? a.appUrl?.(s, worktreeId) ?? null, null);
+
+/** Every running app that an addon knows about. Core shows them; it discovers none of them. */
+export const addonApps = (s: State): AppRow[] => mergeApps(builtins.map((a) => a.apps?.(s) ?? []));
 
 /** The addon that starts panes of this source kind. */
 export const sourceOwner = (kind: string) => builtins.find((a) => a.paneSource?.kind === kind)?.paneSource ?? null;

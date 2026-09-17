@@ -1,5 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { addonViews, builtins } from "./addons";
 import { onConnection, onFrame, rpc, startEventPump } from "./api";
 import { applyZoom, runAction } from "./actions";
@@ -8,6 +8,7 @@ import { applyTheme, useResolvedTheme } from "./theme";
 import { TooltipProvider } from "./components/ui";
 import { Activity } from "./Activity";
 import { Agents } from "./Agents";
+import { Apps } from "./Apps";
 import { Dialogs } from "./Dialogs";
 import { Home } from "./Home";
 import { findAction } from "./keys";
@@ -38,6 +39,9 @@ import { useWindowChrome, useWindowWidth } from "./windowChrome";
 
 const tortureRoute = import.meta.env.DEV && window.location.hash === "#ui-torture";
 const UiTorture = tortureRoute ? lazy(() => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture }))) : () => null;
+
+/** The core views that fill the centre instead of Home. Home renders when no entry and no addon claims the view. */
+const CORE_CENTER: Record<string, ComponentType> = { activity: Activity, agents: Agents, apps: Apps };
 
 export function App() {
   return (
@@ -126,6 +130,7 @@ function Shell() {
 
   const showWorktree = ui.view === "worktree" && worktree;
   const addonView = addonViews().find((v) => v.id === ui.view);
+  const CoreCenter = CORE_CENTER[ui.view];
   const layout = shellLayout(ui, windowWidth, !!showWorktree);
   return (
     <div className="app" style={{ ["--left-col" as string]: `${layout.leftCol}px`, ["--right-col" as string]: `${layout.rightCol}px` }}>
@@ -139,9 +144,8 @@ function Shell() {
             <addonView.component />
           </Suspense>
         )}
-        {loaded && !showWorktree && ui.view === "activity" && <Activity />}
-        {loaded && !showWorktree && ui.view === "agents" && <Agents />}
-        {loaded && !showWorktree && !addonView && ui.view !== "activity" && ui.view !== "agents" && <Home />}
+        {loaded && !showWorktree && CoreCenter && <CoreCenter />}
+        {loaded && !showWorktree && !addonView && !CoreCenter && <Home />}
         {loaded && showWorktree && (
           <LayoutDnd>
             <CheckpointBanner worktree={worktree} />

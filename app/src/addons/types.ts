@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { Action } from "../actions";
 import type { AddonSignal } from "../activityModel";
+import type { AppRow } from "../appsModel";
 import type { MenuItem } from "../components/ui";
 import type { Status } from "../glyphs";
 import type { PaletteEntry } from "../paletteModel";
@@ -117,6 +118,8 @@ export interface Addon {
   sourceMenu?: (worktreeId: Id, source: SourceKey, s: State) => SourceMenu;
   /** The "Open App" URL of a worktree for an item that has none. The first addon that returns a URL wins. */
   appUrl?: (s: State, worktreeId: Id) => string | null;
+  /** Rows for the Apps view. Core owns the view but finds no running app by itself, so an addon that watches for one fills these in. */
+  apps?: (s: State) => readonly AppRow[];
   /** Palette entries for one worktree: `context` is true in the root list for the worktree on screen, and false in its sub-list. */
   paletteEntries?: (s: State, w: Worktree, context: boolean) => PaletteEntry[];
   /** Commands with a key binding in this state. Read on each key press and by the shortcut reference. */
