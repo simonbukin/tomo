@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 43 16" width="43" height="16" role="img" aria-label="tomo">
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 3V11A2 2 0 0 0 5.5 13"/>
+    <path d="M1 6H6"/>
+    <circle cx="13.5" cy="9.5" r="3.5"/>
+    <path d="M21 13V8.5A2.5 2.5 0 0 1 26 8.5V13"/>
+    <path d="M26 8.5A2.5 2.5 0 0 1 31 8.5V13"/>
+    <circle cx="38.5" cy="9.5" r="3.5"/>
+  </g>
+</svg>
