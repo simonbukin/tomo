@@ -56,6 +56,23 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .state-unavailable { border-color: var(--fg-3); }
 .state-fail, .state-error, .pr-closed, .check-failed { background: var(--danger); border-color: var(--danger); }
 .pr-merged { background: var(--accent); border-color: var(--accent); }
+
+/* An icon tinted by status. Two classes, so a tint beats the plain color of the icon. */
+.icon.tint-working { color: var(--working); }
+.icon.tint-needs { color: var(--waiting); }
+.icon.tint-idle { color: var(--fg-2); }
+.icon.tint-ok { color: var(--working); }
+.icon.tint-fail { color: var(--danger); }
+.icon.tint-unknown { color: var(--fg-3); }
+.icon.tint-none { color: var(--fg-3); }
+
+/* How a branch stands with its upstream. `plain` is a branch that nothing tracks. */
+.icon.branch-plain { color: var(--fg-3); }
+.icon.branch-open { color: var(--working); }
+.icon.branch-pending { color: var(--waiting); }
+.icon.branch-failed { color: var(--danger); }
+.icon.branch-closed { color: var(--danger); }
+.icon.branch-merged { color: var(--accent); }
 .check-none { border-color: var(--line-strong); }
 
 /* ---- motion: the shared keyframes and the reduced-motion guard */

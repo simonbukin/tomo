@@ -4,7 +4,7 @@ import type { Action } from "../actions";
 import type { AddonSignal } from "../activityModel";
 import type { AppRow } from "../appsModel";
 import type { MenuItem } from "../components/ui";
-import type { Status } from "../glyphs";
+import type { BranchTone, Status } from "../glyphs";
 import type { PaletteEntry } from "../paletteModel";
 import type { RailMarker } from "../sections";
 import type { State } from "../store";
@@ -124,6 +124,8 @@ export interface Addon {
   gitDetail?: ComponentType<{ worktree: Worktree }>;
   /** The git rail marker for exceptional branch state, such as a failed check. It reads the store and starts no work. */
   gitMarker?: (s: State, w: Worktree) => RailMarker | null;
+  /** How the branch of a worktree card stands with its upstream. It reads the store and starts no work. */
+  branchMark?: (s: State, w: Worktree) => { tone: BranchTone; text: string } | null;
   /** Palette entries for one worktree: `context` is true in the root list for the worktree on screen, and false in its sub-list. */
   paletteEntries?: (s: State, w: Worktree, context: boolean) => PaletteEntry[];
   /** Commands with a key binding in this state. Read on each key press and by the shortcut reference. */

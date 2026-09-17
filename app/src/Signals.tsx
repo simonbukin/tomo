@@ -56,8 +56,9 @@ function SignalLine({ worktreeId, signal }: { worktreeId: Id; signal: Signal }) 
 }
 
 /** At most three selective signals for a NOW card or sidebar row. Renders nothing for a quiet worktree. */
-export function Signals({ worktreeId, className }: { worktreeId: Id; className?: string }) {
-  const signals = useStore((s) => signalsFor(s, worktreeId));
+export function Signals({ worktreeId, className, omit }: { worktreeId: Id; className?: string; omit?: readonly Signal["kind"][] }) {
+  const all = useStore((s) => signalsFor(s, worktreeId));
+  const signals = omit ? all.filter((sig) => !omit.includes(sig.kind)) : all;
   if (!signals.length) return null;
   return (
     <span className={className ?? "signals"}>

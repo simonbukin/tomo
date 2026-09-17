@@ -3,7 +3,7 @@ import { rpc } from "../../api";
 import type { UsageSnapshot } from "../../generated";
 import { HoverPopover } from "../../shell/HoverPopover";
 import { KIND_LABEL } from "../../types";
-import { bucketTone, headlineBucket, microBar, percentText, usageIssues, usageRows, usageTone } from "./model";
+import { bucketTone, headlineBucket, microBar, percentText, resetShort, usageIssues, usageRows, usageTone } from "./model";
 import { setUsage, useUsage } from "./state";
 
 function refreshUsage(): void {
@@ -36,6 +36,8 @@ export function UsageMeters() {
 
 function UsageMeter({ name, snapshot: u }: { name: string; snapshot: UsageSnapshot }) {
   const head = headlineBucket(u);
+  const reset = head ? resetShort(head.resets_at_ms) : null;
+  const label = `${name} usage ${head ? percentText(head.fraction_used) : "unavailable"}${reset ? `, resets in ${reset}` : ""}`;
   return (
     <HoverPopover
       title={name}
@@ -49,12 +51,13 @@ function UsageMeter({ name, snapshot: u }: { name: string; snapshot: UsageSnapsh
         </>
       }
       trigger={
-        <button type="button" className={`bottom-item usage-meter tone-${usageTone(u)}`} aria-label={`${name} usage ${head ? percentText(head.fraction_used) : "unavailable"}`}>
+        <button type="button" className={`bottom-item usage-meter tone-${usageTone(u)}`} aria-label={label}>
           <span className="usage-name">{name}</span>
           {head ? (
             <>
               <MicroBar fraction={head.fraction_used} />
               <span className="num">{percentText(head.fraction_used)}</span>
+              {reset && <span className="usage-reset num">{reset}</span>}
             </>
           ) : (
             <span className="faint">—</span>

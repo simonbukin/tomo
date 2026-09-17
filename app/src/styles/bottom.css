@@ -29,6 +29,7 @@
 .bottom-item .num, .bottom-pop .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 .usage-name { color: var(--fg-1); }
+.usage-reset { color: var(--fg-3); }
 .micro-bar { font-family: var(--mono); letter-spacing: -1px; white-space: pre; }
 .micro-bar .on { color: var(--fg-2); }
 .micro-bar .off { color: var(--line-strong); }

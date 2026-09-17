@@ -32,6 +32,8 @@ export const appUrl = (s: State, worktreeId: Id): string | null => builtins.redu
 export const gitDetails = (): { id: string; component: ComponentType<{ worktree: Worktree }> }[] =>
   builtins.flatMap((a) => (a.gitDetail ? [{ id: a.id, component: a.gitDetail }] : []));
 
+export const branchMark = (s: State, w: Worktree) => builtins.reduce<ReturnType<NonNullable<Addon["branchMark"]>>>((found, a) => found ?? a.branchMark?.(s, w) ?? null, null);
+
 export const gitMarkers = (s: State, w: Worktree): RailMarker | null => builtins.reduce<RailMarker | null>((found, a) => found ?? a.gitMarker?.(s, w) ?? null, null);
 
 /** Every running app that an addon knows about. Core shows them; it discovers none of them. */

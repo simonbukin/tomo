@@ -1,5 +1,5 @@
-import { ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
-import { addonApps } from "./addons";
+import { GitBranch, ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { addonApps, branchMark } from "./addons";
 import { Wordmark } from "./Brand";
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useMemo, useState, type ReactNode } from "react";
@@ -14,11 +14,15 @@ import { greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusL
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass } from "./glyphs";
+import { agentStatus, dotClass, tintClass } from "./glyphs";
+import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
+
+/** A card draws its agents as tinted provider icons, so the signal list leaves them out. */
+const AGENT_SIGNALS = ["agent"] as const;
 
 const KIND_LABEL: Record<FilterKind, string> = { state: "state", repo: "repo", project: "project", tag: "tag", agent: "agent", archived: "archived", attention: "attention" };
 
@@ -233,10 +237,12 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
   const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
+  const mark = useStore((s) => branchMark(s, w));
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const sub = [w.metadata.project ?? repo, busy ? "archiving..." : archived ? "archived" : state].filter(Boolean).join(" · ");
+  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   const summary = summarizeState(agents, attention);
   const drag = useDraggable({ id: w.id, disabled: !draggable || archived || busy });
   return (
@@ -253,8 +259,21 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
         <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
         <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       </div>
-      <div className="card-sub">{sub}{g?.dirty ? " *" : ""}{!w.exists && !archived && " · missing"}</div>
-      {!archived && <Signals worktreeId={w.id} className="card-signals" />}
+      {branch && (
+        <div className="card-branch" title={mark ? `${branch} — ${mark.text}` : branch}>
+          <GitBranch className={`icon branch-${mark?.tone ?? "plain"}`} aria-label={mark?.text ?? "branch"} />
+          <span className="card-branch-name">{branch}</span>
+          {g?.dirty && <span className="card-dirty" aria-label="uncommitted changes">*</span>}
+        </div>
+      )}
+      <div className="card-sub">{sub}{!w.exists && !archived && " · missing"}</div>
+      {!archived && agents.length > 0 && (
+        <div className="card-agents">
+          {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentStatus(a.state))} />)}
+        </div>
+      )}
+      {w.metadata.tags.length > 0 && <div className="card-tags">{w.metadata.tags.map((t) => <span key={t} className="tag-chip">#{t}</span>)}</div>}
+      {!archived && <Signals worktreeId={w.id} className="card-signals" omit={AGENT_SIGNALS} />}
       <RowError worktreeId={w.id} />
       {g && (g.insertions > 0 || g.deletions > 0) && (
         <div className="card-foot">

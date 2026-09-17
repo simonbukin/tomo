@@ -1,4 +1,4 @@
-import { sparkCells } from "../../activityModel";
+import { resetsIn, sparkCells } from "../../activityModel";
 import type { UsageBucket, UsageSnapshot } from "../../generated";
 import { toneOf, worstTone, type Tone } from "../../shell/bottomModel";
 import { KIND_LABEL } from "../../types";
@@ -45,5 +45,8 @@ export function microBar(fraction: number | null, width = 8): { on: string; off:
   const { filled, empty } = sparkCells(fraction, width);
   return { on: "━".repeat(filled), off: "─".repeat(empty) };
 }
+
+/** The strip form of a reset: `2h`, not `resets in 2h`. Null when the bucket has no reset. */
+export const resetShort = (resetsAtMs: number | null): string | null => resetsIn(resetsAtMs)?.replace("resets in ", "") ?? null;
 
 export const usageIssues = (usage: UsageSnapshot[]): UsageSnapshot[] => stripUsage(usage).filter((u) => !u.available);

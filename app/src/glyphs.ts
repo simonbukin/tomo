@@ -13,3 +13,11 @@ export const agentStatus = (state: AgentState | "none"): Status | null => AGENT[
 
 /** Classes for the round status dot that stands for the glyph in dense rows. */
 export const dotClass = (status: Status | null): string => `state ${status ? DOT[status] : "state-none"}`;
+
+/** How a branch stands with its upstream. An addon that watches the branch picks one. */
+export type BranchTone = "open" | "closed" | "merged" | "pending" | "failed";
+
+const TINT: Record<Status, string> = { working: "tint-working", needs: "tint-needs", idle: "tint-idle", complete: "tint-ok", failed: "tint-fail", unknown: "tint-unknown" };
+
+/** Colors an icon by status, the way `dotClass` colors a dot. */
+export const tintClass = (status: Status | null): string => (status ? TINT[status] : "tint-none");

@@ -1,5 +1,5 @@
 import type { AddonSignal } from "../../activityModel";
-import { GLYPH } from "../../glyphs";
+import { GLYPH, type BranchTone } from "../../glyphs";
 import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
 import type { Id, Worktree } from "../../types";
@@ -18,6 +18,16 @@ export function githubOwner(remoteUrl: string | null): string | null {
 export function prMarker(s: State, w: Worktree): RailMarker | null {
   const pr = prOf(s, w.id);
   return pr && pr.checks_failed > 0 ? { glyph: GLYPH.failed, tone: "failed", text: "checks failed" } : pr?.state === "merged" ? { glyph: GLYPH.complete, tone: "complete", text: "merged" } : null;
+}
+
+export function prBranchMark(s: State, w: Worktree): { tone: BranchTone; text: string } | null {
+  const pr = prOf(s, w.id);
+  if (!pr) return null;
+  if (pr.state === "merged") return { tone: "merged", text: `#${pr.number} merged` };
+  if (pr.state === "closed") return { tone: "closed", text: `#${pr.number} closed` };
+  if (pr.checks_failed > 0) return { tone: "failed", text: `#${pr.number}, ${pr.checks_failed} checks failed` };
+  if (pr.checks_pending > 0) return { tone: "pending", text: `#${pr.number}, ${pr.checks_pending} checks running` };
+  return { tone: "open", text: `#${pr.number} open` };
 }
 
 export function prSignals(s: State, worktreeId: Id): AddonSignal[] {
