@@ -17,6 +17,7 @@ import { TabLayout } from "./Layout";
 import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
 import { RightSidebar } from "./RightSidebar";
+import { Settings } from "./Settings";
 import { useAppMenu } from "./appMenu";
 import { ShortcutReference } from "./ShortcutReference";
 import { opensShortcutHelp } from "./shortcuts";
@@ -41,7 +42,7 @@ const tortureRoute = import.meta.env.DEV && window.location.hash === "#ui-tortur
 const UiTorture = tortureRoute ? lazy(() => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture }))) : () => null;
 
 /** The core views that fill the centre instead of Home. Home renders when no entry and no addon claims the view. */
-const CORE_CENTER: Record<string, ComponentType> = { activity: Activity, agents: Agents, apps: Apps };
+const CORE_CENTER: Record<string, ComponentType> = { activity: Activity, agents: Agents, apps: Apps, settings: Settings };
 
 export function App() {
   return (

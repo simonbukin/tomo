@@ -1,12 +1,11 @@
 import type { Action } from "../actions";
 import { rpc } from "../api";
-import type { SettingsSection } from "../settingsModel";
-import { failToast, setState, showStatus } from "../store";
+import { failToast, setState, setUi, showStatus } from "../store";
 import { BASE_THEMES, THEME_LABELS, type ThemeName } from "../theme";
 import type { Config } from "../types";
 
-export function openSettings(section?: SettingsSection): void {
-  setState({ dialog: { kind: "settings", section } });
+export function openSettings(): void {
+  setUi({ view: "settings" });
 }
 
 /** Writes one dotted key to config.toml through the daemon. `null` removes the key so the default applies. */

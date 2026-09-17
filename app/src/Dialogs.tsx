@@ -4,7 +4,7 @@ import { worktreeNameField } from "./addons";
 import { rpc } from "./api";
 import { openWorktree } from "./actions";
 import { Button, Combobox, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, SkeletonRows } from "./components/ui";
-import { IntegrationStatusList, Settings } from "./Settings";
+import { IntegrationStatusList } from "./Settings";
 import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
@@ -24,14 +24,13 @@ export function Dialogs() {
   }
   return (
     <Dialog open={!!dialog} onOpenChange={onOpenChange}>
-      <DialogContent width={shown.kind === "settings" ? 720 : undefined} className={shown.kind === "settings" ? "settings-dialog" : undefined}>
+      <DialogContent>
         {shown.kind === "add-repo" && <AddRepo close={close} />}
         {shown.kind === "create-worktree" && <CreateWorktree close={close} repoId={shown.repoId} />}
         {shown.kind === "prompt" && <Prompt close={close} title={shown.title} initial={shown.initial} placeholder={shown.placeholder} onSubmit={shown.onSubmit} />}
         {shown.kind === "integrations" && <IntegrationsDialog close={close} />}
         {shown.kind === "config-check" && <ConfigCheckDialog close={close} />}
         {shown.kind === "hook-log" && <HookLogDialog close={close} />}
-        {shown.kind === "settings" && <Settings close={close} section={shown.section} />}
         {shown.kind === "diagnostics" && <DiagnosticsDialog close={close} />}
       </DialogContent>
     </Dialog>

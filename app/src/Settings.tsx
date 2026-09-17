@@ -3,7 +3,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { allActions, applyZoom } from "./actions";
 import { rpc } from "./api";
 import { openConfigFile, setConfig } from "./commands/settings";
-import { Button, DialogActions, DialogTitle, IconButton, Select } from "./components/ui";
+import { Button, IconButton, Select } from "./components/ui";
 import { describeBinding } from "./keys";
 import { bindingFromEvent, SETTINGS_SECTIONS, splitList, type SettingsSection } from "./settingsModel";
 import { failToast, setState, showStatus, toast, useStore } from "./store";
@@ -11,12 +11,11 @@ import { ACCENT_PRESETS, BASE_THEMES, THEME_LABELS, TOKENS, useResolvedTheme, ty
 import type { Config, ConfigIssue, IntegrationStatus, Status } from "./types";
 
 /** Settings reads and writes config.toml through the daemon; only zoom stays in UI state. */
-export function Settings({ close, section }: { close: () => void; section?: SettingsSection }) {
-  const [active, setActive] = useState<SettingsSection>(section ?? "appearance");
+export function Settings() {
+  const [active, setActive] = useState<SettingsSection>("appearance");
   const config = useStore((s) => s.config);
   return (
-    <>
-      <DialogTitle>settings</DialogTitle>
+    <div className="settings-page">
       <ConfigFile config={config} />
       <div className="settings">
         <nav className="settings-nav" aria-label="Settings sections">
@@ -36,10 +35,7 @@ export function Settings({ close, section }: { close: () => void; section?: Sett
           {config && active === "integrations" && <IntegrationsSection config={config} />}
         </div>
       </div>
-      <DialogActions>
-        <Button onClick={close}>Done</Button>
-      </DialogActions>
-    </>
+    </div>
   );
 }
 
