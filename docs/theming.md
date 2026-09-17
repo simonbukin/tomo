@@ -94,13 +94,13 @@ preset, and the overrides. `applyTheme` sets the variables and
 `data-theme="light|dark"`. The xterm theme comes from the same resolved
 palette.
 
-A component module (`<Component>.module.css`) reads these tokens and writes
-no color, no typeface, and no duration of its own. A theme change therefore
-reaches the component, and `[theme]` stays the one theming surface. See
-[ui.md](ui.md).
+Feature CSS reads these tokens and writes no color, no typeface, and no
+duration of its own. A theme change therefore reaches every surface, and
+`[theme]` stays the one theming surface. `app/src/WorktreeRow.css` is the
+example that a unit test enforces. See [ui.md](ui.md).
 
 `app/src/styles/tokens.css` holds the Murasaki values for the first paint
-and derives the older short names (`--bg-1`, `--fg-2`, `--line`, `--hot`,
+and derives the short names (`--bg-1`, `--fg-2`, `--line`, `--line-strong`,
 and so on) from the tokens. A custom stylesheet later only has to set the
 tokens on `:root`. A unit test makes sure that the first-paint values in
 `tokens.css` agree with the Murasaki palettes in `theme.ts`.
