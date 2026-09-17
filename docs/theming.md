@@ -44,7 +44,7 @@ danger = "#f26b63"
 success = "#4cc57e"
 
 [terminal]
-font_family = "Geist Mono Variable, Menlo, monospace"
+font_family = "CommitMono, Menlo, monospace"
 font_size = 13           # 6 to 72
 ```
 

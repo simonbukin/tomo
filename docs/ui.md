@@ -266,9 +266,10 @@ as a submenu opens.
 
 `app/src/styles/tokens.css` holds every token, in the groups `DESIGN.md`
 names: surfaces, text, borders, identity, semantic state, floating, type,
-space, shape, and motion. Inter is the interface font. Geist Mono is for
-terminal-adjacent text: branches, paths, ids, commands, process rows, and
-shortcuts. Murasaki `--accent` marks active state, selection, and focus only.
+space, shape, and motion. Hiragino Sans is the interface font. CommitMono is
+for terminal-adjacent text: branches, paths, ids, commands, process rows, and
+shortcuts. Tomo ships neither font, so each token falls back to a system face.
+Murasaki `--accent` marks active state, selection, and focus only.
 Semantic colors (`--working`, `--waiting`, `--danger`, `--success`) keep their
 meaning everywhere.
 
