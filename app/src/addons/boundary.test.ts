@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 /**
- * Product code only. A test and a dev fixture may name any addon, because they seed a state
- * to look at; the rules below are about what ships.
+ * Hand-written product code only. Generated code names every wire type there is, and a test
+ * or a dev fixture may name any addon because it seeds a state to look at; the rules below
+ * are about the code a person writes.
  */
-const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../generated/**", "!../dev/**", "!../**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
+const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../generated/**", "!../schemas.ts", "!../dev/**", "!../**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
 
 const IMPORT = /(?:from\s+|import\s*\(\s*)["']([^"']+)["']/g;
 const ADDON_FOLDER = /(?:^|\/)addons\/(?!(?:index|types|activity)(?:\.tsx?)?$)[^/]+/;

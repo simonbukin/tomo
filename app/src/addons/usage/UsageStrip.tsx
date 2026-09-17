@@ -1,6 +1,6 @@
 import { resetsIn } from "../../activityModel";
 import { rpcParsed } from "../../api";
-import { usageSnapshotSchema } from "../../generated/schemas";
+import { usageSnapshotSchema } from "../../schemas";
 import { z } from "zod";
 import type { UsageSnapshot } from "../../generated";
 import { HoverPopover } from "../../shell/HoverPopover";

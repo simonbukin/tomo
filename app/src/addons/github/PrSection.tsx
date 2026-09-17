@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect } from "react";
 import { rpcParsed } from "../../api";
-import { prStatusResultSchema } from "../../generated/schemas";
+import { prStatusResultSchema } from "../../schemas";
 import { SkeletonRows } from "../../components/ui";
 import { useStore } from "../../store";
 import type { Worktree } from "../../types";

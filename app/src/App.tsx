@@ -2,7 +2,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { addonViews, builtins } from "./addons";
 import { onConnection, onFrame, rpc, rpcParsed, startEventPump } from "./api";
-import { snapshotSchema } from "./generated/schemas";
+import { snapshotSchema } from "./schemas";
 import { applyZoom, runAction } from "./actions";
 import { zoomKey } from "./appearance";
 import { applyTheme, useResolvedTheme } from "./theme";
