@@ -134,14 +134,20 @@ function shallowEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/**
+ * The cached value holds only while the state and the selector are both the same one. A
+ * selector that reads a prop is a new function on the next render, so keying on the state
+ * alone handed back the value of the earlier prop. `shallowEqual` keeps the reference
+ * stable, so a selector that builds a fresh array does not re-render for ever.
+ */
 export function useStore<T>(selector: (s: State) => T): T {
-  const cache = useRef<{ state: State; value: T } | null>(null);
+  const cache = useRef<{ state: State; selector: (s: State) => T; value: T } | null>(null);
   const read = () => {
     const c = cache.current;
-    if (c && c.state === state) return c.value;
+    if (c && c.state === state && c.selector === selector) return c.value;
     const next = selector(state);
     const value = c && shallowEqual(c.value, next) ? c.value : next;
-    cache.current = { state, value };
+    cache.current = { state, selector, value };
     return value;
   };
   return useSyncExternalStore(
