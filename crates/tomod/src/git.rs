@@ -1,7 +1,13 @@
 use anyhow::{anyhow, Context, Result};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
-use tomo_proto::GitSummary;
+use tomo_proto::{Branch, GitSummary};
+
+/// How many branches one listing returns. A repository with more branches keeps the newest.
+pub const BRANCH_LIMIT: usize = 200;
+
+const BRANCH_FORMAT: &str = "%(refname:short)\t%(committerdate:unix)\t%(upstream:short)\t%(refname)";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeEntry {
@@ -136,6 +142,47 @@ pub async fn summary(worktree: &Path) -> Result<GitSummary> {
     Ok(s)
 }
 
+/// Folds the `for-each-ref` rows into one row for each branch name, newest commit first.
+/// A local branch wins over the remote branch of the same name, and `origin/HEAD` is not a branch.
+pub fn parse_branches(text: &str, limit: usize) -> Vec<Branch> {
+    let mut rows: Vec<Branch> = Vec::new();
+    let mut at: HashMap<String, usize> = HashMap::new();
+    for line in text.lines() {
+        let mut fields = line.split('\t');
+        let short = fields.next().unwrap_or("").trim();
+        let seconds: u64 = fields.next().unwrap_or("").trim().parse().unwrap_or(0);
+        let upstream = fields.next().unwrap_or("").trim();
+        let refname = fields.next().unwrap_or("").trim();
+        if short.is_empty() || refname.ends_with("/HEAD") {
+            continue;
+        }
+        let (name, remote) = match refname.starts_with("refs/remotes/") {
+            true => match short.split_once('/') {
+                Some((remote, name)) if !name.is_empty() => (name.to_string(), Some(remote.to_string())),
+                _ => continue,
+            },
+            false => (short.to_string(), None),
+        };
+        let branch = Branch { name, remote, upstream: (!upstream.is_empty()).then(|| upstream.to_string()), committed_at_ms: seconds * 1000 };
+        match at.get(&branch.name) {
+            Some(&i) if rows[i].remote.is_some() && branch.remote.is_none() => rows[i] = branch,
+            Some(_) => {}
+            None => {
+                at.insert(branch.name.clone(), rows.len());
+                rows.push(branch);
+            }
+        }
+    }
+    rows.sort_by(|a, b| b.committed_at_ms.cmp(&a.committed_at_ms).then_with(|| a.name.cmp(&b.name)));
+    rows.truncate(limit);
+    rows
+}
+
+pub async fn list_branches(repo: &Path, limit: usize) -> Result<Vec<Branch>> {
+    let format = format!("--format={BRANCH_FORMAT}");
+    Ok(parse_branches(&git(repo, &["for-each-ref", &format, "refs/heads", "refs/remotes"]).await?, limit))
+}
+
 pub async fn worktree_add(repo: &Path, path: &Path, branch: &str, new_branch: bool, start_ref: Option<&str>) -> Result<()> {
     let path_s = path.to_string_lossy().into_owned();
     let mut args: Vec<&str> = vec!["worktree", "add"];
@@ -214,5 +261,56 @@ mod tests {
     #[test]
     fn numstat_ignores_binary_rows() {
         assert_eq!(parse_numstat("3\t1\ta.rs\n-\t-\tbin.png\n10\t0\tb.rs\n"), (13, 1));
+    }
+
+    #[test]
+    fn a_remote_branch_folds_into_its_local_branch_and_the_newest_comes_first() {
+        let text = "main\t100\torigin/main\trefs/heads/main\n\
+                    old\t50\t\trefs/heads/old\n\
+                    origin\t300\t\trefs/remotes/origin/HEAD\n\
+                    origin/main\t100\t\trefs/remotes/origin/main\n\
+                    origin/fresh\t300\t\trefs/remotes/origin/fresh\n\
+                    upstream/fresh\t400\t\trefs/remotes/upstream/fresh\n";
+        let rows = parse_branches(text, 10);
+        assert_eq!(rows.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["fresh", "main", "old"], "one row for each name, newest first");
+        assert_eq!(rows[0].remote.as_deref(), Some("origin"), "the first remote of a name with no local branch wins");
+        assert_eq!((rows[1].remote.as_deref(), rows[1].upstream.as_deref()), (None, Some("origin/main")), "the local branch keeps its upstream");
+        assert_eq!(rows[1].committed_at_ms, 100_000);
+        assert_eq!(parse_branches(text, 2).len(), 2, "the limit keeps the newest");
+    }
+
+    #[tokio::test]
+    async fn lists_the_branches_of_a_repository_with_a_remote() {
+        let dir = PathBuf::from(format!("/tmp/tomo-branch-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let origin = dir.join("origin");
+        let clone = dir.join("clone");
+        let run = |cwd: &Path, args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .args(["-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=main"])
+                .args(args)
+                .current_dir(cwd)
+                .output()
+                .unwrap()
+                .status
+                .success();
+            assert!(ok, "git {args:?}");
+        };
+        std::fs::create_dir_all(&origin).unwrap();
+        run(&origin, &["init", "-q"]);
+        run(&origin, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        run(&origin, &["branch", "feat/remote-only"]);
+        run(&dir, &["clone", "-q", "origin", "clone"]);
+        run(&clone, &["checkout", "-q", "-b", "feat/local"]);
+        run(&clone, &["commit", "-q", "--allow-empty", "-m", "local work"]);
+
+        let rows = list_branches(&clone, BRANCH_LIMIT).await.unwrap();
+        let names: Vec<&str> = rows.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names[0], "feat/local", "the newest commit comes first");
+        assert_eq!(names.iter().filter(|n| **n == "main").count(), 1, "origin/main folds into main");
+        let remote_only = rows.iter().find(|b| b.name == "feat/remote-only").expect("the remote branch is in the list");
+        assert_eq!(remote_only.remote.as_deref(), Some("origin"));
+        assert!(rows.iter().all(|b| b.name != "origin"), "origin/HEAD is not a branch");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

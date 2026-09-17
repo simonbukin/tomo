@@ -67,6 +67,23 @@ prepends `activity_added` events, and keeps at most 500 in memory. `load
 more` pages with `before_ms`. Every daemon call fails soft: an empty list,
 no toast.
 
+## New worktree dialog
+
+The branch field is the `Combobox` primitive, not a plain input. It lists the
+branches of the repository from the daemon call `branch_list`, newest commit
+first. Typing filters the list, and text that matches nothing stays in the box,
+so a branch name from a pull request works with one paste.
+
+- Picking a branch that exists turns `create this branch` off.
+- Picking a branch that only a remote has keeps `create this branch` on and
+  starts it from `<remote>/<name>`, which the dialog shows as
+  `tracks origin/<name>`.
+- An empty box is valid. The placeholder shows the branch the daemon will make:
+  `branch_prefix` plus the worktree name (see [data-model.md](data-model.md)).
+  The Create button is enabled with an empty box.
+- Keyboard: type, arrow to a branch, Enter creates. Enter with nothing
+  highlighted creates from the text in the box.
+
 ## Sidebar order, appearance, and terminal keys
 
 - The main worktree of a repo shows a star and always sorts first, in
@@ -231,6 +248,7 @@ provider and the Tauri drop listener are in `terminalHooks.ts`.
 | `HoverCard` | `preview-card.tsx` | `PreviewCard` |
 | `Tooltip`, `TooltipProvider` | `tooltip.tsx` | `Tooltip` |
 | `Select` | `select.tsx` | `Select` |
+| `Combobox` | `combobox.tsx` | `Autocomplete` |
 | `Separator` | `separator.tsx` | `Separator` |
 | `Skeleton`, `SkeletonRows` | `skeleton.tsx` | none |
 

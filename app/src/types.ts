@@ -15,6 +15,7 @@ export type {
   AttentionLevel,
   ArchiveResult,
   Authority,
+  Branch,
   CheckpointMode,
   Config,
   ConfigIssue,

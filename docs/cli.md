@@ -74,7 +74,7 @@ level. `remove` forgets the root; worktree metadata stays in the database.
 tomo worktree list
 tomo worktree current
 tomo worktree refresh
-tomo worktree create --repo <repo> --branch <name> [--new] [--from <ref>] [--path <dir>] [--town <slug>]
+tomo worktree create --repo <repo> [--branch <name>] [--new] [--from <ref>] [--path <dir>] [--town <slug>]
 tomo worktree archive <worktree> [--no-checkpoint] [--discard]
 tomo worktree restore <worktree>
 tomo worktree open <worktree>
@@ -92,6 +92,11 @@ directories that the path needs. A name that is already taken there fails in
 `git worktree add`, the same as any other path that exists. Only a new worktree
 follows this rule: a worktree that exists keeps its path, and `restore` only
 puts a worktree in the parent above when its own parent directory is gone.
+Without `--branch` the worktree gets the branch `<branch_prefix><worktree
+name>`, and Tomo always creates it. `branch_prefix` is empty by default, so
+the branch is the worktree name alone; see
+[data-model.md](data-model.md). A branch that exists already fails in
+`git worktree add` with its own message.
 `--town` picks a specific town that is not unlocked yet; otherwise Tomo
 picks one by rarity weight. The town becomes the display name unless you
 set one. `--new` passes `-b`; `--from` gives the start point for a new

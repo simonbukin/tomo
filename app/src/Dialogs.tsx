@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { worktreeNameField } from "./addons";
 import { rpc } from "./api";
 import { openWorktree } from "./actions";
-import { Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, SkeletonRows } from "./components/ui";
+import { Button, Combobox, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, SkeletonRows } from "./components/ui";
 import { IntegrationStatusList, Settings } from "./Settings";
 import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
-import type { ConfigIssue, HookRun, Repo, Worktree } from "./types";
+import type { Branch, ConfigIssue, HookRun, Repo, Worktree } from "./types";
 
 /** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
@@ -109,27 +109,61 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   const [from, setFrom] = useState("");
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [nameHint, setNameHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const highlighted = useRef<string | undefined>(undefined);
+  const creating = useRef(false);
   const NameField = worktreeNameField();
   useEffect(() => {
     if (!repo && repos[0]) setRepo(repos[0].id);
   }, [repos, repo]);
+  useEffect(() => {
+    setBranches([]);
+    if (repo) rpc<Branch[]>("branch_list", { repo_id: repo }).then(setBranches).catch(() => setBranches([]));
+  }, [repo]);
   const r = repos.find((x) => x.id === repo);
+  const worktreeName = path.trim() ? path.trim().replace(/\/+$/, "").split("/").pop()! : (nameHint ?? "<name>");
   const defaultPath = r?.worktree_parent ? `${r.worktree_parent}/${nameHint ?? "<name>"}` : "";
-  const create = async () => {
-    if (!repo || !branch.trim()) return;
+  const defaultBranch = `${r?.branch_prefix ?? ""}${worktreeName}`;
+  const known = (name: string) => branches.find((b) => b.name === name.trim());
+  const picked = known(branch);
+  const choose = (name: string) => {
+    setBranch(name);
+    const b = known(name);
+    if (b) setIsNew(b.remote != null);
+  };
+  const create = async (name = branch) => {
+    const wanted = name.trim();
+    if (!repo || creating.current) return;
+    creating.current = true;
     setBusy(true);
     setError(null);
     try {
-      const w = await rpc<Worktree>("worktree_create", { repo_id: repo, branch: branch.trim(), new_branch: isNew, start_ref: from.trim() || null, path: path.trim() || null, name_hint: path.trim() ? null : nameHint });
+      const b = known(wanted);
+      const w = await rpc<Worktree>("worktree_create", {
+        repo_id: repo,
+        branch: wanted,
+        new_branch: wanted ? (b ? b.remote != null : isNew) : true,
+        start_ref: b?.remote ? `${b.remote}/${wanted}` : from.trim() || null,
+        path: path.trim() || null,
+        name_hint: path.trim() ? null : nameHint,
+      });
       close();
       openWorktree(w.id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      creating.current = false;
       setBusy(false);
     }
+  };
+  const onBranchKey = (e: { key: string; preventDefault: () => void }) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const name = highlighted.current ?? branch;
+    choose(name);
+    create(name);
   };
   return (
     <>
@@ -143,11 +177,24 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
         ))}
       </select>
       <label>Branch</label>
-      <input className="mono" value={branch} placeholder="feature/thing" onChange={(e) => setBranch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+      <Combobox
+        aria-label="Branch"
+        className="mono"
+        value={branch}
+        items={branches.map((b) => b.name)}
+        detail={(name) => known(name)?.remote ?? undefined}
+        placeholder={defaultBranch}
+        empty="no branch of this repository matches"
+        onValueChange={choose}
+        onSelect={choose}
+        onHighlight={(name) => (highlighted.current = name)}
+        onKeyDown={onBranchKey}
+      />
       <label className="check">
         <input type="checkbox" checked={isNew} onChange={(e) => setIsNew(e.target.checked)} /> create this branch
       </label>
-      {isNew && (
+      {picked?.remote && <div className="muted">tracks {`${picked.remote}/${picked.name}`}</div>}
+      {isNew && !picked?.remote && (
         <>
           <label>Start from (optional ref)</label>
           <input className="mono" value={from} placeholder="main" onChange={(e) => setFrom(e.target.value)} />
@@ -159,7 +206,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
       {error && <InlineError>{error}</InlineError>}
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
-        <Button variant="default" disabled={busy || !repo || !branch.trim()} onClick={create}>
+        <Button variant="default" disabled={busy || !repo} onClick={() => create()}>
           {busy ? "Creating…" : "Create"}
         </Button>
       </DialogActions>

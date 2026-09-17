@@ -8,4 +8,9 @@ export type Repo = { id: string, path: string, name: string, exists: boolean, re
  * Where a new worktree of this repository goes: `worktree_parent_dir`, else
  * `~/tomo/worktrees/<repo>`. The daemon owns the rule; a client shows the path.
  */
-worktree_parent?: string | null, };
+worktree_parent?: string | null, 
+/**
+ * `branch_prefix` from the config. A create with an empty branch gets
+ * `<branch_prefix><worktree name>`. The daemon owns the rule; a client shows the name.
+ */
+branch_prefix?: string | null, };

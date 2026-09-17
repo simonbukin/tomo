@@ -167,8 +167,8 @@ enum WorktreeCmd {
     Create {
         #[arg(long, help = "Repo id or path")]
         repo: String,
-        #[arg(long)]
-        branch: String,
+        #[arg(long, help = "Branch to check out; without it, branch_prefix plus the worktree name")]
+        branch: Option<String>,
         #[arg(long, help = "Create the branch")]
         new: bool,
         #[arg(long, help = "Starting ref for a new branch")]
@@ -487,7 +487,7 @@ async fn run() -> Result<()> {
         }
         Cmd::Worktree(WorktreeCmd::Create { repo, branch, new, from, path, town }) => {
             let repo_id = resolve_repo_id(&c, &repo).await?;
-            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch, new_branch: new, start_ref: from, path, name_hint: town })).await?;
+            let w: Worktree = c.call(Call::WorktreeCreate(WorktreeCreate { repo_id, branch: branch.unwrap_or_default(), new_branch: new, start_ref: from, path, name_hint: town })).await?;
             let repos: Vec<Repo> = c.call(Call::RepoList).await?;
             print::worktrees(&[w], &repos, &[], json);
         }

@@ -53,6 +53,7 @@ struct FileConfig {
     shell: Option<String>,
     editor_command: Option<Vec<String>>,
     worktree_parent_dir: Option<PathBuf>,
+    branch_prefix: Option<String>,
     resource_warning_gb: Option<f64>,
     scrollback_lines: Option<u32>,
     font_family: Option<String>,
@@ -115,6 +116,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # editor_command = ["zed", "{path}"]   # Cmd-click path:line opens "{path}" as path:line:col
 # editor_command = ["code", "-g", "{path}:{line}:{col}"]
 # worktree_parent_dir = "~/worktrees"   # default: ~/tomo/worktrees/<repo>/<worktree>
+# branch_prefix = "simon/"   # a create with no branch gets <branch_prefix><worktree name>
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
 # max_panes_per_tab = 4
@@ -198,10 +200,11 @@ pub const DEFAULT_FONT_FAMILY: &str = "Geist Mono Variable, Menlo, monospace";
 pub const THEME_TOKENS: [&str; 14] = ["bg", "surface", "surface_hover", "fg", "fg_muted", "fg_faint", "border", "border_strong", "accent", "accent_soft", "working", "waiting", "danger", "success"];
 const BASE_THEMES: [&str; 5] = ["system", "murasaki-dark", "murasaki-light", "paper", "ink"];
 const ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
-const SETTABLE_KEYS: [&str; 14] = [
+const SETTABLE_KEYS: [&str; 15] = [
     "shell",
     "editor_command",
     "worktree_parent_dir",
+    "branch_prefix",
     "resource_warning_gb",
     "scrollback_lines",
     "font_family",
@@ -293,6 +296,12 @@ pub fn worktree_parent(parent_dir: Option<&Path>, repo_path: &Path) -> PathBuf {
     }
 }
 
+/// The branch of a create that names no branch: `branch_prefix` before the worktree name,
+/// so `simon/` and `aogashima` give `simon/aogashima`. An empty prefix gives the bare name.
+pub fn default_branch(prefix: &str, worktree_name: &str) -> String {
+    format!("{}{}", prefix.trim(), worktree_name.trim())
+}
+
 /// The config for this file, plus the problems found while it was read. Bad values fall back to defaults.
 pub fn load_checked(path: &Path) -> Result<(Config, Vec<ConfigIssue>)> {
     match std::fs::read_to_string(path) {
@@ -356,6 +365,7 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         shell: file.shell.or_else(|| std::env::var("SHELL").ok()).unwrap_or_else(|| "/bin/zsh".into()),
         editor_command: file.editor_command.unwrap_or_else(|| vec!["zed".into(), "{path}".into()]),
         worktree_parent_dir: file.worktree_parent_dir.map(|p| expand_tilde(&p)),
+        branch_prefix: file.branch_prefix.unwrap_or_default(),
         resource_warning_bytes: (file.resource_warning_gb.unwrap_or(2.0) * 1024.0 * 1024.0 * 1024.0) as u64,
         scrollback_lines: file.scrollback_lines.unwrap_or(10_000),
         font_family,
@@ -673,6 +683,14 @@ mod tests {
         assert_eq!(worktree_parent(Some(Path::new("/tmp/wt")), repo), PathBuf::from("/tmp/wt"));
         assert_eq!(worktree_parent(None, Path::new("/Users/y/work/tomo")), home.join("tomo/worktrees/tomo"), "the directory name decides, not the path");
         assert_eq!(worktree_parent(None, Path::new("/")), home.join("tomo/worktrees/repo"));
+    }
+
+    #[test]
+    fn a_create_with_no_branch_gets_the_prefix_and_the_worktree_name() {
+        assert_eq!(default_branch("simon/", "aogashima"), "simon/aogashima");
+        assert_eq!(default_branch("", "aogashima"), "aogashima", "no prefix gives the bare name");
+        assert_eq!(parse("").0.branch_prefix, "", "the prefix is empty until the config sets it");
+        assert_eq!(parse("branch_prefix = \"simon/\"\n").0.branch_prefix, "simon/");
     }
 
     #[test]
