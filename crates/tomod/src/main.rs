@@ -57,7 +57,7 @@ async fn run(args: Args) -> Result<()> {
         paths.socket = s;
     }
 
-    let lock = std::fs::OpenOptions::new().create(true).write(true).open(paths.data_dir.join("tomod.lock"))?;
+    let lock = std::fs::OpenOptions::new().create(true).write(true).truncate(false).open(paths.data_dir.join("tomod.lock"))?;
     if !try_lock(&lock) || UnixStream::connect(&paths.socket).await.is_ok() {
         eprintln!("tomod already running at {}", paths.socket.display());
         return Ok(());

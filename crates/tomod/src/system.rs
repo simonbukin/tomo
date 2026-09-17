@@ -76,7 +76,7 @@ fn sample(daemon: &Arc<Daemon>) -> SystemStats {
 
 /// A sample whose CPU figure covers a short recent window, not the time since the last caller.
 pub async fn fresh(daemon: &Arc<Daemon>) -> SystemStats {
-    let stale = daemon.lock().procs.machine_age().map_or(true, |age| age > CPU_STALE);
+    let stale = daemon.lock().procs.machine_age().is_none_or(|age| age > CPU_STALE);
     if stale {
         daemon.lock().procs.machine();
         tokio::time::sleep(CPU_WINDOW).await;

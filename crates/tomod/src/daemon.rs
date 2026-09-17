@@ -27,6 +27,40 @@ pub struct Client {
     pub attached: HashSet<Id>,
 }
 
+pub type WorktreeNamer = fn(&Store, &WorktreeCreate) -> Result<Option<String>, RpcError>;
+pub type WorktreeCreatedHook = fn(&mut Inner, &CreatedWorktree) -> Result<(), RpcError>;
+pub type WorktreeReboundHook = fn(&Store, &str, &str) -> Result<()>;
+
+pub(crate) struct PaneSpec<'a> {
+    pub command: Option<&'a [String]>,
+    pub title: Option<String>,
+    pub agent_kind: Option<AgentKind>,
+    pub session_ref: Option<String>,
+    pub pending_line: Option<String>,
+    pub origin: PaneOrigin,
+}
+
+impl Default for PaneSpec<'_> {
+    fn default() -> Self {
+        Self { command: None, title: None, agent_kind: None, session_ref: None, pending_line: None, origin: PaneOrigin::Live }
+    }
+}
+
+pub(crate) struct SpawnSpec<'a> {
+    pub tab_id: Option<&'a str>,
+    pub split_from: Option<&'a str>,
+    pub direction: SplitDirection,
+    pub command: Option<&'a [String]>,
+    pub title: Option<String>,
+    pub agent: Option<(AgentKind, Option<String>, String)>,
+}
+
+impl Default for SpawnSpec<'_> {
+    fn default() -> Self {
+        Self { tab_id: None, split_from: None, direction: SplitDirection::Horizontal, command: None, title: None, agent: None }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WorktreeState {
     pub id: Id,
@@ -92,11 +126,11 @@ pub struct Inner {
 /// Plain function lists that addons join at fixed points of Core operations. The composition root builds it once at startup.
 pub struct Seams {
     /// Names the directory of a worktree created without a path, before `git worktree add`. An error refuses the create.
-    pub worktree_namer: Option<fn(&Store, &WorktreeCreate) -> Result<Option<String>, RpcError>>,
+    pub worktree_namer: Option<WorktreeNamer>,
     /// Runs under the state lock after `git worktree add` and discovery, before `worktree_create` returns.
-    pub worktree_created: Vec<fn(&mut Inner, &CreatedWorktree) -> Result<(), RpcError>>,
+    pub worktree_created: Vec<WorktreeCreatedHook>,
     /// Runs under the state lock when a worktree gets a new id: a move on disk, or a restore at a new path.
-    pub worktree_rebound: Vec<fn(&Store, &str, &str) -> Result<()>>,
+    pub worktree_rebound: Vec<WorktreeReboundHook>,
     /// A file in the root of each worktree that an addon reads. Core calls `reload` with no lock held, after each discovery and after the watcher sees that file change.
     pub worktree_files: Vec<WorktreeFile>,
     /// Runs under the state lock when a pane process exits, after `pane_exited` goes out and before Core updates the agent or removes a pane that exited with 0.
@@ -437,7 +471,7 @@ impl Daemon {
 
     pub fn pane_views(inner: &Inner, worktree_id: Option<&str>) -> Vec<Pane> {
         let mut panes: Vec<Pane> =
-            inner.panes.keys().filter_map(|id| Self::pane_view(inner, id)).filter(|p| worktree_id.map_or(true, |w| p.worktree_id == w)).collect();
+            inner.panes.keys().filter_map(|id| Self::pane_view(inner, id)).filter(|p| worktree_id.is_none_or(|w| p.worktree_id == w)).collect();
         panes.sort_by_key(|p| p.created_at_ms);
         panes
     }
@@ -526,7 +560,7 @@ impl Daemon {
                 };
                 let needs_write = existing
                     .as_ref()
-                    .map_or(true, |m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id || m.first_seen_ms.is_none() || m.archived_at_ms.is_some());
+                    .is_none_or(|m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id || m.first_seen_ms.is_none() || m.archived_at_ms.is_some());
                 if needs_write {
                     inner.store.meta_upsert(&row)?;
                 }
@@ -940,19 +974,8 @@ impl Daemon {
     }
 
     /// Creates the pane row in memory and in the store, then starts its PTY.
-    pub(crate) fn create_pane(
-        self: &Arc<Self>,
-        inner: &mut Inner,
-        tab_id: &str,
-        worktree_id: &str,
-        cwd: PathBuf,
-        command: Option<&[String]>,
-        title: Option<String>,
-        agent_kind: Option<AgentKind>,
-        session_ref: Option<String>,
-        pending_line: Option<String>,
-        origin: PaneOrigin,
-    ) -> Result<Id> {
+    pub(crate) fn create_pane(self: &Arc<Self>, inner: &mut Inner, tab_id: &str, worktree_id: &str, cwd: PathBuf, spec: PaneSpec<'_>) -> Result<Id> {
+        let PaneSpec { command, title, agent_kind, session_ref, pending_line, origin } = spec;
         let id = new_id();
         let row = PaneRow {
             id: id.clone(),
@@ -1052,20 +1075,10 @@ impl Daemon {
         tabs.first().map(|t| t.id.clone())
     }
 
-    pub(crate) fn spawn_in_worktree(
-        self: &Arc<Self>,
-        inner: &mut Inner,
-        worktree_id: &str,
-        cwd: PathBuf,
-        tab_id: Option<&str>,
-        split_from: Option<&str>,
-        direction: SplitDirection,
-        command: Option<&[String]>,
-        title: Option<String>,
-        agent: Option<(AgentKind, Option<String>, String)>,
-    ) -> Result<(Id, Id), RpcError> {
+    pub(crate) fn spawn_in_worktree(self: &Arc<Self>, inner: &mut Inner, worktree_id: &str, cwd: PathBuf, spec: SpawnSpec<'_>) -> Result<(Id, Id), RpcError> {
+        let SpawnSpec { tab_id, split_from, direction, command, title, agent } = spec;
         let crowded =
-            |inner: &Inner, t: &str| inner.tabs.get(t).map_or(false, |tab| layout::pane_ids(&tab.layout).len() >= inner.config.max_panes_per_tab as usize);
+            |inner: &Inner, t: &str| inner.tabs.get(t).is_some_and(|tab| layout::pane_ids(&tab.layout).len() >= inner.config.max_panes_per_tab as usize);
         let tab_id = match tab_id
             .map(str::to_string)
             .or_else(|| split_from.and_then(|p| inner.panes.get(p)).map(|p| p.row.tab_id.clone()))
@@ -1078,7 +1091,15 @@ impl Daemon {
             Some((k, s, line)) => (Some(k), s, Some(line)),
             None => (None, None, None),
         };
-        let pane_id = self.create_pane(inner, &tab_id, worktree_id, cwd, command, title, kind, session_ref, pending, PaneOrigin::Live).map_err(internal)?;
+        let pane_id = self
+            .create_pane(
+                inner,
+                &tab_id,
+                worktree_id,
+                cwd,
+                PaneSpec { command, title, agent_kind: kind, session_ref, pending_line: pending, ..PaneSpec::default() },
+            )
+            .map_err(internal)?;
         Self::place_pane(inner, &tab_id, &pane_id, split_from, direction);
         Self::touch(inner, worktree_id);
         Self::emit_tabs(inner, worktree_id);
@@ -1435,7 +1456,7 @@ impl Daemon {
         if !git::branch_exists(&repo_path, &branch).await {
             return Err(err(ErrorCode::Git, format!("branch {branch} no longer exists; create the worktree again from another ref")));
         }
-        let path = if path.parent().map_or(false, |p| p.is_dir()) {
+        let path = if path.parent().is_some_and(|p| p.is_dir()) {
             path
         } else {
             let parent = config::worktree_parent(self.lock().config.worktree_parent_dir.as_deref(), &repo_path);
@@ -1634,10 +1655,10 @@ impl Daemon {
                     .and_then(|m| m.modified().ok())
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map_or(0, |d| d.as_millis() as u64);
-                FsEntry { is_dir: meta.as_ref().map_or(false, |m| m.is_dir()), size: meta.map_or(0, |m| m.len()), modified_ms, name, rel_path: rel }
+                FsEntry { is_dir: meta.as_ref().is_some_and(|m| m.is_dir()), size: meta.map_or(0, |m| m.len()), modified_ms, name, rel_path: rel }
             })
             .collect();
-        entries.sort_by(|a, b| (!a.is_dir, a.name.to_lowercase()).cmp(&(!b.is_dir, b.name.to_lowercase())));
+        entries.sort_by_key(|a| (!a.is_dir, a.name.to_lowercase()));
         ok(entries)
     }
 
@@ -1683,12 +1704,12 @@ impl Daemon {
             &mut inner,
             &worktree_id,
             cwd,
-            tab_id.as_deref(),
-            spec.split_from.as_deref(),
-            SplitDirection::Horizontal,
-            None,
-            None,
-            Some((spec.kind, plan.session_ref, line)),
+            SpawnSpec {
+                tab_id: tab_id.as_deref(),
+                split_from: spec.split_from.as_deref(),
+                agent: Some((spec.kind, plan.session_ref, line)),
+                ..SpawnSpec::default()
+            },
         )?;
         ok(SpawnResult {
             pane: Self::pane_of(&inner, &pane_id)?,
@@ -1843,7 +1864,7 @@ impl Daemon {
         for t in inner.tabs.values().filter(|t| t.worktree_id == worktree_id && t.id != tab.id).cloned().collect::<Vec<_>>() {
             let _ = inner.store.tab_upsert(&t);
         }
-        self.spawn_in_worktree(&mut inner, &worktree_id, cwd, Some(&tab.id), None, SplitDirection::Horizontal, None, None, None)?;
+        self.spawn_in_worktree(&mut inner, &worktree_id, cwd, SpawnSpec { tab_id: Some(&tab.id), ..SpawnSpec::default() })?;
         ok(Self::tab_view(&inner, &inner.tabs[&tab.id]))
     }
 
@@ -1891,7 +1912,7 @@ impl Daemon {
         let mut inner = self.lock();
         if needs_pane {
             let cwd = inner.worktrees[&worktree_id].path.clone();
-            self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, None, SplitDirection::Horizontal, None, None, None)?;
+            self.spawn_in_worktree(&mut inner, &worktree_id, cwd, SpawnSpec::default())?;
         }
         Self::touch(&mut inner, &worktree_id);
         let w = Self::worktree_view(&inner, &inner.worktrees[&worktree_id]);
@@ -2149,12 +2170,7 @@ impl Daemon {
                     &mut inner,
                     &worktree_id,
                     cwd,
-                    spec.tab_id.as_deref(),
-                    None,
-                    SplitDirection::Horizontal,
-                    spec.command.as_deref(),
-                    spec.title,
-                    None,
+                    SpawnSpec { command: spec.command.as_deref(), title: spec.title, ..SpawnSpec::default() },
                 )?;
                 ok(Self::pane_result(&inner, &pane_id, &tab_id)?)
             }
@@ -2164,8 +2180,12 @@ impl Daemon {
                     let p = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
                     (p.row.worktree_id.clone(), p.row.cwd.clone())
                 };
-                let (tab_id, new_id) =
-                    self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, Some(&pane_id), direction, command.as_deref(), None, None)?;
+                let (tab_id, new_id) = self.spawn_in_worktree(
+                    &mut inner,
+                    &worktree_id,
+                    cwd,
+                    SpawnSpec { split_from: Some(&pane_id), direction, command: command.as_deref(), ..SpawnSpec::default() },
+                )?;
                 ok(Self::pane_result(&inner, &new_id, &tab_id)?)
             }
             Call::PaneClose { pane_id, force } => self.pane_close(pane_id, force).await,
@@ -2198,7 +2218,7 @@ impl Daemon {
             Call::AgentList { worktree_id } => {
                 let inner = self.lock();
                 let mut agents: Vec<AgentPresence> =
-                    inner.agents.values().filter(|a| worktree_id.as_deref().map_or(true, |w| a.worktree_id == w)).cloned().collect();
+                    inner.agents.values().filter(|a| worktree_id.as_deref().is_none_or(|w| a.worktree_id == w)).cloned().collect();
                 agents.sort_by(|a, b| (&a.worktree_id, &a.pane_id).cmp(&(&b.worktree_id, &b.pane_id)));
                 ok(agents)
             }
@@ -2231,7 +2251,7 @@ impl Daemon {
                     crate::monitor::poll_once(self, &mut inner, true);
                 }
                 let infos = crate::monitor::classify_all(&inner);
-                ok(infos.into_iter().filter(|p| worktree_id.as_deref().map_or(true, |w| p.worktree_id.as_deref() == Some(w))).collect::<Vec<_>>())
+                ok(infos.into_iter().filter(|p| worktree_id.as_deref().is_none_or(|w| p.worktree_id.as_deref() == Some(w))).collect::<Vec<_>>())
             }
             Call::ProcessKillTree { pid } => self.process_kill_tree(pid).await,
             Call::Notify { pane_id, worktree_id, level, message } => self.notify(pane_id, worktree_id, level, message).await,
@@ -2472,17 +2492,21 @@ mod tests {
         let repo = a_repo();
         let none = HashSet::new();
 
-        let target = archive_target(&wt(|_| {}), &[repo.clone()], &none).expect("a plain worktree archives");
+        let target = archive_target(&wt(|_| {}), std::slice::from_ref(&repo), &none).expect("a plain worktree archives");
         assert_eq!(target.repo_path, PathBuf::from("/repo"));
         assert_eq!(target.branch, "feat/x");
         assert_eq!(target.head, "abc1234");
 
-        assert_eq!(archive_target(&wt(|w| w.branch = None), &[repo.clone()], &none).unwrap().branch, "", "a detached worktree archives with no branch");
+        assert_eq!(
+            archive_target(&wt(|w| w.branch = None), std::slice::from_ref(&repo), &none).unwrap().branch,
+            "",
+            "a detached worktree archives with no branch"
+        );
 
         let code = |r: Result<ArchiveTarget, RpcError>| r.err().map(|e| e.code);
-        assert_eq!(code(archive_target(&wt(|w| w.is_main = true), &[repo.clone()], &none)), Some(ErrorCode::BadRequest));
-        assert_eq!(code(archive_target(&wt(|w| w.archived_at_ms = Some(1)), &[repo.clone()], &none)), Some(ErrorCode::Conflict));
-        assert_eq!(code(archive_target(&wt(|_| {}), &[repo.clone()], &HashSet::from(["w1".to_string()]))), Some(ErrorCode::Conflict));
+        assert_eq!(code(archive_target(&wt(|w| w.is_main = true), std::slice::from_ref(&repo), &none)), Some(ErrorCode::BadRequest));
+        assert_eq!(code(archive_target(&wt(|w| w.archived_at_ms = Some(1)), std::slice::from_ref(&repo), &none)), Some(ErrorCode::Conflict));
+        assert_eq!(code(archive_target(&wt(|_| {}), std::slice::from_ref(&repo), &HashSet::from(["w1".to_string()]))), Some(ErrorCode::Conflict));
         assert_eq!(code(archive_target(&wt(|_| {}), &[], &none)), Some(ErrorCode::NotFound), "a missing repo refuses, and marks nothing");
     }
 

@@ -126,7 +126,7 @@ pub async fn watch(daemon: Arc<Daemon>) {
         .collect();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
     let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if res.map_or(false, |e| e.paths.iter().any(|p| p.file_name().map_or(false, |n| names.iter().any(|x| x == n)))) {
+        if res.is_ok_and(|e| e.paths.iter().any(|p| p.file_name().is_some_and(|n| names.iter().any(|x| x == n)))) {
             let _ = tx.send(());
         }
     }) {

@@ -20,10 +20,11 @@ fn mark(what: &str) {
         eprintln!("[tomo-app] {what} at {} ms", STARTED.get_or_init(std::time::Instant::now).elapsed().as_millis());
     }
 }
+type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, RpcError>>>>>;
 
 pub struct Link {
     tx: Mutex<Option<mpsc::UnboundedSender<String>>>,
-    pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, RpcError>>>>>,
+    pending: Pending,
     next_id: AtomicU64,
 }
 
@@ -136,7 +137,7 @@ async fn connect_loop(app: AppHandle) {
         match connect_once(&app, &link).await {
             Some(()) => attempts = 0,
             None => {
-                if attempts == 0 || attempts % 80 == 0 {
+                if attempts == 0 || attempts.is_multiple_of(80) {
                     start_daemon();
                 }
                 attempts += 1;

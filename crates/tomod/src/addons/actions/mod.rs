@@ -7,7 +7,7 @@ mod tests;
 
 use crate::activity;
 use crate::addons;
-use crate::daemon::{err, new_id, ok, Daemon, Inner, PaneExit, WorktreeFile};
+use crate::daemon::{err, new_id, ok, Daemon, Inner, PaneExit, SpawnSpec, WorktreeFile};
 use crate::events;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
@@ -227,12 +227,7 @@ fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Act
                 &mut inner,
                 worktree_id,
                 path,
-                None,
-                None,
-                SplitDirection::Horizontal,
-                Some(&argv),
-                Some(action.label.clone()),
-                None,
+                SpawnSpec { command: Some(&argv), title: Some(action.label.clone()), ..SpawnSpec::default() },
             )?;
             if let Some(pane) = inner.panes.get_mut(&pane_id) {
                 pane.source = Some(source_of(&action));

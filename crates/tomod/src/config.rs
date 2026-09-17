@@ -413,7 +413,7 @@ fn theme_id(name: &str) -> Option<&'static str> {
 }
 
 fn is_hex_color(s: &str) -> bool {
-    s.strip_prefix('#').map_or(false, |h| (h.len() == 3 || h.len() == 6) && h.chars().all(|c| c.is_ascii_hexdigit()))
+    s.strip_prefix('#').is_some_and(|h| (h.len() == 3 || h.len() == 6) && h.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 fn theme_name_at(table: &toml::Table, key: &str, fallback: &str, allow_system: bool) -> Checked<String> {

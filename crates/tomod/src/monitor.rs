@@ -84,7 +84,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                 Daemon::apply_report(inner, &report, Some(pid));
             }
             None => {
-                let gone = inner.agents.get(&pane_id).map_or(false, |a| a.pid.is_some() && a.state != AgentState::Exited);
+                let gone = inner.agents.get(&pane_id).is_some_and(|a| a.pid.is_some() && a.state != AgentState::Exited);
                 if gone {
                     let kind = inner.agents[&pane_id].kind;
                     let report = AgentReport {
