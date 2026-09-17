@@ -135,6 +135,88 @@ Notes on `perf.sh`. The script was not changed.
   that had run for several minutes. This difference is not explained further.
   Compare each number only with the same method.
 
+## Startup, phase by phase (release daemon, `addons-bench.py startup 5`)
+
+For backlog item 2.8. `perf.sh` gives one number for a cold start; this run
+splits it into the phases a client waits for, and it repeats.
+
+```bash
+W=<worktree root>
+export TOMO_DATA_DIR=/tmp/tomo-startup-bench TOMO_BIN=$W/target/release/tomo TOMO_DAEMON_BIN=$W/target/release/tomod
+python3 $W/scripts/addons-bench.py setup
+python3 $W/scripts/addons-bench.py startup 5
+```
+
+The mode starts `tomod` itself and measures from the process start. It joins
+the daemon as a normal client: connect, `hello`, `subscribe`, then read the
+`worktrees_changed` events. It polls nothing, so it adds no load of its own.
+
+| Phase | Method | Median | Sample min..max |
+|---|---|---|---|
+| Socket accepts a connection | `connect` to `tomod.sock` succeeds | **5.2 ms** | 5.1..99.4 |
+| First answer (`hello`) | The daemon replies for the first time | **47.7 ms** | 46.2..142.7 |
+| First `subscribe` answer | The snapshot arrives | **48.4 ms** | 46.9..143.7 |
+| Worktrees visible | First `worktrees_changed` event with worktrees | **159.8 ms** | 123.8..245.5 |
+| Every summary present | First `worktrees_changed` where all 30 carry `git` | **289.9 ms** | 247.5..450.2 |
+
+Trial 1 is the first boot after `setup` and is a cold-cache outlier in every
+row. The medians come from all 5 trials.
+
+The gaps are what matters:
+
+| Gap | Cost | What runs |
+|---|---|---|
+| process start to bind | 5.2 ms | open the store, read the config |
+| bind to first answer | **42.5 ms** | `restore()`, which runs before `server::serve` |
+| first answer to snapshot | 0.7 ms | `subscribe` itself |
+| snapshot to worktrees | **111.4 ms** | `discover(Summaries::Cached)` |
+| worktrees to summaries | **130.1 ms** | `discover(Summaries::All)` |
+
+### What the first snapshot contains and what it waits for
+
+| Field | Value at 48 ms |
+|---|---|
+| Size | 9.3 KB |
+| Worktrees | **0** (30 by the end of the run) |
+| Worktrees with a git summary | 0 |
+| Panes | 12 |
+| Live panes | 12 |
+| Distinct pane pids | 12 |
+
+The first snapshot waits for `restore()` only. It does not wait for `git
+status`: `main.rs` already runs `discover(Summaries::Cached)` before
+`discover(Summaries::All)`, and both run in a task behind the socket, so the
+snapshot answers with no worktrees at all and the sidebar fills from the
+events. Backlog item 2.8 names the first snapshot holding for `git status` as
+the suspect; this measurement does not agree.
+
+Pane restore costs one PTY spawn per pane and no more: 12 panes, 12 live, 12
+distinct pids. It is synchronous and runs before the listener is served, so a
+client can use every pane the moment the daemon answers at all. No pane
+appears late and none appears twice.
+
+### Where the time goes
+
+`discover` spawns one `git` process at a time. For each repository it runs
+`remote_url`, then `worktree list --porcelain`, then `rev-parse
+--git-common-dir`, and it awaits each one before it starts the next. With 5
+repositories that is 15 sequential `git` processes, about 7 ms each, which is
+the 111 ms gap. `discover(Summaries::All)` repeats those 15 and adds 30
+`git status` calls, which do run in parallel; that is the 130 ms gap.
+
+So the largest lever on this fixture is not the snapshot. It is the sequential
+per-repository probe inside `discover`, which every discovery pays, including
+`worktree_refresh`.
+
+### Correcting the known baseline
+
+Item 2.8 quotes "the socket answers in 8 ms" from the `perf.sh` row above.
+That row measures the `bind`, not an answering daemon: `main.rs` binds the
+listener, then runs `restore()`, and only then serves. The daemon first
+answers at 47.7 ms on this fixture. The 225 ms and 438 ms figures hold in
+shape but read 159.8 ms and 289.9 ms here; `perf.sh` copies only the database
+into a new directory, so compare each number only with the same method.
+
 ## Soak (`scripts/soak/busy.sh`, debug daemon, 300 s)
 
 ```bash
