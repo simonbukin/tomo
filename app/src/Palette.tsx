@@ -1,3 +1,4 @@
+import { transition } from "./motion";
 import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { activateTab, allActions, focusPane, openWorktree, runAction } from "./actions";
@@ -155,5 +156,5 @@ export function Palette() {
 
 export function openPalette(): void {
   setUi({});
-  setState({ paletteOpen: true });
+  transition("reveal", () => setState({ paletteOpen: true }));
 }

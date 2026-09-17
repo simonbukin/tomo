@@ -1,3 +1,5 @@
+import { openPalette } from "./Palette";
+import { navigate } from "./motion";
 import { paneResultSchema, spawnResultSchema, tabSchema, worktreeOpenedSchema, worktreeSchema } from "./schemas";
 import { builtins } from "./addons";
 import { moduleCommands } from "./commands";
@@ -25,7 +27,7 @@ export interface Action {
 }
 
 export async function openWorktree(worktreeId: Id): Promise<void> {
-  setUi({ view: "worktree", activeWorktreeId: worktreeId });
+  navigate({ view: "worktree", activeWorktreeId: worktreeId });
   try {
     const r = await rpcParsed("worktree_open", worktreeOpenedSchema, { worktree_id: worktreeId });
     const tab = r.tabs.find((t) => t.is_active) ?? r.tabs[0];
@@ -485,9 +487,9 @@ export function openExternal(target: "finder" | "editor", relPath = ""): void {
 }
 
 export const actions: Action[] = [
-  { id: "home", label: "Home", run: () => setUi({ view: "home" }) },
-  { id: "activity", label: "Activity", run: () => setUi({ view: "activity" }) },
-  { id: "palette", label: "Command palette", run: () => setState((s) => ({ paletteOpen: !s.paletteOpen })) },
+  { id: "home", label: "Home", run: () => navigate({ view: "home" }) },
+  { id: "activity", label: "Activity", run: () => navigate({ view: "activity" }) },
+  { id: "palette", label: "Command palette", run: () => (getState().paletteOpen ? setState({ paletteOpen: false }) : openPalette()) },
   { id: "zoom_in", label: "Zoom in", run: () => applyZoom("in") },
   { id: "zoom_out", label: "Zoom out", run: () => applyZoom("out") },
   { id: "zoom_reset", label: "Reset zoom", run: () => applyZoom("reset") },

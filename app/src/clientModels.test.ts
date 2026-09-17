@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 const PURE_CLIENT_MODELS = [
+  "./motionModel.ts",
   "./types.ts",
   "./appearance.ts",
   "./order.ts",

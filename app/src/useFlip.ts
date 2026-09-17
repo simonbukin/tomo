@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 
-const DURATION = 180;
+const DURATION = 200;
 
 /**
  * Animates children of `ref` from where they were on the previous render to where

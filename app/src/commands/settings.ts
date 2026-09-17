@@ -1,11 +1,12 @@
+import { navigate } from "../motion";
 import { configSchema } from "../schemas";
 import type { Action } from "../actions";
 import { rpc, rpcParsed } from "../api";
-import { failToast, setState, setUi, showStatus } from "../store";
+import { failToast, setState, showStatus } from "../store";
 import { BASE_THEMES, THEME_LABELS, type ThemeName } from "../theme";
 
 export function openSettings(): void {
-  setUi({ view: "settings" });
+  navigate({ view: "settings" });
 }
 
 /** Writes one dotted key to config.toml through the daemon. `null` removes the key so the default applies. */
