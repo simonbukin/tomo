@@ -91,3 +91,12 @@
 .card-signals { padding-left: 22px; display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); margin-top: 3px; }
 .card-foot { padding-left: 22px; display: flex; align-items: center; gap: var(--sp-3); margin-top: 3px; font-size: var(--fs-0); color: var(--fg-2); min-height: 16px; font-variant-numeric: tabular-nums; }
 .card-foot .right { margin-left: auto; display: inline-flex; gap: var(--sp-3); }
+
+/* Dev gallery: one component state per cell, so a state can be read without the app around it. */
+.gallery { padding: var(--sp-4); overflow: auto; height: 100%; }
+.gallery-head { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-1); font-weight: 600; text-transform: lowercase; letter-spacing: 0.04em; color: var(--fg-3); }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); }
+.gallery-cell { margin: 0; display: grid; gap: var(--sp-1); }
+.gallery-caption { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); }
+.gallery-picker { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: var(--sp-3); }
+.gallery-inspector { width: 300px; height: 520px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }

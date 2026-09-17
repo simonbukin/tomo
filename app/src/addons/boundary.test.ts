@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../generated/**", "!../**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
+/**
+ * Product code only. A test and a dev fixture may name any addon, because they seed a state
+ * to look at; the rules below are about what ships.
+ */
+const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../generated/**", "!../dev/**", "!../**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
 
 const IMPORT = /(?:from\s+|import\s*\(\s*)["']([^"']+)["']/g;
 const ADDON_FOLDER = /(?:^|\/)addons\/(?!(?:index|types|activity)(?:\.tsx?)?$)[^/]+/;

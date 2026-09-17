@@ -38,8 +38,14 @@ import { TopStrip } from "./shell/TopStrip";
 import { ShellLoading } from "./states";
 import { useWindowChrome, useWindowWidth } from "./windowChrome";
 
-const tortureRoute = import.meta.env.DEV && window.location.hash === "#ui-torture";
-const UiTorture = tortureRoute ? lazy(() => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture }))) : () => null;
+/** Dev-only harnesses, each behind its own URL hash. Never linked from the product. */
+const DEV_ROUTES: Record<string, () => Promise<{ default: ComponentType }>> = {
+  "#ui-torture": () => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture })),
+  "#ui-gallery": () => import("./dev/Gallery").then((m) => ({ default: m.Gallery })),
+};
+
+const devRoute = import.meta.env.DEV ? DEV_ROUTES[window.location.hash] : undefined;
+const DevHarness = devRoute ? lazy(devRoute) : () => null;
 
 /** The core views that fill the centre instead of Home. Home renders when no entry and no addon claims the view. */
 const CORE_CENTER: Record<string, ComponentType> = { activity: Activity, agents: Agents, apps: Apps, settings: Settings };
@@ -47,9 +53,9 @@ const CORE_CENTER: Record<string, ComponentType> = { activity: Activity, agents:
 export function App() {
   return (
     <TooltipProvider>
-      {tortureRoute ? (
+      {devRoute ? (
         <Suspense fallback={null}>
-          <UiTorture />
+          <DevHarness />
         </Suspense>
       ) : (
         <Shell />
