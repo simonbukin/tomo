@@ -27,7 +27,7 @@ fn is_slow(call: &Call) -> bool {
     crate::dispatch::is_slow(call)
         || matches!(
             call,
-            Call::RepoAdd { .. } | Call::RepoRemove { .. } | Call::RepoClone { .. } | Call::WorktreeRefresh | Call::WorktreeCreate(_) | Call::WorktreeArchive { .. } | Call::WorktreeRestore { .. } | Call::GitSummary { .. } | Call::SystemStats
+            Call::RepoAdd { .. } | Call::RepoRemove { .. } | Call::RepoClone { .. } | Call::WorktreeRefresh | Call::WorktreeCreate(_) | Call::WorktreeArchive { .. } | Call::WorktreeRestore { .. } | Call::GitSummary { .. } | Call::BranchList { .. } | Call::SystemStats
         )
 }
 

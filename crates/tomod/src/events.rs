@@ -236,6 +236,7 @@ mod tests {
             shell: "sh".into(),
             editor_command: vec![],
             worktree_parent_dir: None,
+            branch_prefix: String::new(),
             resource_warning_bytes: 0,
             scrollback_lines: 0,
             font_family: String::new(),

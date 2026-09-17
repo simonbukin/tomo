@@ -146,6 +146,8 @@ pub enum Call {
     AttentionClear,
 
     GitSummary { worktree_id: Id },
+    /// Branches of a repository, newest commit first. A remote branch folds into its local branch.
+    BranchList { repo_id: Id, #[serde(default)] limit: Option<usize> },
     PrStatus { worktree_id: Id },
     FsList { worktree_id: Id, rel_path: String },
     OpenExternal { worktree_id: Id, rel_path: String, target: ExternalTarget },
@@ -510,6 +512,8 @@ pub struct Config {
     pub shell: String,
     pub editor_command: Vec<String>,
     pub worktree_parent_dir: Option<PathBuf>,
+    #[serde(default)]
+    pub branch_prefix: String,
     pub resource_warning_bytes: u64,
     pub scrollback_lines: u32,
     pub font_family: String,
@@ -592,6 +596,21 @@ pub struct Repo {
     #[serde(default)]
     #[ts(optional, type = "string | null")]
     pub worktree_parent: Option<PathBuf>,
+    /// `branch_prefix` from the config. A create with an empty branch gets
+    /// `<branch_prefix><worktree name>`. The daemon owns the rule; a client shows the name.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub branch_prefix: Option<String>,
+}
+
+/// One branch of a repository. A remote branch with no local branch keeps the name of its
+/// remote in `remote`, so a client can start a local branch from `<remote>/<name>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Branch {
+    pub name: String,
+    pub remote: Option<String>,
+    pub upstream: Option<String>,
+    pub committed_at_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1098,6 +1117,7 @@ mod bindings {
         Diagnostic::export_all(&cfg).unwrap();
         DiagnosticLevel::export_all(&cfg).unwrap();
         SystemStats::export_all(&cfg).unwrap();
+        Branch::export_all(&cfg).unwrap();
         let mut names: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|e| e.ok())

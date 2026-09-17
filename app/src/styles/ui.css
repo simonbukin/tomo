@@ -75,6 +75,16 @@ button.link:hover, .btn-link:hover { color: var(--accent); background: none; }
 .select-check .icon { width: 12px; height: 12px; }
 .select-item-text { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ---- combobox */
+.combobox-input { width: 100%; }
+.combobox-popup { min-width: var(--anchor-width); max-width: var(--anchor-width); background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: 4px; font-size: var(--fs-1); outline: none; z-index: var(--z-dialog); }
+.combobox-list { max-height: min(240px, var(--available-height)); overflow-y: auto; }
+.combobox-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); padding: 4px 8px; border-radius: var(--radius-sm); color: var(--fg-1); cursor: default; outline: none; }
+.combobox-item[data-highlighted] { background: var(--accent-soft); color: var(--accent); }
+.combobox-item-text { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combobox-item-detail { color: var(--fg-3); font-size: var(--fs-0); white-space: nowrap; }
+.combobox-empty { padding: 4px 8px; color: var(--fg-3); }
+
 /* ---- dialog */
 .dialog-backdrop { position: fixed; inset: 0; background: var(--backdrop); z-index: var(--z-dialog); transition: opacity var(--dur) ease-out; }
 .dialog-backdrop[data-starting-style], .dialog-backdrop[data-ending-style] { opacity: 0; }

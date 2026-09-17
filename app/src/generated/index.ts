@@ -24,6 +24,7 @@ export * from "./AttentionItem";
 export * from "./AttentionKind";
 export * from "./AttentionLevel";
 export * from "./Authority";
+export * from "./Branch";
 export * from "./CheckpointMode";
 export * from "./CheckpointSpec";
 export * from "./Config";

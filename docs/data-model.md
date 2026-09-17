@@ -196,6 +196,7 @@ commented copy when the file is missing.
 | `shell`               | `$SHELL`, else `/bin/zsh`                 | Started as a login shell (`-l`)         |
 | `editor_command`      | `["zed", "{path}"]`                       | `{path}` is replaced; appended if absent; falls back to `open` when the program is missing. For a Cmd-click on `path:line` in a terminal, `{path}` becomes `path:line:col`. To place the numbers yourself, use `{line}` and `{col}`, for example `["code", "-g", "{path}:{line}:{col}"]` |
 | `worktree_parent_dir` | unset (`~/tomo/worktrees/<repo>`)         | Where `worktree create` puts new trees. The override is flat: it gets no `<repo>` directory. It never moves a worktree that exists |
+| `branch_prefix`       | empty                                     | A create that names no branch gets `<branch_prefix><worktree name>`, for example `simon/aogashima`. The daemon owns the rule and carries the prefix to a client on `Repo.branch_prefix`. The branch is always created; a name that a branch already has fails in `git worktree add` with its own message |
 | `resource_warning_gb` | `2.0`                                     | Memory above which the sidebar shows a total |
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
 | `max_panes_per_tab`   | `4`                                       | Spawns without a target open a new tab once a tab holds this many panes |

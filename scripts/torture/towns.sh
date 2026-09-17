@@ -74,5 +74,21 @@ rm -f "$TOMO_DATA_DIR/config.toml"; daemon_restart
 read -r W4 P4 < <($T worktree create --repo "$R" --branch feat/home --new --json | jq_ "print(d[0]['id'], d[0]['path'])")
 [ "$P4" = "$HOME/tomo/worktrees/$(basename "$R")/$(slug_of "$W4")" ] && check 0 "a new worktree goes under the worktree home" || check 1 "worktree home" "$P4"
 
+# A create with no branch gets <branch_prefix><town>, and a branch that exists refuses.
+printf 'branch_prefix = "simon/"\n' > "$TOMO_DATA_DIR/config.toml"; daemon_restart
+read -r W5 P5 < <($T worktree create --repo "$R" --json | jq_ "print(d[0]['id'], d[0]['path'])")
+S5=$(slug_of "$W5"); B5=$(git -C "$P5" rev-parse --abbrev-ref HEAD)
+[ "$B5" = "simon/$S5" ] && check 0 "a create with no branch gets branch_prefix and the town" || check 1 "default branch" "$B5"
+o=$($T worktree create --repo "$R" --branch "simon/$S5" --new --json 2>&1); rc=$?
+[ $rc != 0 ] && check 0 "a branch that exists already fails in git worktree add" || check 1 "branch collision" "$o"
+
+# branch_list: one row for each name, newest commit first, origin folded into the local branch.
+git -C "$P5" commit -q --allow-empty -m newest
+git -C "$R" remote add origin "$R" 2>/dev/null; git -C "$R" fetch -q origin
+RID=$($T repo list --json | jq_ "print(d[0]['id'])")
+o=$($RPC call branch_list "{\"repo_id\":\"$RID\"}")
+has "$o" "d[0]['name']=='simon/$S5' and len([b for b in d if b['name']=='simon/$S5'])==1 and d[0]['remote'] is None and all(not b['name'].startswith('origin/') for b in d)" \
+  && check 0 "branch_list puts the newest branch first and folds origin into the local branch" || check 1 "branch list" "$o"
+
 daemon_stop
 summary

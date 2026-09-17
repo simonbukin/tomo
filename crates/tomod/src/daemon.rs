@@ -326,7 +326,11 @@ impl Daemon {
         inner
             .repos
             .iter()
-            .map(|r| Repo { worktree_parent: Some(config::worktree_parent(inner.config.worktree_parent_dir.as_deref(), &r.path)), ..r.clone() })
+            .map(|r| Repo {
+                worktree_parent: Some(config::worktree_parent(inner.config.worktree_parent_dir.as_deref(), &r.path)),
+                branch_prefix: Some(inner.config.branch_prefix.clone()),
+                ..r.clone()
+            })
             .collect()
     }
 
@@ -1577,14 +1581,14 @@ impl Daemon {
                 ok(Self::worktree_views(&self.lock()))
             }
             Call::WorktreeCreate(spec) => {
-                let (repo_path, parent_dir, name) = {
+                let (repo_path, parent_dir, branch_prefix, name) = {
                     let inner = self.lock();
                     let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
                     let name = match (&spec.path, self.seams.worktree_namer) {
                         (None, Some(namer)) => namer(&inner.store, &spec)?,
                         _ => None,
                     };
-                    (repo.path.clone(), inner.config.worktree_parent_dir.clone(), name)
+                    (repo.path.clone(), inner.config.worktree_parent_dir.clone(), inner.config.branch_prefix.clone(), name)
                 };
                 let parent = config::worktree_parent(parent_dir.as_deref(), &repo_path);
                 let path = match (&spec.path, &name) {
@@ -1595,7 +1599,13 @@ impl Daemon {
                 if let Some(dir) = path.parent() {
                     std::fs::create_dir_all(dir).map_err(|e| err(ErrorCode::Io, format!("{}: {e}", dir.display())))?;
                 }
-                git::worktree_add(&repo_path, &path, &spec.branch, spec.new_branch, spec.start_ref.as_deref())
+                let wanted = spec.branch.trim();
+                let dir_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let branch = match wanted.is_empty() {
+                    true => config::default_branch(&branch_prefix, &dir_name),
+                    false => wanted.to_string(),
+                };
+                git::worktree_add(&repo_path, &path, &branch, spec.new_branch || wanted.is_empty(), spec.start_ref.as_deref())
                     .await
                     .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
                 self.discover(Summaries::All).await.map_err(internal)?;
@@ -1996,6 +2006,13 @@ impl Daemon {
             }
 
             Call::GitSummary { worktree_id } => ok(self.refresh_git(&worktree_id).await),
+            Call::BranchList { repo_id, limit } => {
+                let repo_path = {
+                    let inner = self.lock();
+                    inner.repos.iter().find(|r| r.id == repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?.path.clone()
+                };
+                ok(git::list_branches(&repo_path, limit.unwrap_or(git::BRANCH_LIMIT)).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?)
+            }
             Call::FsList { worktree_id, rel_path } => {
                 let root = self.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
                 let dir = safe_join(&root, &rel_path).ok_or_else(|| err(ErrorCode::BadRequest, "path escapes worktree"))?;
@@ -2172,7 +2189,7 @@ fn pasted(text: &str) -> String {
 pub async fn repo_view(id: Id, path: PathBuf) -> Repo {
     let exists = path.exists();
     let remote_url = if exists { git::remote_url(&path).await } else { None };
-    Repo { id, name: repo_name(&path), exists, path, remote_url, worktree_parent: None }
+    Repo { id, name: repo_name(&path), exists, path, remote_url, worktree_parent: None, branch_prefix: None }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,0 +1,81 @@
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Repo } from "./types";
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+vi.mock("./api", async (importOriginal) => {
+  const replies: Record<string, unknown> = {
+    branch_list: [
+      { name: "feat/local", remote: null, upstream: null, committed_at_ms: 3000 },
+      { name: "feat/remote-only", remote: "origin", upstream: null, committed_at_ms: 2000 },
+      { name: "main", remote: null, upstream: "origin/main", committed_at_ms: 1000 },
+    ],
+    worktree_create: { id: "w9" },
+  };
+  return { ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn((method: string) => Promise.resolve(replies[method] ?? null)) };
+});
+vi.mock("./actions", async (importOriginal) => ({ ...(await importOriginal<typeof import("./actions")>()), openWorktree: vi.fn() }));
+
+const { Dialogs } = await import("./Dialogs");
+const { rpc } = await import("./api");
+const { getState, setState } = await import("./store");
+
+const repo = { id: "r1", name: "tomo", path: "/src/tomo", exists: true, worktree_parent: "/wt", branch_prefix: "simon/" } as unknown as Repo;
+const initial = getState();
+
+const branchBox = () => screen.getByLabelText("Branch");
+const optionNames = () => screen.queryAllByRole("option").map((o) => o.querySelector(".combobox-item-text")?.textContent);
+const created = () => vi.mocked(rpc).mock.calls.find(([method]) => method === "worktree_create")?.[1] as Record<string, unknown> | undefined;
+
+async function openDialog() {
+  const user = userEvent.setup();
+  render(<Dialogs />);
+  setState({ dialog: { kind: "create-worktree", repoId: "r1" } });
+  await waitFor(() => expect(vi.mocked(rpc).mock.calls.some(([method]) => method === "branch_list")).toBe(true));
+  return user;
+}
+
+beforeEach(() => {
+  vi.mocked(rpc).mockClear();
+  setState({ ...initial, loaded: true, repos: [repo] });
+});
+afterEach(cleanup);
+
+describe("new worktree dialog", () => {
+  it("filters the branch list while the user types", async () => {
+    const user = await openDialog();
+    await user.type(branchBox(), "remote");
+    await waitFor(() => expect(optionNames()).toEqual(["feat/remote-only"]));
+  });
+
+  it("creates from a pasted name that no branch matches", async () => {
+    const user = await openDialog();
+    await user.type(branchBox(), "feat/from-a-pull-request");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(created()).toMatchObject({ branch: "feat/from-a-pull-request", new_branch: true, start_ref: null }));
+  });
+
+  it("picking a branch that exists turns create this branch off", async () => {
+    const user = await openDialog();
+    await user.type(branchBox(), "feat/loc");
+    await user.click(await screen.findByText("feat/local"));
+    expect(screen.getByLabelText("create this branch")).not.toBeChecked();
+  });
+
+  it("picking a remote branch keeps create on and starts from the remote", async () => {
+    const user = await openDialog();
+    await user.type(branchBox(), "feat/remote-only");
+    await user.click(await screen.findByText("feat/remote-only"));
+    expect(screen.getByLabelText("create this branch")).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(created()).toMatchObject({ branch: "feat/remote-only", new_branch: true, start_ref: "origin/feat/remote-only" }));
+  });
+
+  it("an empty branch box shows the default name and still creates", async () => {
+    const user = await openDialog();
+    expect(branchBox()).toHaveAttribute("placeholder", "simon/<name>");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(created()).toMatchObject({ branch: "", new_branch: true }));
+  });
+});
