@@ -1,4 +1,5 @@
 import { ListFilter, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { addonApps } from "./addons";
 import { Wordmark } from "./Brand";
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useMemo, useState, type ReactNode } from "react";
@@ -9,7 +10,7 @@ import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
 import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
-import { repoSummaries, scopeKind, scopeTitle, scopeWorktrees, tally } from "./homeScope";
+import { greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
@@ -32,7 +33,8 @@ export function Home() {
   const visible = sortWorktrees(filterWorktrees(inScope, o, ctx), o.sort, ctx);
   const searching = o.query.trim().length > 0 || o.filters.length > 0;
   const overview = o.scope.kind === "all" && !searching;
-  const counts = tally(inScope, ctx);
+  const apps = addonApps(s);
+  const counts = tally(inScope, ctx, apps);
   const scope = o.scope;
   const scopeRepo = scope.kind === "repo" ? repos.find((r) => r.id === scope.repoId) : undefined;
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
@@ -123,15 +125,19 @@ export function Home() {
       )}
       {overview && repos.length > 0 && (
         <div className="repo-ledger">
-          <div className="home-summary">{repos.length} repositories · {counts.worktrees} worktrees · {counts.agents} agents{counts.attention > 0 ? ` · ${counts.attention} need you` : ""}</div>
+          <div className="home-greet">
+            <h2 className="home-hello">{greeting(new Date().getHours())}</h2>
+            <p className="home-status">{statusLine(counts)}</p>
+          </div>
           <div className="repo-list">
-            <div className="repo-list-head"><span /><span>repository</span><span>worktrees</span><span>agents</span><span>last activity</span></div>
-            {repoSummaries(inScope, repos, ctx).map((r) => (
+            <div className="repo-list-head"><span /><span>repository</span><span>worktrees</span><span>agents</span><span>apps</span><span>last activity</span></div>
+            {repoSummaries(inScope, repos, ctx, apps).map((r) => (
               <div key={r.repo.id} className="repo-list-row" title={r.repo.path} onClick={() => set({ scope: { kind: "repo", repoId: r.repo.id } })} onContextMenu={(e) => openMenu(e, repoMenu(r.repo))}>
                 <RepoAvatar repo={r.repo} />
                 <span className="name">{r.repo.name}{!r.repo.exists && <span className="faint"> · missing</span>}</span>
                 <span className="num">{r.worktrees}</span>
                 <span className="num">{r.agents}{r.attention > 0 && <span className={dotClass("needs")} />}</span>
+                <span className="num">{r.apps}</span>
                 <span className="muted">{r.lastActiveMs === null ? "—" : `${durationLabel(r.lastActiveMs)} ago`}</span>
               </div>
             ))}
