@@ -1,6 +1,7 @@
-import { rpc } from "../../api";
+import { actionRunResultSchema } from "../../schemas";
+import { rpc, rpcParsed } from "../../api";
 import type { MenuItem } from "../../components/ui";
-import type { ActionDef, ActionRunResult } from "../../generated";
+import type { ActionDef } from "../../generated";
 import { describeBinding } from "../../keys";
 import type { PaletteEntry } from "../../paletteModel";
 import { getState, setRowError, toast, type State } from "../../store";
@@ -23,7 +24,7 @@ const failed = (worktreeId: Id, op: string) => (e: unknown) => {
 };
 
 export function runWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc<ActionRunResult>("action_run", { worktree_id: worktreeId, action_id: actionId }).then(done(worktreeId), failed(worktreeId, actionId));
+  rpcParsed("action_run", actionRunResultSchema, { worktree_id: worktreeId, action_id: actionId }).then(done(worktreeId), failed(worktreeId, actionId));
 }
 
 export function stopWorktreeAction(worktreeId: Id, actionId: string): void {
@@ -31,7 +32,7 @@ export function stopWorktreeAction(worktreeId: Id, actionId: string): void {
 }
 
 export function restartWorktreeAction(worktreeId: Id, actionId: string): void {
-  rpc<ActionRunResult>("action_restart", { worktree_id: worktreeId, action_id: actionId }).then(done(worktreeId), failed(worktreeId, `restart ${actionId}`));
+  rpcParsed("action_restart", actionRunResultSchema, { worktree_id: worktreeId, action_id: actionId }).then(done(worktreeId), failed(worktreeId, `restart ${actionId}`));
 }
 
 const actionsOf = (worktreeId: Id): ActionDef[] => actionSet(worktreeId)?.actions ?? [];

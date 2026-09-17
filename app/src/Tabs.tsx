@@ -1,7 +1,8 @@
+import { z } from "zod";
 import { SortableContext } from "@dnd-kit/sortable";
 import { Globe, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { rpc } from "./api";
+import { rpc, rpcParsed } from "./api";
 import { activateTab, closeTab } from "./actions";
 import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./components/ui";
 import { keepInPlace, NewTabDrop, useTabSortable } from "./LayoutDnd";
@@ -126,7 +127,7 @@ function TabTail({ paneId, title }: { paneId: Id; title: string }) {
   const [lines, setLines] = useState<string[] | null>(null);
   useEffect(() => {
     let live = true;
-    rpc<string[]>("pane_tail", { pane_id: paneId, lines: TAIL_LINES })
+    rpcParsed("pane_tail", z.array(z.string()), { pane_id: paneId, lines: TAIL_LINES })
       .then((l) => live && setLines(l))
       .catch(() => live && setLines([]));
     return () => {

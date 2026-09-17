@@ -1,8 +1,8 @@
+import { configSchema } from "../schemas";
 import type { Action } from "../actions";
-import { rpc } from "../api";
+import { rpc, rpcParsed } from "../api";
 import { failToast, setState, setUi, showStatus } from "../store";
 import { BASE_THEMES, THEME_LABELS, type ThemeName } from "../theme";
-import type { Config } from "../types";
 
 export function openSettings(): void {
   setUi({ view: "settings" });
@@ -11,7 +11,7 @@ export function openSettings(): void {
 /** Writes one dotted key to config.toml through the daemon. `null` removes the key so the default applies. */
 export async function setConfig(key: string, value: unknown): Promise<boolean> {
   try {
-    setState({ config: await rpc<Config>("config_set", { key, value }) });
+    setState({ config: await rpcParsed("config_set", configSchema, { key, value }) });
     return true;
   } catch (e) {
     failToast("Setting not saved")(e);

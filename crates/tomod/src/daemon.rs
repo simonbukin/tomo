@@ -427,6 +427,16 @@ impl Daemon {
         })
     }
 
+    /// The view of a pane that must exist. A handler that just made one uses this, so a
+    /// pane that vanished is an error to the caller and never a panic in the daemon.
+    fn pane_of(inner: &Inner, pane_id: &str) -> Result<Pane, RpcError> {
+        Self::pane_view(inner, pane_id).ok_or_else(|| err(ErrorCode::Internal, "the pane vanished as it was made"))
+    }
+
+    fn pane_result(inner: &Inner, pane_id: &str, tab_id: &str) -> Result<PaneResult, RpcError> {
+        Ok(PaneResult { pane: Self::pane_of(inner, pane_id)?, tab: Self::tab_view(inner, &inner.tabs[tab_id]) })
+    }
+
     pub fn pane_views(inner: &Inner, worktree_id: Option<&str>) -> Vec<Pane> {
         let mut panes: Vec<Pane> = inner
             .panes
@@ -1637,7 +1647,7 @@ impl Daemon {
                 tokio::spawn(async move {
                     handle.refresh_git(&id).await;
                 });
-                Ok(json!({ "worktree": w, "tabs": tabs }))
+                ok(WorktreeOpened { worktree: w, tabs })
             }
             Call::WorktreeResolve { path } => {
                 let inner = self.lock();
@@ -1781,7 +1791,7 @@ impl Daemon {
                 let mut inner = self.lock();
                 let (worktree_id, cwd) = Self::worktree_for_spawn(&inner, spec.worktree_id.as_deref(), spec.cwd.as_deref())?;
                 let (tab_id, pane_id) = self.spawn_in_worktree(&mut inner, &worktree_id, cwd, spec.tab_id.as_deref(), None, SplitDirection::Horizontal, spec.command.as_deref(), spec.title, None)?;
-                ok(json!({ "pane": Self::pane_view(&inner, &pane_id), "tab": Self::tab_view(&inner, &inner.tabs[&tab_id]) }))
+                ok(Self::pane_result(&inner, &pane_id, &tab_id)?)
             }
             Call::PaneSplit { pane_id, direction, command } => {
                 let mut inner = self.lock();
@@ -1790,7 +1800,7 @@ impl Daemon {
                     (p.row.worktree_id.clone(), p.row.cwd.clone())
                 };
                 let (tab_id, new_id) = self.spawn_in_worktree(&mut inner, &worktree_id, cwd, None, Some(&pane_id), direction, command.as_deref(), None, None)?;
-                ok(json!({ "pane": Self::pane_view(&inner, &new_id), "tab": Self::tab_view(&inner, &inner.tabs[&tab_id]) }))
+                ok(Self::pane_result(&inner, &new_id, &tab_id)?)
             }
             Call::PaneClose { pane_id, force } => {
                 let mut inner = self.lock();
@@ -1927,7 +1937,7 @@ impl Daemon {
                     None,
                     Some((spec.kind, plan.session_ref, line)),
                 )?;
-                ok(SpawnResult { pane: Self::pane_view(&inner, &pane_id).unwrap(), tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
+                ok(SpawnResult { pane: Self::pane_of(&inner, &pane_id)?, tab: Self::tab_view(&inner, &inner.tabs[&tab_id]), agent: inner.agents.get(&pane_id).cloned() })
             }
             Call::AgentHook { kind, pane_id, payload, at_ms } => {
                 let outcome = providers::hook_outcome(kind, &payload);

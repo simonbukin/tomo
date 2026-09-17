@@ -1,12 +1,14 @@
+import { configIssueSchema, diagnosticSchema, hookRunSchema, integrationStatusSchema } from "../schemas";
+import { z, type ZodType } from "zod";
 import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
 import { timeLabel } from "../activityModel";
 import { builtins } from "../addons";
-import { rpc } from "../api";
+import { rpcParsed } from "../api";
 import { openDiagnostics } from "../commands/diagnostics";
 import { Button, DialogActions, DialogTitle, PopoverClose, SkeletonRows } from "../components/ui";
 import { useStore } from "../store";
-import { KIND_LABEL, type ConfigIssue, type Diagnostic, type HookRun, type IntegrationStatus } from "../types";
+import { KIND_LABEL, type Diagnostic } from "../types";
 import { CONNECTION_LABEL, countOf, formatUptime, HEALTH, hookFailures, integrationText, integrationTone, mergeDiagnostics, type Tone } from "./bottomModel";
 import { HoverPopover } from "./HoverPopover";
 
@@ -74,12 +76,12 @@ function DaemonSummary() {
 
 type Loaded<T> = T[] | "loading" | "failed";
 
-function useDaemonList<T>(method: string, params: unknown, nonce: number): Loaded<T> {
+function useDaemonList<T>(method: string, item: ZodType<T>, params: unknown, nonce: number): Loaded<T> {
   const [value, setValue] = useState<Loaded<T>>("loading");
   useEffect(() => {
     let live = true;
-    rpc<T[]>(method, params)
-      .then((r) => live && setValue(Array.isArray(r) ? r : "failed"))
+    rpcParsed(method, z.array(item), params)
+      .then((r) => live && setValue(r))
       .catch(() => live && setValue("failed"));
     return () => {
       live = false;
@@ -95,10 +97,10 @@ export function DiagnosticsReport({ eventLimit, compact = false }: { eventLimit:
   const health = useStore((s) => s.daemonHealth);
   const nonce = useStore((s) => s.connectionNonce);
   const local = useStore((s) => s.diagnostics);
-  const fetched = useDaemonList<Diagnostic>("diagnostics_list", { limit: 200 }, nonce);
-  const integrations = useDaemonList<IntegrationStatus>("integrations_status", undefined, nonce);
-  const config = useDaemonList<ConfigIssue>("config_check", undefined, nonce);
-  const hooks = useDaemonList<HookRun>("hook_log", { limit: 50 }, nonce);
+  const fetched = useDaemonList("diagnostics_list", diagnosticSchema, { limit: 200 }, nonce);
+  const integrations = useDaemonList("integrations_status", integrationStatusSchema, undefined, nonce);
+  const config = useDaemonList("config_check", configIssueSchema, undefined, nonce);
+  const hooks = useDaemonList("hook_log", hookRunSchema, { limit: 50 }, nonce);
   const events = mergeDiagnostics(listOf(fetched), local, eventLimit);
   const failures = hookFailures(listOf(hooks)).slice(0, eventLimit);
   const issues = listOf(config);

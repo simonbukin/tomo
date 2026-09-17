@@ -990,6 +990,20 @@ pub struct SpawnResult {
     pub agent: Option<AgentPresence>,
 }
 
+/// The reply of a call that makes a pane: `pane_create` and `pane_split`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct PaneResult {
+    pub pane: Pane,
+    pub tab: Tab,
+}
+
+/// The reply of `worktree_open`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct WorktreeOpened {
+    pub worktree: Worktree,
+    pub tabs: Vec<Tab>,
+}
+
 /// The Core part of the `subscribe` snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct CoreSnapshot {
@@ -1086,6 +1100,8 @@ mod bindings {
         TownHistory::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
         ProcessInfo::export_all(&cfg).unwrap();
+        PaneResult::export_all(&cfg).unwrap();
+        WorktreeOpened::export_all(&cfg).unwrap();
         SpawnResult::export_all(&cfg).unwrap();
         MetadataPatch::export_all(&cfg).unwrap();
         WorktreeCreate::export_all(&cfg).unwrap();

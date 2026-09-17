@@ -1,8 +1,9 @@
+import { paneResultSchema, spawnResultSchema, tabSchema, worktreeOpenedSchema, worktreeSchema } from "./schemas";
 import { builtins } from "./addons";
 import { moduleCommands } from "./commands";
 import { stepZoom, type Appearance } from "./appearance";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { rpc, RpcFailure } from "./api";
+import { RpcFailure, rpc, rpcParsed } from "./api";
 import { openInBrowser } from "./browser/browser";
 import { orderedStates } from "./homeQuery";
 import { activeTab, agentsOf, clearSelection, errorText, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, toast } from "./store";
@@ -26,7 +27,7 @@ export interface Action {
 export async function openWorktree(worktreeId: Id): Promise<void> {
   setUi({ view: "worktree", activeWorktreeId: worktreeId });
   try {
-    const r = await rpc<{ tabs: Tab[] }>("worktree_open", { worktree_id: worktreeId });
+    const r = await rpcParsed("worktree_open", worktreeOpenedSchema, { worktree_id: worktreeId });
     const tab = r.tabs.find((t) => t.is_active) ?? r.tabs[0];
     if (tab?.active_pane_id) window.setTimeout(() => focusTerminal(tab.active_pane_id!), 50);
   } catch (e) {
@@ -56,8 +57,8 @@ export async function splitPane(direction: SplitDirection): Promise<void> {
   const pane = focusedPaneId();
   try {
     const r = pane
-      ? await rpc<{ pane: { id: Id } }>("pane_split", { pane_id: pane, direction, command: null })
-      : await rpc<{ pane: { id: Id } }>("pane_create", { worktree_id: w.id, tab_id: null, cwd: null, command: null, title: null });
+      ? await rpcParsed("pane_split", paneResultSchema, { pane_id: pane, direction, command: null })
+      : await rpcParsed("pane_create", paneResultSchema, { worktree_id: w.id, tab_id: null, cwd: null, command: null, title: null });
     window.setTimeout(() => focusPane(r.pane.id), 50);
   } catch (e) {
     failToast("Split failed")(e);
@@ -68,7 +69,7 @@ export async function newTab(): Promise<void> {
   const w = currentWorktree();
   if (!w) return;
   try {
-    const tab = await rpc<Tab>("tab_create", { worktree_id: w.id, title: null });
+    const tab = await rpcParsed("tab_create", tabSchema, { worktree_id: w.id, title: null });
     if (tab.active_pane_id) window.setTimeout(() => focusPane(tab.active_pane_id!), 50);
   } catch (e) {
     failToast("New tab failed")(e);
@@ -175,7 +176,7 @@ export async function spawnAgent(kind: AgentKind, worktreeId?: Id, opts: SpawnOp
   }
   const from = !opts.newTab && w.id === currentWorktree()?.id ? focusedPaneId() : null;
   try {
-    const r = await rpc<{ pane: { id: Id } }>("agent_spawn", { kind, worktree_id: w.id, cwd: null, tab_id: null, split_from: from, resume: opts.resume ?? null, new_tab: !!opts.newTab, extra_args: [] });
+    const r = await rpcParsed("agent_spawn", spawnResultSchema, { kind, worktree_id: w.id, cwd: null, tab_id: null, split_from: from, resume: opts.resume ?? null, new_tab: !!opts.newTab, extra_args: [] });
     if (w.id !== getState().ui.activeWorktreeId) await openWorktree(w.id);
     window.setTimeout(() => focusPane(r.pane.id), 80);
   } catch (e) {
@@ -185,7 +186,7 @@ export async function spawnAgent(kind: AgentKind, worktreeId?: Id, opts: SpawnOp
 
 export async function newTerminalIn(worktreeId: Id): Promise<void> {
   try {
-    const r = await rpc<{ pane: { id: Id } }>("pane_create", { worktree_id: worktreeId, tab_id: null, cwd: null, command: null, title: null });
+    const r = await rpcParsed("pane_create", paneResultSchema, { worktree_id: worktreeId, tab_id: null, cwd: null, command: null, title: null });
     await openWorktree(worktreeId);
     window.setTimeout(() => focusPane(r.pane.id), 80);
   } catch (e) {
@@ -195,7 +196,7 @@ export async function newTerminalIn(worktreeId: Id): Promise<void> {
 
 export async function newTabIn(worktreeId: Id): Promise<void> {
   try {
-    const tab = await rpc<Tab>("tab_create", { worktree_id: worktreeId, title: null });
+    const tab = await rpcParsed("tab_create", tabSchema, { worktree_id: worktreeId, title: null });
     await openWorktree(worktreeId);
     if (tab.active_pane_id) window.setTimeout(() => focusPane(tab.active_pane_id!), 80);
   } catch (e) {
@@ -258,7 +259,7 @@ export function resolveCheckpoint(id: Id): void {
 }
 
 export function restoreWorktree(worktreeId: Id): void {
-  rpc<Worktree>("worktree_restore", { worktree_id: worktreeId })
+  rpcParsed("worktree_restore", worktreeSchema, { worktree_id: worktreeId })
     .then((w) => {
       setRowError(worktreeId, null);
       openWorktree(w.id);
@@ -429,7 +430,7 @@ export function killPaneTree(paneId: Id): void {
 }
 
 export function splitPaneById(paneId: Id, direction: SplitDirection): void {
-  rpc<{ pane: { id: Id } }>("pane_split", { pane_id: paneId, direction, command: null })
+  rpcParsed("pane_split", paneResultSchema, { pane_id: paneId, direction, command: null })
     .then((r) => window.setTimeout(() => focusPane(r.pane.id), 50))
     .catch(failToast("Split failed"));
 }

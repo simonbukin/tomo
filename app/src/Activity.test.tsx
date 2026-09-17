@@ -8,8 +8,9 @@ import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, Worktree
 import { defaultUi } from "./uiState";
 
 vi.mock("./api", async (importOriginal) => {
-  const replies: Record<string, unknown> = { activity_list: [], worktree_restore: { id: "w1" }, worktree_open: { tabs: [] } };
-  return { ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn((method: string) => Promise.resolve(replies[method] ?? null)) };
+  const { aWorktree, aWorktreeOpened } = await import("./test-fixtures");
+  const replies: Record<string, unknown> = { activity_list: [], worktree_restore: aWorktree(), worktree_open: aWorktreeOpened() };
+  return (await import("./test-api")).mockApi(await importOriginal<typeof import("./api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null)));
 });
 
 const { Activity } = await import("./Activity");

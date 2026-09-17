@@ -1,5 +1,6 @@
+import { tabSchema } from "../schemas";
 import { focusedPaneId, type Action } from "../actions";
-import { rpc } from "../api";
+import { rpc, rpcParsed } from "../api";
 import type { DropPlace } from "../generated";
 import { reorderTabs } from "../layoutModel";
 import { activeTab, failToast, getState, paneIds, setState } from "../store";
@@ -34,7 +35,7 @@ export async function paneToNewTab(paneId: Id): Promise<void> {
   const pane = getState().panes[paneId];
   if (!pane) return;
   try {
-    const tab = await rpc<Tab>("tab_create", { worktree_id: pane.worktree_id, title: null });
+    const tab = await rpcParsed("tab_create", tabSchema, { worktree_id: pane.worktree_id, title: null });
     movePane(paneId, { tabId: tab.id }, "right");
   } catch (e) {
     fail(e);

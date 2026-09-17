@@ -1,6 +1,7 @@
+import { paneResultSchema } from "../schemas";
 import { invoke } from "@tauri-apps/api/core";
 import { focusPane, openWorktree } from "../actions";
-import { rpc } from "../api";
+import { rpc, rpcParsed } from "../api";
 import { errorText, failToast, getState, recordDiagnostic, toast, type State } from "../store";
 import type { Id } from "../types";
 
@@ -19,7 +20,7 @@ export function normalizeUrl(text: string): string {
 
 export async function openBrowser(worktreeId: Id, url: string | null = null, tabId: Id | null = null): Promise<Id | null> {
   try {
-    const r = await rpc<{ pane: { id: Id } }>("browser_open", { worktree_id: worktreeId, url, tab_id: tabId });
+    const r = await rpcParsed("browser_open", paneResultSchema, { worktree_id: worktreeId, url, tab_id: tabId });
     if (worktreeId !== getState().ui.activeWorktreeId) await openWorktree(worktreeId);
     window.setTimeout(() => focusPane(r.pane.id), 80);
     return r.pane.id;

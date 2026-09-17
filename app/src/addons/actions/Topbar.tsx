@@ -1,8 +1,8 @@
+import { actionSetSchema } from "../../schemas";
 import { TriangleAlert } from "lucide-react";
 import { useEffect } from "react";
-import { rpc } from "../../api";
+import { rpcParsed } from "../../api";
 import { Button, IconButton, Popover, PopoverContent, PopoverTitle, PopoverTrigger, Tooltip } from "../../components/ui";
-import type { ActionSet } from "../../generated";
 import { describeBinding } from "../../keys";
 import { openMenu } from "../../MenuHost";
 import { useStore } from "../../store";
@@ -16,7 +16,7 @@ export function ActionButtons({ worktree: w }: TopbarProps) {
   const set = useActionSet(w.id);
   useEffect(() => {
     if (set) return;
-    rpc<ActionSet>("action_list", { worktree_id: w.id })
+    rpcParsed("action_list", actionSetSchema, { worktree_id: w.id })
       .then(putActionSet)
       .catch(() => {});
   }, [w.id, set === null]);
