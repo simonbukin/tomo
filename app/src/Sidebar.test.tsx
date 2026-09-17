@@ -3,7 +3,6 @@ import { SortableContext } from "@dnd-kit/sortable";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentPresence, Worktree } from "./types";
-import styles from "./WorktreeRow.module.css";
 
 vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
 
@@ -12,7 +11,7 @@ const { getState, setState } = await import("./store");
 
 const nodeFsWithoutNodeTypes = "node:fs";
 const { readFileSync } = await import(/* @vite-ignore */ nodeFsWithoutNodeTypes);
-const moduleCss: string = readFileSync("src/WorktreeRow.module.css", "utf8");
+const rowCss: string = readFileSync("src/WorktreeRow.css", "utf8");
 const tokensCss: string = readFileSync("src/styles/tokens.css", "utf8");
 
 const base = {
@@ -64,8 +63,8 @@ function renderRow(w: Worktree, agents: AgentPresence[] = []) {
 }
 
 /** One slot for each part of the row. The fixed grid needs every one of them, whatever the row holds. */
-const SLOTS = ["row", "nameLine", "meta", "sub", "branch", "signalArea"] as const;
-const slotCounts = (c: HTMLElement) => SLOTS.map((slot) => c.querySelectorAll(`.${styles[slot]}`).length);
+const SLOTS = ["wt-row", "wt-name-line", "wt-meta", "wt-sub", "wt-branch", "wt-signals"] as const;
+const slotCounts = (c: HTMLElement) => SLOTS.map((slot) => c.querySelectorAll(`.${slot}`).length);
 
 describe("worktree row height contract", () => {
   const cases: [string, Worktree, AgentPresence[]][] = [
@@ -80,20 +79,20 @@ describe("worktree row height contract", () => {
   });
 
   it.each(cases)("puts the status dot first on a %s row", (_name, w, agents) => {
-    const row = renderRow(w, agents).querySelector(`.${styles.row}`)!;
+    const row = renderRow(w, agents).querySelector(".wt-row")!;
     expect(row.firstElementChild?.className).toMatch(/\bstate\b/);
   });
 
   it("keeps the signal area to one line", () => {
     const [, loud, agents] = cases[1];
-    const area = renderRow(loud, agents).querySelector(`.${styles.signalArea}`)!;
+    const area = renderRow(loud, agents).querySelector(".wt-signals")!;
     expect(area.children).toHaveLength(1);
     expect(area.firstElementChild).toHaveClass("signals");
   });
 });
 
-describe("the module reads tokens only", () => {
-  const declarations = [...moduleCss.matchAll(/([a-z-]+)\s*:\s*([^;{}]+)/g)].map(([, prop, value]) => ({ prop, value: value.trim() }));
+describe("the row CSS reads tokens only", () => {
+  const declarations = [...rowCss.matchAll(/([a-z-]+)\s*:\s*([^;{}]+)/g)].map(([, prop, value]) => ({ prop, value: value.trim() }));
   const TOKEN_ONLY = /^(color|background|background-color|border-color|border-left-color|box-shadow|fill|stroke|font-family|font-size|transition|transition-duration|animation|animation-duration)$/;
   const LITERAL = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|lab)\(|\b\d+(?:\.\d+)?m?s\b|\b(?:red|green|blue|white|black|gray|grey|orange|yellow|purple|pink)\b/i;
 
@@ -109,7 +108,7 @@ describe("the module reads tokens only", () => {
   });
 
   it("reads tokens that the theme defines, so a theme change restyles the row", () => {
-    const used = [...new Set([...moduleCss.matchAll(/var\((--[a-z0-9-]+)\)/g)].map((m) => m[1]))];
+    const used = [...new Set([...rowCss.matchAll(/var\((--[a-z0-9-]+)\)/g)].map((m) => m[1]))];
     expect(used.length).toBeGreaterThan(0);
     for (const token of used) expect(tokensCss, token).toContain(`${token}:`);
   });

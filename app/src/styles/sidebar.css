@@ -1,4 +1,7 @@
-/* Left navigation: repos, worktrees, agents. Flat rows, no cards. */
+/* Sidebar
+ * Core navigation: repos, worktrees, agents, and the minimal rails.
+ * Dense, flat, neutral. Hierarchy comes from spacing and contrast, not from boxes.
+ */
 
 .sidebar { grid-area: left; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--line); overflow: hidden; }
 .sidebar-top { display: flex; align-items: center; gap: 2px; height: var(--bar-h); padding: 0 var(--sp-1) 0 var(--sp-3); border-bottom: 1px solid var(--line); }
@@ -19,7 +22,7 @@
 .repo-head:hover .repo-name { color: var(--fg-1); }
 .repo-avatar { border-radius: var(--radius-sm); flex: none; }
 
-/* The layout of a worktree row lives in app/src/WorktreeRow.module.css. What stays
+/* The layout of a worktree row lives in app/src/WorktreeRow.css. What stays
    here is what another component also uses, or what the row shares with the rails. */
 .tag { color: var(--fg-3); font-size: var(--fs-0); }
 

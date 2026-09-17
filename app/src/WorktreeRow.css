@@ -1,0 +1,37 @@
+/* Worktree row
+ * Core navigation, the densest surface in Tomo. Plain CSS in the .wt- namespace.
+ * The two grid rows and the fixed 42 px height give every row one size, quiet or busy.
+ * Every tone, typeface, and duration is a token, so [theme] restyles the row.
+ */
+
+.wt-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-rows: 18px 16px;
+  align-items: center;
+  column-gap: var(--sp-2);
+  height: 42px;
+  padding: 4px var(--sp-1) 4px var(--sp-3);
+  border-left: 2px solid transparent;
+}
+.wt-row:hover { background: var(--bg-1); }
+.wt-active { background: var(--bg-1); border-left-color: var(--accent); }
+.wt-selected, .wt-selected:hover { background: var(--accent-soft); }
+.wt-archiving { opacity: 0.7; }
+.wt-dragging { position: relative; z-index: 2; background: var(--bg-1); box-shadow: var(--shadow-pop); border-radius: var(--radius-sm); cursor: grabbing; }
+
+.wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
+.wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
+.wt-active .wt-name { color: var(--accent); }
+.wt-missing .wt-name { color: var(--fg-3); text-decoration: line-through; }
+.wt-archived .wt-name { color: var(--fg-2); }
+.wt-active .wt-main-star { color: var(--accent); }
+
+.wt-meta { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.wt-more { visibility: hidden; }
+.wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }
+
+.wt-sub { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
+.wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
+.wt-state { font-family: var(--font-ui); color: var(--fg-2); }
+.wt-signals { flex: 0 0 auto; max-width: 65%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

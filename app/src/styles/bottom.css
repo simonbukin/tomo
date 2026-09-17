@@ -8,7 +8,7 @@
   overflow: hidden;
   font-size: var(--fs-0);
   line-height: 1;
-  transition: grid-template-columns var(--dur) var(--ease-out);
+  transition: grid-template-columns var(--dur-open) var(--ease-out);
 }
 .bottom-strip[data-left="closed"] { grid-template-columns: minmax(0, 1fr) minmax(max-content, var(--right-col)); }
 
@@ -40,8 +40,8 @@
 .health .mono { color: var(--fg-2); }
 
 .tone-warning .num, .tone-warning .micro-bar .on { color: var(--waiting); }
-.tone-danger .num, .tone-danger .micro-bar .on { color: var(--hot); }
-.usage-meter.tone-danger .usage-name { color: var(--hot); }
+.tone-danger .num, .tone-danger .micro-bar .on { color: var(--danger); }
+.usage-meter.tone-danger .usage-name { color: var(--danger); }
 
 /* Previews and popovers opened from the strip. */
 .bottom-pop { min-width: 190px; max-width: 360px; font-size: var(--fs-1); line-height: 1.35; }

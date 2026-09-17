@@ -1,4 +1,11 @@
-/* Japan Towns: the one playful surface. Shared buttons, menus, tooltips, dialogs still apply. */
+/* Towns
+ * Expressive addon: the one playful surface. It may break the normal density and
+ * motion rules. Shared buttons, menus, tooltips, dialogs, and semantic states stay.
+ * The reveal is a ceremony, so its duration is local and not a global token.
+ */
+
+:root { --dur-reveal: 150ms; }
+@media (prefers-reduced-motion: reduce) { :root { --dur-reveal: 0ms; } }
 
 .towns { flex: 1; display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); min-height: 0; }
 .towns-map { position: relative; padding: var(--sp-4); min-width: 0; display: flex; }
