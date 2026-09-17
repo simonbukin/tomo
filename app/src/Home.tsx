@@ -181,7 +181,7 @@ export function Home() {
       {scopePage && visible.length > 0 && (
         <>
           <div className="scope-cards">
-            {visible.map((w) => <Card key={w.id} w={w} />)}
+            {visible.map((w) => <WorktreeCard key={w.id} w={w} />)}
             <button type="button" className="card-new" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>
               <Plus className="icon" /> create worktree
             </button>
@@ -195,7 +195,7 @@ export function Home() {
             {groups.map((g) => (
               <BoardColumn key={g.key || "all"} groupKey={g.key} droppable={o.group === "state"}>
                 <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key || "all"}<span className="right">{g.items.length}</span></div>
-                <div className="board-cards">{g.items.map((w) => <Card key={w.id} w={w} draggable={o.group === "state"} />)}</div>
+                <div className="board-cards">{g.items.map((w) => <WorktreeCard key={w.id} w={w} draggable={o.group === "state"} />)}</div>
               </BoardColumn>
             ))}
           </div>
@@ -283,7 +283,7 @@ function BoardColumn({ groupKey, droppable, children }: { groupKey: string; drop
   );
 }
 
-function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
+export function WorktreeCard({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
