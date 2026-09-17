@@ -184,7 +184,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
         items={branches.map((b) => b.name)}
         detail={(name) => known(name)?.remote ?? undefined}
         placeholder={defaultBranch}
-        empty="no branch of this repository matches"
+        empty="no branch matches"
         onValueChange={choose}
         onSelect={choose}
         onHighlight={(name) => (highlighted.current = name)}
