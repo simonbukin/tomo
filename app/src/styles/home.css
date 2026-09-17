@@ -16,6 +16,24 @@
 .home-empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: 80px 0; color: var(--fg-2); }
 .home-group { margin-bottom: var(--sp-4); }
 
+/* ---- scope header and the repository overview */
+.scope-head { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
+.scope-kind { font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); }
+.scope-title { font-size: var(--fs-3); font-weight: 600; color: var(--fg); }
+.scope-path { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-summary { color: var(--fg-2); font-size: var(--fs-1); margin-bottom: var(--sp-3); }
+.repo-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.repo-list-head, .repo-list-row { display: grid; grid-template-columns: 16px minmax(120px, 2fr) 90px 90px minmax(90px, 1fr); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); }
+.repo-list-head { height: 22px; font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); border-bottom: 1px solid var(--line); }
+.repo-list-head > :nth-child(3), .repo-list-head > :nth-child(4) { text-align: right; }
+.repo-list-row { height: 30px; border-bottom: 1px solid var(--line); font-size: var(--fs-1); color: var(--fg-1); cursor: pointer; transition: background-color var(--dur-fast) ease-out; }
+.repo-list-row:hover { background: var(--bg-1); }
+.repo-list-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repo-list-row .name { color: var(--fg); font-weight: 500; font-size: var(--fs-2); }
+.repo-list-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-2); }
+.repo-list-row .num .state { margin-left: var(--sp-1); }
+.repo-list-row .muted { color: var(--fg-2); font-variant-numeric: tabular-nums; }
+
 .chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: var(--fs-1); color: var(--fg-1); background: var(--bg-1); }
 .chip .btn-icon { width: 18px; height: 18px; padding: 2px; }
 .chip .btn-icon .icon { width: 11px; height: 11px; }

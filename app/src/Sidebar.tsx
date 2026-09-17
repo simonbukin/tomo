@@ -124,6 +124,8 @@ type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: I
 
 const repoKey = (id: Id) => `repo:${id}`;
 
+const openRepoHome = (repoId: Id) => setUi({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
+
 function Group({ group, active, sortable = false }: { group: LensGroup; active: string | null; sortable?: boolean }) {
   const { repo, items } = group;
   const drag = useSortable({ id: repoKey(group.key), data: { kind: "repo", id: group.key } satisfies DragData, disabled: !sortable || !group.key });
@@ -140,7 +142,7 @@ function Group({ group, active, sortable = false }: { group: LensGroup; active: 
       <div ref={drag.setActivatorNodeRef} className="section-label repo-head" {...drag.attributes} {...drag.listeners} onContextMenu={(e) => repo?.id && openMenu(e, repoMenu(repo))}>
         <span className="repo-toggle" onClick={toggle}>{collapsed ? <ChevronRight className="icon chevron" /> : <ChevronDown className="icon chevron" />}</span>
         {repo && <RepoAvatar repo={repo} />}
-        <span className="repo-name" onClick={toggle}>{group.label}</span>
+        <span className="repo-name" onClick={repo?.id ? () => openRepoHome(repo.id) : toggle}>{group.label}</span>
         {repo && !repo.exists && <span className="faint">missing</span>}
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
