@@ -31,7 +31,7 @@ const state = {
 
 describe("worktree menu", () => {
   it("follows the PRD order", () => {
-    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "—", "state", "tags", "set project…", "rename…", "—", "open in zed", "reveal in finder", "copy", "—", "archive…"]);
+    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "—", "state", "tags", "set project...", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
   });
 
   it("copies path, branch, and worktree id, and skips a missing branch", () => {
@@ -41,7 +41,7 @@ describe("worktree menu", () => {
 
   it("lists known tags as checks with an edit item", () => {
     const tags = entry(worktreeMenu(worktree, state), "tags").submenu!;
-    expect(labels(tags)).toEqual(["ui", "—", "edit tags…"]);
+    expect(labels(tags)).toEqual(["ui", "—", "edit tags..."]);
     expect(entry(tags, "ui").checked).toBe(true);
   });
 });
@@ -59,7 +59,7 @@ describe("tab menu", () => {
 describe("pane menu", () => {
   it("has the PRD items, send to other tabs, and copy for cwd and session id", () => {
     const menu = paneMenu("p1", state);
-    expect(labels(menu)).toEqual(["split right", "split down", "zoom", "equalize", "rotate", "swap with", "—", "send to", "—", "rename pane…", "copy", "—", "kill process tree", "close"]);
+    expect(labels(menu)).toEqual(["split right", "split down", "zoom", "equalize", "rotate", "swap with", "—", "send to", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
     expect(labels(entry(menu, "send to").submenu!)).toEqual(["two"]);
     expect(labels(entry(menu, "copy").submenu!)).toEqual(["cwd", "session id"]);
   });

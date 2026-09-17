@@ -25,7 +25,6 @@ export function Apps() {
   return (
     <div className="apps">
       <div className="apps-bar">
-        <span className="apps-title">apps</span>
         <span className="faint">{rows.length > 0 ? `${rows.length} running` : ""}</span>
       </div>
       {rows.length === 0 ? (

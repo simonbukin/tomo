@@ -27,7 +27,7 @@ export function Settings({ close, section }: { close: () => void; section?: Sett
           ))}
         </nav>
         <div className="settings-body">
-          {!config && <div className="faint">loading…</div>}
+          {!config && <div className="faint">loading...</div>}
           {config && active === "appearance" && <AppearanceSection config={config} />}
           {config && active === "terminal" && <TerminalSection config={config} />}
           {config && active === "keyboard" && <KeyboardSection config={config} />}
@@ -241,7 +241,7 @@ function KeyRow({ id, label, binding }: { id: string; label: string; binding: st
     <div className="settings-key">
       <span className="name">{label}</span>
       <button className={`key-capture${recording ? " recording" : ""}`} aria-label={`Shortcut for ${label}`} onClick={() => setRecording(true)} onBlur={() => setRecording(false)} onKeyDown={onKeyDown}>
-        {recording ? "press keys…" : describeBinding(binding)}
+        {recording ? "press keys..." : describeBinding(binding)}
       </button>
       <Button variant="link" onClick={() => setConfig(`keybindings.${id}`, null)}>
         reset
@@ -345,7 +345,7 @@ export function IntegrationStatusList() {
   return (
     <>
       <div className="dialog-list">
-        {items === null && <div className="faint">checking…</div>}
+        {items === null && <div className="faint">checking...</div>}
         {items?.map((i) => (
           <div key={i.kind} className="dialog-row" title={i.binary ?? "binary not found"}>
             <span className={`state state-${i.level}`} />
@@ -361,7 +361,7 @@ export function IntegrationStatusList() {
       </div>
       <div>
         <Button size="sm" disabled={busy} onClick={install}>
-          {busy ? "installing…" : "install hooks"}
+          {busy ? "installing..." : "install hooks"}
         </Button>
       </div>
     </>

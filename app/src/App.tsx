@@ -150,7 +150,7 @@ function Shell() {
           <LayoutDnd>
             <CheckpointBanner worktree={worktree} />
             <TabBar worktreeId={worktree.id} />
-            {tab ? <TabLayout key={tab.id} tab={tab} /> : <div className="center-empty muted">Opening…</div>}
+            {tab ? <TabLayout key={tab.id} tab={tab} /> : <div className="center-empty muted">Opening...</div>}
           </LayoutDnd>
         )}
       </main>

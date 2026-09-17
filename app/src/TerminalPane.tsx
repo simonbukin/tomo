@@ -181,5 +181,5 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
 function shortPath(p: string): string {
   const parts = p.split("/").filter(Boolean);
-  return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : p;
+  return parts.length > 2 ? ".../" + parts.slice(-2).join("/") : p;
 }

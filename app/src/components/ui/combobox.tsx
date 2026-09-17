@@ -17,14 +17,17 @@ export interface ComboboxProps {
   empty?: ReactNode;
   className?: string;
   onKeyDown?: (event: KeyboardEvent) => void;
+  /** Runs when the box loses focus, so a caller can save what the user typed. */
+  onBlur?: () => void;
   "aria-label"?: string;
 }
 
 /** A text box that filters a list and still accepts text that no item matches. */
-export function Combobox({ value, onValueChange, items, onSelect, onHighlight, detail, placeholder, empty, className, onKeyDown, ...aria }: ComboboxProps) {
+export function Combobox({ value, onValueChange, items, onSelect, onHighlight, detail, placeholder, empty, className, onKeyDown, onBlur, ...aria }: ComboboxProps) {
   return (
     <Autocomplete.Root items={items} value={value} onValueChange={onValueChange} onItemHighlighted={(item) => onHighlight?.(item)}>
-      <Autocomplete.Input className={cx("combobox-input", className)} placeholder={placeholder} onKeyDown={onKeyDown} {...aria} />
+      {/* A filter box never wants the platform to capitalise or correct what the user types. */}
+      <Autocomplete.Input className={cx("combobox-input", className)} placeholder={placeholder} onKeyDown={onKeyDown} onBlur={onBlur} autoCapitalize="none" autoCorrect="off" spellCheck={false} {...aria} />
       <Autocomplete.Portal>
         <Autocomplete.Positioner className="combobox-positioner" sideOffset={4} collisionPadding={8}>
           <Autocomplete.Popup className="combobox-popup">

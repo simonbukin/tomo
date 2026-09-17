@@ -18,7 +18,7 @@ export function needsMeItems(list: AttentionItem[], agents: AgentPresence[]): At
 }
 
 export function truncate(text: string, max = 80): string {
-  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+  return text.length <= max ? text : `${text.slice(0, max - 3).trimEnd()}...`;
 }
 
 const DAY_MS = 86_400_000;

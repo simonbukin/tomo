@@ -85,7 +85,7 @@ function AddRepo({ close }: { close: () => void }) {
       <label>Existing repository path</label>
       <div className="row">
         <input className="mono" value={path} placeholder="/path/to/repo" onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-        <Button onClick={browse}>Browse…</Button>
+        <Button onClick={browse}>Browse...</Button>
       </div>
       <label>Or clone</label>
       <input className="mono" value={url} placeholder="git@github.com:org/repo.git" onChange={(e) => setUrl(e.target.value)} />
@@ -94,7 +94,7 @@ function AddRepo({ close }: { close: () => void }) {
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
         <Button variant="default" disabled={busy || (!path.trim() && !(url.trim() && dest.trim()))} onClick={add}>
-          {busy ? "Working…" : "Add"}
+          {busy ? "Working..." : "Add"}
         </Button>
       </DialogActions>
     </>
@@ -207,7 +207,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
         <Button variant="default" disabled={busy || !repo} onClick={() => create()}>
-          {busy ? "Creating…" : "Create"}
+          {busy ? "Creating..." : "Create"}
         </Button>
       </DialogActions>
     </>

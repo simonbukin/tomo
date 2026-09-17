@@ -32,7 +32,7 @@ describe("palette nested actions", () => {
     await user.keyboard("{Enter}");
     expect(crumbs()).toEqual(["aogashima"]);
     expect(input).toHaveValue("");
-    expect(optionLabels()).toEqual(expect.arrayContaining(["open", "new terminal", "new claude", "copy", "archive…"]));
+    expect(optionLabels()).toEqual(expect.arrayContaining(["open", "new terminal", "new claude", "copy", "archive..."]));
 
     await user.keyboard("{Backspace}");
     expect(crumbs()).toEqual([]);

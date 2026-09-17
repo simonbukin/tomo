@@ -21,7 +21,7 @@ export interface SelectProps<V extends string> {
 }
 
 /** A single-value select with keyboard navigation and typeahead. */
-export function Select<V extends string>({ value, onValueChange, options, placeholder = "Choose…", disabled, className, size = "md", ...aria }: SelectProps<V>) {
+export function Select<V extends string>({ value, onValueChange, options, placeholder = "Choose...", disabled, className, size = "md", ...aria }: SelectProps<V>) {
   const items = options.map((o) => ({ value: o.value, label: o.label }));
   return (
     <S.Root<V, false> value={value} onValueChange={(v) => v !== null && onValueChange(v)} items={items} disabled={disabled}>

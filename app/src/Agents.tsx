@@ -22,7 +22,6 @@ export function Agents() {
   return (
     <div className="agents">
       <div className="agents-bar">
-        <span className="agents-title">agents</span>
         <span className="faint">{rows.length > 0 ? `${rows.length} running` : ""}</span>
       </div>
       {rows.length === 0 ? (

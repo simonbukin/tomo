@@ -203,7 +203,7 @@ function Row({ w }: { w: Worktree }) {
       <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
       <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       <span className="muted">{w.metadata.project ?? repo}</span>
-      <span className="muted">{busy ? "archiving…" : archived ? "archived" : (state ?? "")}</span>
+      <span className="muted">{busy ? "archiving..." : archived ? "archived" : (state ?? "")}</span>
       <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
       <span className="agents">
         <RowError worktreeId={w.id} />
@@ -235,7 +235,7 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
-  const sub = [w.metadata.project ?? repo, busy ? "archiving…" : archived ? "archived" : state].filter(Boolean).join(" · ");
+  const sub = [w.metadata.project ?? repo, busy ? "archiving..." : archived ? "archived" : state].filter(Boolean).join(" · ");
   const summary = summarizeState(agents, attention);
   const drag = useDraggable({ id: w.id, disabled: !draggable || archived || busy });
   return (
@@ -246,7 +246,7 @@ function Card({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
       className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}${drag.isDragging ? " card-dragging" : ""}`}
       onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
-      title={[w.path, state ? `state: ${state}` : null, busy ? "archiving…" : null].filter(Boolean).join("\n")}
+      title={[w.path, state ? `state: ${state}` : null, busy ? "archiving..." : null].filter(Boolean).join("\n")}
     >
       <div className="card-title">
         <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />

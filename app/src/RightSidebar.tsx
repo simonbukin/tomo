@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, Copy, ExternalLink, Eye, File, Folder } from
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import { openMenu } from "./MenuHost";
-import { Select, SkeletonRows } from "./components/ui";
+import { Combobox, Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
@@ -33,6 +33,7 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
 function MetadataSection({ w }: { w: Worktree }) {
   const m = w.metadata;
   const states = useStore((s) => orderedStates(s.config?.states ?? []));
+  const projects = useStore((s) => [...new Set(s.worktrees.map((x) => x.metadata.project).filter((p): p is string => !!p))].sort());
   const [name, setName] = useState(m.display_name ?? "");
   const [project, setProject] = useState(m.project ?? "");
   const [tags, setTags] = useState(m.tags.join(", "));
@@ -45,8 +46,19 @@ function MetadataSection({ w }: { w: Worktree }) {
   return (
     <section className="side-section" data-section="worktree">
       <SectionLabel id="worktree" />
-      <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
-      <div className="kv"><label>project</label><input value={project} onChange={(e) => setProject(e.target.value)} onBlur={() => commit({ project: project.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
+      <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
+      <div className="kv"><label>project</label>
+        <Combobox
+          aria-label="Project"
+          value={project}
+          items={projects}
+          placeholder="none"
+          onValueChange={setProject}
+          onSelect={(v) => commit({ project: v })}
+          onBlur={() => commit({ project: project.trim() || null })}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        />
+      </div>
       <div className="kv"><label>state</label>
         <Select
           aria-label="Workflow state"
@@ -56,7 +68,7 @@ function MetadataSection({ w }: { w: Worktree }) {
           options={[{ value: "", label: "no state" }, ...states.map((s) => ({ value: s.id, label: s.label })), ...(m.state && !states.some((s) => s.id === m.state) ? [{ value: m.state, label: m.state }] : [])]}
         />
       </div>
-      <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
+      <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
     </section>
   );
 }
