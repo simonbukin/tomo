@@ -36,7 +36,7 @@ export function Sidebar() {
   const shortcut = useShortcuts();
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
   const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
-  const shown = worktrees.filter((w) => ui.showArchivedInSidebar || !w.archived_at_ms);
+  const shown = worktrees.filter((w) => (ui.showArchivedInSidebar || !w.archived_at_ms) && (ui.showMain || !w.is_main));
   const manual = ui.sidebarSort === "manual";
   const draggable = ui.lens === "repo";
   const groups = lensGroups(shown, ui.lens, ctx, { repos, sort: ui.sidebarSort, manualOrder: ui.manualOrder, repoOrder: ui.repoOrder });
@@ -80,6 +80,7 @@ export function Sidebar() {
   const sortMenu = (): MenuItem[] => [
     ...SORTS.map((s) => ({ label: s === "manual" ? "manual (drag rows)" : s, checked: ui.sidebarSort === s, run: () => setUi({ sidebarSort: s }) })),
     { separator: true },
+    { label: "show main worktree", checked: ui.showMain, run: () => setUi({ showMain: !ui.showMain }) },
     { label: "show archived", checked: ui.showArchivedInSidebar, run: () => setUi({ showArchivedInSidebar: !ui.showArchivedInSidebar }) },
     { label: "show hidden repos", checked: ui.showHiddenRepos, run: () => setUi({ showHiddenRepos: !ui.showHiddenRepos }) },
   ];

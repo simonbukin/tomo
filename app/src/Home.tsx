@@ -28,7 +28,7 @@ export function Home() {
   const set = (patch: Partial<HomeOptions>) => setUi({ home: { ...o, ...patch } });
   const ctx = useMemo(() => queryContext(s), [s.repos, s.agents, s.attention, s.config?.states]);
   const repos = visibleRepos(s);
-  const known = s.worktrees.filter((w) => repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id));
+  const known = s.worktrees.filter((w) => (repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)) && (s.ui.showMain || !w.is_main));
   const inScope = scopeWorktrees(known, o.scope);
   const visible = sortWorktrees(filterWorktrees(inScope, o, ctx), o.sort, ctx);
   const searching = o.query.trim().length > 0 || o.filters.length > 0;
@@ -81,6 +81,7 @@ export function Home() {
     { label: "group by", submenu: (["state", "repo", "project", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
     { label: "sort", submenu: (["state", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
     { separator: true },
+    { label: "show main worktree", checked: s.ui.showMain, run: () => setUi({ showMain: !s.ui.showMain }) },
     { label: "show archived", checked: o.showArchived, run: () => set({ showArchived: !o.showArchived }) },
   ];
   const label = (f: Filter) => {

@@ -22,7 +22,7 @@ export function SidebarToggle({ side, mode }: { side: Side; mode: SidebarMode })
   const id = side === "left" ? "toggle_left_sidebar" : "toggle_right_sidebar";
   const Icon = TOGGLE_ICON[side][mode];
   return (
-    <IconButton label={side === "left" ? "Toggle sidebar" : "Toggle inspector"} shortcut={shortcut(id)} data-mode={mode} onClick={() => runAction(id)}>
+    <IconButton label={side === "left" ? "Toggle sidebar" : "Toggle inspector"} shortcut={shortcut(id)} className="side-toggle" data-mode={mode} onClick={() => runAction(id)}>
       <Icon className="icon" />
     </IconButton>
   );
@@ -32,7 +32,7 @@ export function SidebarToggle({ side, mode }: { side: Side; mode: SidebarMode })
 export function TopLeft({ mode }: { mode: SidebarMode }) {
   const shortcut = useShortcuts();
   return (
-    <div className="top-left" data-tauri-drag-region>
+    <div className="top-left" data-mode={mode} data-tauri-drag-region>
       <button type="button" className="top-brand" aria-label="Home" title={shortcut("home") ? `Home · ${shortcut("home")}` : "Home"} onClick={() => runAction("home")}>
         <Mark size={15} />
         <Wordmark height={13} />

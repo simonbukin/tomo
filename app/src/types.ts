@@ -106,6 +106,8 @@ export interface UiState {
   rightSection: RightSection | null;
   sidebarSort: SidebarSort;
   lens: SidebarLens;
+  /** The repository root worktree is hidden by default; it is rarely the thing being worked on. */
+  showMain: boolean;
   showArchivedInSidebar: boolean;
   /** Collapsed group keys: a repo id in the repository lens, a lens-prefixed key in the others. */
   collapsedRepos: string[];
