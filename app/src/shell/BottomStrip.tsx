@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { runAction } from "../actions";
 import { builtins } from "../addons";
 import { rpcParsed } from "../api";
-import { systemStatsSchema } from "../generated/schemas";
+import { systemStatsSchema } from "../schemas";
 import { openSettings } from "../commands/settings";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";

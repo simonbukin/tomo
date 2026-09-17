@@ -3,7 +3,7 @@ import { activityView } from "./activityKinds";
 import { groupByDay, mergeActivity, needsMeItem, payloadString, timeLabel } from "./activityModel";
 import { openEndpoint, resolveCheckpoint } from "./actions";
 import { rpcParsed } from "./api";
-import { activityEventSchema } from "./generated/schemas";
+import { activityEventSchema } from "./schemas";
 import { z } from "zod";
 import { SkeletonRows } from "./components/ui";
 import { activityEmptyText, type ActivityFilter as Filter } from "./emptyStates";

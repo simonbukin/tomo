@@ -1,7 +1,7 @@
 import { useRef, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { rpc, rpcParsed } from "./api";
-import { configIssueSchema } from "./generated/schemas";
+import { configIssueSchema } from "./schemas";
 import { mergeActivity, needsMeItems } from "./activityModel";
 import { announceAttention } from "./attention";
 import { attentionToastKey } from "./notifyRoute";

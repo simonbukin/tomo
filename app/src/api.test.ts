@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(()
 
 const { invoke } = await import("@tauri-apps/api/core");
 const { RpcFailure, rpcParsed } = await import("./api");
-const { processInfoSchema, gitSummarySchema } = await import("./generated/schemas");
+const { processInfoSchema, gitSummarySchema } = await import("./schemas");
 
 const reply = (value: unknown) => vi.mocked(invoke).mockResolvedValue(value);
 

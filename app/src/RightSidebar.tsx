@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, File, Folder, RotateCw } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { rpc, rpcParsed } from "./api";
-import { agentSessionSchema, fsEntrySchema, processInfoSchema } from "./generated/schemas";
+import { agentSessionSchema, fsEntrySchema, processInfoSchema } from "./schemas";
 import { openMenu } from "./MenuHost";
 import { Combobox, IconButton, plainTextInput, Select, SkeletonRows } from "./components/ui";
 import { fileMenu } from "./menus";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-const modules = import.meta.glob<string>(["./*.ts", "!./index.ts", "!./schemas.ts"], { query: "?raw", import: "default", eager: true });
+const modules = import.meta.glob<string>(["./generated/*.ts", "!./generated/index.ts"], { query: "?raw", import: "default", eager: true });
 const schemas = import.meta.glob<string>("./schemas.ts", { query: "?raw", import: "default", eager: true })["./schemas.ts"];
 
 const exported = new Set([...schemas.matchAll(/^export const (\w+)(?::[^=]+)? =/gm)].map((m) => m[1]));

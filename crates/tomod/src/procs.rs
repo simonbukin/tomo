@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use itertools::Itertools;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tomo_proto::{Id, Ownership, ProcessInfo, WorktreeResources};
 
@@ -101,10 +102,7 @@ pub fn program_name(row: &ProcRow) -> String {
 }
 
 pub fn children_index(rows: &[ProcRow]) -> HashMap<u32, Vec<u32>> {
-    rows.iter().filter_map(|r| r.ppid.map(|pp| (pp, r.pid))).fold(HashMap::new(), |mut m, (pp, pid)| {
-        m.entry(pp).or_default().push(pid);
-        m
-    })
+    rows.iter().filter_map(|r| r.ppid.map(|pp| (pp, r.pid))).into_group_map()
 }
 
 pub fn descendants(rows: &[ProcRow], root: u32) -> Vec<u32> {
@@ -174,18 +172,21 @@ pub fn classify(rows: &[ProcRow], roots: &[Root], worktree_paths: &[(Id, PathBuf
     out
 }
 
+/// Heaviest worktree first. A tie breaks on the id, so the order is the same on every poll.
 pub fn aggregate(infos: &[ProcessInfo]) -> Vec<WorktreeResources> {
-    let mut by_wt: HashMap<Id, WorktreeResources> = HashMap::new();
-    for info in infos {
-        let Some(wt) = &info.worktree_id else { continue };
-        let entry = by_wt.entry(wt.clone()).or_insert_with(|| WorktreeResources { worktree_id: wt.clone(), ..Default::default() });
-        entry.cpu_percent += info.cpu_percent;
-        entry.rss_bytes += info.rss_bytes;
-        entry.process_count += 1;
-    }
-    let mut out: Vec<_> = by_wt.into_values().collect();
-    out.sort_by(|a, b| b.rss_bytes.cmp(&a.rss_bytes));
-    out
+    infos
+        .iter()
+        .filter_map(|info| info.worktree_id.clone().map(|wt| (wt, info)))
+        .into_group_map()
+        .into_iter()
+        .map(|(worktree_id, group)| WorktreeResources {
+            worktree_id,
+            cpu_percent: group.iter().map(|i| i.cpu_percent).sum(),
+            rss_bytes: group.iter().map(|i| i.rss_bytes).sum(),
+            process_count: group.len() as u32,
+        })
+        .sorted_by(|a, b| b.rss_bytes.cmp(&a.rss_bytes).then_with(|| a.worktree_id.cmp(&b.worktree_id)))
+        .collect()
 }
 
 pub fn kill_tree(rows: &[ProcRow], root: u32) {

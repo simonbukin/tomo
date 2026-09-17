@@ -1,7 +1,7 @@
 // GENERATED from the ts-rs types by scripts/gen-schemas.mjs. DO NOT EDIT.
 // Run: pnpm gen:schemas
 import { z } from "zod";
-import { type LayoutNode } from "./index";
+import { type LayoutNode } from "./generated";
 
 export const actionActivitySchema = z.union([z.literal("action_started"), z.literal("action_stopped"), z.literal("action_completed"), z.literal("action_crashed")]);
 

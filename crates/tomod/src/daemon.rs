@@ -1320,26 +1320,18 @@ impl Daemon {
     }
 
     async fn archive_worktree(self: &Arc<Self>, worktree_id: &str, checkpoint: CheckpointMode) -> Result<Value, RpcError> {
-        let (path, repo_path, branch, event, head) = {
+        let (target, event) = {
             let mut inner = self.lock();
             let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.clone();
-            if w.is_main {
-                return Err(err(ErrorCode::BadRequest, "the main worktree cannot be archived"));
-            }
-            if w.archived_at_ms.is_some() {
-                return Err(err(ErrorCode::Conflict, "worktree is already archived"));
-            }
-            if !inner.archiving.insert(worktree_id.to_string()) {
-                return Err(err(ErrorCode::Conflict, "worktree is already being archived"));
-            }
-            let repo_path = inner.repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+            let target = archive_target(&w, &inner.repos, &inner.archiving)?;
+            inner.archiving.insert(worktree_id.to_string());
             Self::emit(&mut inner, Event::WorktreeArchiving { worktree_id: worktree_id.to_string() });
             let worktrees = Self::worktree_views(&inner);
             Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
             let event = events::envelope(&inner, "worktree.before_archive", Some(worktree_id));
-            (w.path.clone(), repo_path, w.branch.clone().unwrap_or_default(), event, w.head.clone())
+            (target, event)
         };
-        let result = self.archive_steps(worktree_id, &path, &repo_path, &branch, event, checkpoint).await;
+        let result = self.archive_steps(worktree_id, &target.path, &target.repo_path, &target.branch, event, checkpoint).await;
         let mut inner = self.lock();
         inner.archiving.remove(worktree_id);
         match result {
@@ -1349,7 +1341,7 @@ impl Daemon {
                 let title = format!("{} archived", Self::worktree_name(&inner, worktree_id));
                 let mut ev = activity::event(CoreActivity::Archived, Some(worktree_id), title);
                 ev.detail = result.checkpoint_commit.as_ref().map(|c| format!("checkpoint {}", &c[..c.len().min(7)]));
-                ev.payload = json!({ "branch": result.branch, "checkpoint_commit": result.checkpoint_commit, "head": head });
+                ev.payload = json!({ "branch": result.branch, "checkpoint_commit": result.checkpoint_commit, "head": target.head });
                 Self::record(&mut inner, ev);
                 let worktrees = Self::worktree_views(&inner);
                 Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
@@ -2230,9 +2222,77 @@ async fn futures_summaries(found: &[(Repo, Vec<git::WorktreeEntry>, PathBuf)]) -
     out
 }
 
+/// What an archive needs from the state.
+pub struct ArchiveTarget {
+    pub path: PathBuf,
+    pub repo_path: PathBuf,
+    pub branch: String,
+    pub head: String,
+}
+
+/// Every reason an archive must not start, decided from state alone: no lock, no clock, and
+/// no IO. The caller marks the worktree in flight only after this returns a target, so a
+/// refusal cannot leave an id behind in `archiving` and block the worktree for the session.
+pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>) -> Result<ArchiveTarget, RpcError> {
+    if w.is_main {
+        return Err(err(ErrorCode::BadRequest, "the main worktree cannot be archived"));
+    }
+    if w.archived_at_ms.is_some() {
+        return Err(err(ErrorCode::Conflict, "worktree is already archived"));
+    }
+    if archiving.contains(&w.id) {
+        return Err(err(ErrorCode::Conflict, "worktree is already being archived"));
+    }
+    let repo_path = repos
+        .iter()
+        .find(|r| r.id == w.repo_id)
+        .map(|r| r.path.clone())
+        .ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+    Ok(ArchiveTarget { path: w.path.clone(), repo_path, branch: w.branch.clone().unwrap_or_default(), head: w.head.clone() })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_archive_refuses_before_it_marks_the_worktree_in_flight() {
+        let repo = Repo { id: "r1".into(), path: PathBuf::from("/repo"), name: "repo".into(), exists: true, remote_url: None, worktree_parent: None, branch_prefix: None };
+        let wt = |patch: fn(&mut WorktreeState)| {
+            let mut w = WorktreeState {
+                id: "w1".into(),
+                repo_id: "r1".into(),
+                path: PathBuf::from("/repo/wt"),
+                branch: Some("feat/x".into()),
+                head: "abc1234".into(),
+                detached: false,
+                is_main: false,
+                exists: true,
+                gitdir: None,
+                git: None,
+                metadata: WorktreeMetadata::default(),
+                last_active_ms: None,
+                first_seen_ms: None,
+                archived_at_ms: None,
+            };
+            patch(&mut w);
+            w
+        };
+        let none = HashSet::new();
+
+        let target = archive_target(&wt(|_| {}), &[repo.clone()], &none).expect("a plain worktree archives");
+        assert_eq!(target.repo_path, PathBuf::from("/repo"));
+        assert_eq!(target.branch, "feat/x");
+        assert_eq!(target.head, "abc1234");
+
+        assert_eq!(archive_target(&wt(|w| w.branch = None), &[repo.clone()], &none).unwrap().branch, "", "a detached worktree archives with no branch");
+
+        let code = |r: Result<ArchiveTarget, RpcError>| r.err().map(|e| e.code);
+        assert_eq!(code(archive_target(&wt(|w| w.is_main = true), &[repo.clone()], &none)), Some(ErrorCode::BadRequest));
+        assert_eq!(code(archive_target(&wt(|w| w.archived_at_ms = Some(1)), &[repo.clone()], &none)), Some(ErrorCode::Conflict));
+        assert_eq!(code(archive_target(&wt(|_| {}), &[repo.clone()], &HashSet::from(["w1".to_string()]))), Some(ErrorCode::Conflict));
+        assert_eq!(code(archive_target(&wt(|_| {}), &[], &none)), Some(ErrorCode::NotFound), "a missing repo refuses, and marks nothing");
+    }
 
     #[test]
     fn problem_change_records_only_appear_change_and_clear() {
