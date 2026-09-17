@@ -1,4 +1,5 @@
 import type { Addon } from "../types";
+import { apps } from "./apps";
 import { looseItems, paletteEntries, sourceItems } from "./commands";
 import { appUrl, runtimeSignals, SIGNAL_CLASS } from "./model";
 import { applyRuntimeFrame, replaceEndpoints } from "./state";
@@ -14,6 +15,7 @@ export const runtime: Addon = {
   sourceMark: EndpointMark,
   sourceMenu: sourceItems,
   appUrl,
+  apps,
   onSnapshot: replaceEndpoints,
   onFrame: applyRuntimeFrame,
 };
