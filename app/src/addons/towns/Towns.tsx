@@ -1,9 +1,10 @@
+import { townHistorySchema } from "../../schemas";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, Minus, Plus, RotateCcw, X } from "lucide-react";
 import { Button, IconButton, SkeletonRows } from "../../components/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openWorktree } from "../../actions";
-import { rpc } from "../../api";
+import { rpcParsed } from "../../api";
 import outline from "./data/japan-outline.json";
 import towns from "./data/japan-towns.json";
 import { townsProgress, type Rarity } from "./model";
@@ -226,7 +227,7 @@ function TownDetail({ town, onClose }: { town: Town; onClose: () => void }) {
 
   useEffect(() => {
     let live = true;
-    rpc<TownHistory>("town_history", { slug: town.slug })
+    rpcParsed("town_history", townHistorySchema, { slug: town.slug })
       .then((h) => {
         if (!live) return;
         setHistory(h);

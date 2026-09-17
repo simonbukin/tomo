@@ -6,7 +6,12 @@ import type { ActionSet, AttentionItem, Pane, Snapshot, Tab, Worktree } from "..
 import type { Frame } from "../../types";
 
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ isFocused: async () => true }) }));
-vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
+vi.mock("../../api", async (importOriginal) => {
+  const { aPane } = await import("../../test-fixtures");
+  const run = (reused: boolean) => ({ action: { id: "serve", label: "Serve", command: "pnpm dev", mode: "pane", show: "always", shortcut: null }, pane: aPane(), reused });
+  const replies: Record<string, unknown> = { action_run: run(false), action_restart: run(true) };
+  return (await import("../../test-api")).mockApi(await importOriginal<typeof import("../../api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null)));
+});
 
 const { rpc } = await import("../../api");
 const { WorktreeHeader } = await import("../../WorktreeHeader");

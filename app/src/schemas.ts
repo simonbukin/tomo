@@ -387,6 +387,38 @@ export const paneCreateSchema = z.object({
     title: z.string().nullable()
 });
 
+export const paneSchema = z.object({
+    id: z.string(),
+    tab_id: z.string(),
+    worktree_id: z.string(),
+    title: z.string(),
+    user_title: z.string().nullable(),
+    cwd: z.string(),
+    cols: z.number(),
+    rows: z.number(),
+    pid: z.number().nullable(),
+    live: z.boolean(),
+    origin: paneOriginSchema,
+    exit_code: z.number().nullable(),
+    agent: agentPresenceSchema.nullable(),
+    created_at_ms: z.number(),
+    action_id: z.string().nullable(),
+    source: paneSourceSchema.nullable(),
+    process_cmd: z.string().nullable(),
+    kind: paneKindSchema,
+    url: z.string().nullable()
+});
+
+export const tabSchema = z.object({
+    id: z.string(),
+    worktree_id: z.string(),
+    title: z.string(),
+    position: z.number(),
+    layout: layoutNodeSchema,
+    active_pane_id: z.string().nullable(),
+    is_active: z.boolean()
+});
+
 export const prStatusResultSchema = z.object({
     available: z.boolean(),
     reason: z.string().nullable(),
@@ -469,38 +501,6 @@ export const worktreeSchema = z.object({
     pane_count: z.number()
 });
 
-export const tabSchema = z.object({
-    id: z.string(),
-    worktree_id: z.string(),
-    title: z.string(),
-    position: z.number(),
-    layout: layoutNodeSchema,
-    active_pane_id: z.string().nullable(),
-    is_active: z.boolean()
-});
-
-export const paneSchema = z.object({
-    id: z.string(),
-    tab_id: z.string(),
-    worktree_id: z.string(),
-    title: z.string(),
-    user_title: z.string().nullable(),
-    cwd: z.string(),
-    cols: z.number(),
-    rows: z.number(),
-    pid: z.number().nullable(),
-    live: z.boolean(),
-    origin: paneOriginSchema,
-    exit_code: z.number().nullable(),
-    agent: agentPresenceSchema.nullable(),
-    created_at_ms: z.number(),
-    action_id: z.string().nullable(),
-    source: paneSourceSchema.nullable(),
-    process_cmd: z.string().nullable(),
-    kind: paneKindSchema,
-    url: z.string().nullable()
-});
-
 export const spawnResultSchema = z.object({
     pane: paneSchema,
     tab: tabSchema,
@@ -553,6 +553,11 @@ export const worktreeCreateSchema = z.object({
     name_hint: z.string().nullable()
 });
 
+export const worktreeOpenedSchema = z.object({
+    worktree: worktreeSchema,
+    tabs: z.array(tabSchema)
+});
+
 export const actionRunResultSchema = z.object({
     action: actionDefSchema,
     pane: paneSchema.nullable(),
@@ -600,6 +605,11 @@ export const hookEventSchema = z.object({
     agent: hookAgentSchema.nullable(),
     attention: attentionItemSchema.nullable(),
     action: hookActionSchema.nullable()
+});
+
+export const paneResultSchema = z.object({
+    pane: paneSchema,
+    tab: tabSchema
 });
 
 export const snapshotSchema = z.object({

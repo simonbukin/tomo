@@ -5,15 +5,16 @@ import type { Repo } from "./types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("./api", async (importOriginal) => {
+  const { aWorktree } = await import("./test-fixtures");
   const replies: Record<string, unknown> = {
     branch_list: [
       { name: "feat/local", remote: null, upstream: null, committed_at_ms: 3000 },
       { name: "feat/remote-only", remote: "origin", upstream: null, committed_at_ms: 2000 },
       { name: "main", remote: null, upstream: "origin/main", committed_at_ms: 1000 },
     ],
-    worktree_create: { id: "w9" },
+    worktree_create: aWorktree({ id: "w9" }),
   };
-  return { ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn((method: string) => Promise.resolve(replies[method] ?? null)) };
+  return (await import("./test-api")).mockApi(await importOriginal<typeof import("./api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null)));
 });
 vi.mock("./actions", async (importOriginal) => ({ ...(await importOriginal<typeof import("./actions")>()), openWorktree: vi.fn() }));
 

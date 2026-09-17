@@ -1,14 +1,16 @@
+import { branchSchema, configIssueSchema, hookRunSchema, repoSchema, worktreeSchema } from "./schemas";
+import { z, type ZodType } from "zod";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import { worktreeNameField } from "./addons";
-import { rpc } from "./api";
+import { rpcParsed } from "./api";
 import { openWorktree } from "./actions";
 import { Button, Combobox, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, SkeletonRows } from "./components/ui";
 import { IntegrationStatusList } from "./Settings";
 import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
-import type { Branch, ConfigIssue, HookRun, Repo, Worktree } from "./types";
+import type { Branch } from "./types";
 
 /** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
@@ -65,8 +67,8 @@ function AddRepo({ close }: { close: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      if (url.trim()) await rpc<Repo>("repo_clone", { url: url.trim(), dest: dest.trim() });
-      else await rpc<Repo>("repo_add", { path: path.trim() });
+      if (url.trim()) await rpcParsed("repo_clone", repoSchema, { url: url.trim(), dest: dest.trim() });
+      else await rpcParsed("repo_add", repoSchema, { path: path.trim() });
       close();
     } catch (e) {
       setError((e as Error).message);
@@ -119,7 +121,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   }, [repos, repo]);
   useEffect(() => {
     setBranches([]);
-    if (repo) rpc<Branch[]>("branch_list", { repo_id: repo }).then(setBranches).catch(() => setBranches([]));
+    if (repo) rpcParsed("branch_list", z.array(branchSchema), { repo_id: repo }).then(setBranches).catch(() => setBranches([]));
   }, [repo]);
   const r = repos.find((x) => x.id === repo);
   const worktreeName = path.trim() ? path.trim().replace(/\/+$/, "").split("/").pop()! : (nameHint ?? "<name>");
@@ -140,7 +142,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
     setError(null);
     try {
       const b = known(wanted);
-      const w = await rpc<Worktree>("worktree_create", {
+      const w = await rpcParsed("worktree_create", worktreeSchema, {
         repo_id: repo,
         branch: wanted,
         new_branch: wanted ? (b ? b.remote != null : isNew) : true,
@@ -213,11 +215,11 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   );
 }
 
-function useRpcList<T>(method: string, params?: Record<string, unknown>): { items: T[] | null; error: string | null; reload: () => void } {
+function useRpcList<T>(method: string, item: ZodType<T>, params?: Record<string, unknown>): { items: T[] | null; error: string | null; reload: () => void } {
   const [items, setItems] = useState<T[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reload = () =>
-    rpc<T[]>(method, params)
+    rpcParsed(method, z.array(item), params)
       .then((list) => {
         setError(null);
         setItems(list);
@@ -245,7 +247,7 @@ function IntegrationsDialog({ close }: { close: () => void }) {
 }
 
 function ConfigCheckDialog({ close }: { close: () => void }) {
-  const { items, error } = useRpcList<ConfigIssue>("config_check");
+  const { items, error } = useRpcList("config_check", configIssueSchema);
   return (
     <>
       <DialogTitle>config check</DialogTitle>
@@ -271,7 +273,7 @@ function ConfigCheckDialog({ close }: { close: () => void }) {
 }
 
 function HookLogDialog({ close }: { close: () => void }) {
-  const { items, error } = useRpcList<HookRun>("hook_log", { limit: 20 });
+  const { items, error } = useRpcList("hook_log", hookRunSchema, { limit: 20 });
   const [open, setOpen] = useState<number | null>(null);
   return (
     <>

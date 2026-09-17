@@ -11,7 +11,10 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
-vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../api")>()), rpc: vi.fn(() => Promise.resolve({ pane: { id: "b2" } })) }));
+vi.mock("../api", async (importOriginal) => {
+  const { aPaneResult, aPane } = await import("../test-fixtures");
+  return (await import("../test-api")).mockApi(await importOriginal<typeof import("../api")>(), vi.fn(() => Promise.resolve(aPaneResult({ pane: aPane({ id: "b2", kind: "browser" }) }))));
+});
 
 const { invoke } = await import("@tauri-apps/api/core");
 const { openUrl } = await import("@tauri-apps/plugin-opener");

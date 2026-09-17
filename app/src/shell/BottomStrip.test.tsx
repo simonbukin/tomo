@@ -11,7 +11,7 @@ const { daemonEvents } = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../api")>()), rpc: vi.fn((method: string) => Promise.resolve(method === "diagnostics_list" ? daemonEvents : [])) }));
+vi.mock("../api", async (importOriginal) => (await import("../test-api")).mockApi(await importOriginal<typeof import("../api")>(), vi.fn((method: string) => Promise.resolve(method === "diagnostics_list" ? daemonEvents : []))));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(() => Promise.resolve("0.1.3")) }));
 
 const { BottomStrip } = await import("./BottomStrip");

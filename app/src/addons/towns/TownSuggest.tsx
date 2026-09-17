@@ -1,5 +1,6 @@
+import { townSchema } from "../../schemas";
 import { useEffect, useState } from "react";
-import { rpc } from "../../api";
+import { rpcParsed } from "../../api";
 import { Button } from "../../components/ui";
 import type { Town } from "../../generated";
 import type { WorktreeNameFieldProps } from "../types";
@@ -7,7 +8,7 @@ import type { WorktreeNameFieldProps } from "../types";
 /** The town that the next worktree gets. Its slug is the `name_hint`, so the create unlocks the town that the user saw. */
 export function TownSuggest({ hidden, onHint }: WorktreeNameFieldProps) {
   const [town, setTown] = useState<Town | null>(null);
-  const reroll = () => rpc<Town>("town_pick").then(setTown).catch(() => setTown(null));
+  const reroll = () => rpcParsed("town_pick", townSchema).then(setTown).catch(() => setTown(null));
   useEffect(() => {
     reroll();
   }, []);

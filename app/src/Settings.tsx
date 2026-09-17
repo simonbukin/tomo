@@ -1,14 +1,16 @@
+import { configIssueSchema, integrationStatusSchema, statusSchema } from "./schemas";
+import { z } from "zod";
 import { Minus, Plus } from "lucide-react";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { allActions, applyZoom } from "./actions";
-import { rpc } from "./api";
+import { rpc, rpcParsed } from "./api";
 import { openConfigFile, setConfig } from "./commands/settings";
 import { Button, IconButton, Select } from "./components/ui";
 import { describeBinding } from "./keys";
 import { bindingFromEvent, SETTINGS_SECTIONS, splitList, type SettingsSection } from "./settingsModel";
 import { failToast, setState, showStatus, toast, useStore } from "./store";
 import { ACCENT_PRESETS, BASE_THEMES, THEME_LABELS, TOKENS, useResolvedTheme, type AccentPreset, type ThemeName, type Token } from "./theme";
-import type { Config, ConfigIssue, IntegrationStatus, Status } from "./types";
+import type { Config, ConfigIssue, IntegrationStatus } from "./types";
 
 /** Settings reads and writes config.toml through the daemon; only zoom stays in UI state. */
 export function Settings() {
@@ -43,12 +45,12 @@ function ConfigFile({ config }: { config: Config | null }) {
   const [path, setPath] = useState<string | null>(null);
   const [issues, setIssues] = useState<ConfigIssue[]>([]);
   useEffect(() => {
-    rpc<Status>("status")
+    rpcParsed("status", statusSchema)
       .then((s) => setPath(`${s.data_dir}/config.toml`))
       .catch(() => setPath(null));
   }, []);
   useEffect(() => {
-    rpc<ConfigIssue[]>("config_check")
+    rpcParsed("config_check", z.array(configIssueSchema))
       .then(setIssues)
       .catch(() => setIssues([]));
   }, [config]);
@@ -301,7 +303,7 @@ export function IntegrationStatusList() {
   const [items, setItems] = useState<IntegrationStatus[] | null>(null);
   const [busy, setBusy] = useState(false);
   const load = () =>
-    rpc<IntegrationStatus[]>("integrations_status")
+    rpcParsed("integrations_status", z.array(integrationStatusSchema))
       .then(setItems)
       .catch((e) => {
         failToast("Integration status failed")(e);

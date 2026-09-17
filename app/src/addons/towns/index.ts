@@ -1,7 +1,8 @@
+import { townUnlockSchema } from "../../schemas";
+import { z } from "zod";
 import { Map as MapIcon } from "lucide-react";
 import { lazy } from "react";
-import { rpc } from "../../api";
-import type { TownUnlock } from "../../generated";
+import { rpcParsed } from "../../api";
 import { setUi } from "../../store";
 import type { Addon } from "../types";
 import { MapLoading } from "./MapLoading";
@@ -16,7 +17,7 @@ export const towns: Addon = {
   worktreeNameField: TownSuggest,
   mount: TownReveal,
   onSnapshot: () => {
-    rpc<{ unlocks: TownUnlock[] }>("town_list")
+    rpcParsed("town_list", z.object({ unlocks: z.array(townUnlockSchema) }), undefined)
       .then((r) => setTownState({ unlocks: r.unlocks ?? [] }))
       .catch(() => {});
   },
