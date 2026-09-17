@@ -45,7 +45,8 @@ keeps at most three, in this order:
    (`checks failed`) that the session already knows
 
 A healthy quiet worktree shows at most `Claude ●` and `App ↗`. The dots
-and colors are the shared status vocabulary from `base.css`. No new colors,
+and colors are the shared status vocabulary from `base.css` and
+`app/src/signals.css`. No new colors,
 no cards inside cards. The list row keeps its grid and puts the signals in
 the `agents` column. The board card shows name, `project · state`, the
 signals, then `+12 −4` when the diff is not empty.
@@ -263,33 +264,36 @@ as a submenu opens.
 
 ## Tokens
 
-`app/src/styles/tokens.css` holds the palette, fonts, sizes, spacing, radius,
-durations, and shadows. Inter is the interface font. Geist Mono is for
+`app/src/styles/tokens.css` holds every token, in the groups `DESIGN.md`
+names: surfaces, text, borders, identity, semantic state, floating, type,
+space, shape, and motion. Inter is the interface font. Geist Mono is for
 terminal-adjacent text: branches, paths, ids, commands, process rows, and
 shortcuts. Murasaki `--accent` marks active state, selection, and focus only.
-Semantic colors (`--working`, `--waiting`, `--hot`, `--ins`, `--del`) keep
-their meaning everywhere.
+Semantic colors (`--working`, `--waiting`, `--danger`, `--success`) keep their
+meaning everywhere.
 
-Spacing uses 4, 8, 12, 16. Radius is 3 to 6 px. Motion is 80 to 150 ms and
-only for floating surfaces and small state changes.
+Spacing uses 4, 8, 12, 16, 24. Radius is 3 to 6 px. Motion is 80 to 140 ms and
+only for floating surfaces and small state changes. Shell geometry
+(`--title-h`, `--bar-h`, `--bottom-h`) lives in `layout.css`, not in
+`tokens.css`. Do not add a component token such as
+`--sidebar-row-active-hover-background`. Write local CSS instead.
 
 ### Motion tokens
 
-The motion block at the end of `tokens.css` holds the curves and the named
-moments. It has no colors. `--dur-fast` (80 ms) and `--dur` (140 ms) stay
-the base.
+`tokens.css` holds three durations and two curves. It has no separate motion
+block.
 
 | Token | Value | Use |
 |-------|-------|-----|
 | `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | hover, press, open |
 | `--ease-in` | `cubic-bezier(0.4, 0, 1, 1)` | close |
-| `--dur-hover` | 100 ms | background and color on hover |
-| `--dur-press` | 80 ms | the press scale (`--press-scale`, 0.97) |
+| `--dur-fast` | 80 ms | the press scale (`--press-scale`, 0.97) and small state changes |
+| `--dur-hover` | 100 ms | background and color on hover, and a surface that closes |
 | `--dur-open` | 140 ms | menus, popovers, dialogs, attention arrival |
-| `--dur-close` | 100 ms | the same surfaces when they close |
-| `--dur-reveal` | 150 ms | the town reveal |
 | `--hit-min` | 24 px | the smallest clickable area |
-| `--focus-ring-width` | 2 px | the focus ring |
+
+The focus ring is 2 px and lives in `base.css`. The town reveal keeps its own
+`--dur-reveal` in `addons/towns/towns.css`, because one addon uses it.
 
 Under `prefers-reduced-motion: reduce` every duration is 0 and the press
 scale is 1. The guard in `base.css` also stops every animation. No springs,
@@ -482,13 +486,15 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
 ```text
 styles/
   index.css     imports, in order
-  tokens.css    variables, light and dark
-  base.css      reset, typography, status dots, motion
-  ui.css        primitives
-  layout.css    shell grid, top strip, worktree header, tabs, inspector, resize handles
+  tokens.css    every token, in groups, light and dark
+  base.css      reset, typography, selection, focus, status dots, motion guard
+  ui.css        primitives, form controls, key caps
+  layout.css    shell grid and geometry, top strip, worktree header, tabs, inspector, resize handles
   sidebar.css   left navigation and the minimal rails
   home.css      list rows and board
   terminal.css  splits and panes
+  ../signals.css          the NOW signal line, beside Signals.tsx
+  ../WorktreeRow.css      the sidebar worktree row, beside Sidebar.tsx
   ../browser/browser.css  browser pane toolbar and host box
   palette.css   command palette
   towns.css     Japan map
@@ -503,21 +509,24 @@ styles/
   space, type, and motion; the status vocabulary (`.state`, the dot classes,
   the glyph tones); the resets; and every class that more than one component
   uses.
-- **Module** (`<Component>.module.css` beside the component): the layout that
-  one component owns. Grid areas, sizes, and local states.
+- **Feature** (a plain `.css` file beside the component): the layout and the
+  local states that one surface owns. Class names carry a feature namespace:
+  `.wt-*`, `.towns-*`, `.browser-*`, `.activity-*`, `.rail-*`.
 - **The rule:** if a change must reach the whole app, it is a token or a
-  shared class. If a change must reach one component, it is a module.
+  shared class. If a change reaches one surface, it is local CSS.
 
-A module reads tokens. It writes no color, no typeface, and no duration, so
-`[theme]` in `config.toml` stays the one theming surface (see
-[theming.md](theming.md)). Vite scopes each module class as
-`<File>__<class>__<hash>`, so the inspector still names the file that holds
-the rule.
+Tomo does not use CSS Modules. Plain CSS greps better, an agent can find the
+rule from the class name, and collisions are manageable at this scale. Revisit
+only if real collisions become a problem.
 
-`app/src/WorktreeRow.module.css` is the first module: the sidebar worktree
-row. `Sidebar.test.tsx` fails if a row loses a slot, or if the module holds a
-color, a typeface, or a duration. The rest of the app moves later, one
-component at a time, and only where a module makes it simpler.
+Feature CSS reads tokens. `app/src/WorktreeRow.css` writes no color, no
+typeface, and no duration, so `[theme]` in `config.toml` stays the one theming
+surface (see [theming.md](theming.md)). `Sidebar.test.tsx` fails if a row
+loses a slot, or if that file holds a color, a typeface, or a duration.
+
+`DESIGN.md` at the repository root holds the design language itself: brand
+character, hierarchy, color, shape, type, density, motion, and how much
+freedom a surface has.
 
 ## Torture page
 
