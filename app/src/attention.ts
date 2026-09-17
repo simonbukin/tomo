@@ -3,7 +3,7 @@ import { sourceOwner } from "./addons";
 import { rpc } from "./api";
 import { attentionDelivery, type AttentionActionId, type AttentionNames, type RouteContext } from "./notifyRoute";
 import { playChime } from "./sounds";
-import { activeTab, getState, toast, type State } from "./store";
+import {activeTab, failQuietly, getState, toast, type State} from "./store";
 import type { AttentionItem } from "./types";
 
 async function windowFocused(): Promise<boolean> {
@@ -66,7 +66,7 @@ export async function announceAttention(item: AttentionItem): Promise<void> {
   const names = namesOf(s, item);
   const delivery = attentionDelivery(item, routeContext(s, focused), names);
   if (delivery.channels.includes("chime")) playChime("checkpoint");
-  if (delivery.markSeen) rpc("attention_view", { id: item.id }).catch(() => {});
+  if (delivery.markSeen) rpc("attention_view", { id: item.id }).catch(failQuietly("attention_view"));
   if (delivery.toast) {
     const { actions, ...rest } = delivery.toast;
     toast({ ...rest, actions: actions.map((a) => toastAction(a, item, names)) });

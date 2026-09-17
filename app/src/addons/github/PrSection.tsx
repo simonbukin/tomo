@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { rpcParsed } from "../../api";
 import { prStatusResultSchema } from "../../schemas";
 import { SkeletonRows } from "../../components/ui";
-import { useStore } from "../../store";
+import {failQuietly, failToast, useStore} from "../../store";
 import type { Worktree } from "../../types";
 import { prStatusOf, setPrStatus } from "./state";
 
@@ -11,7 +11,7 @@ const PR_POLL_MS = 120_000;
 
 export function PrDetail({ worktree: w }: { worktree: Worktree }) {
   const status = useStore((s) => prStatusOf(s, w.id));
-  const load = () => rpcParsed("pr_status", prStatusResultSchema, { worktree_id: w.id }).then((r) => setPrStatus(w.id, r)).catch(() => {});
+  const load = () => rpcParsed("pr_status", prStatusResultSchema, { worktree_id: w.id }).then((r) => setPrStatus(w.id, r)).catch(failQuietly("pr_status"));
   useEffect(() => {
     if (!w.exists) return;
     load();
@@ -28,7 +28,7 @@ export function PrDetail({ worktree: w }: { worktree: Worktree }) {
   }
   return (
     <>
-      <div className="kv"><label>pull request</label><span className="pr-title" title={pr.title} onClick={() => openUrl(pr.url).catch(() => {})}><span className="pr-number">#{pr.number}</span> <span>{pr.title}</span></span></div>
+      <div className="kv"><label>pull request</label><span className="pr-title" title={pr.title} onClick={() => openUrl(pr.url).catch(failToast("Could not open the link"))}><span className="pr-number">#{pr.number}</span> <span>{pr.title}</span></span></div>
       <div className="kv"><label>review</label><span><span className={`state pr-${pr.state}`} /> {pr.state}{pr.draft ? ", draft" : ""}{pr.review_decision ? `, ${pr.review_decision.replace(/_/g, " ")}` : ""}</span></div>
       <div className="kv"><label>checks</label><span><span className={`state check-${checkState}`} /> {checks === 0 ? "none" : `${pr.checks_passed} passed${pr.checks_failed ? `, ${pr.checks_failed} failed` : ""}${pr.checks_pending ? `, ${pr.checks_pending} pending` : ""}`}</span></div>
       {pr.mergeable && pr.mergeable !== "mergeable" && <div className="kv"><label>merge</label><span className="hot">{pr.mergeable}</span></div>}

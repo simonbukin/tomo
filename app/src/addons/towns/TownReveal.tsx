@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { playChime } from "../../sounds";
-import { setUi } from "../../store";
+import {failQuietly, setUi} from "../../store";
 import { setTownState, useTownState } from "./state";
 import { ceremonyTier, chimeFor, prefersReducedMotion, revealDurationMs, unlockedLine } from "./model";
 import type { Town } from "../../generated";
@@ -15,7 +15,7 @@ export function TownReveal() {
   const [hiddenNonce, setHiddenNonce] = useState(0);
 
   useEffect(() => {
-    if (reveal && !towns) loadTowns().then(setTowns).catch(() => {});
+    if (reveal && !towns) loadTowns().then(setTowns).catch(failQuietly("town_list"));
   }, [reveal?.nonce]);
 
   const town = reveal && towns ? (towns.find((t) => t.slug === reveal.unlock.slug) ?? null) : null;

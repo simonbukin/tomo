@@ -6,7 +6,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { RpcFailure, rpc, rpcParsed } from "./api";
 import { openInBrowser } from "./browser/browser";
 import { orderedStates } from "./homeQuery";
-import { activeTab, agentsOf, clearSelection, errorText, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, toast } from "./store";
+import {activeTab, agentsOf, clearSelection, errorText, failQuietly, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, toast} from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
 
@@ -48,7 +48,7 @@ export function focusedPaneId(): Id | null {
 
 export async function focusPane(paneId: Id): Promise<void> {
   focusTerminal(paneId);
-  await rpc("pane_focus", { pane_id: paneId }).catch(() => {});
+  await rpc("pane_focus", { pane_id: paneId }).catch(failQuietly("pane_focus"));
 }
 
 export async function splitPane(direction: SplitDirection): Promise<void> {
@@ -119,7 +119,7 @@ export async function closeTab(tabId: Id): Promise<void> {
 export function activateTab(tabId: Id): void {
   const s = getState();
   const tab = Object.values(s.tabs).flat().find((t) => t.id === tabId);
-  rpc("tab_activate", { tab_id: tabId }).catch(() => {});
+  rpc("tab_activate", { tab_id: tabId }).catch(failQuietly("tab_activate"));
   if (tab?.active_pane_id) window.setTimeout(() => focusTerminal(tab.active_pane_id!), 30);
 }
 
@@ -158,7 +158,7 @@ export async function nextAttention(): Promise<void> {
   } else {
     await openWorktree(item.worktree_id);
   }
-  await rpc("attention_view", { id: item.id }).catch(() => {});
+  await rpc("attention_view", { id: item.id }).catch(failQuietly("attention_view"));
 }
 
 export interface SpawnOptions {
@@ -255,7 +255,7 @@ export function openEndpoint(url: string, worktreeId?: Id): void {
 export function resolveCheckpoint(id: Id): void {
   rpc("checkpoint_resolve", { id })
     .then(() => setState((s) => ({ attention: s.attention.filter((a) => a.id !== id) })))
-    .catch(() => {});
+    .catch(failQuietly("checkpoint_resolve"));
 }
 
 export function restoreWorktree(worktreeId: Id): void {

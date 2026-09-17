@@ -11,7 +11,7 @@ import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { useShortcuts } from "./shortcuts";
 import { dotClass } from "./glyphs";
-import { paneIds, useStore } from "./store";
+import {failQuietly, paneIds, useStore} from "./store";
 import type { Id, Pane, Tab } from "./types";
 
 const TAIL_LINES = 8;
@@ -30,7 +30,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const shortcut = useShortcuts();
 
   const commit = () => {
-    if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(() => {});
+    if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(failQuietly("tab_rename"));
     setEditing(null);
   };
 

@@ -10,7 +10,7 @@ import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
 import { InspectorSection } from "./sections";
-import { failToast, formatBytes, useStore } from "./store";
+import {failQuietly, failToast, formatBytes, useStore} from "./store";
 import { gitDetails, inspectorSections } from "./addons";
 import type { AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
 
@@ -78,12 +78,12 @@ function MetadataSection({ w }: { w: Worktree }) {
 function GitSection({ w }: { w: Worktree }) {
   const g = w.git;
   useEffect(() => {
-    rpc("git_summary", { worktree_id: w.id }).catch(() => {});
-    const t = window.setInterval(() => rpc("git_summary", { worktree_id: w.id }).catch(() => {}), 10_000);
+    rpc("git_summary", { worktree_id: w.id }).catch(failQuietly("git_summary"));
+    const t = window.setInterval(() => rpc("git_summary", { worktree_id: w.id }).catch(failQuietly("git_summary")), 10_000);
     return () => window.clearInterval(t);
   }, [w.id]);
   return (
-    <InspectorSection id="git" control={<IconButton label="Refresh git status" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(() => {})}><RotateCw className="icon" /></IconButton>}>
+    <InspectorSection id="git" control={<IconButton label="Refresh git status" onClick={() => rpc("git_summary", { worktree_id: w.id }).catch(failToast("Refresh failed"))}><RotateCw className="icon" /></IconButton>}>
       <div className="kv"><label>branch</label><span className="mono">{w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "—")}</span></div>
       {g ? (
         <>
@@ -105,7 +105,7 @@ function ProcessSection({ w }: { w: Worktree }) {
   const res = useStore((s) => s.resources[w.id]);
   const [procs, setProcs] = useState<ProcessInfo[]>([]);
   useEffect(() => {
-    const load = () => rpcParsed("ps", z.array(processInfoSchema), { worktree_id: w.id }).then(setProcs).catch(() => {});
+    const load = () => rpcParsed("ps", z.array(processInfoSchema), { worktree_id: w.id }).then(setProcs).catch(failQuietly("ps"));
     load();
     const t = window.setInterval(load, 3000);
     return () => window.clearInterval(t);
@@ -185,7 +185,7 @@ function FilesSection({ w }: { w: Worktree }) {
   const [selected, setSelected] = useState<string>("");
   const [dirs, setDirs] = useState<Record<string, FsEntry[]>>({});
   const [openDirs, setOpenDirs] = useState<Set<string>>(new Set([""]));
-  const load = (rel: string) => rpcParsed("fs_list", z.array(fsEntrySchema), { worktree_id: w.id, rel_path: rel }).then((e) => setDirs((d) => ({ ...d, [rel]: e }))).catch(() => {});
+  const load = (rel: string) => rpcParsed("fs_list", z.array(fsEntrySchema), { worktree_id: w.id, rel_path: rel }).then((e) => setDirs((d) => ({ ...d, [rel]: e }))).catch(failQuietly("fs_list"));
   useEffect(() => {
     setDirs({});
     setOpenDirs(new Set([""]));
@@ -204,7 +204,7 @@ function FilesSection({ w }: { w: Worktree }) {
   const render = (rel: string, depth: number): React.ReactNode =>
     sortEntries(dirs[rel] ?? [], sort).map((e) => (
       <div key={e.rel_path}>
-        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(() => {})}>
+        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(failQuietly("open_external"))}>
           {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />}
           <span className="file-name">{e.name}</span>
           {e.modified_ms > 0 && <span className="file-age">{ago(e.modified_ms)}</span>}

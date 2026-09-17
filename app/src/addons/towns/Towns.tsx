@@ -9,7 +9,7 @@ import outline from "./data/japan-outline.json";
 import towns from "./data/japan-towns.json";
 import { townsProgress, type Rarity } from "./model";
 import { EmptyState, InlineError } from "../../states";
-import { setState, useStore } from "../../store";
+import {failToast, setState, useStore} from "../../store";
 import { getTownState, useTownState } from "./state";
 import type { Town, TownHistory, TownUnlock } from "../../generated";
 
@@ -263,12 +263,12 @@ function TownDetail({ town, onClose }: { town: Town; onClose: () => void }) {
           </div>
           <div className="kv"><label>status</label><span>{h.status}</span></div>
           <div className="kv"><label>{liveTree ? "head" : "final commit"}</label><span className="mono" title={h.final_commit ?? undefined}>{h.final_commit?.slice(0, 7) ?? "—"}</span></div>
-          {h.pr && <div className="kv"><label>pull request</label><span><button className="link" onClick={() => openUrl(h.pr!.url).catch(() => {})}>#{h.pr.number} {h.pr.state}</button></span></div>}
+          {h.pr && <div className="kv"><label>pull request</label><span><button className="link" onClick={() => openUrl(h.pr!.url).catch(failToast("Could not open the link"))}>#{h.pr.number} {h.pr.state}</button></span></div>}
           <div className="kv"><label>repo</label><span>{h.repo_name ?? "—"}</span></div>
           {h.archived_at_ms != null && <div className="kv"><label>archived</label><span>{day(h.archived_at_ms)}</span></div>}
         </div>
       )}
-      <button className="link" onClick={() => openUrl(town.wiki).catch(() => {})}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
+      <button className="link" onClick={() => openUrl(town.wiki).catch(failToast("Could not open the link"))}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
     </section>
   );
 }
@@ -289,7 +289,7 @@ function TownCard({ hover, style, onEnter, onLeave, worktreeName, openWorktree }
           {worktreeName && <> · <button className="link" onClick={openWorktree}>{worktreeName}</button></>}
         </div>
       )}
-      <button className="link" onClick={() => openUrl(t.wiki).catch(() => {})}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
+      <button className="link" onClick={() => openUrl(t.wiki).catch(failToast("Could not open the link"))}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
     </div>
   );
 }

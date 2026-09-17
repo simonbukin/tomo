@@ -7,7 +7,7 @@ import { systemStatsSchema } from "../schemas";
 import { openSettings } from "../commands/settings";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
-import { formatBytes, setState, useStore } from "../store";
+import {failQuietly, formatBytes, setState, useStore} from "../store";
 import type { SidebarMode, SystemStats } from "../types";
 import { stripMetrics, systemDetail } from "./bottomModel";
 import { HealthArea } from "./Diagnostics";
@@ -57,7 +57,7 @@ function SystemMetrics() {
     if (!nonce) return;
     rpcParsed("system_stats", systemStatsSchema)
       .then((system) => system?.memory_total_bytes && setState({ system }))
-      .catch(() => {});
+      .catch(failQuietly("system_stats"));
   }, [nonce]);
   if (!stats) return <div className="bottom-metrics" />;
   const metrics = stripMetrics(stats);

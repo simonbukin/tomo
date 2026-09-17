@@ -6,7 +6,7 @@ import { openEndpoint } from "./actions";
 import { encodeBase64, rpc } from "./api";
 import { containsPoint, cssPoint, dropText } from "./fileDrop";
 import { findLinks, resolvePath, type TermLink } from "./links";
-import { failToast, getState } from "./store";
+import {failQuietly, failToast, getState} from "./store";
 import { focusTerminal } from "./terminals";
 import type { Id } from "./types";
 
@@ -47,7 +47,7 @@ export function listenFileDrop(host: HTMLElement, paneId: Id): () => void {
         if (payload.type !== "drop" || !payload.paths.length) return;
         const scale = await getCurrentWindow().scaleFactor().catch(() => window.devicePixelRatio);
         if (!containsPoint(host.getBoundingClientRect(), cssPoint(payload.position, scale, getState().ui.appearance.zoom))) return;
-        await rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(dropText(payload.paths)) }).catch(() => {});
+        await rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(dropText(payload.paths)) }).catch(failQuietly("pane_send"));
         focusTerminal(paneId);
       })
       .then((off) => {

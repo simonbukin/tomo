@@ -164,7 +164,7 @@ export function setUi(patch: Partial<UiState>): void {
   setState((s) => ({ ui: { ...s.ui, ...patch } }));
   window.clearTimeout(uiSaveTimer);
   uiSaveTimer = window.setTimeout(() => {
-    rpc("ui_state_set", { state: state.ui }).catch(() => {});
+    rpc("ui_state_set", { state: state.ui }).catch(failQuietly("ui_state_set"));
   }, 300);
 }
 
@@ -202,7 +202,7 @@ function checkHealthOnce(): void {
       const errors = issues.filter((i) => i.level === "error");
       if (errors.length) toast({ key: "config", level: "warning", title: "Config problem", detail: `${errors[0].key}: ${errors[0].message}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`, actions: [{ label: "Check", run: () => setState({ dialog: { kind: "config-check" } }) }] });
     })
-    .catch(() => {});
+    .catch(failQuietly("config_check"));
 }
 
 export function setZoom(tabId: Id, paneId: Id | null): void {
@@ -432,6 +432,16 @@ export const failToast =
   (title: string) =>
   (e: unknown): void =>
     toast({ level: "error", title, detail: errorText(e) });
+
+/**
+ * A daemon call that failed where the person has nothing to decide: a poll, a save, a
+ * keystroke that did not land. It records the failure under the name of the call, so
+ * Diagnostics can show it, and nothing interrupts the work on screen.
+ */
+export const failQuietly =
+  (source: string) =>
+  (e: unknown): void =>
+    recordDiagnostic("warning", source, errorText(e));
 
 /** Something Tomo itself did or noticed on the client side, such as a reconnect. A repeat of the newest entry is dropped. */
 export function recordDiagnostic(level: DiagnosticLevel, source: string, message: string): void {

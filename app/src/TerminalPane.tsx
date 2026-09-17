@@ -8,7 +8,7 @@ import { applyZoom, closePane, focusPane, runAction, splitPaneById } from "./act
 import { keyOverride, zoomKey } from "./appearance";
 import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
-import { getState, keyBindings, useStore } from "./store";
+import {failQuietly, getState, keyBindings, useStore} from "./store";
 import { registerTerminal } from "./terminals";
 import { listenFileDrop, registerTerminalLinks } from "./terminalHooks";
 import { Columns2, Rows2, X } from "lucide-react";
@@ -69,7 +69,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       const override = keyOverride(e);
       if (override !== null) {
         e.preventDefault();
-        rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(override) }).catch(() => {});
+        rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(override) }).catch(failQuietly("pane_send"));
         return false;
       }
       const action = findAction(e, keyBindings(getState()));
@@ -89,10 +89,10 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       return true;
     });
 
-    const send = (data: string) => rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(data) }).catch(() => {});
+    const send = (data: string) => rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(data) }).catch(failQuietly("pane_send"));
     term.onData(send);
-    term.onBinary((data) => rpc("pane_send", { pane_id: paneId, data_base64: btoa(data) }).catch(() => {}));
-    term.onResize(({ cols, rows }) => rpc("pane_resize", { pane_id: paneId, cols, rows }).catch(() => {}));
+    term.onBinary((data) => rpc("pane_send", { pane_id: paneId, data_base64: btoa(data) }).catch(failQuietly("pane_send")));
+    term.onResize(({ cols, rows }) => rpc("pane_resize", { pane_id: paneId, cols, rows }).catch(failQuietly("pane_resize")));
     term.onTitleChange((t) => setOscTitle(t || null));
     term.onSelectionChange(() => {
       if (term.hasSelection()) navigator.clipboard.writeText(term.getSelection()).catch(() => {});
@@ -117,7 +117,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     const observer = new ResizeObserver(refit);
     observer.observe(host);
     fit.fit();
-    rpc("pane_attach", { pane_id: paneId }).catch(() => {});
+    rpc("pane_attach", { pane_id: paneId }).catch(failQuietly("pane_attach"));
     const onFocus = () => focusPane(paneId);
     host.addEventListener("mousedown", onFocus);
 
@@ -130,7 +130,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       window.clearTimeout(settle);
       unsub();
       unregister();
-      rpc("pane_detach", { pane_id: paneId }).catch(() => {});
+      rpc("pane_detach", { pane_id: paneId }).catch(failQuietly("pane_detach"));
       term.dispose();
       termRef.current = null;
     };
