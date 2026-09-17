@@ -20,11 +20,19 @@ describe("sanitizeUi", () => {
       rightWidth: 420,
       sidebarSort: "manual",
       collapsedRepos: ["r1"],
-      home: { query: "labor", filters: [{ kind: "state", value: "active" }], view: "board", sort: "recent", group: "repo", showArchived: true },
+      home: { query: "labor", scope: { kind: "all" }, filters: [{ kind: "state", value: "active" }], view: "board", sort: "recent", group: "repo", showArchived: true },
       manualOrder: { r1: ["w2", "w1"] },
       repoOrder: ["r2", "r1"],
     };
     expect(sanitizeUi(JSON.parse(JSON.stringify(saved)), ["w1", "w2"])).toEqual(saved);
+  });
+
+  it("keeps a good Home scope and falls back to all work for a bad one", () => {
+    expect(sanitizeUi({ home: { scope: { kind: "repo", repoId: "r1" } } }, []).home.scope).toEqual({ kind: "repo", repoId: "r1" });
+    expect(sanitizeUi({ home: { scope: { kind: "tag", tag: "design" } } }, []).home.scope).toEqual({ kind: "tag", tag: "design" });
+    expect(sanitizeUi({ home: { scope: { kind: "repo" } } }, []).home.scope).toEqual({ kind: "all" });
+    expect(sanitizeUi({ home: { scope: "nope" } }, []).home.scope).toEqual({ kind: "all" });
+    expect(sanitizeUi({ home: { scope: { kind: "elsewhere", repoId: "r1" } } }, []).home.scope).toEqual({ kind: "all" });
   });
 
   it("clamps sidebar widths and rejects non-numbers", () => {

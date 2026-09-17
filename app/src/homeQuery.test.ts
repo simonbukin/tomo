@@ -11,7 +11,7 @@ function wt(id: string, extra: Partial<Worktree> = {}): Worktree {
 const agent = (worktree_id: string, state: AgentPresence["state"]): AgentPresence => ({ pane_id: `p-${worktree_id}`, worktree_id, kind: "claude", state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null });
 const states = [{ id: "active", label: "Active", order: 20 }, { id: "exploring", label: "Exploring", order: 10 }, { id: "merged", label: "Merged", order: 40 }];
 const ctx: QueryContext = { repos: [{ id: "r1", name: "holly", path: "/r1", exists: true, remote_url: null }], agents: [agent("a", "waiting"), agent("b", "working")], attention: [], states };
-const base = { query: "", filters: [], view: "list" as const, sort: "name" as const, group: "repo" as const, showArchived: false };
+const base = { query: "", scope: { kind: "all" as const }, filters: [], view: "list" as const, sort: "name" as const, group: "repo" as const, showArchived: false };
 const list = [
   wt("a", { metadata: { display_name: null, project: "LR", state: "merged", tags: ["lr"] } }),
   wt("b", { metadata: { display_name: null, project: null, state: "exploring", tags: [] }, last_active_ms: 5 }),

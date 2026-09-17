@@ -1,8 +1,8 @@
 import { defaultAppearance, sanitizeAppearance } from "./appearance";
 import { LENSES } from "./lenses";
-import type { CoreSection, Filter, FilterKind, HomeOptions, Id, SidebarMode, SidebarSort, UiState } from "./types";
+import type { CoreSection, Filter, FilterKind, HomeOptions, HomeScope, Id, SidebarMode, SidebarSort, UiState } from "./types";
 
-export const defaultHome: HomeOptions = { query: "", filters: [], view: "list", sort: "state", group: "state", showArchived: false };
+export const defaultHome: HomeOptions = { query: "", scope: { kind: "all" }, filters: [], view: "list", sort: "state", group: "state", showArchived: false };
 
 export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showArchivedInSidebar: false, collapsedRepos: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
 
@@ -29,11 +29,20 @@ const stringLists = (v: unknown): Record<string, Id[]> =>
 const filters = (v: unknown): Filter[] =>
   (Array.isArray(v) ? v : []).map(record).filter((f) => FILTER_KINDS.includes(f.kind as FilterKind) && typeof f.value === "string").map((f) => ({ kind: f.kind as FilterKind, value: f.value as string }));
 
+const scope = (v: unknown): HomeScope => {
+  const s = record(v);
+  if (s.kind === "repo" && typeof s.repoId === "string") return { kind: "repo", repoId: s.repoId };
+  if (s.kind === "project" && typeof s.project === "string") return { kind: "project", project: s.project };
+  if (s.kind === "tag" && typeof s.tag === "string") return { kind: "tag", tag: s.tag };
+  return { kind: "all" };
+};
+
 function sanitizeHome(v: unknown): HomeOptions {
   const h = record(v);
   return {
     ...defaultHome,
     query: typeof h.query === "string" ? h.query : "",
+    scope: scope(h.scope),
     filters: filters(h.filters),
     view: oneOf(["list", "board"], h.view, defaultHome.view),
     sort: oneOf(["state", "recent", "created", "name"], h.sort, defaultHome.sort),
