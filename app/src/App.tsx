@@ -7,6 +7,7 @@ import { zoomKey } from "./appearance";
 import { applyTheme, useResolvedTheme } from "./theme";
 import { TooltipProvider } from "./components/ui";
 import { Activity } from "./Activity";
+import { Agents } from "./Agents";
 import { Dialogs } from "./Dialogs";
 import { Home } from "./Home";
 import { findAction } from "./keys";
@@ -139,7 +140,8 @@ function Shell() {
           </Suspense>
         )}
         {loaded && !showWorktree && ui.view === "activity" && <Activity />}
-        {loaded && !showWorktree && !addonView && ui.view !== "activity" && <Home />}
+        {loaded && !showWorktree && ui.view === "agents" && <Agents />}
+        {loaded && !showWorktree && !addonView && ui.view !== "activity" && ui.view !== "agents" && <Home />}
         {loaded && showWorktree && (
           <LayoutDnd>
             <CheckpointBanner worktree={worktree} />
