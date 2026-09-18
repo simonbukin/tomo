@@ -14,12 +14,11 @@
   grid-template-rows: var(--title-h) minmax(0, 1fr) var(--bottom-h);
   grid-template-areas: "top top top" "left center right" "bottom bottom bottom";
   height: 100%;
-  transition: grid-template-columns var(--dur-open) var(--ease-out);
 }
 :root[data-fullscreen] .app { --traffic-inset: var(--sp-3); --top-left-min: 72px; }
 
 /* The top-left region keeps the traffic-light safe width when the left column is a rail or 0. */
-.topbar { grid-area: top; display: grid; grid-template-columns: max(var(--left-col), var(--top-left-min)) minmax(0, 1fr) max(var(--right-col), var(--top-right-min)); min-width: 0; background: var(--bg); border-bottom: 1px solid var(--line); transition: grid-template-columns var(--dur-open) var(--ease-out); }
+.topbar { grid-area: top; display: grid; grid-template-columns: max(var(--left-col), var(--top-left-min)) minmax(0, 1fr) max(var(--right-col), var(--top-right-min)); min-width: 0; background: var(--bg); border-bottom: 1px solid var(--line); }
 .top-left { display: flex; align-items: center; gap: 2px; min-width: 0; padding: 0 var(--sp-2) 0 var(--traffic-inset); }
 .top-brand { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 2px 4px; border-radius: var(--radius); background: none; color: var(--fg); }
 .top-brand:hover { background: var(--bg-1); }
