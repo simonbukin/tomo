@@ -46,6 +46,7 @@ impl Daemon {
                 pending_line: None,
                 last_output_ms: 0,
                 scrollback: Scrollback::default(),
+                screen: None,
                 source: None,
             },
         );

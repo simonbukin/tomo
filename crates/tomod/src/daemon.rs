@@ -89,6 +89,8 @@ pub struct PaneState {
     pub pending_line: Option<String>,
     pub last_output_ms: u64,
     pub scrollback: Scrollback,
+    /// What the pane has on screen, when an engine other than `xterm` reads the pty.
+    pub screen: Option<Box<dyn crate::vt::Screen>>,
     /// Set when Tomo itself ends the pane's process, so the exit is a stop and not a crash.
     pub stop_intent: bool,
     /// Set by the code that spawned the pane. Memory only: a restore starts without it.
@@ -822,6 +824,9 @@ impl Daemon {
             let mut inner = self.lock();
             let Some(pane) = inner.panes.get_mut(pane_id) else { return };
             pane.scrollback.push(bytes);
+            if let Some(screen) = pane.screen.as_mut() {
+                screen.write(bytes);
+            }
             pane.last_output_ms = now_ms();
             let encoded = B64.encode(bytes);
             let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id: pane_id.to_string(), data_base64: encoded } };
@@ -1004,6 +1009,12 @@ impl Daemon {
                 pending_line,
                 last_output_ms: 0,
                 scrollback: Scrollback::default(),
+                screen: crate::vt::screen_for(
+                    crate::vt::VtEngine::parse(&inner.config.vt_engine).unwrap_or_default(),
+                    120,
+                    30,
+                    inner.config.scrollback_lines as usize,
+                ),
                 stop_intent: false,
                 source: None,
             },
@@ -1116,6 +1127,8 @@ impl Daemon {
 
     pub fn restore(self: &Arc<Self>) -> Result<()> {
         let mut inner = self.lock();
+        let engine = inner.config.vt_engine.clone();
+        let scrollback_lines = inner.config.scrollback_lines as usize;
         let tabs = inner.store.tabs()?;
         let panes = inner.store.panes()?;
         let referenced: HashSet<Id> = tabs.iter().flat_map(|t| layout::pane_ids(&t.layout)).collect();
@@ -1166,6 +1179,7 @@ impl Daemon {
                     pending_line: pending,
                     last_output_ms: 0,
                     scrollback,
+                    screen: crate::vt::screen_for(crate::vt::VtEngine::parse(&engine).unwrap_or_default(), 120, 30, scrollback_lines),
                     stop_intent: false,
                     source: None,
                 },

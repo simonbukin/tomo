@@ -241,6 +241,7 @@ mod tests {
             branch_prefix: String::new(),
             resource_warning_bytes: 0,
             scrollback_lines: 0,
+            vt_engine: String::new(),
             font_family: String::new(),
             font_size: 0,
             theme: Default::default(),

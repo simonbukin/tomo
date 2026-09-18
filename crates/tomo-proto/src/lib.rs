@@ -772,6 +772,8 @@ pub struct Config {
     pub branch_prefix: String,
     pub resource_warning_bytes: u64,
     pub scrollback_lines: u32,
+    #[serde(default)]
+    pub vt_engine: String,
     pub font_family: String,
     pub font_size: u32,
     #[serde(default)]

@@ -11,18 +11,13 @@ use rio_vt::performer::handler::Processor;
 use serde::{Deserialize, Serialize};
 
 /// Which engine reads the pty. `Xterm` leaves the reading to the client, as it always was.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VtEngine {
+    #[default]
     Rio,
     Ghostty,
     Xterm,
-}
-
-impl Default for VtEngine {
-    fn default() -> Self {
-        VtEngine::Rio
-    }
 }
 
 impl VtEngine {
@@ -45,13 +40,11 @@ impl VtEngine {
 
     /// Whether this build can run the engine. `ghostty` needs the `ghostty` feature.
     pub fn available(self) -> bool {
-        match self {
-            VtEngine::Ghostty => cfg!(feature = "ghostty"),
-            _ => true,
-        }
+        !matches!(self, VtEngine::Ghostty) || cfg!(feature = "ghostty")
     }
 }
 
+#[allow(dead_code, reason = "resize and rows land with pane_resize and the pane_text call")]
 pub trait Screen: Send {
     fn write(&mut self, bytes: &[u8]);
     fn resize(&mut self, cols: u16, rows: u16);
@@ -183,7 +176,7 @@ mod tests {
     fn the_client_engine_keeps_no_screen_in_the_daemon() {
         assert!(screen_for(VtEngine::Xterm, 80, 24, 100).is_none());
         assert!(screen_for(VtEngine::Rio, 80, 24, 100).is_some());
-        assert_eq!(VtEngine::Xterm.available(), true);
+        assert!(VtEngine::Xterm.available());
         assert_eq!(VtEngine::Ghostty.available(), cfg!(feature = "ghostty"));
     }
 }
