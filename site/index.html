@@ -263,7 +263,7 @@
       .alt-title { font-size: 23px; }
       .alt-note { font-size: 13px; color: #7c7266; padding-top: 7px; }
       .alt-bar { margin-top: 20px; height: 6px; border-radius: 3px; background: #e0d8cb; }
-      .alt-bar i { display: block; height: 100%; border-radius: 3px; background: #b4744a; }
+      .alt-bar i { display: block; height: 100%; width: 24%; border-radius: 3px; background: #b4744a; }
       .alt-side { border-left: 1px solid #e0d8cb; padding: 24px 16px; font-size: 13px; color: #7c7266; display: grid; gap: 12px; align-content: start; }
       .alt-side .on { color: #b4744a; }
 
@@ -293,12 +293,36 @@
       @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
       @media (prefers-reduced-motion: reduce) { .t .ln::after { animation: none; } }
 
-      /* i want sound effects */
-      .sound { padding: 14px 16px; }
-      .kv { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px 12px; font-size: 13px; }
-      .on-pill { color: var(--success); font-size: 11px; }
-      .code { font-family: var(--mono); font-size: 11.5px; line-height: 1.8; white-space: pre; color: var(--fg-2); background: var(--dot-soft); border-radius: 6px; padding: 12px 13px; }
-      .toast { margin-top: 18px; display: inline-block; font-size: 12px; color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; }
+      /* i want my agents to argue in front of me */
+      .chat { height: 100%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: flex-end; gap: 9px; overflow: hidden; }
+      .msg { font-size: 12.5px; line-height: 1.45; color: var(--fg); }
+      .msg .who { color: var(--accent); font-weight: 500; margin-right: 7px; }
+      .msg .via { font-family: var(--mono); font-size: 10px; color: var(--fg-3); margin-right: 8px; }
+
+      /* i want it to tell me when i can go to bed */
+      .bed { height: 100%; display: grid; place-content: center; justify-items: center; gap: 4px; text-align: center; }
+      .orb { width: 74px; height: 74px; border-radius: 50%; background: var(--waiting); box-shadow: 0 0 0 0 color-mix(in srgb, var(--waiting) 45%, transparent); animation: breathe 2.6s ease-in-out infinite; transition: background 500ms ease-out; }
+      .orb.ok { background: var(--success); box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent); }
+      @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 0 currentColor; } 50% { box-shadow: 0 0 0 16px transparent; } }
+      .verdict { margin: 18px 0 0; font-size: 20px; font-weight: 600; }
+      .why { margin: 0; font-size: 12.5px; color: var(--fg-2); max-width: 26ch; }
+
+      /* i want a ticker for what i'm burning */
+      .tick { height: 100%; display: flex; flex-direction: column; }
+      .tape { display: flex; gap: 26px; padding: 11px 0; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--fg-2); }
+      .sym b { color: var(--fg); font-weight: 500; margin-right: 6px; }
+      .sym i { font-style: normal; margin-left: 5px; }
+      .sym i.up { color: var(--success); }
+      .sym i.down { color: var(--fg-3); }
+      .total { flex: 1; display: grid; place-content: center; justify-items: center; gap: 6px; }
+      .big { font-family: var(--mono); font-size: 40px; color: var(--fg); font-variant-numeric: tabular-nums; }
+      .since { font-size: 12px; color: var(--fg-3); }
+
+      /* i want it to be mean to me about it */
+      .roast { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden; }
+      .jab { margin: 0; font-size: 13px; line-height: 1.45; color: var(--fg-2); opacity: 0; transform: translateY(6px); transition: opacity 320ms ease-out, transform 320ms cubic-bezier(0.2, 0, 0, 1); }
+      .jab.in { opacity: 1; transform: none; }
+      .roast .jab:last-child { color: var(--fg); }
 
       .empty { height: 100%; display: grid; place-items: center; color: var(--dot); }
       .empty svg { width: 66px; height: 66px; }
@@ -390,74 +414,172 @@
 
     <script>
       // ---------- the deck of what ifs ----------
-      // Every card is a mock: none of these variants exist in the app. The rows are drawn with
-      // tomo's own WorktreeRow.css, scoped to .tomo-ui, so the metrics are the app's own.
+      // Every card is a mock, and every card moves: a flat picture of a feature is a boring
+      // argument for a tool whose whole pitch is that you can go and change it. One timer drives
+      // them all. Cards behind the top one are rotated; the top one is square, because a rotated
+      // layer is rasterised and then resampled, which smears its text and its hairlines.
       (function () {
-        var row = function (name, branch, foot, dot, meta) {
-          return (
-            '<div class="wt-row' + (dot === "active" ? " wt-active" : "") + '">' +
-            '<span class="state ' + (dot === "active" ? "work" : dot) + '"></span>' +
-            '<span class="wt-name-line"><span class="wt-name">' + name + "</span></span>" +
-            '<span class="wt-meta">' + (meta || "") + "</span>" +
-            '<span class="wt-sub"><span class="wt-branch">' + branch + "</span></span>" +
-            '<span class="wt-foot">' + foot + "</span>" +
-            "</div>"
-          );
-        };
-        var pane = function (label, right, rows) {
-          return (
-            '<div class="tomo-ui"><div class="side-lens">' + label +
-            (right ? '<span class="right">' + right + "</span>" : "") +
-            "</div>" + rows + "</div>"
-          );
-        };
+        var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-        // Nine panes, each running something a real one would be running.
         var PANES = [
-          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "\u279c  local:  localhost:3000"],
+          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "➜  local:  localhost:3000"],
           ["$ cargo run -p tomod", "   Compiling tomod v0.1.0", "    Finished dev in 8.42s"],
-          ["$ claude", "\u25cf reading costing.ts", "\u25cf edited 2 files"],
-          ["$ pnpm test", "\u2713 412 passed (3.1s)"],
+          ["$ claude", "● reading costing.ts", "● edited 2 files"],
+          ["$ pnpm test", "✓ 412 passed (3.1s)"],
           ["$ git log --oneline -2", "be861d7 deck of what ifs", "12401b5 set it left"],
           ["$ tail -f runtime.jsonl", '{"pane":"p3","kind":"exit"}'],
           ["$ psql holly", "holly=# select count(*);", " 58"],
-          ["$ codex", "thinking\u2026", "\u25cf writing migration"],
-          ["$ htop", "cpu  \u2587\u2585\u2583\u2582\u2581\u2582\u2584\u2586", "mem  4.2G / 16G"],
+          ["$ codex", "thinking…", "● writing migration"],
+          ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
+        ];
+
+        var CHAT = [
+          ["otter", "claude", "i renamed costing.ts, hope that's chill"],
+          ["crane", "codex", "it is not chill. i was in there"],
+          ["otter", "claude", "..."],
+          ["beaver", "fable", "i'll rebase you both, stop typing"],
+          ["crane", "codex", "thank you beaver"],
+        ];
+
+        var ROASTS = [
+          "nine agents running. nine.",
+          "seoul has been waiting on you for 41 minutes.",
+          "you opened this worktree in august.",
+          "$18.60 today. it is 11am.",
+          "pickerel has no commits and a lot of confidence.",
+        ];
+
+        var TICKER = [
+          { name: "CLAUDE", cost: 18.6, up: true },
+          { name: "CODEX", cost: 6.12, up: false },
+          { name: "FABLE", cost: 2.04, up: true },
+          { name: "SEOUL", cost: 9.98, up: true },
         ];
 
         var CARDS = [
           {
-            caption: "i want my agents to name themselves",
-            body: pane(
-              "worktrees",
-              "",
-              row("🦦 otter", "simon/costing-rewrite", '<span class="wt-agents">claude</span>', "active", "12m") +
-                row("🦫 beaver", "simon/lr-homepage", '<span class="wt-agents">codex · waiting on you</span>', "wait", "3m") +
-                row("🐦 crane", "simon/field-primitives", '<span class="wt-agents">claude</span>', "work", "3h") +
-                row("🦭 seal", "simon/hoist-modals", '<span class="wt-agents">fable</span>', "", "1d"),
-            ),
+            caption: "i want to terminalmaxx",
+            body: '<div class="grid9">' + PANES.map(function (_, n) { return '<div class="t"><pre class="ln" data-pane="' + n + '"></pre></div>'; }).join("") + "</div>",
+            start: function (screen) {
+              var lines = Array.prototype.slice.call(screen.querySelectorAll(".ln"));
+              var state = lines.map(function (_, n) { return { line: 0, char: 0, hold: n * 7 }; });
+              if (reduced) {
+                lines.forEach(function (el) { el.textContent = PANES[+el.dataset.pane].join("\n"); });
+                return null;
+              }
+              return function () {
+                lines.forEach(function (el, n) {
+                  var script = PANES[+el.dataset.pane];
+                  var at = state[n];
+                  if (at.hold > 0) { at.hold -= 1; return; }
+                  if (at.line >= script.length) { at.hold = 70; at.line = 0; at.char = 0; el.textContent = ""; return; }
+                  at.char += 1;
+                  el.textContent = script.slice(0, at.line).concat([script[at.line].slice(0, at.char)]).join("\n");
+                  if (at.char >= script[at.line].length) { at.line += 1; at.char = 0; at.hold = 8; }
+                });
+              };
+            },
           },
           {
-            caption: "i want my worktree state synced with linear",
-            body: pane(
-              "linear · holly",
-              "",
-              row("hol-3466 fix costing", "simon/hol-3466-costing", '<span class="pill prog">in progress</span>', "active", "12m") +
-                row("hol-3219 create user", "simon/hol-3219-create-user", '<span class="pill rev">in review</span>', "wait", "2h") +
-                row("hol-2988 seed study", "simon/hol-2988-seed", '<span class="pill done">done</span>', "", "1d") +
-                row("hol-3501 port lootbox", "simon/hol-3501-lootbox", '<span class="pill todo">todo</span>', "", "3d"),
-            ),
+            caption: "i want my agents to argue in front of me",
+            body: '<div class="chat"></div>',
+            start: function (screen) {
+              var box = screen.querySelector(".chat");
+              var shown = 0;
+              var hold = 0;
+              var draw = function (partial) {
+                box.innerHTML = CHAT.slice(0, shown)
+                  .map(function (m, n) {
+                    var text = n === shown - 1 && partial !== undefined ? m[2].slice(0, partial) : m[2];
+                    return '<div class="msg"><span class="who">' + m[0] + '</span><span class="via">' + m[1] + "</span>" + text + "</div>";
+                  })
+                  .join("");
+                box.scrollTop = box.scrollHeight;
+              };
+              if (reduced) { shown = CHAT.length; draw(); return null; }
+              var chars = 0;
+              return function () {
+                if (hold > 0) { hold -= 1; return; }
+                if (shown === 0) { shown = 1; chars = 0; }
+                var current = CHAT[shown - 1][2];
+                if (chars < current.length) { chars += 2; draw(chars); return; }
+                draw();
+                if (shown >= CHAT.length) { hold = 60; shown = 0; box.innerHTML = ""; return; }
+                shown += 1;
+                chars = 0;
+                hold = 10;
+              };
+            },
           },
           {
-            caption: "i want to sort my worktrees by cost",
-            body: pane(
-              "worktrees",
-              "sort: cost ↓",
-              row("scenario comparisons", "simon/scenario-comparisons", '<span class="wt-agents"><span class="num">2.4M</span> tokens · $18.60</span>', "active", "") +
-                row("labor relations ux", "simon/labor-relations-ui", '<span class="wt-agents"><span class="num">1.1M</span> tokens · $8.30</span>', "wait", "") +
-                row("seoul", "wordloader-cogitating-states", '<span class="wt-agents"><span class="num">840k</span> tokens · $6.10</span>', "work", "") +
-                row("pickerel", "simon/zany-approval-stamp-arm", '<span class="wt-agents"><span class="num">96k</span> tokens · $0.72</span>', "", ""),
-            ),
+            caption: "i want it to tell me when i can go to bed",
+            body: '<div class="bed"><span class="orb"></span><p class="verdict">not yet</p><p class="why">crane is still working. seoul wants you.</p></div>',
+            start: function (screen) {
+              var orb = screen.querySelector(".orb");
+              var verdict = screen.querySelector(".verdict");
+              var why = screen.querySelector(".why");
+              var frame = 0;
+              if (reduced) return null;
+              return function () {
+                frame += 1;
+                var clear = frame % 200 > 130;
+                orb.classList.toggle("ok", clear);
+                verdict.textContent = clear ? "go to bed" : "not yet";
+                why.textContent = clear ? "everything is green. nothing wants you." : "crane is still working. seoul wants you.";
+              };
+            },
+          },
+          {
+            caption: "i want a ticker for what i'm burning",
+            body: '<div class="tick"><div class="tape"></div><div class="total"><span class="big">$0.00</span><span class="since">today, across 9 agents</span></div></div>',
+            start: function (screen) {
+              var tape = screen.querySelector(".tape");
+              var big = screen.querySelector(".big");
+              var frame = 0;
+              var render = function () {
+                tape.innerHTML = TICKER.concat(TICKER)
+                  .map(function (t) {
+                    return '<span class="sym"><b>' + t.name + "</b> $" + t.cost.toFixed(2) + '<i class="' + (t.up ? "up" : "down") + '">' + (t.up ? "▲" : "▼") + "</i></span>";
+                  })
+                  .join("");
+              };
+              render();
+              if (reduced) { big.textContent = "$36.74"; return null; }
+              return function () {
+                frame += 1;
+                TICKER.forEach(function (t) { if (frame % 12 === 0 && t.up) t.cost += 0.01; });
+                if (frame % 12 === 0) render();
+                var total = TICKER.reduce(function (sum, t) { return sum + t.cost; }, 0);
+                big.textContent = "$" + total.toFixed(2);
+                tape.style.transform = "translateX(" + (-(frame * 0.6) % 50) + "%)";
+              };
+            },
+          },
+          {
+            caption: "i want it to be mean to me about it",
+            body: '<div class="roast"></div>',
+            start: function (screen) {
+              var box = screen.querySelector(".roast");
+              var at = 0;
+              var hold = 0;
+              var push = function () {
+                var line = document.createElement("p");
+                line.className = "jab";
+                line.textContent = ROASTS[at % ROASTS.length];
+                box.appendChild(line);
+                window.requestAnimationFrame(function () { line.classList.add("in"); });
+                if (box.children.length > 4) box.removeChild(box.firstChild);
+                at += 1;
+              };
+              if (reduced) { ROASTS.slice(0, 4).forEach(push); return null; }
+              push();
+              return function () {
+                hold += 1;
+                if (hold < 34) return;
+                hold = 0;
+                push();
+              };
+            },
           },
           {
             caption: "i want to change it all",
@@ -465,22 +587,20 @@
               '<div class="alt"><div class="alt-main">' +
               '<div class="alt-title">costing rewrite</div>' +
               '<div class="alt-note">three agents, one branch, since tuesday</div>' +
-              '<div class="alt-bar"><i style="width:62%"></i></div>' +
+              '<div class="alt-bar"><i></i></div>' +
               '</div><div class="alt-side">' +
               '<div>costing rewrite</div><div class="on">homepage</div><div>field primitives</div><div>lootbox port</div>' +
               "</div></div>",
-          },
-          {
-            caption: "i want to terminalmaxx",
-            terminals: true,
-            body: '<div class="grid9">' + PANES.map(function (_, n) { return '<div class="t"><pre class="ln" data-pane="' + n + '"></pre></div>'; }).join("") + "</div>",
-          },
-          {
-            caption: "i want sound effects when my agent finishes",
-            body:
-              '<div class="sound"><div class="kv"><span>sounds</span><span class="on-pill">on</span></div>' +
-              '<div class="code">[sounds]\nagent_done = "coin.wav"\nneeds_you  = "chime.wav"\ncrash      = "thud.wav"</div>' +
-              '<div class="toast">otter finished  ♪</div></div>',
+            start: function (screen) {
+              var bar = screen.querySelector(".alt-bar i");
+              var at = 24;
+              if (reduced) { bar.style.width = "62%"; return null; }
+              return function () {
+                at += 0.06;
+                if (at > 96) at = 24;
+                bar.style.width = at.toFixed(1) + "%";
+              };
+            },
           },
         ];
 
@@ -494,22 +614,22 @@
         };
 
         var LAYOUT = [
-          { x: 0, y: 0, r: -1.2, z: 6 },
-          { x: 13, y: 8, r: 2.4, z: 5 },
-          { x: 25, y: 15, r: -3.2, z: 4 },
-          { x: 34, y: 21, r: 1.6, z: 3 },
+          { x: 0, y: 0, r: 0, z: 6 },
+          { x: 14, y: 9, r: 2.4, z: 5 },
+          { x: 26, y: 16, r: -3.2, z: 4 },
+          { x: 35, y: 22, r: 1.6, z: 3 },
         ];
 
         var root = document.getElementById("deck");
-        var whatIfs = CARDS.slice();
-        for (var i = whatIfs.length - 1; i > 0; i--) {
+        var pool = CARDS.slice();
+        for (var i = pool.length - 1; i > 0; i--) {
           var j = Math.floor(Math.random() * (i + 1));
-          var held = whatIfs[i];
-          whatIfs[i] = whatIfs[j];
-          whatIfs[j] = held;
+          var held = pool[i];
+          pool[i] = pool[j];
+          pool[j] = held;
         }
-        // Three of the six each visit, so the deck reads 1, 2, 3, then the question.
-        var deck = whatIfs.slice(0, 3).concat([BLANK]);
+        // Three a visit, then the question, so the deck reads 1, 2, 3, what's yours.
+        var deck = pool.slice(0, 3).concat([BLANK]);
 
         root.innerHTML =
           deck
@@ -525,6 +645,10 @@
         var cards = Array.prototype.slice.call(root.querySelectorAll(".card"));
         var caption = root.querySelector(".cap");
         var order = cards.map(function (_, n) { return n; });
+
+        var ticks = deck.map(function (card, n) {
+          return card.start ? card.start(cards[n].querySelector(".screen")) : null;
+        });
 
         function place() {
           order.forEach(function (cardIndex, slot) {
@@ -546,28 +670,11 @@
         });
 
         place();
-
-        // The terminals type themselves out, then start over. One timer drives all nine.
-        var screens = Array.prototype.slice.call(root.querySelectorAll(".ln"));
-        if (screens.length) {
-          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            screens.forEach(function (el) { el.textContent = PANES[+el.dataset.pane].join("\n"); });
-          } else {
-            var state = screens.map(function (_, n) { return { line: 0, char: 0, hold: n * 7 }; });
-            window.setInterval(function () {
-              screens.forEach(function (el, n) {
-                var script = PANES[+el.dataset.pane];
-                var at = state[n];
-                if (at.hold > 0) { at.hold -= 1; return; }
-                if (at.line >= script.length) { at.hold = 70; at.line = 0; at.char = 0; el.textContent = ""; return; }
-                at.char += 1;
-                var shown = script.slice(0, at.line).concat([script[at.line].slice(0, at.char)]);
-                el.textContent = shown.join("\n");
-                if (at.char >= script[at.line].length) { at.line += 1; at.char = 0; at.hold = 8; }
-              });
-            }, 55);
-          }
-        }
+        // Only the card on top is animated; the rest are hidden behind it.
+        if (!reduced) window.setInterval(function () {
+          var run = ticks[order[0]];
+          if (run) run();
+        }, 55);
       })();
 
       // ---------- copy the install command ----------
@@ -625,9 +732,11 @@
         var w = 0;
         var h = 0;
         var dot = "";
+        var dpr = 1;
 
         function build() {
           var ratio = window.devicePixelRatio || 1;
+          dpr = ratio;
           w = window.innerWidth;
           h = window.innerHeight;
           canvas.width = Math.round(w * ratio);
@@ -658,8 +767,9 @@
               var near = Math.hypot((x - cx) / 1.6, line.y - cy) / hush;
               var calm = near < 1 ? 0.2 + near * near * 0.8 : 1;
               g.globalAlpha = (0.38 + (off / AMP + 1) * 0.22) * calm;
+              // Snapped to the device pixel grid: a 1.5px circle on a fractional centre is mush.
               g.beginPath();
-              g.arc(x, line.y + off, 1.5, 0, 6.283);
+              g.arc(Math.round(x * dpr) / dpr, Math.round((line.y + off) * dpr) / dpr, 1.5, 0, 6.283);
               g.fill();
             }
           }
