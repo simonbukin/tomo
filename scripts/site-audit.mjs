@@ -2,7 +2,7 @@
 // Splits the DEMANDS array by brace depth rather than by regex, so nested functions stay put.
 import { readFileSync } from "node:fs";
 
-const src = readFileSync("/Users/simonbukin/Projects/tomo/site/index.html", "utf8");
+const src = readFileSync(new URL("../site/index.html", import.meta.url), "utf8");
 const styles = src.slice(0, src.indexOf("</style>"));
 const from = src.indexOf("var DEMANDS = [");
 const body = src.slice(from + "var DEMANDS = [".length);

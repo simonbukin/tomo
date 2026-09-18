@@ -1,113 +1,67 @@
 # tomo
 
-A little workspace for my coding agents.
+**somewhere to put your agents.** small, local, and yours.
 
-Tomo keeps worktrees, terminals, agents, running apps, and the things that
-need attention in one quiet place. It answers these questions at a glance:
+Tomo keeps your worktrees, your terminals, and the agents working in them in
+one window. It tells you which agent is working, which one is waiting for you,
+and which one is eating the machine.
 
-- What repositories and worktrees exist?
-- Which ones am I working on?
-- What terminals and agents run in each?
-- Which agents need my attention?
-- Which worktree consumes my machine?
-- After a restart, how do I get back to where I was?
-
-It does not replace Git, your editor, your shell, or your agents. It keeps
-the room organized.
-
-The worktree is the unit of context. Terminals, agents, processes, resource
-use, metadata, and attention all roll up to a worktree.
-
-Tomo has three parts:
-
-| Part    | Role                                                                  |
-|---------|-----------------------------------------------------------------------|
-| `tomod` | Local Rust daemon. Owns terminals, state, agent signals, persistence. |
-| `tomo`  | Command-line client. Agents and shell scripts use it.                 |
-| Tomo.app| Tauri desktop client. A disposable view of the daemon.                |
-
-Close the window and nothing dies. Reopen it and everything reconnects.
-
-## What is happening right now
-
-Tomo watches the runtime for you. Listening ports that belong to a pane
-show up as endpoints next to their Action (`● App ↗`), open in a browser
-surface inside the worktree, and can be annotated and sent to the agent
-that already works there. Crashes, agent waits, checkpoints, state
-changes, and archives land in one Activity stream; `tomo checkpoint
-"Review the new costing UI" --url http://localhost:3000` is how an agent
-asks for a human. Usage limits for Claude and Codex show in the bottom
-strip. See [docs/runtime.md](docs/runtime.md),
-[docs/activity.md](docs/activity.md), [docs/browser.md](docs/browser.md),
-and [docs/usage.md](docs/usage.md).
+It does not replace Git, your editor, your shell, or your agents. It keeps the
+room organized.
 
 ## Install
 
-```bash
-git clone <this repository> tomo
-cd tomo
-scripts/install.sh
-```
-
-The script builds the release binaries, copies `tomo` and `tomod` to
-`~/.local/bin`, and copies `Tomo.app` to `/Applications`. Make sure that
-`~/.local/bin` is on your `PATH`.
-
-Then install the agent integrations once:
+macOS only, for now.
 
 ```bash
+git clone https://github.com/simonbukin/tomo && tomo/scripts/install.sh
 tomo integrations install
 ```
 
-This adds Tomo hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`
-and writes the Pi extension to `~/.pi/agent/extensions/tomo-status.ts`. The
-hooks do nothing outside a Tomo terminal. See
-[docs/agent-integrations.md](docs/agent-integrations.md).
+The script builds the release binaries, puts `tomo` and `tomod` in
+`~/.local/bin`, and puts `Tomo.app` in `/Applications`. The second line adds
+the hooks for Claude, Codex, and Pi; they do nothing outside a Tomo terminal.
 
-## First run
+Open Tomo.app, add a repository with the plus button, and every worktree of it
+turns up in the sidebar. Click one and a shell opens there. `⌘K` is the command
+palette; `⌘⇧A` jumps to the next agent that wants you.
 
-1. Open Tomo.app. It starts `tomod` when the daemon is not running.
-2. Add a repository with the plus button in the sidebar, or run
-   `tomo repo add <path>`.
-3. Every Git worktree of that repository appears in the sidebar and on Home.
-4. Click a worktree. A shell opens in it.
-5. Press `⌘K` for the command palette and `⌘⇧A` to jump to the next agent
-   that waits for you.
+## The shape of it
 
-Configuration lives in `~/Library/Application Support/tomo/config.toml`. Tomo
-writes a commented default file on the first start.
+| part | what it is |
+|---|---|
+| `tomod` | a local Rust daemon. It owns the terminals, the state, and the agent signals. |
+| `tomo` | the command line client. Agents and scripts talk to Tomo through it. |
+| Tomo.app | a window. Close it and nothing dies; open it again and everything reconnects. |
 
-## Useful commands
+The worktree is the unit. Terminals, agents, processes, ports, and attention
+all roll up to one.
+
+## A few commands
 
 ```bash
-tomo status                          # daemon, counts, integration state
-tomo worktree list                   # every known worktree with agents
-tomo agent spawn codex --cwd .       # start Codex in a new pane of this worktree
-tomo notify "Need approval"          # raise attention from inside a pane
-tomo ps --worktree .                 # process tree and memory for this worktree
-tomo worktree metadata set . --state waiting-review   # move it along your workflow
-tomo worktree archive .              # done: checkpoint, close terminals, remove the worktree, keep the branch
-tomo config check                    # validate config.toml
+tomo status                      # daemon, counts, integrations
+tomo worktree list               # every worktree, with its agents
+tomo agent spawn codex --cwd .   # start an agent in a new pane here
+tomo notify "need a human"       # raise attention from inside a pane
+tomo worktree archive .          # checkpoint, close, remove, keep the branch
 ```
 
-Add `--json` to any command for structured output.
+Add `--json` to any of them.
 
-## States and hooks
+## Making it yours
 
-A worktree has one workflow state (`exploring`, `active`, `waiting-review`,
-`merged` by default; define your own under `[[states]]`) and any number of
-tags. Home groups by state. Events such as `worktree.state_changed`,
-`worktree.created`, and `agent.waiting` run the commands you list under
-`[[hooks]]`, with the event JSON on stdin; a hook acts on Tomo through the
-`tomo` CLI. See [docs/hooks.md](docs/hooks.md).
+Everything below is a file you can edit.
 
-An archive commits uncommitted work as `tomo: archive checkpoint` on the
-branch before it removes the directory, so a restore brings it back.
-
-## Actions
-
-A repository can name commands in `.tomo.toml`. They show as buttons and
-palette entries in each worktree, and `tomo action run <id>` runs them.
+- **Config** lives in `~/Library/Application Support/tomo/config.toml`. Tomo
+  writes a commented default on first run. Themes, fonts, keybindings, your own
+  workflow states.
+- **Actions** are commands a repository declares in `.tomo.toml`. They become
+  buttons and palette entries in every worktree of it.
+- **Hooks** run your commands on events like `agent.waiting` or
+  `worktree.created`, with the event JSON on stdin.
+- **Addons** add their own state, their own commands, and their own place in
+  the window. The core stays small on purpose.
 
 ```toml
 [[actions]]
@@ -117,45 +71,27 @@ command = "pnpm storybook"
 show = "topbar"
 ```
 
-Tomo never runs an action by itself. See [docs/actions.md](docs/actions.md).
+## Docs
 
-## Pull requests
+[architecture](docs/architecture.md) ·
+[cli](docs/cli.md) ·
+[hooks](docs/hooks.md) ·
+[actions](docs/actions.md) ·
+[theming](docs/theming.md) ·
+[addons](docs/addons.md) ·
+[agent integrations](docs/agent-integrations.md) ·
+[development](docs/development.md)
 
-With the GitHub CLI logged in (`gh auth login`), the right panel and
-`tomo pr` show the pull request for the current branch: state, review
-decision, and check results. Tomo does not manage pull requests.
+[DESIGN.md](DESIGN.md) is how it is meant to look and why.
 
-## Worktree names
+## Building on it
 
-A new worktree without an explicit path is named after a Japanese
-municipality (city, town, or village). Each town has a rarity tier by
-population, a Wikipedia link, and a place on the map view. Creating
-worktrees unlocks towns; `tomo towns list --unlocked` shows the collection.
+```bash
+cargo test --workspace
+cd app && pnpm install && pnpm test
+```
 
-## Documentation
+The landing page is one static file at [site/index.html](site/index.html), with
+no build step.
 
-- [docs/architecture.md](docs/architecture.md) — parts, invariants, what is
-  authoritative and what is cached
-- [docs/state-and-recovery.md](docs/state-and-recovery.md) — live, restored,
-  and resumed panes; what survives what
-- [docs/agent-integrations.md](docs/agent-integrations.md) — Claude, Codex,
-  and Pi signals and session resume
-- [docs/cli.md](docs/cli.md) — every `tomo` command
-- [docs/hooks.md](docs/hooks.md) — events, hook configuration, recipes
-- [docs/actions.md](docs/actions.md) — repo-defined commands in `.tomo.toml`
-- [docs/features/towns.md](docs/features/towns.md) — Japan Towns
-- [docs/development.md](docs/development.md) — build, run, test, and change
-  Tomo (protocol types are generated from Rust; see there)
-- [docs/data-model.md](docs/data-model.md) — SQLite tables, identities, and
-  config keys
-
-## About
-
-tomo
-
-made for work in progress.
-
-A small local workspace for Git worktrees, terminals, coding agents, and
-everything they leave running.
-
-Don't like it? Fork it and ask your agent to change it.
+Public domain. Take it.
