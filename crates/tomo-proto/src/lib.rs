@@ -236,6 +236,11 @@ pub enum Call {
     PaneKillTree {
         pane_id: Id,
     },
+    /// What the pane shows now, one string per row. Empty when `[terminal] engine` is `xterm`,
+    /// because then the client keeps the screen and the daemon does not.
+    PaneScreen {
+        pane_id: Id,
+    },
     /// The last `lines` (default 8, at most 200) non-empty lines of pane output as plain text.
     PaneTail {
         pane_id: Id,

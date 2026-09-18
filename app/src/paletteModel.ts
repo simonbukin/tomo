@@ -49,27 +49,33 @@ function matchEntry(query: string, entry: PaletteEntry): { tier: number; gaps: n
   return label.tier === MATCH.none || capped.gaps < label.gaps ? capped : label;
 }
 
-/**
- * The worktree on screen comes first. After that, a typed query is the person saying what they
- * want, so how well an entry matches it decides the order, and recency only separates entries
- * that match equally well. With nothing typed there is nothing to match, so recency leads.
- * A text match in the hint counts as a fuzzy match. Entries that do not match drop out.
- */
+interface Ranked {
+  entry: PaletteEntry;
+  order: number;
+  recent: number;
+  tier: number;
+  gaps: number;
+}
+
+const byContext = (a: Ranked, b: Ranked) => Number(!!b.entry.context) - Number(!!a.entry.context);
+const byMatch = (a: Ranked, b: Ranked) => b.tier - a.tier || a.gaps - b.gaps;
+const byRecency = (a: Ranked, b: Ranked) => a.recent - b.recent;
+const bySource = (a: Ranked, b: Ranked) => a.order - b.order;
+
+/** With a query, the match leads and recency breaks ties. With none, there is nothing to match. */
+const order = (typed: boolean): ((a: Ranked, b: Ranked) => number)[] =>
+  typed ? [byContext, byMatch, byRecency, bySource] : [byContext, byRecency, bySource];
+
 export function rankEntries(entries: PaletteEntry[], query: string, recent: string[]): PaletteEntry[] {
   const recency = (key: string) => {
     const idx = recent.indexOf(key);
     return idx < 0 ? recent.length : idx;
   };
-  const typed = query.trim().length > 0;
+  const rules = order(query.trim().length > 0);
   return entries
-    .map((entry, order) => ({ entry, order, recent: recency(entry.key), ...matchEntry(query, entry) }))
+    .map((entry, at) => ({ entry, order: at, recent: recency(entry.key), ...matchEntry(query, entry) }))
     .filter((r) => r.tier > MATCH.none)
-    .sort(
-      (a, b) =>
-        Number(!!b.entry.context) - Number(!!a.entry.context) ||
-        (typed ? b.tier - a.tier || a.gaps - b.gaps || a.recent - b.recent : a.recent - b.recent) ||
-        a.order - b.order,
-    )
+    .sort((a, b) => rules.reduce((decided, rule) => decided || rule(a, b), 0))
     .map((r) => r.entry);
 }
 

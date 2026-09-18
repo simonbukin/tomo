@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tokio::process::Command;
 use tomo_proto::{Branch, GitSummary};
 
@@ -44,15 +45,25 @@ pub fn parse_worktree_list(text: &str) -> Vec<WorktreeEntry> {
         .collect()
 }
 
+/// git reads the worktree, and a worktree can be on a mount that has gone away. Without this a
+/// read of a dead path never returns and the caller waits for ever.
+const GIT_TIMEOUT: Duration = Duration::from_secs(20);
+
 async fn git(cwd: &Path, args: &[&str]) -> Result<String> {
-    let out = Command::new("git")
+    let child = Command::new("git")
         .arg("-C")
         .arg(cwd)
         .args(args)
         .env("GIT_OPTIONAL_LOCKS", "0")
-        .output()
-        .await
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
         .with_context(|| format!("run git {}", args.join(" ")))?;
+    let out = match tokio::time::timeout(GIT_TIMEOUT, child.wait_with_output()).await {
+        Ok(result) => result.with_context(|| format!("run git {}", args.join(" ")))?,
+        Err(_) => return Err(anyhow!("git {} did not answer in {}s", args.join(" "), GIT_TIMEOUT.as_secs())),
+    };
     if !out.status.success() {
         return Err(anyhow!("git {}: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim()));
     }
@@ -194,8 +205,6 @@ fn summary_gix(worktree: &Path) -> Result<GitSummary> {
     Ok(s)
 }
 
-/// Commits on each side that the other does not have.
-///
 /// `with_hidden` stops each walk where the histories meet, so the cost is the distance between
 /// the two tips. Walking both to the root and subtracting costs the whole history instead, on a
 /// branch that is three commits ahead as much as on one that has diverged for a year.
@@ -320,13 +329,14 @@ pub async fn clone(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Compares the two implementations over real worktrees. Run with:
-/// `TOMO_GIT_COMPARE=/path/a:/path/b cargo test -p tomod git::compare -- --nocapture`
 #[cfg(test)]
 mod compare {
     use super::*;
 
+    /// Names the worktrees to compare in `TOMO_GIT_COMPARE`, so it is run on purpose:
+    /// `TOMO_GIT_COMPARE=/a:/b cargo test -p tomod git::compare -- --ignored --nocapture`
     #[tokio::test]
+    #[ignore = "needs real worktrees named in TOMO_GIT_COMPARE"]
     async fn gix_agrees_with_git_on_every_worktree_it_is_given() {
         let Ok(list) = std::env::var("TOMO_GIT_COMPARE") else {
             eprintln!("set TOMO_GIT_COMPARE to a colon separated list of worktrees");

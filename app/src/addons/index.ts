@@ -15,7 +15,6 @@ import { usage } from "./usage";
 /** The composition root of the GUI: every built-in addon, in render order. Core client files reach addons only through this module. */
 export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime, agentation];
 
-/** Every addon in this build, for the Settings page that lists them. */
 export const addonSummaries = (): { id: string; label: string; description: string; slots: number }[] =>
   builtins.map((a) => ({
     id: a.id,

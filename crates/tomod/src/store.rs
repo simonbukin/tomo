@@ -38,8 +38,6 @@ pub struct MetaRow {
     pub first_seen_ms: Option<u64>,
     pub archived_at_ms: Option<u64>,
     pub archived_branch: Option<String>,
-    /// The name this worktree's infrastructure is created under. Minted once and then kept,
-    /// so a rename or a move cannot orphan a container or a volume.
     pub infra_name: Option<String>,
 }
 
