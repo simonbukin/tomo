@@ -327,16 +327,6 @@
       /* i want my worktrees to be fish */
       .tank { display: block; width: 100%; height: 100%; }
 
-      /* i want a plant that dies when i ignore it */
-      .plant { height: 100%; display: grid; place-content: center; justify-items: center; }
-      .plant svg { width: 128px; height: 160px; --droop: 0; }
-      .plant .stem { fill: none; stroke: var(--success); stroke-width: 4; stroke-linecap: round; }
-      .plant .leaf { fill: var(--success); transform-origin: 60px 100px; transform: rotate(calc(var(--droop) * 26deg)); opacity: calc(1 - var(--droop) * 0.45); transition: none; }
-      .plant .l2 { transform-origin: 60px 86px; transform: rotate(calc(var(--droop) * -22deg)); }
-      .plant .l3 { transform-origin: 60px 66px; transform: rotate(calc(var(--droop) * 18deg)); }
-      .plant .pot { fill: var(--fg-3); }
-      .plant .mood { margin: 10px 0 0; font-size: 12.5px; color: var(--fg-2); }
-
       /* i want a seismograph for my repo */
       .seis { display: block; width: 100%; height: calc(100% - 30px); }
       .seis-note { margin: 0; padding: 0 16px; font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); }
@@ -392,7 +382,7 @@
             <span class="kana" aria-hidden="true">とも</span>
           </span>
 
-          <h1>a little place for your agents</h1>
+          <h1>somewhere to put your agents</h1>
           <p class="sub">small, local, and yours.</p>
 
           <div class="actions">
@@ -436,6 +426,24 @@
       // them all. Cards behind the top one are rotated; the top one is square, because a rotated
       // layer is rasterised and then resampled, which smears its text and its hairlines.
       (function () {
+        var row = function (name, branch, foot, dot, meta) {
+          return (
+            '<div class="wt-row' + (dot === "active" ? " wt-active" : "") + '">' +
+            '<span class="state ' + (dot === "active" ? "work" : dot) + '"></span>' +
+            '<span class="wt-name-line"><span class="wt-name">' + name + "</span></span>" +
+            '<span class="wt-meta">' + (meta || "") + "</span>" +
+            '<span class="wt-sub"><span class="wt-branch">' + branch + "</span></span>" +
+            '<span class="wt-foot">' + foot + "</span>" +
+            "</div>"
+          );
+        };
+        var pane = function (label, right, rows) {
+          return (
+            '<div class="tomo-ui"><div class="side-lens">' + label +
+            (right ? '<span class="right">' + right + "</span>" : "") +
+            "</div>" + rows + "</div>"
+          );
+        };
         var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         var PANES = [
@@ -465,6 +473,22 @@
           ["10:20", "mallow", "CANCELLED"],
         ];
         var STATUSES = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED", "AT PLATFORM"];
+
+        // Card zero is tomo as it ships. Without it every other card is a mutation of something
+        // the reader has never seen, and the deck is just seven unrelated jokes.
+        var STOCK = [
+          ["thistle", "feat/pricing-rewrite", "claude \u00b7 2 panes", "active", "12m"],
+          ["juniper", "feat/checkout-copy", "codex \u00b7 waiting on you", "wait", "2h"],
+          ["mallow", "feat/search-index", "claude", "work", "3h"],
+          ["kestrel", "chore/drop-old-flag", "", "", "1d"],
+        ];
+
+        var ZERO = {
+          caption: "this is tomo, before you touch it",
+          body: pane("worktrees", "", STOCK.map(function (w) {
+            return row(w[0], w[1], w[2] ? '<span class="wt-agents">' + w[2] + "</span>" : "", w[3], w[4]);
+          }).join("")),
+        };
 
         var CARDS = [
           {
@@ -649,31 +673,6 @@
             },
           },
           {
-            caption: "i want a plant that dies when i ignore it",
-            body:
-              '<div class="plant"><svg viewBox="0 0 120 150" aria-hidden="true">' +
-              '<path class="stem" d="M60 132 C60 100 60 80 60 54" />' +
-              '<path class="leaf l1" d="M60 100 C40 96 30 82 32 70 C46 72 58 84 60 100Z" />' +
-              '<path class="leaf l2" d="M60 86 C80 82 90 68 88 56 C74 58 62 70 60 86Z" />' +
-              '<path class="leaf l3" d="M60 66 C44 62 36 50 38 40 C50 42 58 54 60 66Z" />' +
-              '<path class="pot" d="M38 132 L44 150 L76 150 L82 132Z" />' +
-              "</svg><p class=\"mood\">watered 3 days ago</p></div>",
-            start: function (screen) {
-              var svg = screen.querySelector("svg");
-              var mood = screen.querySelector(".mood");
-              var frame = 0;
-              if (reduced) return null;
-              return function () {
-                frame += 1;
-                // A triangle wave, so it wilts and recovers instead of resetting in one frame.
-                var phase = (frame % 840) / 420;
-                var droop = phase > 1 ? 2 - phase : phase;
-                svg.style.setProperty("--droop", droop.toFixed(3));
-                mood.textContent = droop > 0.72 ? "merge something. please." : droop > 0.4 ? "watered 3 days ago" : "thriving";
-              };
-            },
-          },
-          {
             caption: "i want a seismograph for my repo",
             body: '<canvas class="seis"></canvas><p class="seis-note">3 agents writing · magnitude 4.1</p>',
             start: function (screen) {
@@ -742,8 +741,8 @@
           pool[i] = pool[j];
           pool[j] = held;
         }
-        // Three a visit, then the question, so the deck reads 1, 2, 3, what's yours.
-        var deck = pool.slice(0, 3).concat([BLANK]);
+        // tomo first, then two of the what ifs, then the question.
+        var deck = [ZERO].concat(pool.slice(0, 2), [BLANK]);
 
         root.innerHTML =
           deck
