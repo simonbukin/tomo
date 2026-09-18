@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tomo</title>
+    <meta name="description" content="A little workspace for coding agents. Local, small, and yours to change." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23a684ff' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%23a684ff'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
+    <style>
+      :root {
+        --bg: #ffffff;
+        --surface: #f5f6f8;
+        --fg: #17171c;
+        --fg-2: #7a7a86;
+        --fg-3: #a8a8b3;
+        --line: #e3e3e9;
+        --accent: #7d4dff;
+        --working: #2a9d5c;
+        --waiting: #d98a1a;
+        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0f0f12;
+          --surface: #151519;
+          --fg: #e8e8ee;
+          --fg-2: #7f7f8c;
+          --fg-3: #52525e;
+          --line: #232329;
+          --accent: #a684ff;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #0f0f12;
+        --surface: #151519;
+        --fg: #e8e8ee;
+        --fg-2: #7f7f8c;
+        --fg-3: #52525e;
+        --line: #232329;
+        --accent: #a684ff;
+      }
+
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--mono);
+        font-size: 14px;
+        line-height: 1.65;
+        font-variant-ligatures: none;
+      }
+      main {
+        max-width: 60ch;
+        margin: 0 auto;
+        padding: 72px 16px 96px;
+      }
+
+      .mark { width: 40px; height: 40px; color: var(--accent); display: block; }
+      h1 {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin: 18px 0 0;
+      }
+      .tagline { color: var(--fg-2); margin: 2px 0 0; }
+
+      h2 {
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: lowercase;
+        letter-spacing: 0.09em;
+        color: var(--fg-3);
+        margin: 0 0 14px;
+      }
+      section { margin-top: 56px; }
+      p { margin: 0 0 14px; }
+      p:last-child { margin-bottom: 0; }
+      strong { font-weight: 600; }
+      em { font-style: normal; color: var(--accent); }
+
+      dl { margin: 0; display: grid; grid-template-columns: 7.5rem 1fr; gap: 10px 20px; }
+      dt { color: var(--fg); }
+      dd { margin: 0; color: var(--fg-2); }
+
+      ul { margin: 0; padding: 0; list-style: none; }
+      li { padding-left: 20px; position: relative; margin-bottom: 14px; }
+      li:last-child { margin-bottom: 0; }
+      li::before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: 0.62em;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      li b { font-weight: 600; color: var(--fg); }
+      li span { color: var(--fg-2); }
+
+      pre {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 14px 16px;
+        margin: 0;
+        overflow-x: auto;
+        line-height: 1.7;
+      }
+      code { font-family: inherit; }
+      .comment { color: var(--fg-3); }
+
+      table { border-collapse: collapse; width: 100%; }
+      th, td { text-align: left; padding: 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { font-weight: 500; color: var(--fg-3); font-size: 11px; letter-spacing: 0.06em; }
+      td:first-child { width: 8.5rem; padding-right: 16px; }
+      td .n { color: var(--fg); }
+      tr:last-child td { border-bottom: 0; }
+
+      footer {
+        margin-top: 64px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        color: var(--fg-3);
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+      a:hover { border-bottom-color: currentColor; }
+      a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+      @media (max-width: 480px) {
+        main { padding-top: 48px; }
+        dl { grid-template-columns: 1fr; gap: 2px 0; }
+        dd { margin-bottom: 12px; }
+        td:first-child { width: 6.5rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="tomo">
+          <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 65.03 Q59 88.61 86 57.58" />
+          </g>
+          <g fill="currentColor">
+            <circle cx="23.62" cy="33.99" r="9.19" />
+            <circle cx="76.38" cy="33.99" r="9.19" />
+          </g>
+        </svg>
+        <h1>tomo</h1>
+        <p class="tagline">A little workspace for coding agents.</p>
+      </header>
+
+      <section>
+        <p>
+          Run many agents at once and the mess is not the code. It is the room: which worktree,
+          which terminal, which agent waits for you, which one eats the machine.
+        </p>
+        <p>
+          Tomo keeps that room in order. The worktree is the unit. Terminals, agents, processes,
+          ports, and attention all roll up to it. Tomo does not replace Git, your editor, your
+          shell, or your agents. <em>It keeps the room organized.</em>
+        </p>
+      </section>
+
+      <section>
+        <h2>shape</h2>
+        <dl>
+          <dt>tomod</dt>
+          <dd>A local Rust daemon. It owns the terminals, the state, and the agent signals.</dd>
+          <dt>tomo</dt>
+          <dd>A command-line client. Agents and shell scripts speak to Tomo through it.</dd>
+          <dt>Tomo.app</dt>
+          <dd>A desktop window. It is a view, and nothing more.</dd>
+        </dl>
+        <p style="margin-top: 20px; color: var(--fg-2)">
+          Close the window and nothing dies. Open it again and everything reconnects.
+        </p>
+      </section>
+
+      <section>
+        <h2>how it thinks</h2>
+        <ul>
+          <li>
+            <b>Yours to change.</b>
+            <span>Read the source, change it, build it. A tool you cannot open is a tool you rent.</span>
+          </li>
+          <li>
+            <b>Small parts that compose.</b>
+            <span>The daemon holds the truth. The CLI is the whole API. The window is disposable.
+            Each part stays useful when you ignore the others.</span>
+          </li>
+          <li>
+            <b>Addons, not a plugin API you must beg for.</b>
+            <span>The core stays small on purpose. An addon adds its own state, its own commands,
+            and its own place in the window, and a test keeps the core from learning its name.</span>
+          </li>
+          <li>
+            <b>Local, and quiet about it.</b>
+            <span>Everything runs on your machine. No account, no cloud, no telemetry.
+            The daemon makes no calls of its own.</span>
+          </li>
+          <li>
+            <b>Fast enough to forget.</b>
+            <span>A tool you wait for is a tool you stop opening.</span>
+          </li>
+          <li>
+            <b>Quiet by default.</b>
+            <span>It should feel like good stationery: careful, restrained, tactile. It tells you
+            what needs you, and otherwise says nothing.</span>
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>measured, not claimed</h2>
+        <table>
+          <tr>
+            <th>what</th>
+            <th>number</th>
+          </tr>
+          <tr>
+            <td>window</td>
+            <td><span class="n">120 fps</span> on a 120 Hz display</td>
+          </tr>
+          <tr>
+            <td>git status</td>
+            <td><span class="n">33 ms</span> across 29 worktrees, in process, not through the git binary</td>
+          </tr>
+          <tr>
+            <td>terminal</td>
+            <td><span class="n">1.4 GB/s</span> of terminal output parsed</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2>install</h2>
+        <pre><code>git clone https://github.com/simonbukin/tomo
+cd tomo
+scripts/install.sh
+tomo integrations install</code></pre>
+        <p style="margin-top: 14px; color: var(--fg-2)">
+          The script builds the binaries, puts <code>tomo</code> and <code>tomod</code> in
+          <code>~/.local/bin</code>, and puts the app in <code>/Applications</code>. The last line
+          adds the hooks for Claude, Codex, and Pi.
+        </p>
+        <p style="color: var(--fg-3)">
+          macOS only today. The daemon speaks over a Unix socket, so Linux is close but untested,
+          and Windows needs a different transport first.
+        </p>
+      </section>
+
+      <footer>
+        <a href="https://github.com/simonbukin/tomo">source</a>
+        <span>MIT</span>
+      </footer>
+    </main>
+  </body>
+</html>
