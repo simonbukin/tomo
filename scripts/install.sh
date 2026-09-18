@@ -19,7 +19,28 @@ install -m 755 target/release/tomod "$BIN_DIR/tomod"
 echo "== installed $BIN_DIR/tomo and $BIN_DIR/tomod"
 
 cp target/release/tomo target/release/tomod "$APP_SRC/Contents/MacOS/"
-codesign --force --deep --sign - "$APP_SRC" >/dev/null 2>&1 || true
+
+# macOS saves each permission you grant against the app's designated requirement. Ad-hoc
+# signing ("-") makes that requirement a cdhash, which changes with every build, so every
+# install looks like a new app and asks for camera, files and the rest again. A stable
+# identity pins the requirement to the certificate instead, and the grants survive.
+# Only an identity named for Tomo is used: signing with whatever else is in the keychain
+# would put another project's name on this app.
+SIGN_ID="${TOMO_SIGN_ID:-}"
+if [ -z "$SIGN_ID" ] && security find-identity -v -p codesigning 2>/dev/null | grep -q '"Tomo Local Signing"'; then
+  SIGN_ID="Tomo Local Signing"
+fi
+if [ -z "$SIGN_ID" ]; then
+  SIGN_ID="-"
+  echo "== signing ad-hoc, so macOS asks for permissions again after every install."
+  echo "   To make the grants stick, create a self-signed code signing certificate once:"
+  echo "   Keychain Access > Certificate Assistant > Create a Certificate,"
+  echo "   name 'Tomo Local Signing', type 'Code Signing', then run this script again."
+else
+  echo "== signing as '$SIGN_ID'"
+fi
+codesign --force --sign "$SIGN_ID" "$APP_SRC/Contents/MacOS/tomo" "$APP_SRC/Contents/MacOS/tomod"
+codesign --force --sign "$SIGN_ID" "$APP_SRC"
 rm -rf "$APP_DIR/Tomo.app"
 cp -R "$APP_SRC" "$APP_DIR/Tomo.app"
 echo "== installed $APP_DIR/Tomo.app"
