@@ -50,8 +50,9 @@
       .stack { width: 100%; max-width: 1060px; display: grid; justify-items: start; gap: 20px; }
 
       /* ---------- the line ---------- */
-      .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-      .mark-wrap { position: relative; display: inline-block; font-size: 30px; line-height: 0; cursor: default; }
+      /* The mark rides inside the headline's line box. Its wordmark baseline sits a quarter of
+         its height above its bottom edge, so -0.25em drops it exactly onto the text baseline. */
+      .mark-wrap { position: relative; display: inline-block; font-size: 30px; line-height: 0; cursor: default; vertical-align: -0.25em; margin-right: 10px; }
       .lockup { width: 105px; height: 30px; color: var(--fg); display: block; }
       .lockup .word { transition: opacity 240ms ease-out; }
       .kana {
@@ -63,7 +64,7 @@
       }
       .mark-wrap:hover .word { opacity: 0; }
       .mark-wrap:hover .kana { opacity: 1; transform: translateY(-50%); }
-      h1 { margin: 0; font-size: clamp(19px, 2.6vw, 26px); font-weight: 500; letter-spacing: -0.012em; }
+      h1 { margin: 0; font-size: clamp(19px, 2.6vw, 26px); font-weight: 500; letter-spacing: -0.012em; line-height: 1.35; }
 
       /* ---------- the render ---------- */
       .render { width: 100%; display: grid; gap: 13px; }
@@ -75,7 +76,8 @@
         background: var(--bg); color: var(--fg);
         box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.12);
         display: grid; grid-template-rows: 32px 1fr 26px; text-align: left;
-        transition: background 300ms ease-out, color 300ms ease-out;
+        position: relative;
+        transition: background 300ms ease-out, color 300ms ease-out, transform 400ms cubic-bezier(0.2, 0, 0, 1), filter 400ms ease-out;
       }
       .app-bar { display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid var(--line); }
       .app-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
@@ -102,6 +104,34 @@
       .app.huge .tomo-ui { --fs-0: 14px; --fs-1: 16px; }
       .app.huge .tomo-ui .wt-row { height: 74px; grid-template-rows: 23px 19px 20px; }
       .app.huge .pane pre { font-size: 14px; }
+      .app.crt {
+        --bg: #04170a; --fg: #35e06a; --fg-2: #2aa851; --fg-3: #1c7038;
+        --line: #0d3d1d; --dot-soft: #07230e; --accent: #7dff9f; --success: #35e06a; --waiting: #c8e035;
+        background: var(--bg); color: var(--fg); text-shadow: 0 0 6px rgba(53, 224, 106, 0.35);
+      }
+      .app.crt .app-bar i { background: #0d3d1d; }
+      .app.crt::after {
+        content: ""; position: absolute; inset: 0; pointer-events: none;
+        background: repeating-linear-gradient(rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
+      }
+      .app.grey { filter: grayscale(1); }
+      .app.tilt { transform: rotate(-2.4deg); }
+      .app.flip .app-body { direction: rtl; }
+      .app.flip .app-body > * { direction: ltr; }
+      .app.flip .app-side { border-right: 0; border-left: 1px solid var(--line); }
+      .app.noside .app-body { grid-template-columns: 0 1fr; }
+      .app.noside .app-side { display: none; }
+      .app.zen .tabs { display: none; }
+      .app.zen .panes { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+      .app.zen .pane:not(:first-child) { display: none; }
+      .app.zen .pane pre { font-size: 15px; line-height: 1.75; }
+      .vimline {
+        flex: none; display: flex; gap: 14px; padding: 3px 11px;
+        background: var(--dot-soft); border-top: 1px solid var(--line);
+        font-family: var(--mono); font-size: 10.5px; color: var(--fg-2);
+      }
+      .vimline b { color: var(--accent); font-weight: 400; }
+      .vimline .right { margin-left: auto; }
 
       /* ---------- tomo's own row CSS, scoped, so the mock carries the app's real metrics ---------- */
       .tomo-ui {
@@ -179,30 +209,22 @@
       .jab.in { opacity: 1; transform: none; }
       .jab.noise { font-family: var(--mono); font-size: 11px; }
 
-      /* ---------- actions ---------- */
-      .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-      .button {
-        display: inline-flex; align-items: center; gap: 8px;
-        font-family: var(--sans); font-weight: 500; font-size: 15px;
-        color: var(--bg); background: var(--fg); border-radius: 5px;
-        padding: 10px 17px; text-decoration: none; border: 1px solid var(--fg);
+      /* ---------- get it ---------- */
+      .get { margin: 0; font-size: 17px; color: var(--fg-2); }
+      .get a, .linkish {
+        color: var(--fg); background: none; border: 0; padding: 0;
+        font: inherit; cursor: pointer; text-decoration: none;
+        border-bottom: 1px solid var(--fg-3);
       }
-      .button:hover { opacity: 0.86; }
-      .copy { color: var(--fg); background: transparent; border-color: var(--line); cursor: pointer; }
-      .copy:hover { opacity: 1; border-color: var(--fg-3); }
-      .swap-icon { position: relative; width: 15px; height: 15px; flex: none; }
-      .swap-icon svg { position: absolute; inset: 0; width: 15px; height: 15px; transition: opacity 150ms ease-out, transform 260ms cubic-bezier(0.2, 0, 0, 1); }
-      .i-check { color: var(--success); opacity: 0; transform: scale(0.55); }
-      .i-check path { stroke-dasharray: 16; stroke-dashoffset: 16; transition: stroke-dashoffset 280ms cubic-bezier(0.2, 0, 0, 1) 70ms; }
-      .copy[data-copied] .i-copy { opacity: 0; transform: scale(0.55); }
-      .copy[data-copied] .i-check { opacity: 1; transform: none; }
-      .copy[data-copied] .i-check path { stroke-dashoffset: 0; }
-      .swap-label { display: grid; overflow: hidden; transition: width 260ms cubic-bezier(0.2, 0, 0, 1); }
-      .swap-label > span { grid-area: 1 / 1; justify-self: start; white-space: nowrap; transition: opacity 150ms ease-out, transform 220ms cubic-bezier(0.2, 0, 0, 1); }
-      .l-done { opacity: 0; transform: translateY(5px); }
-      .copy[data-copied] .l-rest { opacity: 0; transform: translateY(-5px); }
-      .copy[data-copied] .l-done { opacity: 1; transform: none; }
-      .copy-wrap { position: relative; display: inline-flex; }
+      .get a:hover, .linkish:hover { color: var(--accent); border-bottom-color: currentColor; }
+      .get a:focus-visible, .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+      /* Both sentences share one grid cell, so the line never jumps and nothing is rebuilt. */
+      .get { display: grid; }
+      .get > span { grid-area: 1 / 1; transition: opacity 200ms ease-out; }
+      .get .taken { color: var(--fg); opacity: 0; pointer-events: none; }
+      .get[data-taken] .offer { opacity: 0; pointer-events: none; }
+      .get[data-taken] .taken { opacity: 1; }
+      .copy-wrap { position: relative; display: inline-block; }
       .tip {
         position: absolute; bottom: calc(100% + 9px); left: 0;
         font-family: var(--mono); font-size: 12px; line-height: 1.5;
@@ -212,7 +234,7 @@
         transition: opacity 140ms ease-out, transform 140ms ease-out;
       }
       .tip::before { content: "$ "; color: var(--fg-3); }
-      .copy-wrap:hover .tip, .copy:focus-visible ~ .tip { opacity: 1; transform: none; }
+      .copy-wrap:hover .tip, .linkish:focus-visible + .tip { opacity: 1; transform: none; }
 
       .foot { margin: 0; color: var(--fg-3); font-size: 13.5px; }
       .foot a { color: var(--fg-2); text-decoration: none; border-bottom: 1px solid var(--line); }
@@ -237,7 +259,7 @@
     <canvas class="tide" id="tide" aria-hidden="true"></canvas>
     <main>
       <div class="stack">
-        <div class="top">
+        <h1>
           <span class="mark-wrap">
             <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
               <g transform="scale(0.2)">
@@ -261,9 +283,8 @@
               </g>
             </svg>
             <span class="kana" aria-hidden="true">とも</span>
-          </span>
-          <h1>somewhere to put your agents</h1>
-        </div>
+          </span>somewhere to put your agents
+        </h1>
 
         <div class="render">
           <button type="button" class="screen-btn" id="screen" aria-label="tomo. Click it to change something.">
@@ -279,32 +300,10 @@
           <p class="caption" id="caption"></p>
         </div>
 
-        <div class="actions">
-          <a class="button" href="https://github.com/simonbukin/tomo">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-            </svg>
-            github
-          </a>
-          <span class="copy-wrap">
-            <button type="button" class="button copy" id="copy" aria-describedby="copyTip">
-              <span class="swap-icon">
-                <svg class="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
-                  <path d="M10.5 3.5a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 4 11" />
-                </svg>
-                <svg class="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M3 8.6 6.3 12 13 4.8" />
-                </svg>
-              </span>
-              <span class="swap-label" aria-hidden="true">
-                <span class="l-rest">take it</span>
-                <span class="l-done">it's yours now.</span>
-              </span>
-            </button>
-            <span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span>
-          </span>
-        </div>
+        <p class="get" id="get">
+          <span class="offer">get it <a href="https://github.com/simonbukin/tomo">on github</a>, or <span class="copy-wrap"><button type="button" class="linkish" id="copy" aria-describedby="copyTip">right here</button><span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span></span>.</span>
+          <span class="taken" aria-live="polite"></span>
+        </p>
 
         <p class="foot">made with 💜 by <a href="https://simonbukin.com">simon</a></p>
       </div>
@@ -340,10 +339,10 @@
           ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
         ];
 
-        function sidebar() {
+        function sidebar(rows) {
           return (
             '<div class="tomo-ui"><div class="side-lens">worktrees</div>' +
-            WORKTREES.map(function (w) {
+            (rows || WORKTREES).map(function (w) {
               return (
                 '<div class="wt-row' + (w[3] === "active" ? " wt-active" : "") + '">' +
                 '<span class="state ' + (w[3] === "active" ? "work" : w[3]) + '"></span>' +
@@ -515,6 +514,72 @@
               return toaster(box, ["nine agents. nine.", "juniper has waited 41 minutes.", "you opened kestrel in august.", "$18.60 today. it is 11am."], 34);
             },
           },
+          { id: "crt", says: "we're doing 1995. ok.", css: "crt" },
+          { id: "grey", says: "every colour gone. bleak. fine.", css: "grey" },
+          { id: "tilt", says: "...why.", css: "tilt" },
+          { id: "flip", says: "other side. done.", css: "flip" },
+          { id: "noside", says: "no sidebar at all. bold.", css: "noside" },
+          { id: "zen", says: "just the one. zen.", css: "zen" },
+          {
+            id: "animals",
+            says: "they name themselves now. of course they do.",
+            apply: function () {
+              side.innerHTML = sidebar([
+                ["\ud83e\udda6 otter", "feat/pricing-rewrite", "claude \u00b7 2 panes", "active", "12m"],
+                ["\ud83e\uddab beaver", "feat/checkout-copy", "codex \u00b7 waiting on you", "wait", "2h"],
+                ["\ud83e\udda2 crane", "feat/search-index", "claude", "work", "3h"],
+                ["\ud83e\uddad seal", "chore/drop-old-flag", "", "", "1d"],
+              ]);
+              return null;
+            },
+          },
+          {
+            id: "money",
+            says: "you want to watch it burn. fine.",
+            apply: function () {
+              side.innerHTML = sidebar([
+                ["thistle", "feat/pricing-rewrite", "$18.60 \u00b7 2.4M tokens", "active", "12m"],
+                ["juniper", "feat/checkout-copy", "$8.30 \u00b7 1.1M tokens", "wait", "2h"],
+                ["mallow", "feat/search-index", "$6.10 \u00b7 840k tokens", "work", "3h"],
+                ["kestrel", "chore/drop-old-flag", "$0.72 \u00b7 96k tokens", "", "1d"],
+              ]);
+              var total = document.createElement("span");
+              total.textContent = "$33.72 today";
+              document.querySelector(".app-foot .spacer").after(total);
+              return null;
+            },
+          },
+          {
+            id: "japanese",
+            says: "\u5168\u90e8\u65e5\u672c\u8a9e\u3002\u306f\u3044\u3002",
+            apply: function () {
+              var lens = side.querySelector(".side-lens");
+              if (lens) lens.textContent = "\u30ef\u30fc\u30af\u30c4\u30ea\u30fc";
+              var add = document.querySelector(".app-foot span");
+              if (add) add.textContent = "+ \u30ea\u30dd\u30b8\u30c8\u30ea\u8ffd\u52a0";
+              return null;
+            },
+          },
+          {
+            id: "vim",
+            says: "vim keys. obviously.",
+            apply: function () {
+              var bar = document.createElement("div");
+              bar.className = "vimline";
+              bar.innerHTML = '<b>-- NORMAL --</b><span>pricing.ts</span><span class="right">42,7   34%</span>';
+              mainArea.appendChild(bar);
+              var modes = ["-- NORMAL --", "-- INSERT --", "-- VISUAL --", ":w"];
+              var at = 0, hold = 0;
+              var label = bar.querySelector("b");
+              return reduced ? null : function () {
+                hold += 1;
+                if (hold < 44) return;
+                hold = 0;
+                at += 1;
+                label.textContent = modes[at % modes.length];
+              };
+            },
+          },
           {
             id: "noise",
             says: "a sound every time one fails. your neighbours will love that.",
@@ -599,41 +664,24 @@
       // ---------- take it ----------
       (function () {
         var button = document.getElementById("copy");
-        var label = button.querySelector(".swap-label");
-        var rest = button.querySelector(".l-rest");
-        var done = button.querySelector(".l-done");
+        var sentence = document.getElementById("get");
+        var taken = sentence.querySelector(".taken");
         var command = document.getElementById("copyTip").textContent;
-        var resting = "Copy the install command: " + command;
-        var widths = { rest: 0, done: 0 };
         var timer = 0;
 
-        function measure() {
-          widths.rest = rest.getBoundingClientRect().width;
-          widths.done = done.getBoundingClientRect().width;
-          label.style.width = widths.rest + "px";
-        }
-        if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
-        else window.addEventListener("load", measure);
-        measure();
-
-        button.setAttribute("aria-label", resting);
+        button.setAttribute("aria-label", "Copy the install command: " + command);
         button.addEventListener("click", function () {
-          var settle = function (copied, spoken) {
-            button.toggleAttribute("data-copied", copied);
-            label.style.width = (copied ? widths.done : widths.rest) + "px";
-            button.setAttribute("aria-label", spoken);
+          var settle = function (words) {
+            taken.textContent = words;
+            sentence.setAttribute("data-taken", "");
             window.clearTimeout(timer);
-            timer = window.setTimeout(function () {
-              button.removeAttribute("data-copied");
-              label.style.width = widths.rest + "px";
-              button.setAttribute("aria-label", resting);
-            }, 2200);
+            timer = window.setTimeout(function () { sentence.removeAttribute("data-taken"); }, 4600);
           };
           // No clipboard on an insecure origin, and the promise rejects on a denied permission.
-          if (!navigator.clipboard) return settle(false, "Could not copy. The command is shown above the button.");
+          if (!navigator.clipboard) return settle("copy it yourself, it's in the tooltip.");
           navigator.clipboard.writeText(command).then(
-            function () { settle(true, "Copied. It is yours now."); },
-            function () { settle(false, "Could not copy. The command is shown above the button."); },
+            function () { settle("it's yours now. i hope you can handle the responsibility."); },
+            function () { settle("copy it yourself, it's in the tooltip."); },
           );
         });
       })();
