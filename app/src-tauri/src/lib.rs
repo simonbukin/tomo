@@ -207,7 +207,12 @@ pub fn run() {
     STARTED.get_or_init(std::time::Instant::now);
     mark("process start");
     let link = Arc::new(Link { tx: Mutex::new(None), pending: Arc::new(Mutex::new(HashMap::new())), next_id: AtomicU64::new(1) });
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // WebKit renders web content at 60 Hz even where the display runs at 120. There is no
+    // public API for it, so this flips WebKit's own private preference, the way Safari does.
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_plugin_macos_fps::init());
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
