@@ -5,7 +5,7 @@ members = ["crates/tomo-proto", "crates/tomod", "crates/tomo-cli", "app/src-taur
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "Unlicense"
 
 [workspace.dependencies]
 tomo-proto = { path = "crates/tomo-proto" }
