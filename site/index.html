@@ -71,7 +71,16 @@
       /* ---------- the render ---------- */
       /* The render wants room to breathe on its own, beyond the stack gap. */
       .render { width: 100%; display: grid; gap: 15px; margin-block: 10px; }
-      .screen-btn { width: 100%; padding: 0; border: 0; background: none; cursor: pointer; display: block; border-radius: 11px; }
+      .screen-btn {
+        width: 100%; padding: 0; border: 0; background: none; display: block; border-radius: 11px;
+        cursor: pointer;
+        /* a little hand, so the render says "click me" without a caption saying it */
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M11 15V6.5a2 2 0 0 1 4 0V14V4.5a2 2 0 0 1 4 0V14V6.5a2 2 0 0 1 4 0V19c0 5-3 9-8 9s-8-4-8-9v-4a2 2 0 0 1 4 0z' fill='%23fff' stroke='%23111' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 12 4, pointer;
+      }
+      .screen-btn .app { animation: nudge 3.4s ease-in-out infinite; }
+      .screen-btn:hover .app, .screen-btn:focus-visible .app { animation: none; }
+      @keyframes nudge { 0%, 88%, 100% { filter: brightness(1); } 94% { filter: brightness(0.9); } }
+      @media (prefers-reduced-motion: reduce) { .screen-btn .app { animation: none; } }
       .screen-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
       .app {
         width: 100%; aspect-ratio: 16 / 9.4;
@@ -98,7 +107,6 @@
         min-height: 1.4em; transition: opacity 180ms ease-out;
       }
       .caption { transition: opacity 200ms ease-out; }
-      .caption .hint { color: var(--fg-3); font-size: 15px; margin-left: 10px; }
 
       /* ---------- what you can do to it ---------- */
       .app.comic, .app.comic .tomo-ui, .app.comic .pane pre, .app.comic .app-foot {
@@ -157,6 +165,16 @@
       .app.raw .pane { display: block; border-bottom: 1px solid #767676; }
       .app.raw .pane pre { font-family: "Courier New", monospace !important; font-size: 12px; }
       .app.raw .app-foot, .app.raw .app-bar { border-color: #767676 !important; }
+      .app.raw .board, .app.raw .sheet, .app.raw .label { background: #fff !important; }
+      .app.raw .tank, .app.raw .fire, .app.raw .rain { display: none; }
+      .app.raw .sh-grid div, .app.raw .rule { border-color: #767676 !important; }
+      .app.raw .lb-title { font-size: 20px; font-weight: 700; }
+      .app.raw .clip .bubble { border-radius: 0; box-shadow: none; }
+      /* bigger has to reach whatever is in the main area, not only the panes */
+      .app.huge .sh-grid { font-size: 18px; }
+      .app.huge .lb-title { font-size: 40px; }
+      .app.huge .lb-line { font-size: 19px; }
+      .app.huge .bd-row { font-size: 18px; }
 
       /* this guy looks familiar */
       .clip { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: flex-end; gap: 9px; z-index: 5; pointer-events: none; }
@@ -184,7 +202,8 @@
       .app.zen .pane:not(:first-child) { display: none; }
       .app.zen .pane pre { font-size: 15px; line-height: 1.75; }
       .vimline {
-        flex: none; display: flex; gap: 14px; padding: 3px 11px;
+        position: absolute; left: 0; right: 0; bottom: 26px; z-index: 6;
+        display: flex; gap: 14px; padding: 3px 11px;
         background: var(--dot-soft); border-top: 1px solid var(--line);
         font-family: var(--mono); font-size: 10.5px; color: var(--fg-2);
       }
@@ -264,7 +283,7 @@
       .lb-line i { font-style: normal; font-weight: 700; text-align: right; }
       .lb-foot { font-size: 10px; color: var(--fg-2); padding-top: 5px; }
 
-      .overlay { position: absolute; right: 13px; bottom: 13px; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; pointer-events: none; }
+      .overlay { position: absolute; right: 13px; bottom: 39px; z-index: 6; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; pointer-events: none; }
       .jab {
         margin: 0; font-size: 12px; line-height: 1.4; color: var(--fg);
         background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
@@ -421,14 +440,20 @@
         }
 
         var audio = null;
-        function beep(notes, kind) {
-          if (reduced) return;
+        // Browsers only allow sound after a gesture, so the context is opened on the first
+        // click and kept, rather than created later when a demand happens to want it.
+        function unlockAudio() {
           try {
             if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
             if (audio.state === "suspended") audio.resume();
           } catch (err) {
-            return;
+            audio = null;
           }
+        }
+        function beep(notes, kind) {
+          if (reduced) return;
+          unlockAudio();
+          if (!audio) return;
           notes.forEach(function (hz, n) {
             var at = audio.currentTime + n * 0.085;
             var osc = audio.createOscillator();
@@ -436,11 +461,11 @@
             osc.type = kind || "triangle";
             osc.frequency.setValueAtTime(hz, at);
             gain.gain.setValueAtTime(0.0001, at);
-            gain.gain.exponentialRampToValueAtTime(0.06, at + 0.012);
-            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.24);
+            gain.gain.exponentialRampToValueAtTime(0.19, at + 0.012);
+            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.32);
             osc.connect(gain).connect(audio.destination);
             osc.start(at);
-            osc.stop(at + 0.26);
+            osc.stop(at + 0.34);
           });
         }
 
@@ -467,6 +492,7 @@
           { id: "huge", says: "your eye doctor will love you for this.", css: "huge" },
           {
             id: "tank",
+            owns: "side",
             says: "...ok, i guess the agents can be fish.",
             apply: function () {
               side.innerHTML = '<canvas class="tank"></canvas>';
@@ -520,6 +546,7 @@
           },
           {
             id: "trains",
+            owns: "side",
             says: "trains. you want them to be trains.",
             apply: function () {
               side.innerHTML =
@@ -574,11 +601,13 @@
           },
           {
             id: "nine",
+            owns: "main",
             says: "all nine at once. that's healthy.",
             apply: function () { mainArea.innerHTML = terminals(9); return null; },
           },
           {
             id: "label",
+            owns: "main",
             says: "a nutrition label. for a git worktree. ok.",
             apply: function () {
               mainArea.innerHTML =
@@ -604,9 +633,10 @@
           { id: "crt", says: "ooo, how retro of you.", css: "crt" },
           { id: "tilt", says: "this is not good for your neck btw.", css: "tilt" },
           { id: "flip", says: "i guess you can put it over there.", css: "flip" },
-          { id: "zen", says: "just the one, then.", css: "zen" },
+          { id: "zen", says: "just the one, then.", css: "zen", owns: "main" },
           {
             id: "animals",
+            owns: "side",
             says: "sure, i guess the agents can be little guys.",
             apply: function () {
               side.innerHTML = sidebar([
@@ -620,6 +650,7 @@
           },
           {
             id: "money",
+            owns: "side",
             says: "racks on racks.",
             apply: function () {
               side.innerHTML = sidebar([
@@ -641,7 +672,7 @@
               var bar = document.createElement("div");
               bar.className = "vimline";
               bar.innerHTML = '<b>-- NORMAL --</b><span>pricing.ts</span><span class="right">42,7   34%</span>';
-              mainArea.appendChild(bar);
+              app.appendChild(bar);
               var modes = ["-- NORMAL --", "-- INSERT --", "-- VISUAL --", ":w"];
               var at = 0, hold = 0;
               var label = bar.querySelector("b");
@@ -656,6 +687,7 @@
           },
           {
             id: "sheet",
+            owns: "main",
             says: "oh? you miss excel?",
             apply: function () {
               var COLS = ["worktree", "branch", "agent", "$"];
@@ -694,7 +726,7 @@
               };
             },
           },
-          { id: "raw", says: "keeping it simple i see.", css: "raw" },
+          { id: "raw", says: "keeping it simple i see.", css: "raw", last: true },
           {
             id: "clippy",
             says: "this guy looks familiar.",
@@ -770,60 +802,76 @@
           },
           {
             id: "fire",
+            owns: null,
             says: "and now it's on fire. cool. cool cool cool.",
             apply: function () {
               var canvas = document.createElement("canvas");
               canvas.className = "fire";
               app.appendChild(canvas);
               var g = canvas.getContext("2d", { willReadFrequently: true });
-              // The demoscene fire: seed the bottom row hot, cool and drift upward, then scale
-              // a small buffer over the whole window so it stays cheap at any size.
-              var W = 132, H = 78;
-              var heat = new Uint8Array(W * H);
-              var palette = [];
+              // Real fire, at the size of the window rather than a thumbnail scaled up, and on
+              // its own frame loop, because 18 frames a second looks like a bad gif.
+              var W = 0, H = 0, heat = null, image = null;
+              var buffer = document.createElement("canvas");
+              var bg = buffer.getContext("2d");
+              var palette = new Uint8Array(256 * 4);
               for (var i = 0; i < 256; i++) {
                 var t = i / 255;
-                palette.push([
-                  Math.min(255, Math.round(Math.pow(t, 0.55) * 400)),
-                  Math.round(Math.pow(t, 1.9) * 255),
-                  Math.round(Math.pow(t, 5) * 210),
-                  Math.min(255, Math.round(Math.pow(t, 0.7) * 320)),
-                ]);
+                palette[i * 4] = Math.min(255, Math.round(Math.pow(t, 0.42) * 460));
+                palette[i * 4 + 1] = Math.round(Math.pow(t, 1.7) * 255);
+                palette[i * 4 + 2] = Math.round(Math.pow(t, 4.4) * 235);
+                palette[i * 4 + 3] = Math.min(255, Math.round(Math.pow(t, 0.62) * 360));
               }
-              var image = g.createImageData(W, H);
-              var buffer = document.createElement("canvas");
-              buffer.width = W;
-              buffer.height = H;
-              var bg = buffer.getContext("2d");
 
-              var burn = function () {
-                for (var x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.random() < 0.82 ? 255 : 90;
+              function size() {
+                var w = canvas.clientWidth, h = canvas.clientHeight;
+                if (!w || !h) return false;
+                var want = Math.max(240, Math.min(560, Math.round(w / 2)));
+                if (want === W) return true;
+                W = want;
+                H = Math.round(want * (h / w));
+                buffer.width = W;
+                buffer.height = H;
+                heat = new Uint8Array(W * H);
+                image = bg.createImageData(W, H);
+                return true;
+              }
+
+              var alive = true;
+              function burn() {
+                if (!alive) return;
+                requestAnimationFrame(burn);
+                if (!document.body.contains(canvas)) { alive = false; return; }
+                if (!size()) return;
+                for (var x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.random() < 0.9 ? 255 : 140;
                 for (var y = 0; y < H - 1; y++) {
+                  var rowUp = y * W, rowDown = (y + 1) * W;
                   for (var x2 = 0; x2 < W; x2++) {
-                    var below = (y + 1) * W + ((x2 + (Math.random() * 3 | 0) - 1 + W) % W);
-                    var next = heat[below] - (Math.random() * 15 | 0);
-                    heat[y * W + x2] = next < 0 ? 0 : next;
+                    var drift = (Math.random() * 3 | 0) - 1;
+                    var next = heat[rowDown + ((x2 + drift + W) % W)] - (Math.random() * 7 | 0);
+                    heat[rowUp + x2] = next < 0 ? 0 : next;
                   }
                 }
-                for (var p = 0; p < heat.length; p++) {
-                  var c = palette[heat[p]];
-                  image.data[p * 4] = c[0];
-                  image.data[p * 4 + 1] = c[1];
-                  image.data[p * 4 + 2] = c[2];
-                  image.data[p * 4 + 3] = c[3];
+                var data = image.data;
+                for (var p = 0, q = 0; p < heat.length; p++, q += 4) {
+                  var c = heat[p] * 4;
+                  data[q] = palette[c];
+                  data[q + 1] = palette[c + 1];
+                  data[q + 2] = palette[c + 2];
+                  data[q + 3] = palette[c + 3];
                 }
                 bg.putImageData(image, 0, 0);
-                var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
-                if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+                var cw = canvas.clientWidth, ch = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+                if (canvas.width !== Math.round(cw * dpr)) { canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr); }
                 g.setTransform(dpr, 0, 0, dpr, 0, 0);
-                g.clearRect(0, 0, w, h);
+                g.clearRect(0, 0, cw, ch);
                 g.imageSmoothingEnabled = true;
-                g.globalAlpha = 0.9;
-                g.drawImage(buffer, 0, 0, w, h);
-                g.globalAlpha = 1;
-              };
+                g.imageSmoothingQuality = "high";
+                g.drawImage(buffer, 0, 0, cw, ch);
+              }
+              if (reduced) { size(); return null; }
               burn();
-              return reduced ? null : burn;
+              return null;
             },
           },
           {
@@ -832,8 +880,15 @@
             apply: function () {
               var box = document.createElement("div");
               box.className = "overlay";
-              mainArea.appendChild(box);
-              return toaster(box, ["mallow failed  ♪", "juniper wants you  ♫", "thistle finished  ♪", "kestrel crashed  ♬"], 30, "noise");
+              app.appendChild(box);
+              // It really does make the noise. That is the entire demand.
+              return toaster(
+                box,
+                ["mallow failed  ♪", "juniper wants you  ♫", "thistle finished  ♪", "kestrel crashed  ♬"],
+                30,
+                "noise",
+                [[[196, 147], "sawtooth"], [[880, 1174], "sine"], [[523, 659, 784], "triangle"], [[110, 82], "square"]],
+              );
             },
           },
         ];
@@ -850,6 +905,9 @@
             left[i] = left[j];
             left[j] = held;
           }
+          // The deck is popped from the end, so anything marked last goes to the front and is
+          // handed over last. Stripping every style first would make the rest invisible.
+          left.sort(function (a, b) { return (a.last ? 1 : 0) - (b.last ? 1 : 0); });
         }
 
         function collectTyping() {
@@ -875,6 +933,9 @@
             return;
           }
           var demand = left.pop();
+          // One takeover per region per visit. Two of them and the first would be replaced
+          // without explanation, which reads as the app forgetting what you asked for.
+          if (demand.owns) left = left.filter(function (other) { return other.owns !== demand.owns; });
           if (demand.css) app.classList.add(demand.css);
           if (demand.apply) {
             var run = demand.apply();
@@ -892,10 +953,13 @@
           caption.textContent = demand.says;
         }
 
-        document.getElementById("screen").addEventListener("click", grant);
+        document.getElementById("screen").addEventListener("click", function () {
+          unlockAudio();
+          grant();
+        });
 
         stock();
-        caption.innerHTML = 'this is tomo, before you mess it up.<span class="hint">click it</span>';
+        caption.textContent = "this is tomo, before you mess it up.";
         window.setInterval(function () {
           if (!reduced) {
             typing.forEach(function (t) {
