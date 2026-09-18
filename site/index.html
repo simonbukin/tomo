@@ -274,7 +274,7 @@
 
       /* i want to terminalmaxx */
       .grid9 { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 1px; background: var(--line); height: 100%; }
-      .t { background: var(--bg); padding: 8px 9px; overflow: hidden; }
+      .t { background: var(--bg); padding: 8px 9px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
       .t .ln {
         margin: 0;
         font-family: var(--mono);
@@ -393,7 +393,7 @@
           </span>
 
           <h1>a little place for your agents</h1>
-          <p class="sub">it's your room. do whatever you want in it. want a fish tank? just ask.</p>
+          <p class="sub">small, local, and yours.</p>
 
           <div class="actions">
             <a class="button" href="https://github.com/simonbukin/tomo">
@@ -472,7 +472,8 @@
             body: '<div class="grid9">' + PANES.map(function (_, n) { return '<div class="t"><pre class="ln" data-pane="' + n + '"></pre></div>'; }).join("") + "</div>",
             start: function (screen) {
               var lines = Array.prototype.slice.call(screen.querySelectorAll(".ln"));
-              var state = lines.map(function (_, n) { return { line: 0, char: 0, hold: n * 7 }; });
+              var KEEP = 5;
+              var state = lines.map(function (_, n) { return { done: [], line: 0, char: 0, hold: n * 7 }; });
               if (reduced) {
                 lines.forEach(function (el) { el.textContent = PANES[+el.dataset.pane].join("\n"); });
                 return null;
@@ -482,10 +483,16 @@
                   var script = PANES[+el.dataset.pane];
                   var at = state[n];
                   if (at.hold > 0) { at.hold -= 1; return; }
-                  if (at.line >= script.length) { at.hold = 70; at.line = 0; at.char = 0; el.textContent = ""; return; }
+                  var current = script[at.line % script.length];
                   at.char += 1;
-                  el.textContent = script.slice(0, at.line).concat([script[at.line].slice(0, at.char)]).join("\n");
-                  if (at.char >= script[at.line].length) { at.line += 1; at.char = 0; at.hold = 8; }
+                  el.textContent = at.done.concat([current.slice(0, at.char)]).join("\n");
+                  if (at.char < current.length) return;
+                  // The finished line joins the scrollback; the pane never blanks, it just runs on.
+                  at.done.push(current);
+                  while (at.done.length > KEEP) at.done.shift();
+                  at.line += 1;
+                  at.char = 0;
+                  at.hold = at.line % script.length === 0 ? 40 : 8;
                 });
               };
             },
@@ -538,7 +545,8 @@
               if (reduced) return null;
               return function () {
                 at += 0.001;
-                tok.textContent = at.toFixed(3).replace(/0+$/, "") + "M";
+                if (at > 3.2) at = 2.4;
+                tok.textContent = at.toFixed(2) + "M";
               };
             },
           },
@@ -657,7 +665,9 @@
               if (reduced) return null;
               return function () {
                 frame += 1;
-                var droop = (frame % 420) / 420;
+                // A triangle wave, so it wilts and recovers instead of resetting in one frame.
+                var phase = (frame % 840) / 420;
+                var droop = phase > 1 ? 2 - phase : phase;
                 svg.style.setProperty("--droop", droop.toFixed(3));
                 mood.textContent = droop > 0.72 ? "merge something. please." : droop > 0.4 ? "watered 3 days ago" : "thriving";
               };
