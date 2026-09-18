@@ -76,10 +76,11 @@
          affordance. It leaves once it has been listened to. */
       .poke {
         position: absolute;
-        top: -34px;
-        right: 54px;
+        top: -36px;
+        left: 50%;
         width: 86px;
         height: 86px;
+        margin-left: -43px;
         z-index: 3;
         pointer-events: none;
         color: var(--fg);
@@ -94,7 +95,7 @@
       }
       .render[data-poked] .poke { opacity: 0; transform: rotate(-13deg) translateY(-14px) scale(0.8); animation: none; transition: opacity 320ms ease-out, transform 320ms ease-out; }
       @media (prefers-reduced-motion: reduce) { .poke { animation: none; } }
-      @media (max-width: 760px) { .poke { width: 62px; height: 62px; top: -24px; right: 18px; } }
+      @media (max-width: 760px) { .poke { width: 62px; height: 62px; top: -26px; margin-left: -31px; } }
       .screen-btn {
         width: 100%; padding: 0; border: 0; background: none; display: block; border-radius: 11px;
         cursor: pointer;
