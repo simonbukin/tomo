@@ -195,15 +195,18 @@ fn summary_gix(worktree: &Path) -> Result<GitSummary> {
 }
 
 /// Commits on each side that the other does not have.
+///
+/// `with_hidden` stops each walk where the histories meet, so the cost is the distance between
+/// the two tips. Walking both to the root and subtracting costs the whole history instead, on a
+/// branch that is three commits ahead as much as on one that has diverged for a year.
 fn count_ahead_behind(repo: &gix::Repository, local: gix::ObjectId, remote: gix::ObjectId) -> Result<(u32, u32)> {
     if local == remote {
         return Ok((0, 0));
     }
-    let of = |tip: gix::ObjectId| -> Result<std::collections::HashSet<gix::ObjectId>> {
-        Ok(repo.rev_walk([tip]).all()?.filter_map(|c| c.ok()).map(|c| c.id).collect())
+    let only_on = |tip: gix::ObjectId, hidden: gix::ObjectId| -> Result<u32> {
+        Ok(repo.rev_walk([tip]).with_hidden([hidden]).all()?.filter(|c| c.is_ok()).count() as u32)
     };
-    let (mine, theirs) = (of(local)?, of(remote)?);
-    Ok((mine.difference(&theirs).count() as u32, theirs.difference(&mine).count() as u32))
+    Ok((only_on(local, remote)?, only_on(remote, local)?))
 }
 
 pub async fn summary(worktree: &Path) -> Result<GitSummary> {
