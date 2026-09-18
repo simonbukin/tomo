@@ -129,6 +129,51 @@
       @keyframes ease-in-place { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
       .swap-in { animation: ease-in-place 380ms cubic-bezier(0.2, 0, 0, 1) both; }
       @media (prefers-reduced-motion: reduce) { .swap-in { animation: none; } }
+      /* you miss excel */
+      .sheet { height: 100%; display: flex; flex-direction: column; background: #fff; color: #111; font-family: Calibri, "Segoe UI", Arial, sans-serif; }
+      .sh-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid #c9c9c9; font-size: 11px; }
+      .sh-cell { border: 1px solid #c9c9c9; padding: 2px 7px; min-width: 46px; background: #fff; }
+      .sh-fx { flex: 1; border: 1px solid #c9c9c9; padding: 2px 7px; font-family: var(--mono); color: #1a6b3c; background: #fff; }
+      .sh-grid { flex: 1; display: grid; grid-template-columns: 30px repeat(4, 1fr); font-size: 11.5px; overflow: hidden; }
+      .sh-grid div { border-right: 1px solid #d8d8d8; border-bottom: 1px solid #d8d8d8; padding: 3px 7px; overflow: hidden; white-space: nowrap; }
+      .sh-grid .hd { background: #f1f1f1; color: #555; text-align: center; font-weight: 600; }
+      .sh-grid .rn { background: #f1f1f1; color: #555; text-align: center; }
+      .sh-grid .on { outline: 2px solid #1a6b3c; outline-offset: -2px; }
+
+      /* keeping it simple i see */
+      .app.raw, .app.raw * {
+        font-family: "Times New Roman", Times, serif !important;
+        background: #fff !important; color: #000 !important;
+        border-color: #767676 !important; text-shadow: none !important; box-shadow: none !important;
+      }
+      .app.raw .tomo-ui .wt-row { display: block; height: auto; padding: 1px 0 1px 18px; border: 0; list-style: disc; }
+      .app.raw .tomo-ui .wt-row::before { content: "\2022 "; }
+      .app.raw .tomo-ui .state, .app.raw .app-bar i { display: none; }
+      .app.raw .tomo-ui .wt-name { font-weight: 400; text-decoration: underline; color: #0000ee !important; }
+      .app.raw .side-lens { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 700; }
+      .app.raw .tabs { display: block; border: 0; }
+      .app.raw .tab { display: inline; padding: 0 8px 0 0; text-decoration: underline; color: #0000ee !important; }
+      .app.raw .panes { display: block; background: #fff; }
+      .app.raw .pane { display: block; border-bottom: 1px solid #767676; }
+      .app.raw .pane pre { font-family: "Courier New", monospace !important; font-size: 12px; }
+      .app.raw .app-foot, .app.raw .app-bar { border-color: #767676 !important; }
+
+      /* this guy looks familiar */
+      .clip { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: flex-end; gap: 9px; z-index: 5; pointer-events: none; }
+      .clip .bubble {
+        max-width: 208px; background: #ffffe1; color: #111; border: 1px solid #9a9a72;
+        border-radius: 4px; padding: 8px 10px; font-size: 11.5px; line-height: 1.4;
+        font-family: "Segoe UI", Tahoma, sans-serif; box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.15);
+      }
+      .clip svg { width: 42px; height: 58px; flex: none; }
+      .clip .eye { transform-origin: center; animation: clipblink 4.2s infinite; }
+      @keyframes clipblink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+
+      /* a little more visceral */
+      .rain { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+      .app.storm { filter: brightness(0.82) saturate(0.8); }
+      .app.storm .app-foot::after { content: "heavy conflicts \00b7 clearing by six"; margin-left: auto; color: var(--waiting); }
+
       .fire { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; z-index: 4; }
       .app.tilt { transform: rotate(-2.4deg); }
       .app.flip .app-body { direction: rtl; }
@@ -559,7 +604,7 @@
           { id: "crt", says: "ooo, how retro of you.", css: "crt" },
           { id: "tilt", says: "this is not good for your neck btw.", css: "tilt" },
           { id: "flip", says: "i guess you can put it over there.", css: "flip" },
-          { id: "zen", says: "keeping it simple.", css: "zen" },
+          { id: "zen", says: "just the one, then.", css: "zen" },
           {
             id: "animals",
             says: "sure, i guess the agents can be little guys.",
@@ -607,6 +652,120 @@
                 at += 1;
                 label.textContent = modes[at % modes.length];
               };
+            },
+          },
+          {
+            id: "sheet",
+            says: "oh? you miss excel?",
+            apply: function () {
+              var COLS = ["worktree", "branch", "agent", "$"];
+              var ROWS = [
+                ["thistle", "feat/pricing-rewrite", "claude", "18.60"],
+                ["juniper", "feat/checkout-copy", "codex", "8.30"],
+                ["mallow", "feat/search-index", "claude", "6.10"],
+                ["kestrel", "chore/drop-old-flag", "", "0.72"],
+              ];
+              var cells = '<div class="sh-grid"><div class="hd"></div>' +
+                ["A", "B", "C", "D"].map(function (c) { return '<div class="hd">' + c + "</div>"; }).join("") +
+                '<div class="rn">1</div>' + COLS.map(function (c) { return "<div><b>" + c + "</b></div>"; }).join("") +
+                ROWS.map(function (r, n) {
+                  return '<div class="rn">' + (n + 2) + "</div>" + r.map(function (v) { return "<div>" + v + "</div>"; }).join("");
+                }).join("") +
+                '<div class="rn">6</div><div>total</div><div></div><div></div><div class="sum">33.72</div></div>';
+              mainArea.innerHTML =
+                '<div class="sheet"><div class="sh-bar"><span class="sh-cell">D6</span>' +
+                '<span class="sh-fx">=SUM(D2:D5)</span></div>' + cells + "</div>";
+
+              var grid = mainArea.querySelector(".sh-grid");
+              var boxes = Array.prototype.slice.call(grid.children).filter(function (el) {
+                return !el.classList.contains("hd") && !el.classList.contains("rn");
+              });
+              var sum = mainArea.querySelector(".sum");
+              var at = 0, hold = 0, total = 33.72;
+              return reduced ? null : function () {
+                hold += 1;
+                if (hold < 22) return;
+                hold = 0;
+                boxes.forEach(function (el) { el.classList.remove("on"); });
+                at = (at + 1) % boxes.length;
+                boxes[at].classList.add("on");
+                total += 0.03;
+                sum.textContent = total.toFixed(2);
+              };
+            },
+          },
+          { id: "raw", says: "keeping it simple i see.", css: "raw" },
+          {
+            id: "clippy",
+            says: "this guy looks familiar.",
+            apply: function () {
+              var lines = [
+                "It looks like you're running nine agents. Would you like help?",
+                "I see you have not merged since Tuesday.",
+                "Would you like me to write a commit message? I will not be good at it.",
+                "It looks like you're on fire.",
+              ];
+              var box = document.createElement("div");
+              box.className = "clip";
+              box.innerHTML =
+                '<div class="bubble">' + lines[0] + "</div>" +
+                '<svg viewBox="0 0 40 56" fill="none" stroke="#8a8a96" stroke-width="3.4" stroke-linecap="round">' +
+                '<path d="M12 50 V14 a8 8 0 0 1 16 0 v30 a5 5 0 0 1-10 0 V18" />' +
+                '<circle class="eye" cx="15" cy="17" r="2.6" fill="#1b1b22" stroke="none" />' +
+                '<circle class="eye" cx="25" cy="17" r="2.6" fill="#1b1b22" stroke="none" />' +
+                "</svg>";
+              app.appendChild(box);
+              var bubble = box.querySelector(".bubble");
+              var at = 0, hold = 0;
+              return reduced ? null : function () {
+                hold += 1;
+                if (hold < 82) return;
+                hold = 0;
+                at += 1;
+                bubble.textContent = lines[at % lines.length];
+              };
+            },
+          },
+          {
+            id: "storm",
+            says: "a little more visceral, sure.",
+            css: "storm",
+            apply: function () {
+              var canvas = document.createElement("canvas");
+              canvas.className = "rain";
+              app.appendChild(canvas);
+              var g = canvas.getContext("2d");
+              var drops = [];
+              var flash = 0;
+              for (var i = 0; i < 150; i++) {
+                drops.push({ x: Math.random(), y: Math.random(), len: 9 + Math.random() * 20, v: 0.012 + Math.random() * 0.016 });
+              }
+              var paint = function () {
+                var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+                if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                if (flash > 0) {
+                  g.fillStyle = "rgba(255,255,255," + (flash * 0.16).toFixed(3) + ")";
+                  g.fillRect(0, 0, w, h);
+                  flash -= 0.08;
+                }
+                g.strokeStyle = "rgba(150,180,220,0.42)";
+                g.lineWidth = 1;
+                g.beginPath();
+                drops.forEach(function (d) {
+                  if (!reduced) { d.y += d.v; d.x += d.v * 0.22; }
+                  if (d.y > 1.05) { d.y = -0.08; d.x = Math.random(); }
+                  if (d.x > 1.05) d.x = -0.05;
+                  var px = d.x * w, py = d.y * h;
+                  g.moveTo(px, py);
+                  g.lineTo(px - d.len * 0.24, py - d.len);
+                });
+                g.stroke();
+                if (!reduced && Math.random() < 0.004) flash = 1;
+              };
+              paint();
+              return reduced ? null : paint;
             },
           },
           {
