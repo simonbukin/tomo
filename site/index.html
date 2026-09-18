@@ -4,9 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>tomo</title>
-    <meta name="description" content="A small workspace for your worktrees, terminals, and agents. Adapt it to how you work, not the other way around." />
+    <meta name="description" content="tomo is your personal agent workspace. it’s made to be taken apart. we dare you to." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="deck.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23a684ff' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%23a684ff'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
     <style>
@@ -18,6 +19,9 @@
         --line: #e4e4ea;
         --dot: #c9c9d4;
         --accent: #7d4dff;
+        --success: #2a9d5c;
+        --waiting: #d98a1a;
+        --dot-soft: #f0f0f4;
         --sans: "Work Sans", system-ui, -apple-system, sans-serif;
         --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
       }
@@ -30,6 +34,9 @@
           --line: #232329;
           --dot: #36363f;
           --accent: #a684ff;
+          --success: #45b877;
+          --waiting: #e0a445;
+          --dot-soft: #1a1a20;
         }
       }
       :root[data-theme="dark"] {
@@ -40,6 +47,9 @@
         --line: #232329;
         --dot: #36363f;
         --accent: #a684ff;
+        --success: #45b877;
+        --waiting: #e0a445;
+        --dot-soft: #1a1a20;
       }
 
       * { box-sizing: border-box; }
@@ -64,9 +74,42 @@
       }
       /* Wider than the text measure on purpose: the headline and the line under it are capped
          in ch, and this width only exists so the button and the command share one row. */
-      .col { width: 100%; max-width: 860px; margin-left: max(0px, calc((100% - 1160px) / 2)); }
+      .row {
+        width: 100%;
+        max-width: 1220px;
+        margin-inline: auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 420px;
+        gap: 64px;
+        align-items: center;
+      }
+      .col { width: 100%; max-width: 560px; }
+      @media (max-width: 900px) {
+        .row { grid-template-columns: 1fr; gap: 44px; }
+      }
 
+      /* The wordmark crosses over to hiragana on hover. The font size on the wrapper is the
+         lockup height, so the kana can be sized and placed against it in em and hold at any width. */
+      .mark-wrap { position: relative; display: inline-block; font-size: 35px; line-height: 0; cursor: default; }
       .lockup { width: 122px; height: 35px; color: var(--fg); display: block; }
+      .lockup .word { transition: opacity 240ms ease-out; }
+      .kana {
+        position: absolute;
+        left: 39%;
+        top: 50%;
+        font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+        font-size: 0.62em;
+        line-height: 1;
+        color: var(--fg);
+        opacity: 0;
+        transform: translateY(-46%);
+        transition: opacity 240ms ease-out, transform 300ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      .mark-wrap:hover .word { opacity: 0; }
+      .mark-wrap:hover .kana { opacity: 1; transform: translateY(-50%); }
+      @media (prefers-reduced-motion: reduce) {
+        .lockup .word, .kana { transition: none; }
+      }
       h1 {
         font-weight: 600;
         font-size: clamp(31px, 5.4vw, 48px);
@@ -100,39 +143,91 @@
         border: 1px solid var(--fg);
       }
       .button:hover { opacity: 0.86; }
-      .cmd {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
+      /* The same box as the github button, filled the other way round. The command itself lives
+         in the tooltip, so it can be read before it is trusted to the clipboard. */
+      .copy {
+        color: var(--fg);
+        background: transparent;
+        border-color: var(--line);
+        cursor: pointer;
+      }
+      .copy:hover { opacity: 1; border-color: var(--fg-3); }
+
+      /* The mark and the word each cross over in place. Both labels share one grid cell, so the
+         button keeps the width of the longer one and nothing on the row moves when it changes. */
+      .swap-icon { position: relative; width: 15px; height: 15px; flex: none; }
+      .swap-icon svg {
+        position: absolute;
+        inset: 0;
+        width: 15px;
+        height: 15px;
+        transition: opacity 150ms ease-out, transform 260ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      .i-check { color: var(--success); opacity: 0; transform: scale(0.55); }
+      .i-check path { stroke-dasharray: 16; stroke-dashoffset: 16; transition: stroke-dashoffset 280ms cubic-bezier(0.2, 0, 0, 1) 70ms; }
+      .copy[data-copied] .i-copy { opacity: 0; transform: scale(0.55); }
+      .copy[data-copied] .i-check { opacity: 1; transform: none; }
+      .copy[data-copied] .i-check path { stroke-dashoffset: 0; }
+
+      /* Both labels share one cell so they can cross over in place, and the cell's width is set
+         from the active one, so the button grows to the message instead of always reserving it. */
+      .swap-label { display: grid; overflow: hidden; transition: width 260ms cubic-bezier(0.2, 0, 0, 1); }
+      .swap-label > span {
+        grid-area: 1 / 1;
+        justify-self: start;
+        white-space: nowrap;
+        transition: opacity 150ms ease-out, transform 220ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      .l-done { opacity: 0; transform: translateY(5px); }
+      .copy[data-copied] .l-rest { opacity: 0; transform: translateY(-5px); }
+      .copy[data-copied] .l-done { opacity: 1; transform: none; }
+
+      .copy-wrap { position: relative; display: inline-flex; }
+      .tip {
+        position: absolute;
+        bottom: calc(100% + 9px);
+        left: 0;
         font-family: var(--mono);
-        font-size: 13px;
+        font-size: 12px;
+        line-height: 1.5;
         color: var(--fg-2);
+        background: var(--bg);
         border: 1px solid var(--line);
         border-radius: 5px;
-        padding: 10px 14px;
-        background: var(--bg);
-        overflow-x: auto;
-        max-width: 100%;
+        padding: 7px 10px;
         white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(3px);
+        transition: opacity 140ms ease-out, transform 140ms ease-out;
       }
-      .cmd .p { color: var(--fg-3); flex: none; }
+      .tip::before { content: "$ "; color: var(--fg-3); }
+      .copy-wrap:hover .tip,
+      .copy:focus-visible ~ .tip { opacity: 1; transform: none; }
+      @media (prefers-reduced-motion: reduce) {
+        .tip, .swap-icon svg, .swap-label, .swap-label > span, .i-check path { transition: none; }
+      }
       .foot { margin-top: 22px; color: var(--fg-3); font-size: 13.5px; }
       .foot a { color: var(--fg-2); text-decoration: none; border-bottom: 1px solid var(--line); }
       .foot a:hover { color: var(--fg); border-bottom-color: currentColor; }
 
       a { color: inherit; }
-      a:focus-visible, .cmd:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+      a:focus-visible, .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
       @media (max-width: 560px) {
+        .mark-wrap { font-size: 30px; }
         .lockup { width: 104px; height: 30px; }
-        .cmd { font-size: 12px; }
+        /* A one line tooltip is wider than a phone, so let it wrap and stay inside the gutter. */
+        .tip { white-space: normal; max-width: calc(100vw - 48px); }
       }
     </style>
   </head>
   <body>
     <canvas id="tide" aria-hidden="true"></canvas>
     <main>
+      <div class="row">
       <div class="col">
+        <span class="mark-wrap">
         <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
           <g transform="scale(0.2)">
             <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
@@ -143,7 +238,7 @@
               <circle cx="76.38" cy="33.99" r="9.19" />
             </g>
           </g>
-          <g transform="translate(27 2)">
+          <g class="word" transform="translate(27 2)">
             <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3.5 3V11A2 2 0 0 0 5.5 13" />
               <path d="M1 6H6" />
@@ -154,11 +249,12 @@
             </g>
           </g>
         </svg>
+        <span class="kana" aria-hidden="true">とも</span>
+        </span>
 
-        <h1>A little place for all your agents.</h1>
+        <h1>a little place for your agents</h1>
         <p class="sub">
-          Tomo is a small workspace for your worktrees, terminals, and agents. Adapt it to how
-          you work, not the other way around.
+          tomo is your personal agent workspace. it's made to be taken apart. we dare you to.
         </p>
 
         <div class="actions">
@@ -168,14 +264,78 @@
             </svg>
             github
           </a>
-          <code class="cmd" tabindex="0"><span class="p">$</span>git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</code>
+          <span class="copy-wrap">
+            <button type="button" class="button copy" id="copy" aria-describedby="copyTip">
+              <span class="swap-icon">
+                <svg class="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                  <path d="M10.5 3.5a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 4 11" />
+                </svg>
+                <svg class="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 8.6 6.3 12 13 4.8" />
+                </svg>
+              </span>
+              <span class="swap-label" aria-hidden="true">
+                <span class="l-rest">copy install command</span>
+                <span class="l-done">congrats! it’s yours now.</span>
+              </span>
+            </button>
+            <span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span>
+          </span>
         </div>
 
         <p class="foot">built with 💜 by <a href="https://simonbukin.com">simon</a></p>
       </div>
+      <div class="deck" id="deck"></div>
+      </div>
     </main>
 
-    <script>
+    <script type="module">
+      import { mountDeck } from "./deck.js";
+      mountDeck(document.getElementById("deck"));
+
+      (function () {
+        var button = document.getElementById("copy");
+        var label = button.querySelector(".swap-label");
+        var rest = button.querySelector(".l-rest");
+        var done = button.querySelector(".l-done");
+        var command = document.getElementById("copyTip").textContent;
+        var resting = "Copy the install command: " + command;
+        var widths = { rest: 0, done: 0 };
+        var timer = 0;
+
+        function measure() {
+          widths.rest = rest.getBoundingClientRect().width;
+          widths.done = done.getBoundingClientRect().width;
+          label.style.width = widths.rest + "px";
+        }
+        // The labels are measured after the webfont lands, or they are measured in the fallback.
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+        else window.addEventListener("load", measure);
+        measure();
+
+        button.setAttribute("aria-label", resting);
+        button.addEventListener("click", function () {
+          var settle = function (copied, spoken) {
+            button.toggleAttribute("data-copied", copied);
+            label.style.width = (copied ? widths.done : widths.rest) + "px";
+            button.setAttribute("aria-label", spoken);
+            window.clearTimeout(timer);
+            timer = window.setTimeout(function () {
+              button.removeAttribute("data-copied");
+              label.style.width = widths.rest + "px";
+              button.setAttribute("aria-label", resting);
+            }, 2200);
+          };
+          // No clipboard on an insecure origin, and the promise rejects on a denied permission.
+          if (!navigator.clipboard) return settle(false, "Could not copy. The command is shown above the button.");
+          navigator.clipboard.writeText(command).then(
+            function () { settle(true, "Copied. It is yours now."); },
+            function () { settle(false, "Could not copy. The command is shown above the button."); },
+          );
+        });
+      })();
+
       // Rows of dots sliding past one another, a half beat apart. The band behind the column
       // stays calm so the words keep their contrast, and it follows the column, which sits left.
       (function () {
@@ -185,6 +345,7 @@
         var STEP = 26;
         var AMP = 9;
         var rows = [];
+        var rings = [];
         var w = 0;
         var h = 0;
         var dot = "";
@@ -214,6 +375,12 @@
             var row = rows[i];
             for (var x = 0; x < w + STEP; x += STEP) {
               var off = Math.sin(x / 90 + t * 0.9 + row.phase) * AMP;
+              for (var k = 0; k < rings.length; k++) {
+                var ring = rings[k];
+                var age = t - ring.t;
+                var edge = Math.hypot(x - ring.x, row.y - ring.y) - age * 420;
+                if (Math.abs(edge) < 150) off += Math.cos(edge / 48) * 13 * Math.max(0, 1 - age / 1.5);
+              }
               var near = Math.hypot((x - cx) / 1.9, row.y - cy) / hush;
               var calm = near < 1 ? 0.2 + near * near * 0.8 : 1;
               g.globalAlpha = (0.38 + (off / AMP + 1) * 0.22) * calm;
@@ -226,7 +393,9 @@
         }
 
         function tick(now) {
-          draw(now / 1000);
+          var t = now / 1000;
+          rings = rings.filter(function (ring) { return t - ring.t < 1.5; });
+          draw(t);
           requestAnimationFrame(tick);
         }
 
@@ -235,9 +404,21 @@
           build();
           if (reduced) draw(0);
         });
+        if (!reduced) {
+          document.addEventListener("pointerdown", function (event) {
+            if (event.target.closest("a, button")) return;
+            rings.push({ x: event.clientX, y: event.clientY, t: performance.now() / 1000 });
+          });
+        }
         if (reduced) draw(0);
         else requestAnimationFrame(tick);
       })();
+
+      console.log(
+        "%c\u3068\u3082%c  you found the console. the whole thing is one html file \u2014 read it, take it.",
+        "font-size:15px",
+        "font-size:12px;color:#8a8a97",
+      );
     </script>
   </body>
 </html>
