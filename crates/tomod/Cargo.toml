@@ -17,9 +17,15 @@ base64.workspace = true
 portable-pty = "0.9.0"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 itertools = "0.15.0"
+rio-vt = { version = "0.5", default-features = false }
+mnml-libghostty-vt = { version = "0.2", optional = true }
 sysinfo = "0.39.6"
 notify = "8.2.0"
 toml = "1.1.6"
 toml_edit = "0.25.15"
 libc = "0.2.189"
 clap = { version = "4.6.6", features = ["derive", "env"] }
+
+[features]
+# Needs zig 0.16 on PATH: libghostty builds from source.
+ghostty = ["dep:mnml-libghostty-vt"]

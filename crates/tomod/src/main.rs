@@ -18,6 +18,7 @@ mod server;
 mod settings;
 mod store;
 mod system;
+mod vt;
 mod watch;
 
 use anyhow::{Context, Result};
