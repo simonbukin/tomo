@@ -94,4 +94,7 @@ cd app && pnpm install && pnpm test
 The landing page is one static file at [site/index.html](site/index.html), with
 no build step.
 
-Public domain. Take it.
+## Don't like something?
+
+All good. Fork it and do whatever you want with it. It is public domain, there
+is no licence to argue with, and nobody is going to ask what you did to it.
