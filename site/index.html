@@ -79,13 +79,13 @@
         box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.12);
         display: grid; grid-template-rows: 32px 1fr 26px; text-align: left;
         position: relative;
-        transition: background 300ms ease-out, color 300ms ease-out, opacity 180ms ease-out,
-          transform 400ms cubic-bezier(0.2, 0, 0, 1), filter 400ms ease-out;
+        transition: background 420ms cubic-bezier(0.2, 0, 0, 1), color 420ms cubic-bezier(0.2, 0, 0, 1),
+          transform 460ms cubic-bezier(0.2, 0, 0, 1), filter 420ms ease-out;
       }
       .app-bar { display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid var(--line); }
       .app-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
       .app-bar span { margin-left: 8px; font-size: 11.5px; color: var(--fg-3); }
-      .app-body { display: grid; grid-template-columns: 234px 1fr; min-height: 0; }
+      .app-body { display: grid; grid-template-columns: 234px 1fr; min-height: 0; transition: grid-template-columns 420ms cubic-bezier(0.2, 0, 0, 1); }
       .app-side { border-right: 1px solid var(--line); min-width: 0; overflow: hidden; position: relative; }
       .app-main { min-width: 0; position: relative; overflow: hidden; display: flex; flex-direction: column; }
       .app-foot { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--fg-3); font-family: var(--mono); }
@@ -96,7 +96,7 @@
         margin: 0; font-size: 19px; line-height: 1.4; color: var(--fg);
         min-height: 1.4em; transition: opacity 180ms ease-out;
       }
-      .caption[data-swapping] { opacity: 0; }
+      .caption { transition: opacity 200ms ease-out; }
       .caption .hint { color: var(--fg-3); font-size: 15px; margin-left: 10px; }
 
       /* ---------- what you can do to it ---------- */
@@ -121,7 +121,10 @@
         content: ""; position: absolute; inset: 0; pointer-events: none;
         background: repeating-linear-gradient(rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
       }
-      .app[data-swapping] { opacity: 0.25; }
+      @keyframes ease-in-place { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+      .swap-in { animation: ease-in-place 380ms cubic-bezier(0.2, 0, 0, 1) both; }
+      @media (prefers-reduced-motion: reduce) { .swap-in { animation: none; } }
+      .fire { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; z-index: 4; }
       .app.grey { filter: grayscale(1); }
       .app.tilt { transform: rotate(-2.4deg); }
       .app.flip .app-body { direction: rtl; }
@@ -158,6 +161,7 @@
       .tomo-ui .state.wait { background: var(--waiting); }
       .tomo-ui .wt-meta { color: var(--fg-3); font-size: var(--fs-0); font-family: var(--mono); }
       .tomo-ui .wt-row {
+        transition: height 420ms cubic-bezier(0.2, 0, 0, 1);
         display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; grid-template-rows: 18px 15px 16px;
         align-items: center; column-gap: var(--sp-2); height: 58px;
         padding: 4px var(--sp-1) 4px var(--sp-3); border-left: 2px solid transparent;
@@ -175,7 +179,7 @@
       .tabs { display: flex; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); flex: none; }
       .tab { background: var(--bg); padding: 6px 13px; font-size: 11px; color: var(--fg-3); font-family: var(--mono); }
       .tab.on { color: var(--fg); }
-      .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); min-height: 0; }
+      .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); min-height: 0; transition: grid-template-columns 420ms cubic-bezier(0.2, 0, 0, 1), grid-template-rows 420ms cubic-bezier(0.2, 0, 0, 1); }
       .panes.nine { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
       .pane { background: var(--bg); padding: 9px 11px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
       .pane pre { margin: 0; font-family: var(--mono); font-size: 10.5px; line-height: 1.7; color: var(--fg-2); white-space: pre-wrap; word-break: break-all; }
@@ -362,7 +366,31 @@
           );
         }
 
-        function toaster(box, lines, gap, extraClass) {
+        var audio = null;
+        function beep(notes, kind) {
+          if (reduced) return;
+          try {
+            if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+            if (audio.state === "suspended") audio.resume();
+          } catch (err) {
+            return;
+          }
+          notes.forEach(function (hz, n) {
+            var at = audio.currentTime + n * 0.085;
+            var osc = audio.createOscillator();
+            var gain = audio.createGain();
+            osc.type = kind || "triangle";
+            osc.frequency.setValueAtTime(hz, at);
+            gain.gain.setValueAtTime(0.0001, at);
+            gain.gain.exponentialRampToValueAtTime(0.06, at + 0.012);
+            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.24);
+            osc.connect(gain).connect(audio.destination);
+            osc.start(at);
+            osc.stop(at + 0.26);
+          });
+        }
+
+        function toaster(box, lines, gap, extraClass, sounds) {
           var at = 0, hold = 0;
           var push = function () {
             var el = document.createElement("p");
@@ -371,6 +399,7 @@
             box.appendChild(el);
             window.requestAnimationFrame(function () { el.classList.add("in"); });
             if (box.children.length > 3) box.removeChild(box.firstChild);
+            if (sounds) beep(sounds[at % sounds.length][0], sounds[at % sounds.length][1]);
             at += 1;
           };
           push();
@@ -380,6 +409,14 @@
         // Each demand knows how to apply itself, and what the app says about it.
         var DEMANDS = [
           { id: "comic", says: "oh. comic sans. sure.", css: "comic" },
+          {
+            id: "startup",
+            says: "a chime when it opens. like a mac from 1998.",
+            apply: function () {
+              beep([392, 523, 659, 784], "triangle");
+              return null;
+            },
+          },
           { id: "bright", says: "and bright. of course it's bright.", css: "bright" },
           { id: "huge", says: "bigger. yep. that's a choice.", css: "huge" },
           {
@@ -575,6 +612,64 @@
             },
           },
           {
+            id: "fire",
+            says: "and now it's on fire. cool. cool cool cool.",
+            apply: function () {
+              var canvas = document.createElement("canvas");
+              canvas.className = "fire";
+              app.appendChild(canvas);
+              var g = canvas.getContext("2d", { willReadFrequently: true });
+              // The demoscene fire: seed the bottom row hot, cool and drift upward, then scale
+              // a small buffer over the whole window so it stays cheap at any size.
+              var W = 132, H = 78;
+              var heat = new Uint8Array(W * H);
+              var palette = [];
+              for (var i = 0; i < 256; i++) {
+                var t = i / 255;
+                palette.push([
+                  Math.min(255, Math.round(Math.pow(t, 0.55) * 400)),
+                  Math.round(Math.pow(t, 1.9) * 255),
+                  Math.round(Math.pow(t, 5) * 210),
+                  Math.min(255, Math.round(Math.pow(t, 0.7) * 320)),
+                ]);
+              }
+              var image = g.createImageData(W, H);
+              var buffer = document.createElement("canvas");
+              buffer.width = W;
+              buffer.height = H;
+              var bg = buffer.getContext("2d");
+
+              var burn = function () {
+                for (var x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.random() < 0.82 ? 255 : 90;
+                for (var y = 0; y < H - 1; y++) {
+                  for (var x2 = 0; x2 < W; x2++) {
+                    var below = (y + 1) * W + ((x2 + (Math.random() * 3 | 0) - 1 + W) % W);
+                    var next = heat[below] - (Math.random() * 15 | 0);
+                    heat[y * W + x2] = next < 0 ? 0 : next;
+                  }
+                }
+                for (var p = 0; p < heat.length; p++) {
+                  var c = palette[heat[p]];
+                  image.data[p * 4] = c[0];
+                  image.data[p * 4 + 1] = c[1];
+                  image.data[p * 4 + 2] = c[2];
+                  image.data[p * 4 + 3] = c[3];
+                }
+                bg.putImageData(image, 0, 0);
+                var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+                if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                g.imageSmoothingEnabled = true;
+                g.globalAlpha = 0.9;
+                g.drawImage(buffer, 0, 0, w, h);
+                g.globalAlpha = 1;
+              };
+              burn();
+              return reduced ? null : burn;
+            },
+          },
+          {
             id: "noise",
             says: "a sound every time one fails. your neighbours will love that.",
             apply: function () {
@@ -609,7 +704,6 @@
 
         function stock() {
           app.className = "app";
-          app.setAttribute("data-swapping", "");
           side.innerHTML = sidebar();
           mainArea.innerHTML = terminals(4);
           runners = [];
@@ -617,32 +711,28 @@
           reshuffle();
         }
 
-        var busy = false;
-
         function grant() {
-          if (busy) return;
-          busy = true;
-          app.setAttribute("data-swapping", "");
-          caption.setAttribute("data-swapping", "");
-          // The swap happens while the app is faded out, so nothing is seen mid change.
-          window.setTimeout(function () {
-            if (!left.length) {
-              stock();
-              caption.textContent = "fine. put it back.";
-            } else {
-              var demand = left.pop();
-              if (demand.css) app.classList.add(demand.css);
-              if (demand.apply) {
-                var run = demand.apply();
-                if (run) runners.push(run);
-                collectTyping();
-              }
-              caption.textContent = demand.says;
-            }
-            app.removeAttribute("data-swapping");
-            caption.removeAttribute("data-swapping");
-            busy = false;
-          }, 190);
+          if (!left.length) {
+            stock();
+            caption.textContent = "fine. put it back.";
+            return;
+          }
+          var demand = left.pop();
+          if (demand.css) app.classList.add(demand.css);
+          if (demand.apply) {
+            var run = demand.apply();
+            if (run) runners.push(run);
+            collectTyping();
+          }
+          // Only what actually changed eases in; the window never blanks.
+          [side, mainArea].forEach(function (region) {
+            Array.prototype.forEach.call(region.children, function (child) {
+              if (child.dataset.settled) return;
+              child.dataset.settled = "";
+              child.classList.add("swap-in");
+            });
+          });
+          caption.textContent = demand.says;
         }
 
         document.getElementById("screen").addEventListener("click", grant);
