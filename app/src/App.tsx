@@ -1,6 +1,5 @@
-import { transition, watchPointer } from "./motion";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { lazy, Suspense, useEffect, useRef, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { addonViews, builtins } from "./addons";
 import { onConnection, onFrame, rpc, rpcParsed, startEventPump } from "./api";
 import { snapshotSchema } from "./schemas";
@@ -78,8 +77,6 @@ function Shell() {
   useAppMenu();
   const theme = useResolvedTheme();
 
-  useEffect(() => watchPointer(window), []);
-
   useEffect(() => {
     const offFrame = onFrame(applyFrame);
     const offConn = onConnection((up) => {
@@ -130,16 +127,7 @@ function Shell() {
   }, [ui.view, worktree?.id, loaded, tab?.id]);
 
   const appearance = ui.appearance;
-  const painted = useRef(false);
-  useEffect(() => {
-    const paint = () => applyTheme(document.documentElement, theme);
-    if (!painted.current) {
-      painted.current = true;
-      paint();
-      return;
-    }
-    transition("theme", paint);
-  }, [theme]);
+  useEffect(() => applyTheme(document.documentElement, theme), [theme]);
 
   useEffect(() => {
     try {
