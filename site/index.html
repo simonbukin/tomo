@@ -45,9 +45,9 @@
       main {
         position: relative; min-height: 100%;
         display: grid; align-content: center; justify-items: center;
-        padding-block: 44px; padding-left: 16px; padding-right: 16px;
+        padding-block: 56px; padding-left: 16px; padding-right: 16px;
       }
-      .stack { width: 100%; max-width: 1060px; display: grid; justify-items: start; gap: 20px; }
+      .stack { width: 100%; max-width: 1060px; display: grid; justify-items: start; gap: 22px; }
 
       /* ---------- the line ---------- */
       h1 {
@@ -69,7 +69,8 @@
       .dash { color: var(--fg-3); padding: 0 0.16em; }
 
       /* ---------- the render ---------- */
-      .render { width: 100%; display: grid; gap: 13px; }
+      /* The render wants room to breathe on its own, beyond the stack gap. */
+      .render { width: 100%; display: grid; gap: 15px; margin-block: 10px; }
       .screen-btn { width: 100%; padding: 0; border: 0; background: none; cursor: pointer; display: block; border-radius: 11px; }
       .screen-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
       .app {
@@ -108,9 +109,13 @@
         --line: #e8e2c8; --dot-soft: #fdf6d8; --accent: #e0359b; --success: #17a34a; --waiting: #e07b00;
         background: var(--bg); color: var(--fg);
       }
-      .app.huge .tomo-ui { --fs-0: 14px; --fs-1: 16px; }
-      .app.huge .tomo-ui .wt-row { height: 74px; grid-template-rows: 23px 19px 20px; }
-      .app.huge .pane pre { font-size: 14px; }
+      .app.huge .tomo-ui { --fs-0: 19px; --fs-1: 23px; }
+      .app.huge .tomo-ui .wt-row { height: 112px; grid-template-rows: 34px 28px 30px; }
+      .app.huge .tomo-ui .side-lens { font-size: 16px; }
+      .app.huge .pane pre { font-size: 21px; line-height: 1.6; }
+      .app.huge .tab { font-size: 17px; padding: 10px 18px; }
+      .app.huge .app-foot { font-size: 16px; }
+      .app.huge .app-body { grid-template-columns: 330px 1fr; }
       .app.crt {
         --bg: #04170a; --fg: #35e06a; --fg-2: #2aa851; --fg-3: #1c7038;
         --line: #0d3d1d; --dot-soft: #07230e; --accent: #7dff9f; --success: #35e06a; --waiting: #c8e035;
@@ -125,13 +130,10 @@
       .swap-in { animation: ease-in-place 380ms cubic-bezier(0.2, 0, 0, 1) both; }
       @media (prefers-reduced-motion: reduce) { .swap-in { animation: none; } }
       .fire { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; z-index: 4; }
-      .app.grey { filter: grayscale(1); }
       .app.tilt { transform: rotate(-2.4deg); }
       .app.flip .app-body { direction: rtl; }
       .app.flip .app-body > * { direction: ltr; }
       .app.flip .app-side { border-right: 0; border-left: 1px solid var(--line); }
-      .app.noside .app-body { grid-template-columns: 0 1fr; }
-      .app.noside .app-side { display: none; }
       .app.zen .tabs { display: none; }
       .app.zen .panes { grid-template-columns: 1fr; grid-template-rows: 1fr; }
       .app.zen .pane:not(:first-child) { display: none; }
@@ -196,6 +198,13 @@
       .bd-head { display: grid; grid-template-columns: 44px 1fr; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6a6a58; padding-bottom: 7px; }
       .bd-row { display: grid; grid-template-columns: 44px 1fr; align-items: baseline; font-size: 11.5px; color: #f5c518; padding: 7px 0; border-top: 1px solid #1d1d16; }
       .bd-row b { display: block; font-weight: 400; font-size: 9.5px; letter-spacing: 0.05em; color: #b99512; padding-top: 2px; }
+      .bd-row b span { display: inline-block; transition: transform 90ms ease-out; }
+      .bd-row b span.turn { transform: rotateX(72deg); }
+      .train {
+        position: absolute; left: 0; bottom: 8px; white-space: nowrap;
+        font-size: 19px; line-height: 1; pointer-events: none;
+        filter: drop-shadow(0 0 7px rgba(245, 197, 24, 0.35));
+      }
 
       .label { height: 100%; padding: 16px 20px; font-family: Helvetica, Arial, sans-serif; color: var(--fg); overflow: hidden; }
       .lb-title { font-size: 27px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
@@ -408,20 +417,12 @@
 
         // Each demand knows how to apply itself, and what the app says about it.
         var DEMANDS = [
-          { id: "comic", says: "oh. comic sans. sure.", css: "comic" },
-          {
-            id: "startup",
-            says: "a chime when it opens. like a mac from 1998.",
-            apply: function () {
-              beep([392, 523, 659, 784], "triangle");
-              return null;
-            },
-          },
-          { id: "bright", says: "and bright. of course it's bright.", css: "bright" },
-          { id: "huge", says: "bigger. yep. that's a choice.", css: "huge" },
+          { id: "comic", says: "oh, that's a choice.", css: "comic" },
+          { id: "bright", says: "yeah, i guess we can have a light mode.", css: "bright" },
+          { id: "huge", says: "your eye doctor will love you for this.", css: "huge" },
           {
             id: "tank",
-            says: "you want them swimming around. fine.",
+            says: "...ok, i guess the agents can be fish.",
             apply: function () {
               side.innerHTML = '<canvas class="tank"></canvas>';
               var canvas = side.querySelector(".tank");
@@ -479,30 +480,50 @@
               side.innerHTML =
                 '<div class="board"><div class="bd-head"><span>time</span><span>worktree</span></div>' +
                 [["09:42", "thistle", "ON TIME"], ["09:51", "juniper", "DELAYED"], ["10:03", "mallow", "BOARDING"], ["10:20", "kestrel", "CANCELLED"]]
-                  .map(function (d) { return '<div class="bd-row"><span>' + d[0] + "</span><span>" + d[1] + '<b class="flap">' + d[2] + "</b></span></div>"; })
+                  .map(function (d) { return '<div class="bd-row"><span>' + d[0] + '</span><span>' + d[1] + '<b class="flap"></b></span></div>'; })
                   .join("") +
-                "</div>";
+                '<div class="train">\ud83d\ude82\ud83d\ude83\ud83d\ude83\ud83d\ude83</div></div>';
+
               var flaps = Array.prototype.slice.call(side.querySelectorAll(".flap"));
-              var options = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED BY BUS"];
-              var hold = 30, spin = null;
+              var train = side.querySelector(".train");
+              var options = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED BY BUS", "ON TIME*", "SEE STAFF"];
+              var GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+              var seeds = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED"];
+
+              // Every cell is its own flap, so a row rolls letter by letter instead of all at once.
+              var cells = flaps.map(function (el, n) {
+                var target = seeds[n];
+                el.innerHTML = target.split("").map(function (ch) { return "<span>" + ch + "</span>"; }).join("");
+                return { el: el, spans: Array.prototype.slice.call(el.children), target: target, at: 99, hold: 20 + n * 25 };
+              });
+
+              var frame = 0;
               return reduced ? null : function () {
-                if (spin) {
-                  spin.left -= 1;
-                  if (spin.left > 0) {
-                    spin.el.textContent = spin.target.split("").map(function (ch, n) {
-                      return n < spin.settled ? ch : "ABCDEFGHIJKLMNOPQRSTUVWXYZ "[Math.floor(Math.random() * 27)];
-                    }).join("");
-                    if (spin.left % 2 === 0) spin.settled += 1;
+                frame += 1;
+                train.style.transform = "translateX(" + (-90 + ((frame * 1.5) % 340)) + "%)";
+
+                cells.forEach(function (cell) {
+                  if (cell.at < cell.target.length) {
+                    // three frames a letter: tip over, change, tip back
+                    var step = cell.step || 0;
+                    var span = cell.spans[cell.at];
+                    if (step === 0 && span) span.classList.add("turn");
+                    if (step === 1 && span) span.textContent = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+                    if (step === 2 && span) { span.textContent = cell.target[cell.at]; span.classList.remove("turn"); }
+                    cell.step = step + 1;
+                    if (cell.step > 2) { cell.step = 0; cell.at += 1; }
                     return;
                   }
-                  spin.el.textContent = spin.target;
-                  spin = null;
-                  hold = 46;
-                  return;
-                }
-                hold -= 1;
-                if (hold > 0) return;
-                spin = { el: flaps[Math.floor(Math.random() * flaps.length)], target: options[Math.floor(Math.random() * options.length)], left: 26, settled: 0 };
+                  cell.hold -= 1;
+                  if (cell.hold > 0) return;
+                  var next = options[Math.floor(Math.random() * options.length)];
+                  cell.target = next;
+                  cell.el.innerHTML = next.split("").map(function (ch) { return "<span>" + ch + "</span>"; }).join("");
+                  cell.spans = Array.prototype.slice.call(cell.el.children);
+                  cell.at = 0;
+                  cell.step = 0;
+                  cell.hold = 90 + Math.floor(Math.random() * 90);
+                });
               };
             },
           },
@@ -535,25 +556,13 @@
               };
             },
           },
-          {
-            id: "judge",
-            says: "and now it has opinions about you. great.",
-            apply: function () {
-              var box = document.createElement("div");
-              box.className = "overlay";
-              mainArea.appendChild(box);
-              return toaster(box, ["nine agents. nine.", "juniper has waited 41 minutes.", "you opened kestrel in august.", "$18.60 today. it is 11am."], 34);
-            },
-          },
-          { id: "crt", says: "we're doing 1995. ok.", css: "crt" },
-          { id: "grey", says: "every colour gone. bleak. fine.", css: "grey" },
-          { id: "tilt", says: "...why.", css: "tilt" },
-          { id: "flip", says: "other side. done.", css: "flip" },
-          { id: "noside", says: "no sidebar at all. bold.", css: "noside" },
-          { id: "zen", says: "just the one. zen.", css: "zen" },
+          { id: "crt", says: "ooo, how retro of you.", css: "crt" },
+          { id: "tilt", says: "this is not good for your neck btw.", css: "tilt" },
+          { id: "flip", says: "i guess you can put it over there.", css: "flip" },
+          { id: "zen", says: "keeping it simple.", css: "zen" },
           {
             id: "animals",
-            says: "they name themselves now. of course they do.",
+            says: "sure, i guess the agents can be little guys.",
             apply: function () {
               side.innerHTML = sidebar([
                 ["\ud83e\udda6 otter", "feat/pricing-rewrite", "claude \u00b7 2 panes", "active", "12m"],
@@ -566,7 +575,7 @@
           },
           {
             id: "money",
-            says: "you want to watch it burn. fine.",
+            says: "racks on racks.",
             apply: function () {
               side.innerHTML = sidebar([
                 ["thistle", "feat/pricing-rewrite", "$18.60 \u00b7 2.4M tokens", "active", "12m"],
@@ -577,17 +586,6 @@
               var total = document.createElement("span");
               total.textContent = "$33.72 today";
               document.querySelector(".app-foot .spacer").after(total);
-              return null;
-            },
-          },
-          {
-            id: "japanese",
-            says: "\u5168\u90e8\u65e5\u672c\u8a9e\u3002\u306f\u3044\u3002",
-            apply: function () {
-              var lens = side.querySelector(".side-lens");
-              if (lens) lens.textContent = "\u30ef\u30fc\u30af\u30c4\u30ea\u30fc";
-              var add = document.querySelector(".app-foot span");
-              if (add) add.textContent = "+ \u30ea\u30dd\u30b8\u30c8\u30ea\u8ffd\u52a0";
               return null;
             },
           },
