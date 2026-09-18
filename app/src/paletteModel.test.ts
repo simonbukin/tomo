@@ -17,9 +17,14 @@ describe("matchText", () => {
 });
 
 describe("rankEntries", () => {
-  it("orders by context, then recency, then exact or prefix, then fuzzy", () => {
+  it("orders by context, then how well it matches what was typed, and recency only breaks a tie", () => {
     const entries = [e("fz", "a p p"), e("none", "zsh"), e("pre", "app logs"), e("exact", "app"), e("rec", "reapply"), e("ctx", "a big pile of prose", { context: true })];
-    expect(keys(rankEntries(entries, "app", ["rec"]))).toEqual(["ctx", "rec", "exact", "pre", "fz"]);
+    expect(keys(rankEntries(entries, "app", ["rec"]))).toEqual(["ctx", "exact", "pre", "rec", "fz"]);
+  });
+
+  it("lets recency separate two entries that match the query equally well", () => {
+    const entries = [e("first", "app one"), e("second", "app two")];
+    expect(keys(rankEntries(entries, "app", ["second"]))).toEqual(["second", "first"]);
   });
 
   it("keeps the source order for an empty query after context and recency", () => {
@@ -62,5 +67,32 @@ describe("remembered", () => {
   it("puts the key first, removes the old copy, and caps the list", () => {
     expect(remembered(["a", "b", "c"], "b")).toEqual(["b", "a", "c"]);
     expect(remembered(["a", "b", "c"], "d", 3)).toEqual(["d", "a", "b"]);
+  });
+});
+
+describe("what wins when a query is typed", () => {
+  const entry = (key: string, label: string): PaletteEntry => ({ key, label, run: () => {} });
+
+  it("puts an exact match above something used recently that merely fuzzy matches", () => {
+    // "toggle right sidebar" contains g, i and t in order, so it is a fuzzy match for "git"
+    const entries = [entry("toggle_right_sidebar", "Toggle right sidebar"), entry("git", "Git")];
+    const ranked = rankEntries(entries, "git", ["toggle_right_sidebar"]);
+    expect(ranked.map((x) => x.key)).toEqual(["git", "toggle_right_sidebar"]);
+  });
+
+  it("puts a prefix match above a recent fuzzy match", () => {
+    const entries = [entry("toggle_right_sidebar", "Toggle right sidebar"), entry("agents", "Agents")];
+    const ranked = rankEntries(entries, "age", ["toggle_right_sidebar"]);
+    expect(ranked[0].key).toBe("agents");
+  });
+
+  it("still leads with recency when nothing is typed", () => {
+    const entries = [entry("home", "Home"), entry("activity", "Activity")];
+    expect(rankEntries(entries, "", ["activity"])[0].key).toBe("activity");
+  });
+
+  it("keeps the worktree on screen first, whatever the query", () => {
+    const here: PaletteEntry = { key: "here", label: "zzz", context: true, run: () => {} };
+    expect(rankEntries([entry("other", "zzz"), here], "zzz", ["other"])[0].key).toBe("here");
   });
 });

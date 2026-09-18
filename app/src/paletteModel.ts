@@ -50,18 +50,26 @@ function matchEntry(query: string, entry: PaletteEntry): { tier: number; gaps: n
 }
 
 /**
- * Orders entries by current context, then recency, then exact or prefix match, then fuzzy match.
- * A text match in the hint counts as a fuzzy match. Entries that do not match the query drop out.
+ * The worktree on screen comes first. After that, a typed query is the person saying what they
+ * want, so how well an entry matches it decides the order, and recency only separates entries
+ * that match equally well. With nothing typed there is nothing to match, so recency leads.
+ * A text match in the hint counts as a fuzzy match. Entries that do not match drop out.
  */
 export function rankEntries(entries: PaletteEntry[], query: string, recent: string[]): PaletteEntry[] {
   const recency = (key: string) => {
     const idx = recent.indexOf(key);
     return idx < 0 ? recent.length : idx;
   };
+  const typed = query.trim().length > 0;
   return entries
     .map((entry, order) => ({ entry, order, recent: recency(entry.key), ...matchEntry(query, entry) }))
     .filter((r) => r.tier > MATCH.none)
-    .sort((a, b) => Number(!!b.entry.context) - Number(!!a.entry.context) || a.recent - b.recent || b.tier - a.tier || a.gaps - b.gaps || a.order - b.order)
+    .sort(
+      (a, b) =>
+        Number(!!b.entry.context) - Number(!!a.entry.context) ||
+        (typed ? b.tier - a.tier || a.gaps - b.gaps || a.recent - b.recent : a.recent - b.recent) ||
+        a.order - b.order,
+    )
     .map((r) => r.entry);
 }
 
