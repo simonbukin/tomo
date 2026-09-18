@@ -257,15 +257,20 @@
       .tomo-ui .wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; color: var(--fg-2); font-size: var(--fs-0); }
       .tomo-ui .wt-tags { flex: 0 1 auto; color: var(--fg-3); font-size: var(--fs-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-      /* i want to change it all */
-      .alt { display: grid; grid-template-columns: 1fr 150px; height: 100%; font-family: Georgia, "Iowan Old Style", serif; background: #f4efe6; color: #2f2a24; }
-      .alt-main { padding: 28px 24px; }
-      .alt-title { font-size: 23px; }
-      .alt-note { font-size: 13px; color: #7c7266; padding-top: 7px; }
-      .alt-bar { margin-top: 20px; height: 6px; border-radius: 3px; background: #e0d8cb; }
-      .alt-bar i { display: block; height: 100%; width: 24%; border-radius: 3px; background: #b4744a; }
-      .alt-side { border-left: 1px solid #e0d8cb; padding: 24px 16px; font-size: 13px; color: #7c7266; display: grid; gap: 12px; align-content: start; }
-      .alt-side .on { color: #b4744a; }
+      /* i want my agents to be an rpg party */
+      .party { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+      .hero { display: grid; grid-template-columns: 62px 30px 1fr 52px; align-items: center; gap: 9px; font-size: 12px; }
+      .hero .nm { color: var(--fg); font-weight: 500; }
+      .hero .lv { font-family: var(--mono); font-size: 10px; color: var(--fg-3); }
+      .hero .hp { height: 8px; border-radius: 4px; background: var(--dot-soft); overflow: hidden; }
+      .hero .hp i { display: block; height: 100%; background: var(--success); transition: width 240ms linear; }
+      .hero .via { font-family: var(--mono); font-size: 10px; color: var(--fg-3); text-align: right; }
+      .battle { margin: auto 0 0; font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--fg-2); white-space: pre-wrap; min-height: 3.4em; }
+
+      /* i want it to look like it's 1995 */
+      .bbs { height: 100%; background: #04170a; padding: 12px 14px; }
+      .irc { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.75; color: #35e06a; white-space: pre-wrap; text-shadow: 0 0 6px rgba(53, 224, 106, 0.35); }
+      .irc::after { content: "\u2588"; animation: blink 1.05s steps(1, end) infinite; }
 
       /* i want to terminalmaxx */
       .grid9 { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 1px; background: var(--line); height: 100%; }
@@ -422,19 +427,19 @@
         var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         var PANES = [
-          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "➜  local:  localhost:3000"],
-          ["$ cargo run -p tomod", "   Compiling tomod v0.1.0", "    Finished dev in 8.42s"],
-          ["$ claude", "● reading costing.ts", "● edited 2 files"],
-          ["$ pnpm test", "✓ 412 passed (3.1s)"],
-          ["$ git log --oneline -2", "be861d7 deck of what ifs", "12401b5 set it left"],
+          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "\u279c  local:  localhost:3000"],
+          ["$ cargo run", "   Compiling orchard v0.4.1", "    Finished dev in 8.42s"],
+          ["$ claude", "\u25cf reading pricing.ts", "\u25cf edited 2 files"],
+          ["$ pnpm test", "\u2713 128 passed (3.1s)"],
+          ["$ git log --oneline -2", "a91f004 split the cart", "5c2ed88 drop the old flag"],
           ["$ tail -f runtime.jsonl", '{"pane":"p3","kind":"exit"}'],
-          ["$ psql holly", "holly=# select count(*);", " 58"],
-          ["$ codex", "thinking…", "● writing migration"],
-          ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
+          ["$ psql orchard", "orchard=# select count(*);", " 58"],
+          ["$ codex", "thinking\u2026", "\u25cf writing migration"],
+          ["$ htop", "cpu  \u2587\u2585\u2583\u2582\u2581\u2582\u2584\u2586", "mem  4.2G / 16G"],
         ];
 
         var CHAT = [
-          ["otter", "claude", "i renamed costing.ts, hope that's chill"],
+          ["otter", "claude", "i renamed pricing.ts, hope that's chill"],
           ["crane", "codex", "it is not chill. i was in there"],
           ["otter", "claude", "..."],
           ["beaver", "fable", "i'll rebase you both, stop typing"],
@@ -443,17 +448,41 @@
 
         var ROASTS = [
           "nine agents running. nine.",
-          "seoul has been waiting on you for 41 minutes.",
-          "you opened this worktree in august.",
+          "thistle has been waiting on you for 41 minutes.",
+          "you opened juniper in august.",
           "$18.60 today. it is 11am.",
-          "pickerel has no commits and a lot of confidence.",
+          "kestrel has no commits and a lot of confidence.",
         ];
 
         var TICKER = [
           { name: "CLAUDE", cost: 18.6, up: true },
           { name: "CODEX", cost: 6.12, up: false },
           { name: "FABLE", cost: 2.04, up: true },
-          { name: "SEOUL", cost: 9.98, up: true },
+          { name: "THISTLE", cost: 9.98, up: true },
+        ];
+
+        var PARTY = [
+          { name: "otter", via: "claude", lv: 12, hp: 0.82 },
+          { name: "crane", via: "codex", lv: 7, hp: 0.54 },
+          { name: "beaver", via: "fable", lv: 3, hp: 0.31 },
+        ];
+
+        var BATTLE = [
+          "crane casts REBASE",
+          "it is super effective",
+          "otter takes 40 damage from CONFLICT",
+          "beaver uses STASH",
+          "otter has fainted",
+          "you gained 1 commit",
+        ];
+
+        var BBS = [
+          "*** now talking in #orchard",
+          "*** otter has joined",
+          "<otter> i have the conch",
+          "*** crane has joined",
+          "<crane> you do not have the conch",
+          "[12:04] thistle  +142 -8",
         ];
 
         var CARDS = [
@@ -513,7 +542,7 @@
           },
           {
             caption: "i want it to tell me when i can go to bed",
-            body: '<div class="bed"><span class="orb"></span><p class="verdict">not yet</p><p class="why">crane is still working. seoul wants you.</p></div>',
+            body: '<div class="bed"><span class="orb"></span><p class="verdict">not yet</p><p class="why">crane is still working. thistle wants you.</p></div>',
             start: function (screen) {
               var orb = screen.querySelector(".orb");
               var verdict = screen.querySelector(".verdict");
@@ -525,7 +554,7 @@
                 var clear = frame % 200 > 130;
                 orb.classList.toggle("ok", clear);
                 verdict.textContent = clear ? "go to bed" : "not yet";
-                why.textContent = clear ? "everything is green. nothing wants you." : "crane is still working. seoul wants you.";
+                why.textContent = clear ? "everything is green. nothing wants you." : "crane is still working. thistle wants you.";
               };
             },
           },
@@ -582,23 +611,51 @@
             },
           },
           {
-            caption: "i want to change it all",
+            caption: "i want my agents to be an rpg party",
             body:
-              '<div class="alt"><div class="alt-main">' +
-              '<div class="alt-title">costing rewrite</div>' +
-              '<div class="alt-note">three agents, one branch, since tuesday</div>' +
-              '<div class="alt-bar"><i></i></div>' +
-              '</div><div class="alt-side">' +
-              '<div>costing rewrite</div><div class="on">homepage</div><div>field primitives</div><div>lootbox port</div>' +
-              "</div></div>",
+              '<div class="party">' +
+              PARTY.map(function (p) {
+                return (
+                  '<div class="hero"><span class="nm">' + p.name + '</span><span class="lv">lv' + p.lv + "</span>" +
+                  '<span class="hp"><i style="width:' + Math.round(p.hp * 100) + '%"></i></span>' +
+                  '<span class="via">' + p.via + "</span></div>"
+                );
+              }).join("") +
+              '<pre class="battle"></pre></div>',
             start: function (screen) {
-              var bar = screen.querySelector(".alt-bar i");
-              var at = 24;
-              if (reduced) { bar.style.width = "62%"; return null; }
+              var log = screen.querySelector(".battle");
+              var bars = Array.prototype.slice.call(screen.querySelectorAll(".hp i"));
+              var at = 0;
+              var hold = 0;
+              if (reduced) { log.textContent = BATTLE.slice(0, 3).map(function (l) { return "> " + l; }).join("\n"); return null; }
               return function () {
-                at += 0.06;
-                if (at > 96) at = 24;
-                bar.style.width = at.toFixed(1) + "%";
+                hold += 1;
+                bars.forEach(function (bar, n) {
+                  var wobble = Math.sin((hold + n * 30) / 26) * 5;
+                  bar.style.width = Math.max(6, Math.round(PARTY[n].hp * 100 + wobble)) + "%";
+                });
+                if (hold % 26) return;
+                at += 1;
+                log.textContent = BATTLE.slice(Math.max(0, at - 3), at).map(function (l) { return "> " + l; }).join("\n");
+                if (at > BATTLE.length) at = 0;
+              };
+            },
+          },
+          {
+            caption: "i want it to look like it's 1995",
+            body: '<div class="bbs"><pre class="irc"></pre></div>',
+            start: function (screen) {
+              var out = screen.querySelector(".irc");
+              var line = 0;
+              var char = 0;
+              var hold = 0;
+              if (reduced) { out.textContent = BBS.join("\n"); return null; }
+              return function () {
+                if (hold > 0) { hold -= 1; return; }
+                if (line >= BBS.length) { hold = 70; line = 0; char = 0; out.textContent = ""; return; }
+                char += 2;
+                out.textContent = BBS.slice(0, line).concat([BBS[line].slice(0, char)]).join("\n");
+                if (char >= BBS[line].length) { line += 1; char = 0; hold = 6; }
               };
             },
           },
