@@ -1,16 +1,16 @@
 /* Worktree row
  * Core navigation, the densest surface in Tomo. Plain CSS in the .wt- namespace.
- * The two grid rows and the fixed 42 px height give every row one size, quiet or busy.
+ * The three grid rows and the fixed 58 px height give every row one size, quiet or busy.
  * Every tone, typeface, and duration is a token, so [theme] restyles the row.
  */
 
 .wt-row {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
-  grid-template-rows: 18px 16px;
+  grid-template-rows: 18px 15px 16px;
   align-items: center;
   column-gap: var(--sp-2);
-  height: 42px;
+  height: 58px;
   padding: 4px var(--sp-1) 4px var(--sp-3);
   border-left: 2px solid transparent;
 }
@@ -31,7 +31,11 @@
 .wt-more { visibility: hidden; }
 .wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }
 
-.wt-sub { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
+.wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
 .wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
 .wt-state { font-family: var(--font-ui); color: var(--fg-2); }
-.wt-signals { flex: 0 0 auto; max-width: 65%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-foot { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
+.wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; }
+.wt-signals { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-tags { flex: 0 1 auto; color: var(--fg-3); font-size: var(--fs-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-tags:empty, .wt-agents:empty { display: none; }

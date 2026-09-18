@@ -1,3 +1,4 @@
+import { ProcessIcon } from "./ProcessIcon";
 import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, Star, type LucideIcon } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -9,7 +10,7 @@ import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass } from "./glyphs";
+import { agentStatus, dotClass, tintClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
@@ -146,6 +147,9 @@ function Destination({ id, label, icon: Icon, count = 0, current, shortcut }: { 
 
 type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: Id };
 
+/** A row draws its agents as tinted provider icons, so the signal list leaves them out. */
+const AGENT_SIGNALS = ["agent"] as const;
+
 const repoKey = (id: Id) => `repo:${id}`;
 
 const openRepoHome = (repoId: Id) => setUi({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
@@ -264,11 +268,18 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
       </span>
       <span className="wt-sub">
         <span className="wt-branch" title={w.path}>
-          {busy ? <span className="wt-state">archiving... · </span> : archived ? "archived · " : state ? <span className="wt-state">{state} · </span> : null}{branch}
+          {busy ? <span className="wt-state">archiving...</span> : archived ? "archived" : state ? <span className="wt-state">{state}</span> : null}
+          {(busy || archived || state) && " "}
+          {branch}
           {w.git?.dirty ? " *" : ""}
-          {w.metadata.tags.length > 0 && <span className="tag"> {w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
         </span>
-        <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} />}</span>
+      </span>
+      <span className="wt-foot">
+        <span className="wt-agents">
+          {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentStatus(a.state))} />)}
+        </span>
+        <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
+        <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
       </span>
     </div>
   );
