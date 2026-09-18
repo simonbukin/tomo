@@ -298,36 +298,48 @@
       @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
       @media (prefers-reduced-motion: reduce) { .t .ln::after { animation: none; } }
 
-      /* i want my agents to argue in front of me */
-      .chat { height: 100%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: flex-end; gap: 9px; overflow: hidden; }
-      .msg { font-size: 12.5px; line-height: 1.45; color: var(--fg); }
-      .msg .who { color: var(--accent); font-weight: 500; margin-right: 7px; }
-      .msg .via { font-family: var(--mono); font-size: 10px; color: var(--fg-3); margin-right: 8px; }
-
-      /* i want it to tell me when i can go to bed */
-      .bed { height: 100%; display: grid; place-content: center; justify-items: center; gap: 4px; text-align: center; }
-      .orb { width: 74px; height: 74px; border-radius: 50%; background: var(--waiting); box-shadow: 0 0 0 0 color-mix(in srgb, var(--waiting) 45%, transparent); animation: breathe 2.6s ease-in-out infinite; transition: background 500ms ease-out; }
-      .orb.ok { background: var(--success); box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent); }
-      @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 0 currentColor; } 50% { box-shadow: 0 0 0 16px transparent; } }
-      .verdict { margin: 18px 0 0; font-size: 20px; font-weight: 600; }
-      .why { margin: 0; font-size: 12.5px; color: var(--fg-2); max-width: 26ch; }
-
-      /* i want a ticker for what i'm burning */
-      .tick { height: 100%; display: flex; flex-direction: column; }
-      .tape { display: flex; gap: 26px; padding: 11px 0; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--fg-2); }
-      .sym b { color: var(--fg); font-weight: 500; margin-right: 6px; }
-      .sym i { font-style: normal; margin-left: 5px; }
-      .sym i.up { color: var(--success); }
-      .sym i.down { color: var(--fg-3); }
-      .total { flex: 1; display: grid; place-content: center; justify-items: center; gap: 6px; }
-      .big { font-family: var(--mono); font-size: 40px; color: var(--fg); font-variant-numeric: tabular-nums; }
-      .since { font-size: 12px; color: var(--fg-3); }
-
       /* i want it to be mean to me about it */
       .roast { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden; }
       .jab { margin: 0; font-size: 13px; line-height: 1.45; color: var(--fg-2); opacity: 0; transform: translateY(6px); transition: opacity 320ms ease-out, transform 320ms cubic-bezier(0.2, 0, 0, 1); }
       .jab.in { opacity: 1; transform: none; }
       .roast .jab:last-child { color: var(--fg); }
+
+      /* i want a nutrition label for every worktree */
+      .label { height: 100%; padding: 10px 16px; font-family: Helvetica, Arial, sans-serif; color: var(--fg); display: flex; flex-direction: column; }
+      .lb-title { font-size: 25px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+      .lb-serv { font-size: 11px; padding-top: 1px; }
+      .rule { height: 1px; background: var(--fg); margin: 5px 0; }
+      .rule.thick { height: 7px; }
+      .lb-amt { font-size: 10px; font-weight: 700; }
+      .lb-big { display: flex; justify-content: space-between; font-size: 17px; font-weight: 800; }
+      .lb-dv { font-size: 9.5px; font-weight: 700; text-align: right; padding-bottom: 2px; }
+      .lb-line { display: grid; grid-template-columns: 1fr auto 44px; gap: 8px; font-size: 11.5px; padding: 2px 0; border-top: 1px solid var(--line); }
+      .lb-line b { font-weight: 700; }
+      .lb-line i { font-style: normal; font-weight: 700; text-align: right; }
+      .lb-foot { font-size: 9.5px; color: var(--fg-2); padding-top: 4px; }
+
+      /* i want to see my agents as if they're trains */
+      .board { height: 100%; background: #0b0b0d; padding: 12px 14px; font-family: var(--mono); }
+      .bd-head { display: grid; grid-template-columns: 52px 1fr 108px; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6a6a58; padding-bottom: 8px; }
+      .bd-row { display: grid; grid-template-columns: 52px 1fr 108px; align-items: center; font-size: 13px; color: #f5c518; padding: 6px 0; border-top: 1px solid #1d1d16; }
+      .bd-row b { font-weight: 400; letter-spacing: 0.04em; font-size: 11.5px; }
+
+      /* i want my worktrees to be fish */
+      .tank { display: block; width: 100%; height: 100%; }
+
+      /* i want a plant that dies when i ignore it */
+      .plant { height: 100%; display: grid; place-content: center; justify-items: center; }
+      .plant svg { width: 128px; height: 160px; --droop: 0; }
+      .plant .stem { fill: none; stroke: var(--success); stroke-width: 4; stroke-linecap: round; }
+      .plant .leaf { fill: var(--success); transform-origin: 60px 100px; transform: rotate(calc(var(--droop) * 26deg)); opacity: calc(1 - var(--droop) * 0.45); transition: none; }
+      .plant .l2 { transform-origin: 60px 86px; transform: rotate(calc(var(--droop) * -22deg)); }
+      .plant .l3 { transform-origin: 60px 66px; transform: rotate(calc(var(--droop) * 18deg)); }
+      .plant .pot { fill: var(--fg-3); }
+      .plant .mood { margin: 10px 0 0; font-size: 12.5px; color: var(--fg-2); }
+
+      /* i want a seismograph for my repo */
+      .seis { display: block; width: 100%; height: calc(100% - 30px); }
+      .seis-note { margin: 0; padding: 0 16px; font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); }
 
       .empty { height: 100%; display: grid; place-items: center; color: var(--dot); }
       .empty svg { width: 66px; height: 66px; }
@@ -381,7 +393,7 @@
           </span>
 
           <h1>a little place for your agents</h1>
-          <p class="sub">tomo is your personal agent workspace. it's made to be taken apart. we dare you to.</p>
+          <p class="sub">it's your room. do whatever you want in it. want a fish tank? just ask.</p>
 
           <div class="actions">
             <a class="button" href="https://github.com/simonbukin/tomo">
@@ -427,23 +439,15 @@
         var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         var PANES = [
-          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "\u279c  local:  localhost:3000"],
+          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "➜  local:  localhost:3000"],
           ["$ cargo run", "   Compiling orchard v0.4.1", "    Finished dev in 8.42s"],
-          ["$ claude", "\u25cf reading pricing.ts", "\u25cf edited 2 files"],
-          ["$ pnpm test", "\u2713 128 passed (3.1s)"],
+          ["$ claude", "● reading pricing.ts", "● edited 2 files"],
+          ["$ pnpm test", "✓ 128 passed (3.1s)"],
           ["$ git log --oneline -2", "a91f004 split the cart", "5c2ed88 drop the old flag"],
           ["$ tail -f runtime.jsonl", '{"pane":"p3","kind":"exit"}'],
           ["$ psql orchard", "orchard=# select count(*);", " 58"],
-          ["$ codex", "thinking\u2026", "\u25cf writing migration"],
-          ["$ htop", "cpu  \u2587\u2585\u2583\u2582\u2581\u2582\u2584\u2586", "mem  4.2G / 16G"],
-        ];
-
-        var CHAT = [
-          ["otter", "claude", "i renamed pricing.ts, hope that's chill"],
-          ["crane", "codex", "it is not chill. i was in there"],
-          ["otter", "claude", "..."],
-          ["beaver", "fable", "i'll rebase you both, stop typing"],
-          ["crane", "codex", "thank you beaver"],
+          ["$ codex", "thinking…", "● writing migration"],
+          ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
         ];
 
         var ROASTS = [
@@ -454,36 +458,13 @@
           "kestrel has no commits and a lot of confidence.",
         ];
 
-        var TICKER = [
-          { name: "CLAUDE", cost: 18.6, up: true },
-          { name: "CODEX", cost: 6.12, up: false },
-          { name: "FABLE", cost: 2.04, up: true },
-          { name: "THISTLE", cost: 9.98, up: true },
+        var DEPARTURES = [
+          ["09:42", "thistle", "ON TIME"],
+          ["09:51", "juniper", "DELAYED"],
+          ["10:03", "kestrel", "BOARDING"],
+          ["10:20", "mallow", "CANCELLED"],
         ];
-
-        var PARTY = [
-          { name: "otter", via: "claude", lv: 12, hp: 0.82 },
-          { name: "crane", via: "codex", lv: 7, hp: 0.54 },
-          { name: "beaver", via: "fable", lv: 3, hp: 0.31 },
-        ];
-
-        var BATTLE = [
-          "crane casts REBASE",
-          "it is super effective",
-          "otter takes 40 damage from CONFLICT",
-          "beaver uses STASH",
-          "otter has fainted",
-          "you gained 1 commit",
-        ];
-
-        var BBS = [
-          "*** now talking in #orchard",
-          "*** otter has joined",
-          "<otter> i have the conch",
-          "*** crane has joined",
-          "<crane> you do not have the conch",
-          "[12:04] thistle  +142 -8",
-        ];
+        var STATUSES = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED", "AT PLATFORM"];
 
         var CARDS = [
           {
@@ -506,81 +487,6 @@
                   el.textContent = script.slice(0, at.line).concat([script[at.line].slice(0, at.char)]).join("\n");
                   if (at.char >= script[at.line].length) { at.line += 1; at.char = 0; at.hold = 8; }
                 });
-              };
-            },
-          },
-          {
-            caption: "i want my agents to argue in front of me",
-            body: '<div class="chat"></div>',
-            start: function (screen) {
-              var box = screen.querySelector(".chat");
-              var shown = 0;
-              var hold = 0;
-              var draw = function (partial) {
-                box.innerHTML = CHAT.slice(0, shown)
-                  .map(function (m, n) {
-                    var text = n === shown - 1 && partial !== undefined ? m[2].slice(0, partial) : m[2];
-                    return '<div class="msg"><span class="who">' + m[0] + '</span><span class="via">' + m[1] + "</span>" + text + "</div>";
-                  })
-                  .join("");
-                box.scrollTop = box.scrollHeight;
-              };
-              if (reduced) { shown = CHAT.length; draw(); return null; }
-              var chars = 0;
-              return function () {
-                if (hold > 0) { hold -= 1; return; }
-                if (shown === 0) { shown = 1; chars = 0; }
-                var current = CHAT[shown - 1][2];
-                if (chars < current.length) { chars += 2; draw(chars); return; }
-                draw();
-                if (shown >= CHAT.length) { hold = 60; shown = 0; box.innerHTML = ""; return; }
-                shown += 1;
-                chars = 0;
-                hold = 10;
-              };
-            },
-          },
-          {
-            caption: "i want it to tell me when i can go to bed",
-            body: '<div class="bed"><span class="orb"></span><p class="verdict">not yet</p><p class="why">crane is still working. thistle wants you.</p></div>',
-            start: function (screen) {
-              var orb = screen.querySelector(".orb");
-              var verdict = screen.querySelector(".verdict");
-              var why = screen.querySelector(".why");
-              var frame = 0;
-              if (reduced) return null;
-              return function () {
-                frame += 1;
-                var clear = frame % 200 > 130;
-                orb.classList.toggle("ok", clear);
-                verdict.textContent = clear ? "go to bed" : "not yet";
-                why.textContent = clear ? "everything is green. nothing wants you." : "crane is still working. thistle wants you.";
-              };
-            },
-          },
-          {
-            caption: "i want a ticker for what i'm burning",
-            body: '<div class="tick"><div class="tape"></div><div class="total"><span class="big">$0.00</span><span class="since">today, across 9 agents</span></div></div>',
-            start: function (screen) {
-              var tape = screen.querySelector(".tape");
-              var big = screen.querySelector(".big");
-              var frame = 0;
-              var render = function () {
-                tape.innerHTML = TICKER.concat(TICKER)
-                  .map(function (t) {
-                    return '<span class="sym"><b>' + t.name + "</b> $" + t.cost.toFixed(2) + '<i class="' + (t.up ? "up" : "down") + '">' + (t.up ? "▲" : "▼") + "</i></span>";
-                  })
-                  .join("");
-              };
-              render();
-              if (reduced) { big.textContent = "$36.74"; return null; }
-              return function () {
-                frame += 1;
-                TICKER.forEach(function (t) { if (frame % 12 === 0 && t.up) t.cost += 0.01; });
-                if (frame % 12 === 0) render();
-                var total = TICKER.reduce(function (sum, t) { return sum + t.cost; }, 0);
-                big.textContent = "$" + total.toFixed(2);
-                tape.style.transform = "translateX(" + (-(frame * 0.6) % 50) + "%)";
               };
             },
           },
@@ -611,52 +517,193 @@
             },
           },
           {
-            caption: "i want my agents to be an rpg party",
+            caption: "i want a nutrition label for every worktree",
             body:
-              '<div class="party">' +
-              PARTY.map(function (p) {
-                return (
-                  '<div class="hero"><span class="nm">' + p.name + '</span><span class="lv">lv' + p.lv + "</span>" +
-                  '<span class="hp"><i style="width:' + Math.round(p.hp * 100) + '%"></i></span>' +
-                  '<span class="via">' + p.via + "</span></div>"
-                );
-              }).join("") +
-              '<pre class="battle"></pre></div>',
+              '<div class="label"><div class="lb-title">Nutrition Facts</div>' +
+              '<div class="lb-serv">1 worktree (thistle)</div>' +
+              '<div class="rule thick"></div>' +
+              '<div class="lb-amt">Amount per session</div>' +
+              '<div class="lb-big"><span>Tokens</span><b class="tok">2.4M</b></div>' +
+              '<div class="rule"></div>' +
+              '<div class="lb-dv">% daily value</div>' +
+              '<div class="lb-line"><span>Files touched</span><b>18</b><i>36%</i></div>' +
+              '<div class="lb-line"><span>Commits</span><b>3</b><i>5%</i></div>' +
+              '<div class="lb-line"><span>Tests added</span><b>0</b><i>0%</i></div>' +
+              '<div class="lb-line"><span>Confidence</span><b>high</b><i>∞%</i></div>' +
+              '<div class="rule thick"></div>' +
+              '<div class="lb-foot">* based on a 2,000 commit diet</div></div>',
             start: function (screen) {
-              var log = screen.querySelector(".battle");
-              var bars = Array.prototype.slice.call(screen.querySelectorAll(".hp i"));
-              var at = 0;
-              var hold = 0;
-              if (reduced) { log.textContent = BATTLE.slice(0, 3).map(function (l) { return "> " + l; }).join("\n"); return null; }
+              var tok = screen.querySelector(".tok");
+              var at = 2.4;
+              if (reduced) return null;
               return function () {
-                hold += 1;
-                bars.forEach(function (bar, n) {
-                  var wobble = Math.sin((hold + n * 30) / 26) * 5;
-                  bar.style.width = Math.max(6, Math.round(PARTY[n].hp * 100 + wobble)) + "%";
-                });
-                if (hold % 26) return;
-                at += 1;
-                log.textContent = BATTLE.slice(Math.max(0, at - 3), at).map(function (l) { return "> " + l; }).join("\n");
-                if (at > BATTLE.length) at = 0;
+                at += 0.001;
+                tok.textContent = at.toFixed(3).replace(/0+$/, "") + "M";
               };
             },
           },
           {
-            caption: "i want it to look like it's 1995",
-            body: '<div class="bbs"><pre class="irc"></pre></div>',
+            caption: "i want to see my agents as if they're trains",
+            body:
+              '<div class="board"><div class="bd-head"><span>time</span><span>worktree</span><span>status</span></div>' +
+              DEPARTURES.map(function (d) {
+                return '<div class="bd-row"><span>' + d[0] + "</span><span>" + d[1] + '</span><b class="flap">' + d[2] + "</b></div>";
+              }).join("") +
+              "</div>",
             start: function (screen) {
-              var out = screen.querySelector(".irc");
-              var line = 0;
-              var char = 0;
+              var flaps = Array.prototype.slice.call(screen.querySelectorAll(".flap"));
               var hold = 0;
-              if (reduced) { out.textContent = BBS.join("\n"); return null; }
+              var spin = null;
+              if (reduced) return null;
               return function () {
-                if (hold > 0) { hold -= 1; return; }
-                if (line >= BBS.length) { hold = 70; line = 0; char = 0; out.textContent = ""; return; }
-                char += 2;
-                out.textContent = BBS.slice(0, line).concat([BBS[line].slice(0, char)]).join("\n");
-                if (char >= BBS[line].length) { line += 1; char = 0; hold = 6; }
+                if (spin) {
+                  spin.left -= 1;
+                  if (spin.left > 0) {
+                    spin.el.textContent = spin.target
+                      .split("")
+                      .map(function (ch, n) { return n < spin.settled ? ch : "ABCDEFGHIJKLMNOPQRSTUVWXYZ "[Math.floor(Math.random() * 27)]; })
+                      .join("");
+                    if (spin.left % 2 === 0) spin.settled += 1;
+                    return;
+                  }
+                  spin.el.textContent = spin.target;
+                  spin = null;
+                  hold = 44;
+                  return;
+                }
+                hold -= 1;
+                if (hold > 0) return;
+                var el = flaps[Math.floor(Math.random() * flaps.length)];
+                spin = { el: el, target: STATUSES[Math.floor(Math.random() * STATUSES.length)], left: 24, settled: 0 };
               };
+            },
+          },
+          {
+            caption: "i want my worktrees to be fish",
+            body: '<canvas class="tank"></canvas>',
+            start: function (screen) {
+              var canvas = screen.querySelector(".tank");
+              var g = canvas.getContext("2d");
+              var fish = [
+                { x: 0.2, y: 0.3, v: 0.0016, s: 1, name: "thistle", dead: false },
+                { x: 0.7, y: 0.6, v: -0.0011, s: 0.85, name: "juniper", dead: false },
+                { x: 0.45, y: 0.8, v: 0.0009, s: 0.7, name: "mallow", dead: false },
+                { x: 0.8, y: 0.22, v: -0.0014, s: 0.6, name: "kestrel", dead: true },
+              ];
+              var frame = 0;
+              var paint = function () {
+                var w = canvas.clientWidth;
+                var h = canvas.clientHeight;
+                var dpr = window.devicePixelRatio || 1;
+                if (canvas.width !== Math.round(w * dpr)) {
+                  canvas.width = Math.round(w * dpr);
+                  canvas.height = Math.round(h * dpr);
+                }
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                var css = getComputedStyle(document.documentElement);
+                g.fillStyle = css.getPropertyValue("--accent").trim();
+                fish.forEach(function (f, n) {
+                  if (!reduced) f.x += f.v;
+                  if (f.x > 1.08) f.x = -0.08;
+                  if (f.x < -0.08) f.x = 1.08;
+                  var bob = Math.sin(frame / 34 + n) * 0.02;
+                  var px = f.x * w;
+                  var py = (f.y + bob) * h;
+                  var size = 13 * f.s;
+                  g.save();
+                  g.translate(px, py);
+                  if (f.dead) g.rotate(Math.PI);
+                  g.globalAlpha = f.dead ? 0.35 : 0.85;
+                  g.scale(f.v > 0 ? 1 : -1, 1);
+                  g.beginPath();
+                  g.ellipse(0, 0, size, size * 0.6, 0, 0, 6.283);
+                  g.fill();
+                  g.beginPath();
+                  g.moveTo(-size, 0);
+                  g.lineTo(-size * 1.8, -size * 0.55);
+                  g.lineTo(-size * 1.8, size * 0.55);
+                  g.closePath();
+                  g.fill();
+                  g.restore();
+                  g.globalAlpha = f.dead ? 0.4 : 0.75;
+                  g.fillStyle = css.getPropertyValue("--fg-2").trim();
+                  g.font = '10px ' + css.getPropertyValue("--mono");
+                  g.textAlign = "center";
+                  g.fillText(f.name + (f.dead ? "  (rip)" : ""), px, py + size * 1.9);
+                  g.fillStyle = css.getPropertyValue("--accent").trim();
+                  g.globalAlpha = 1;
+                });
+              };
+              paint();
+              if (reduced) return null;
+              return function () { frame += 1; paint(); };
+            },
+          },
+          {
+            caption: "i want a plant that dies when i ignore it",
+            body:
+              '<div class="plant"><svg viewBox="0 0 120 150" aria-hidden="true">' +
+              '<path class="stem" d="M60 132 C60 100 60 80 60 54" />' +
+              '<path class="leaf l1" d="M60 100 C40 96 30 82 32 70 C46 72 58 84 60 100Z" />' +
+              '<path class="leaf l2" d="M60 86 C80 82 90 68 88 56 C74 58 62 70 60 86Z" />' +
+              '<path class="leaf l3" d="M60 66 C44 62 36 50 38 40 C50 42 58 54 60 66Z" />' +
+              '<path class="pot" d="M38 132 L44 150 L76 150 L82 132Z" />' +
+              "</svg><p class=\"mood\">watered 3 days ago</p></div>",
+            start: function (screen) {
+              var svg = screen.querySelector("svg");
+              var mood = screen.querySelector(".mood");
+              var frame = 0;
+              if (reduced) return null;
+              return function () {
+                frame += 1;
+                var droop = (frame % 420) / 420;
+                svg.style.setProperty("--droop", droop.toFixed(3));
+                mood.textContent = droop > 0.72 ? "merge something. please." : droop > 0.4 ? "watered 3 days ago" : "thriving";
+              };
+            },
+          },
+          {
+            caption: "i want a seismograph for my repo",
+            body: '<canvas class="seis"></canvas><p class="seis-note">3 agents writing · magnitude 4.1</p>',
+            start: function (screen) {
+              var canvas = screen.querySelector(".seis");
+              var g = canvas.getContext("2d");
+              var trace = [];
+              var frame = 0;
+              var paint = function () {
+                var w = canvas.clientWidth;
+                var h = canvas.clientHeight;
+                var dpr = window.devicePixelRatio || 1;
+                if (canvas.width !== Math.round(w * dpr)) {
+                  canvas.width = Math.round(w * dpr);
+                  canvas.height = Math.round(h * dpr);
+                }
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                var css = getComputedStyle(document.documentElement);
+                g.strokeStyle = css.getPropertyValue("--accent").trim();
+                g.lineWidth = 1.4;
+                g.beginPath();
+                trace.forEach(function (v, n) {
+                  var x = (n / (trace.length - 1 || 1)) * w;
+                  var y = h / 2 + v * (h / 2.6);
+                  if (n === 0) g.moveTo(x, y);
+                  else g.lineTo(x, y);
+                });
+                g.stroke();
+              };
+              var next = function () {
+                frame += 1;
+                var quiet = Math.sin(frame / 60) * 0.1;
+                var burst = frame % 90 < 16 ? (Math.random() - 0.5) * 1.7 : (Math.random() - 0.5) * 0.24;
+                trace.push(quiet + burst);
+                if (trace.length > 120) trace.shift();
+              };
+              for (var i = 0; i < 120; i++) next();
+              paint();
+              if (reduced) return null;
+              return function () { next(); paint(); };
             },
           },
         ];
