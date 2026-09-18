@@ -77,6 +77,8 @@ pub struct WorktreeState {
     pub last_active_ms: Option<u64>,
     pub first_seen_ms: Option<u64>,
     pub archived_at_ms: Option<u64>,
+    /// The name this worktree's infrastructure is created under. See `identity`.
+    pub infra_name: String,
 }
 
 pub struct PaneState {
@@ -568,9 +570,14 @@ impl Daemon {
                         &id,
                     )),
                 };
-                let needs_write = existing
-                    .as_ref()
-                    .is_none_or(|m| m.path != path || m.gitdir != gitdir || m.repo_id != repo.id || m.first_seen_ms.is_none() || m.archived_at_ms.is_some());
+                let needs_write = existing.as_ref().is_none_or(|m| {
+                    m.path != path
+                        || m.gitdir != gitdir
+                        || m.repo_id != repo.id
+                        || m.first_seen_ms.is_none()
+                        || m.archived_at_ms.is_some()
+                        || m.infra_name.is_none()
+                });
                 if needs_write {
                     inner.store.meta_upsert(&row)?;
                 }
@@ -591,6 +598,7 @@ impl Daemon {
                         last_active_ms: row.last_active_ms,
                         first_seen_ms: row.first_seen_ms,
                         archived_at_ms: None,
+                        infra_name: row.infra_name.clone().unwrap_or_default(),
                     },
                 );
             }
@@ -619,6 +627,7 @@ impl Daemon {
                     last_active_ms: m.last_active_ms,
                     first_seen_ms: m.first_seen_ms,
                     archived_at_ms: m.archived_at_ms,
+                    infra_name: m.infra_name.clone().unwrap_or_default(),
                 },
             );
         }
@@ -762,7 +771,7 @@ impl Daemon {
 
     fn pane_env(&self, inner: &Inner, pane_id: &str, tab_id: &str, worktree_id: &str) -> Vec<(String, String)> {
         let worktree_path = inner.worktrees.get(worktree_id).map(|w| w.path.to_string_lossy().into_owned()).unwrap_or_default();
-        let infra_name = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == worktree_id).and_then(|m| m.infra_name).unwrap_or_default();
+        let infra_name = inner.worktrees.get(worktree_id).map(|w| w.infra_name.clone()).unwrap_or_default();
         vec![
             ("TOMO_INFRA_NAME".into(), infra_name.clone()),
             // What Compose calls a project. Everything it makes is named after this, so two
@@ -2457,6 +2466,7 @@ mod tests {
             last_active_ms: None,
             first_seen_ms: None,
             archived_at_ms: None,
+            infra_name: "tomo-test-0000".into(),
         }
     }
 
