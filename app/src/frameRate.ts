@@ -16,8 +16,15 @@ export function summarise(gaps: readonly number[]): FrameReport {
 
 export function useFrameRate(on: boolean): FrameReport | null {
   const [report, setReport] = useState<FrameReport | null>(null);
+  const [awake, setAwake] = useState(() => (typeof document === "undefined" ? true : !document.hidden));
   useEffect(() => {
-    if (!on) {
+    const note = () => setAwake(!document.hidden);
+    document.addEventListener("visibilitychange", note);
+    return () => document.removeEventListener("visibilitychange", note);
+  }, []);
+  useEffect(() => {
+    // A hidden window is throttled, so the reading would be a lie and the wake-ups a waste.
+    if (!on || !awake) {
       setReport(null);
       return;
     }
@@ -37,6 +44,6 @@ export function useFrameRate(on: boolean): FrameReport | null {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [on]);
+  }, [on, awake]);
   return report;
 }

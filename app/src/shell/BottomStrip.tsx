@@ -52,19 +52,16 @@ function HelpControls() {
 }
 
 function FrameMeter() {
-  const [on, setOn] = useState(false);
+  const [on, setOn] = useState(true);
   const report = useFrameRate(on);
   const late = report ? report.longestGapMs > droppedAt(report.fps) : false;
+  const label = report
+    ? `${report.fps} frames per second, longest gap ${report.longestGapMs} milliseconds. Click to stop counting.`
+    : "Frames are not being counted. Click to start.";
   return (
-    <button
-      type="button"
-      className={`bottom-item metric frame-meter${late ? " tone-warning" : ""}`}
-      aria-label={report ? `Frame rate ${report.fps} per second, longest gap ${report.longestGapMs} milliseconds. Click to stop counting.` : "Count frames"}
-      onClick={() => setOn((was) => !was)}
-    >
-      <span className="metric-label">fps</span>
+    <button type="button" className={`metric frame-meter${late ? " tone-warning" : ""}`} aria-label={label} title={label} onClick={() => setOn((was) => !was)}>
+      <span className="metric-label">FPS</span>
       <span className="num">{report ? report.fps : "\u2014"}</span>
-      {report && <span className="metric-label">{report.longestGapMs}ms</span>}
     </button>
   );
 }
