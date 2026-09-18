@@ -585,6 +585,7 @@ export const configSchema = z.object({
     branch_prefix: z.string(),
     resource_warning_bytes: z.number(),
     scrollback_lines: z.number(),
+    vt_engine: z.string(),
     font_family: z.string(),
     font_size: z.number(),
     theme: themeConfigSchema,

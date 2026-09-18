@@ -366,7 +366,7 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         })
         .collect();
     let (theme, theme_issues) = parse_theme(file.theme.as_ref());
-    let (font_family, font_size, terminal_issues) = parse_terminal(file.terminal.as_ref(), file.font_family, file.font_size);
+    let (font_family, font_size, vt_engine, terminal_issues) = parse_terminal(file.terminal.as_ref(), file.font_family, file.font_size);
     let cfg = Config {
         shell: file.shell.or_else(|| std::env::var("SHELL").ok()).unwrap_or_else(|| "/bin/zsh".into()),
         editor_command: file.editor_command.unwrap_or_else(|| vec!["zed".into(), "{path}".into()]),
@@ -374,6 +374,7 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         branch_prefix: file.branch_prefix.unwrap_or_default(),
         resource_warning_bytes: (file.resource_warning_gb.unwrap_or(2.0) * 1024.0 * 1024.0 * 1024.0) as u64,
         scrollback_lines: file.scrollback_lines.unwrap_or(10_000),
+        vt_engine,
         font_family,
         font_size,
         theme,
@@ -469,13 +470,14 @@ fn parse_theme(value: Option<&toml::Value>) -> (ThemeConfig, Vec<ConfigIssue>) {
 }
 
 /// `[terminal]` wins over the older top-level `font_family` and `font_size`.
-fn parse_terminal(value: Option<&toml::Value>, legacy_family: Option<String>, legacy_size: Option<u32>) -> (String, u32, Vec<ConfigIssue>) {
+fn parse_terminal(value: Option<&toml::Value>, legacy_family: Option<String>, legacy_size: Option<u32>) -> (String, u32, String, Vec<ConfigIssue>) {
     let family = legacy_family.unwrap_or_else(|| DEFAULT_FONT_FAMILY.into());
     let size = legacy_size.unwrap_or(13);
+    let default_engine = crate::vt::VtEngine::default().name().to_string();
     let table = match value {
-        None => return (family, size, vec![]),
+        None => return (family, size, default_engine, vec![]),
         Some(toml::Value::Table(t)) => t,
-        Some(v) => return (family, size, vec![issue(IssueLevel::Error, "terminal", format!("must be a [terminal] table, not {v}"))]),
+        Some(v) => return (family, size, default_engine, vec![issue(IssueLevel::Error, "terminal", format!("must be a [terminal] table, not {v}"))]),
     };
     let family: Checked<String> = match table.get("font_family") {
         None => Ok(family),
@@ -487,10 +489,27 @@ fn parse_terminal(value: Option<&toml::Value>, legacy_family: Option<String>, le
         Some(toml::Value::Integer(n)) if (6..=72).contains(n) => Ok(*n as u32),
         Some(v) => Err((size, issue(IssueLevel::Error, "terminal.font_size", format!("{v} must be a whole number from 6 to 72")))),
     };
+    let engine: Checked<String> = match table.get("engine") {
+        None => Ok(default_engine.clone()),
+        Some(toml::Value::String(s)) => match crate::vt::VtEngine::parse(s.trim()) {
+            Some(e) if e.available() => Ok(e.name().to_string()),
+            Some(e) => Err((
+                default_engine.clone(),
+                issue(IssueLevel::Warning, "terminal.engine", format!("{} is not in this build; using {default_engine}", e.name())),
+            )),
+            None => Err((default_engine.clone(), issue(IssueLevel::Error, "terminal.engine", format!("{s:?} must be rio, ghostty, or xterm")))),
+        },
+        Some(v) => Err((default_engine.clone(), issue(IssueLevel::Error, "terminal.engine", format!("must be an engine name, not {v}")))),
+    };
     let (family, family_issue) = settle(family);
     let (size, size_issue) = settle(size);
-    let issues = [family_issue, size_issue].into_iter().flatten().chain(unknown_keys("terminal", table, &["font_family", "font_size"])).collect();
-    (family, size, issues)
+    let (engine, engine_issue) = settle(engine);
+    let issues = [family_issue, size_issue, engine_issue]
+        .into_iter()
+        .flatten()
+        .chain(unknown_keys("terminal", table, &["font_family", "font_size", "engine"]))
+        .collect();
+    (family, size, engine, issues)
 }
 
 fn json_to_toml(value: &serde_json::Value) -> std::result::Result<toml_edit::Value, String> {
