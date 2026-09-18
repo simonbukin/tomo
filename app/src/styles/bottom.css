@@ -64,3 +64,6 @@
 .diag-message { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .diag-actions { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
 .diagnostics-dialog { display: grid; gap: var(--sp-2); max-height: 60vh; overflow: auto; overscroll-behavior: contain; font-size: var(--fs-1); }
+
+.frame-meter { cursor: pointer; }
+.frame-meter .metric-label { color: var(--fg-3); }

@@ -1,5 +1,6 @@
+import { DROPPED_MS, useFrameRate } from "../frameRate";
 import { CircleHelp, Settings2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { runAction } from "../actions";
 import { builtins } from "../addons";
 import { rpcParsed } from "../api";
@@ -50,6 +51,25 @@ function HelpControls() {
   );
 }
 
+/** Frames, on demand. Click it to start counting; it counts nothing until you do. */
+function FrameMeter() {
+  const [on, setOn] = useState(false);
+  const report = useFrameRate(on);
+  const late = report ? report.worstMs > DROPPED_MS : false;
+  return (
+    <button
+      type="button"
+      className={`bottom-item metric frame-meter${late ? " tone-warning" : ""}`}
+      aria-label={report ? `Frame rate ${report.fps} per second, worst frame ${report.worstMs} milliseconds. Click to stop counting.` : "Count frames"}
+      onClick={() => setOn((was) => !was)}
+    >
+      <span className="metric-label">fps</span>
+      <span className="num">{report ? report.fps : "\u2014"}</span>
+      {report && <span className="metric-label">{report.worstMs}ms</span>}
+    </button>
+  );
+}
+
 function SystemMetrics() {
   const stats = useStore((s) => (s.connected ? s.system : null));
   const nonce = useStore((s) => s.connectionNonce);
@@ -63,6 +83,7 @@ function SystemMetrics() {
   const metrics = stripMetrics(stats);
   return (
     <div className="bottom-metrics">
+      <FrameMeter />
       <HoverPopover
         align="end"
         title="System"
