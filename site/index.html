@@ -4,25 +4,30 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>tomo</title>
-    <meta name="description" content="A little workspace for coding agents." />
+    <meta name="description" content="A little place for all your agents. Fast, local, and yours to edit." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23a684ff' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%23a684ff'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
     <style>
       :root {
         --bg: #ffffff;
         --fg: #17171c;
-        --fg-2: #6f6f7c;
+        --fg-2: #5f5f6c;
+        --fg-3: #9a9aa6;
+        --line: #e4e4ea;
         --dot: #c9c9d4;
         --accent: #7d4dff;
+        --sans: "Work Sans", system-ui, -apple-system, sans-serif;
         --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) {
           --bg: #0f0f12;
           --fg: #e8e8ee;
-          --fg-2: #8a8a97;
+          --fg-2: #9a9aa7;
+          --fg-3: #63636f;
+          --line: #232329;
           --dot: #36363f;
           --accent: #a684ff;
         }
@@ -30,19 +35,21 @@
       :root[data-theme="dark"] {
         --bg: #0f0f12;
         --fg: #e8e8ee;
-        --fg-2: #8a8a97;
+        --fg-2: #9a9aa7;
+        --fg-3: #63636f;
+        --line: #232329;
         --dot: #36363f;
         --accent: #a684ff;
       }
 
+      * { box-sizing: border-box; }
       html, body { height: 100%; }
       body {
         margin: 0;
         background: var(--bg);
         color: var(--fg);
-        font-family: var(--mono);
-        font-size: 14px;
-        line-height: 1.75;
+        font-family: var(--sans);
+        font-size: 15px;
       }
       canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
@@ -50,41 +57,82 @@
         position: relative;
         min-height: 100%;
         display: grid;
-        place-items: center;
-        padding: 40px 16px;
-        text-align: center;
+        align-content: center;
+        padding-block: 64px;
+        padding-left: 16px;
+        padding-right: 16px;
       }
-      .lockup { width: 154px; height: 44px; color: var(--fg); display: block; margin: 0 auto; }
+      /* Wider than the text measure on purpose: the headline and the line under it are capped
+         in ch, and this width only exists so the button and the command share one row. */
+      .col { width: 100%; max-width: 860px; margin-left: max(0px, calc((100% - 1160px) / 2)); }
+
+      .lockup { width: 122px; height: 35px; color: var(--fg); display: block; }
       h1 {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
+        font-weight: 600;
+        font-size: clamp(31px, 5.4vw, 48px);
+        line-height: 1.1;
+        letter-spacing: -0.022em;
+        margin: 28px 0 0;
+        max-width: 15ch;
+        text-wrap: balance;
+      }
+      .sub {
+        color: var(--fg-2);
+        font-size: 17px;
+        line-height: 1.6;
+        margin: 18px 0 0;
+        max-width: 42ch;
+      }
+
+      .actions { margin-top: 34px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--sans);
+        font-weight: 500;
+        font-size: 15px;
+        color: var(--bg);
+        background: var(--fg);
+        border-radius: 5px;
+        padding: 10px 17px;
+        text-decoration: none;
+        border: 1px solid var(--fg);
+      }
+      .button:hover { opacity: 0.86; }
+      .cmd {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--fg-2);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 10px 14px;
+        background: var(--bg);
+        overflow-x: auto;
+        max-width: 100%;
         white-space: nowrap;
       }
-      p { margin: 22px auto 0; max-width: 44ch; color: var(--fg-2); }
-      p.lead { color: var(--fg); margin-top: 26px; }
-      a {
-        display: inline-block;
-        margin-top: 32px;
-        color: var(--accent);
-        text-decoration: none;
-        border-bottom: 1px solid transparent;
-      }
-      a:hover { border-bottom-color: currentColor; }
-      a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+      .cmd .p { color: var(--fg-3); flex: none; }
+      .foot { margin-top: 22px; color: var(--fg-3); font-size: 13.5px; }
+      .foot a { color: var(--fg-2); text-decoration: none; border-bottom: 1px solid var(--line); }
+      .foot a:hover { color: var(--fg); border-bottom-color: currentColor; }
 
-      @media (max-width: 480px) {
-        .lockup { width: 126px; height: 36px; }
+      a { color: inherit; }
+      a:focus-visible, .cmd:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+      @media (max-width: 560px) {
+        .lockup { width: 104px; height: 30px; }
+        .cmd { font-size: 12px; }
       }
     </style>
   </head>
   <body>
     <canvas id="tide" aria-hidden="true"></canvas>
     <main>
-      <div>
-        <h1>tomo</h1>
+      <div class="col">
         <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
           <g transform="scale(0.2)">
             <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
@@ -106,18 +154,30 @@
             </g>
           </g>
         </svg>
-        <p class="lead">A little workspace for coding agents.</p>
-        <p>
-          Every worktree, terminal, and agent in one place. Don't like how it does something?
-          Point your agent at the source.
+
+        <h1>A little place for all your agents.</h1>
+        <p class="sub">
+          It holds your worktrees, your terminals, and the agents working in them. Fast, local,
+          and yours to edit.
         </p>
-        <a href="https://github.com/simonbukin/tomo">github</a>
+
+        <div class="actions">
+          <a class="button" href="https://github.com/simonbukin/tomo">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            github
+          </a>
+          <code class="cmd" tabindex="0"><span class="p">$</span>git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</code>
+        </div>
+
+        <p class="foot">built with 💜 by <a href="https://simonbukin.com">simon</a></p>
       </div>
     </main>
 
     <script>
-      // Rows of dots sliding past one another, a half beat apart. The middle stays calm so the
-      // words on top of it keep their contrast.
+      // Rows of dots sliding past one another, a half beat apart. The band behind the column
+      // stays calm so the words keep their contrast, and it follows the column, which sits left.
       (function () {
         var canvas = document.getElementById("tide");
         var g = canvas.getContext("2d");
@@ -146,15 +206,16 @@
         function draw(t) {
           g.clearRect(0, 0, w, h);
           g.fillStyle = dot;
-          var cx = w / 2;
-          var cy = h / 2;
-          var hush = Math.min(w, h) * 0.34;
+          var box = document.querySelector(".col").getBoundingClientRect();
+          var cx = box.left + box.width * 0.42;
+          var cy = box.top + box.height / 2;
+          var hush = Math.min(w, h) * 0.46;
           for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             for (var x = 0; x < w + STEP; x += STEP) {
               var off = Math.sin(x / 90 + t * 0.9 + row.phase) * AMP;
               var near = Math.hypot((x - cx) / 1.9, row.y - cy) / hush;
-              var calm = near < 1 ? 0.22 + near * near * 0.78 : 1;
+              var calm = near < 1 ? 0.2 + near * near * 0.8 : 1;
               g.globalAlpha = (0.38 + (off / AMP + 1) * 0.22) * calm;
               g.beginPath();
               g.arc(x, row.y + off, 1.5, 0, 6.283);
