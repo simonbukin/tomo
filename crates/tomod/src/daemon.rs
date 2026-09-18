@@ -77,7 +77,6 @@ pub struct WorktreeState {
     pub last_active_ms: Option<u64>,
     pub first_seen_ms: Option<u64>,
     pub archived_at_ms: Option<u64>,
-    /// The name this worktree's infrastructure is created under. See `identity`.
     pub infra_name: String,
 }
 
@@ -91,7 +90,6 @@ pub struct PaneState {
     pub pending_line: Option<String>,
     pub last_output_ms: u64,
     pub scrollback: Scrollback,
-    /// What the pane has on screen, when an engine other than `xterm` reads the pty.
     pub screen: Option<Box<dyn crate::vt::Screen>>,
     /// Set when Tomo itself ends the pane's process, so the exit is a stop and not a crash.
     pub stop_intent: bool,
@@ -2193,6 +2191,11 @@ impl Daemon {
                     Self::emit_pane(&mut inner, p);
                 }
                 ok(Self::tabs_of(&inner, &moved.worktree_id))
+            }
+            Call::PaneScreen { pane_id } => {
+                let inner = self.lock();
+                let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+                ok(pane.screen.as_ref().map(|s| s.rows()).unwrap_or_default())
             }
             Call::PaneTail { pane_id, lines } => {
                 let inner = self.lock();

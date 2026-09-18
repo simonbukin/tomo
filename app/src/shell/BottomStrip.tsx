@@ -1,4 +1,4 @@
-import { DROPPED_MS, useFrameRate } from "../frameRate";
+import { droppedAt, useFrameRate } from "../frameRate";
 import { CircleHelp, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { runAction } from "../actions";
@@ -51,21 +51,20 @@ function HelpControls() {
   );
 }
 
-/** Frames, on demand. Click it to start counting; it counts nothing until you do. */
 function FrameMeter() {
   const [on, setOn] = useState(false);
   const report = useFrameRate(on);
-  const late = report ? report.worstMs > DROPPED_MS : false;
+  const late = report ? report.longestGapMs > droppedAt(report.fps) : false;
   return (
     <button
       type="button"
       className={`bottom-item metric frame-meter${late ? " tone-warning" : ""}`}
-      aria-label={report ? `Frame rate ${report.fps} per second, worst frame ${report.worstMs} milliseconds. Click to stop counting.` : "Count frames"}
+      aria-label={report ? `Frame rate ${report.fps} per second, longest gap ${report.longestGapMs} milliseconds. Click to stop counting.` : "Count frames"}
       onClick={() => setOn((was) => !was)}
     >
       <span className="metric-label">fps</span>
       <span className="num">{report ? report.fps : "\u2014"}</span>
-      {report && <span className="metric-label">{report.worstMs}ms</span>}
+      {report && <span className="metric-label">{report.longestGapMs}ms</span>}
     </button>
   );
 }

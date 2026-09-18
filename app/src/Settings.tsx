@@ -287,7 +287,6 @@ function NotificationsSection({ config }: { config: Config }) {
   );
 }
 
-/** What this build of Tomo is made of. Core names no addon; this list comes from the addons. */
 function AddonsSection() {
   const addons = addonSummaries();
   return (

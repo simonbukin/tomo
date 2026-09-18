@@ -1,25 +1,19 @@
 import { useEffect, useState } from "react";
 
 export interface FrameReport {
-  /** Frames per second over the last window. */
   fps: number;
-  /** The longest gap between two frames in the window, in milliseconds. */
-  worstMs: number;
+  longestGapMs: number;
 }
 
-/** A frame longer than this dropped at least one at 60 Hz. */
-export const DROPPED_MS = 20;
+/** A gap longer than one and a half frames at the rate on offer dropped at least one. */
+export const droppedAt = (fps: number): number => (fps > 0 ? 1500 / fps : 25);
 
 export function summarise(gaps: readonly number[]): FrameReport {
-  if (gaps.length === 0) return { fps: 0, worstMs: 0 };
+  if (gaps.length === 0) return { fps: 0, longestGapMs: 0 };
   const total = gaps.reduce((sum, ms) => sum + ms, 0);
-  return { fps: Math.round((gaps.length * 1000) / total), worstMs: Math.round(Math.max(...gaps)) };
+  return { fps: Math.round((gaps.length * 1000) / total), longestGapMs: Math.round(Math.max(...gaps)) };
 }
 
-/**
- * Counts frames while `on`. It runs no loop when off, because a meter that wakes the main
- * thread sixty times a second to say the main thread is busy is its own problem.
- */
 export function useFrameRate(on: boolean): FrameReport | null {
   const [report, setReport] = useState<FrameReport | null>(null);
   useEffect(() => {

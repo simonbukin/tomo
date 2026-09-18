@@ -1,16 +1,9 @@
-//! What a pane has on its screen.
-//!
-//! The daemon owns the pty, so it can also own the terminal state. An engine takes the bytes
-//! that came back and answers what the screen looks like, which lets `tomo` and a hook read a
-//! pane without a window, and lets a client render from a grid instead of a byte stream.
-
 use rio_vt::ansi::CursorShape;
 use rio_vt::crosswords::{Crosswords, CrosswordsSize};
 use rio_vt::event::{VoidListener, WindowId};
 use rio_vt::performer::handler::Processor;
 use serde::{Deserialize, Serialize};
 
-/// Which engine reads the pty. `Xterm` leaves the reading to the client, as it always was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VtEngine {
@@ -38,17 +31,14 @@ impl VtEngine {
         }
     }
 
-    /// Whether this build can run the engine. `ghostty` needs the `ghostty` feature.
     pub fn available(self) -> bool {
         !matches!(self, VtEngine::Ghostty) || cfg!(feature = "ghostty")
     }
 }
 
-#[allow(dead_code, reason = "resize and rows land with pane_resize and the pane_text call")]
 pub trait Screen: Send {
     fn write(&mut self, bytes: &[u8]);
-    fn resize(&mut self, cols: u16, rows: u16);
-    /// The visible screen, one string per row, trailing blanks trimmed.
+    /// The visible rows, trailing blanks trimmed. Empty from an engine that cannot read back.
     fn rows(&self) -> Vec<String>;
 }
 
@@ -66,16 +56,8 @@ impl RioScreen {
     }
 }
 
-impl Screen for RioScreen {
-    fn write(&mut self, bytes: &[u8]) {
-        self.processor.advance(&mut self.grid, bytes);
-    }
-
-    fn resize(&mut self, cols: u16, rows: u16) {
-        self.grid.resize(CrosswordsSize::new(cols as usize, rows as usize));
-    }
-
-    fn rows(&self) -> Vec<String> {
+impl RioScreen {
+    fn visible(&self) -> Vec<String> {
         self.grid
             .visible_rows()
             .iter()
@@ -90,6 +72,16 @@ impl Screen for RioScreen {
                 line.trim_end().to_string()
             })
             .collect()
+    }
+}
+
+impl Screen for RioScreen {
+    fn write(&mut self, bytes: &[u8]) {
+        self.processor.advance(&mut self.grid, bytes);
+    }
+
+    fn rows(&self) -> Vec<String> {
+        self.visible()
     }
 }
 
@@ -117,16 +109,12 @@ impl Screen for GhosttyScreen {
         let _ = self.term.vt_write(bytes);
     }
 
-    fn resize(&mut self, cols: u16, rows: u16) {
-        let _ = self.term.resize(cols, rows, 0, 0);
-    }
-
+    /// libghostty reads a screen through a render state, which this does not hold yet.
     fn rows(&self) -> Vec<String> {
         Vec::new()
     }
 }
 
-/// The screen for a pane, or none when the client does the reading.
 pub fn screen_for(engine: VtEngine, cols: u16, rows: u16, scrollback: usize) -> Option<Box<dyn Screen>> {
     match engine {
         VtEngine::Rio => Some(Box::new(RioScreen::new(cols, rows, scrollback))),
@@ -155,21 +143,26 @@ mod tests {
     }
 
     #[test]
-    fn rio_reads_a_screen_the_way_a_terminal_does() {
+    fn rio_puts_text_where_a_terminal_would() {
         let mut s = RioScreen::new(20, 4, 100);
         s.write(b"hello");
-        assert_eq!(s.rows()[0], "hello");
-
+        assert_eq!(s.visible()[0], "hello");
         s.write(b"\r\nsecond");
-        assert_eq!(s.rows()[1], "second");
+        assert_eq!(s.visible()[1], "second");
+    }
 
-        // colour is state, not text
-        s.write(b"\x1b[2J\x1b[H\x1b[31mred\x1b[0m");
-        assert_eq!(s.rows()[0], "red");
+    #[test]
+    fn rio_keeps_colour_out_of_the_text() {
+        let mut s = RioScreen::new(20, 4, 100);
+        s.write(b"\x1b[31mred\x1b[0m");
+        assert_eq!(s.visible()[0], "red");
+    }
 
-        // cursor addressing puts a word where it was asked to
+    #[test]
+    fn rio_follows_the_cursor_where_it_is_sent() {
+        let mut s = RioScreen::new(20, 4, 100);
         s.write(b"\x1b[3;5Hthere");
-        assert_eq!(s.rows()[2], "    there");
+        assert_eq!(s.visible()[2], "    there");
     }
 
     #[test]

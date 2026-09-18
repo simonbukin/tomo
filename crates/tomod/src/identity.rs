@@ -1,15 +1,7 @@
-//! The name a worktree's infrastructure is created under.
-//!
-//! Every way of isolating a worktree needs one stable name: Compose spends it as
-//! `COMPOSE_PROJECT_NAME`, Apple's container as a name prefix, a sandbox profile as an allowed
-//! subpath. Tomo mints it; what runs decides how to spend it.
-
 /// The longest a label may be in the name. A project name becomes part of a volume name and of
 /// the unix sockets inside it, and macOS stops at 104 bytes for a socket path.
 const LABEL_MAX: usize = 16;
 
-/// Lowercase letters, digits and single dashes, starting and ending on a character Compose
-/// accepts. An empty result becomes `wt`, so a worktree named only in punctuation still works.
 pub fn slug(label: &str) -> String {
     let mut out = String::with_capacity(label.len());
     for ch in label.chars() {
@@ -30,11 +22,6 @@ pub fn slug(label: &str) -> String {
     }
 }
 
-/// Minted once, then kept for ever.
-///
-/// A rename or a move must not change this name. Containers and volumes are created under it,
-/// and nothing else records where they went: recompute it and the old ones are orphaned, holding
-/// a database that no longer belongs to anything.
 pub fn infra_name(existing: Option<&str>, label: &str, seed: &str) -> String {
     if let Some(name) = existing.map(str::trim).filter(|n| !n.is_empty()) {
         return name.to_string();
@@ -52,7 +39,6 @@ mod tests {
     fn a_name_is_minted_once_and_then_kept() {
         let first = infra_name(None, "seoul", "a1b2c3d4e5f6");
         assert_eq!(first, "tomo-seoul-a1b2");
-        // renamed, moved, restored somewhere else: the name does not move with it
         assert_eq!(infra_name(Some(&first), "renamed-entirely", "999999999999"), first);
         assert_eq!(infra_name(Some("  "), "seoul", "a1b2c3d4e5f6"), first, "a blank name is no name");
     }
@@ -73,9 +59,6 @@ mod tests {
         }
     }
 
-    /// The failure this whole module exists to prevent: a name that is minted but never stored
-    /// is minted again from whatever the label says next time, and the containers and volumes
-    /// made under the first name are left with nothing pointing at them.
     #[test]
     fn a_name_that_is_not_stored_follows_the_label_and_orphans_what_it_made() {
         let stored = infra_name(None, "seoul", "a1b2c3d4e5f6");

@@ -74,9 +74,8 @@ describe("what wins when a query is typed", () => {
   const entry = (key: string, label: string): PaletteEntry => ({ key, label, run: () => {} });
 
   it("puts an exact match above something used recently that merely fuzzy matches", () => {
-    // "toggle right sidebar" contains g, i and t in order, so it is a fuzzy match for "git"
-    const entries = [entry("toggle_right_sidebar", "Toggle right sidebar"), entry("git", "Git")];
-    const ranked = rankEntries(entries, "git", ["toggle_right_sidebar"]);
+    const fuzzyMatchesGit = entry("toggle_right_sidebar", "Toggle right sidebar");
+    const ranked = rankEntries([fuzzyMatchesGit, entry("git", "Git")], "git", ["toggle_right_sidebar"]);
     expect(ranked.map((x) => x.key)).toEqual(["git", "toggle_right_sidebar"]);
   });
 
