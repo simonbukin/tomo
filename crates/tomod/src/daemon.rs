@@ -1359,7 +1359,7 @@ impl Daemon {
     }
 
     pub fn meta_row_of(inner: &Inner, w: &WorktreeState, metadata: WorktreeMetadata) -> MetaRow {
-        let stored = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == w.id);
+        let stored = inner.store.meta_one(&w.id).ok().flatten();
         let archived_branch = stored.as_ref().and_then(|m| m.archived_branch.clone());
         let infra_name = stored.as_ref().and_then(|m| m.infra_name.clone());
         MetaRow {

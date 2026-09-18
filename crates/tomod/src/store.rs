@@ -136,6 +136,25 @@ CREATE TABLE IF NOT EXISTS activity (
 CREATE INDEX IF NOT EXISTS activity_occurred_at ON activity(occurred_at_ms);
 "#;
 
+const META_SELECT: &str =
+    "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state, infra_name FROM worktree_meta";
+
+fn meta_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<MetaRow> {
+    let tags: String = r.get(7)?;
+    Ok(MetaRow {
+        id: r.get(0)?,
+        repo_id: r.get(1)?,
+        path: PathBuf::from(r.get::<_, String>(2)?),
+        gitdir: r.get(3)?,
+        metadata: WorktreeMetadata { display_name: r.get(4)?, project: r.get(5)?, state: r.get(12)?, tags: serde_json::from_str(&tags).unwrap_or_default() },
+        last_active_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+        first_seen_ms: r.get::<_, Option<i64>>(9)?.map(|v| v as u64),
+        archived_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
+        archived_branch: r.get(11)?,
+        infra_name: r.get(13)?,
+    })
+}
+
 const META_COLUMNS: [(&str, &str); 5] =
     [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT"), ("infra_name", "TEXT")];
 
@@ -244,30 +263,15 @@ impl Store {
     }
 
     pub fn meta_all(&self) -> Result<Vec<MetaRow>> {
-        let mut st = self.conn.prepare(
-            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state, infra_name FROM worktree_meta",
-        )?;
-        let rows = st.query_map([], |r| {
-            let tags: String = r.get(7)?;
-            Ok(MetaRow {
-                id: r.get(0)?,
-                repo_id: r.get(1)?,
-                path: PathBuf::from(r.get::<_, String>(2)?),
-                gitdir: r.get(3)?,
-                metadata: WorktreeMetadata {
-                    display_name: r.get(4)?,
-                    project: r.get(5)?,
-                    state: r.get(12)?,
-                    tags: serde_json::from_str(&tags).unwrap_or_default(),
-                },
-                last_active_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
-                first_seen_ms: r.get::<_, Option<i64>>(9)?.map(|v| v as u64),
-                archived_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
-                archived_branch: r.get(11)?,
-                infra_name: r.get(13)?,
-            })
-        })?;
+        let mut st = self.conn.prepare(META_SELECT)?;
+        let rows = st.query_map([], meta_row)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn meta_one(&self, id: &str) -> Result<Option<MetaRow>> {
+        let mut st = self.conn.prepare(&format!("{META_SELECT} WHERE id = ?1"))?;
+        let mut rows = st.query_map(params![id], meta_row)?;
+        Ok(rows.next().transpose()?)
     }
 
     pub fn meta_upsert(&self, row: &MetaRow) -> Result<()> {
