@@ -4,10 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>tomo</title>
-    <meta name="description" content="tomo is your personal agent workspace. it’s made to be taken apart. we dare you to." />
+    <meta name="description" content="tomo is your personal agent workspace. it's made to be taken apart. we dare you to." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="deck.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23a684ff' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%23a684ff'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
     <style>
@@ -18,10 +17,10 @@
         --fg-3: #9a9aa6;
         --line: #e4e4ea;
         --dot: #c9c9d4;
+        --dot-soft: #f0f0f4;
         --accent: #7d4dff;
         --success: #2a9d5c;
         --waiting: #d98a1a;
-        --dot-soft: #f0f0f4;
         --sans: "Work Sans", system-ui, -apple-system, sans-serif;
         --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
       }
@@ -33,10 +32,10 @@
           --fg-3: #63636f;
           --line: #232329;
           --dot: #36363f;
+          --dot-soft: #1a1a20;
           --accent: #a684ff;
           --success: #45b877;
           --waiting: #e0a445;
-          --dot-soft: #1a1a20;
         }
       }
       :root[data-theme="dark"] {
@@ -46,21 +45,15 @@
         --fg-3: #63636f;
         --line: #232329;
         --dot: #36363f;
+        --dot-soft: #1a1a20;
         --accent: #a684ff;
         --success: #45b877;
         --waiting: #e0a445;
-        --dot-soft: #1a1a20;
       }
 
       * { box-sizing: border-box; }
       html, body { height: 100%; }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--fg);
-        font-family: var(--sans);
-        font-size: 15px;
-      }
+      body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; }
       canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
       main {
@@ -68,28 +61,22 @@
         min-height: 100%;
         display: grid;
         align-content: center;
-        padding-block: 64px;
+        padding-block: 56px;
         padding-left: 16px;
         padding-right: 16px;
       }
-      /* Wider than the text measure on purpose: the headline and the line under it are capped
-         in ch, and this width only exists so the button and the command share one row. */
       .row {
         width: 100%;
-        max-width: 1220px;
+        max-width: 1280px;
         margin-inline: auto;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 420px;
-        gap: 64px;
+        grid-template-columns: minmax(0, 1fr) 560px;
+        gap: 72px;
         align-items: center;
       }
-      .col { width: 100%; max-width: 560px; }
-      @media (max-width: 900px) {
-        .row { grid-template-columns: 1fr; gap: 44px; }
-      }
+      .col { width: 100%; max-width: 540px; justify-self: end; }
 
-      /* The wordmark crosses over to hiragana on hover. The font size on the wrapper is the
-         lockup height, so the kana can be sized and placed against it in em and hold at any width. */
+      /* the wordmark, and the hiragana under it */
       .mark-wrap { position: relative; display: inline-block; font-size: 35px; line-height: 0; cursor: default; }
       .lockup { width: 122px; height: 35px; color: var(--fg); display: block; }
       .lockup .word { transition: opacity 240ms ease-out; }
@@ -107,25 +94,17 @@
       }
       .mark-wrap:hover .word { opacity: 0; }
       .mark-wrap:hover .kana { opacity: 1; transform: translateY(-50%); }
-      @media (prefers-reduced-motion: reduce) {
-        .lockup .word, .kana { transition: none; }
-      }
+
       h1 {
         font-weight: 600;
-        font-size: clamp(31px, 5.4vw, 48px);
+        font-size: clamp(31px, 5vw, 48px);
         line-height: 1.1;
         letter-spacing: -0.022em;
         margin: 28px 0 0;
         max-width: 15ch;
         text-wrap: balance;
       }
-      .sub {
-        color: var(--fg-2);
-        font-size: 17px;
-        line-height: 1.6;
-        margin: 18px 0 0;
-        max-width: 42ch;
-      }
+      .sub { color: var(--fg-2); font-size: 17px; line-height: 1.6; margin: 18px 0 0; max-width: 42ch; }
 
       .actions { margin-top: 34px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
       .button {
@@ -143,41 +122,19 @@
         border: 1px solid var(--fg);
       }
       .button:hover { opacity: 0.86; }
-      /* The same box as the github button, filled the other way round. The command itself lives
-         in the tooltip, so it can be read before it is trusted to the clipboard. */
-      .copy {
-        color: var(--fg);
-        background: transparent;
-        border-color: var(--line);
-        cursor: pointer;
-      }
+      .copy { color: var(--fg); background: transparent; border-color: var(--line); cursor: pointer; }
       .copy:hover { opacity: 1; border-color: var(--fg-3); }
 
-      /* The mark and the word each cross over in place. Both labels share one grid cell, so the
-         button keeps the width of the longer one and nothing on the row moves when it changes. */
+      /* the mark and the word cross over in place; the cell width follows the active label */
       .swap-icon { position: relative; width: 15px; height: 15px; flex: none; }
-      .swap-icon svg {
-        position: absolute;
-        inset: 0;
-        width: 15px;
-        height: 15px;
-        transition: opacity 150ms ease-out, transform 260ms cubic-bezier(0.2, 0, 0, 1);
-      }
+      .swap-icon svg { position: absolute; inset: 0; width: 15px; height: 15px; transition: opacity 150ms ease-out, transform 260ms cubic-bezier(0.2, 0, 0, 1); }
       .i-check { color: var(--success); opacity: 0; transform: scale(0.55); }
       .i-check path { stroke-dasharray: 16; stroke-dashoffset: 16; transition: stroke-dashoffset 280ms cubic-bezier(0.2, 0, 0, 1) 70ms; }
       .copy[data-copied] .i-copy { opacity: 0; transform: scale(0.55); }
       .copy[data-copied] .i-check { opacity: 1; transform: none; }
       .copy[data-copied] .i-check path { stroke-dashoffset: 0; }
-
-      /* Both labels share one cell so they can cross over in place, and the cell's width is set
-         from the active one, so the button grows to the message instead of always reserving it. */
       .swap-label { display: grid; overflow: hidden; transition: width 260ms cubic-bezier(0.2, 0, 0, 1); }
-      .swap-label > span {
-        grid-area: 1 / 1;
-        justify-self: start;
-        white-space: nowrap;
-        transition: opacity 150ms ease-out, transform 220ms cubic-bezier(0.2, 0, 0, 1);
-      }
+      .swap-label > span { grid-area: 1 / 1; justify-self: start; white-space: nowrap; transition: opacity 150ms ease-out, transform 220ms cubic-bezier(0.2, 0, 0, 1); }
       .l-done { opacity: 0; transform: translateY(5px); }
       .copy[data-copied] .l-rest { opacity: 0; transform: translateY(-5px); }
       .copy[data-copied] .l-done { opacity: 1; transform: none; }
@@ -202,23 +159,165 @@
         transition: opacity 140ms ease-out, transform 140ms ease-out;
       }
       .tip::before { content: "$ "; color: var(--fg-3); }
-      .copy-wrap:hover .tip,
-      .copy:focus-visible ~ .tip { opacity: 1; transform: none; }
-      @media (prefers-reduced-motion: reduce) {
-        .tip, .swap-icon svg, .swap-label, .swap-label > span, .i-check path { transition: none; }
-      }
+      .copy-wrap:hover .tip, .copy:focus-visible ~ .tip { opacity: 1; transform: none; }
+
       .foot { margin-top: 22px; color: var(--fg-3); font-size: 13.5px; }
       .foot a { color: var(--fg-2); text-decoration: none; border-bottom: 1px solid var(--line); }
       .foot a:hover { color: var(--fg); border-bottom-color: currentColor; }
-
       a { color: inherit; }
       a:focus-visible, .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
+      /* ---------- the deck ---------- */
+      .deck { position: relative; width: 520px; height: 400px; padding-bottom: 44px; }
+      .card {
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 472px;
+        max-width: 100%;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        transform-origin: 50% 90%;
+        transition: transform 420ms cubic-bezier(0.2, 0, 0, 1), opacity 260ms ease-out;
+      }
+      .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 10px; }
+      .card:not([data-top]) { cursor: default; }
+      .card:not([data-top]) .screen { opacity: 0; }
+      .frame {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--bg);
+        overflow: hidden;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.12);
+      }
+      .card[data-top] .frame { border-color: var(--fg-3); }
+      .bar { display: flex; gap: 6px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+      .bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+      .screen { display: block; height: 300px; overflow: hidden; }
+      .cap { position: absolute; left: 0; right: 0; bottom: 6px; margin: 0; color: var(--fg); font-size: 15px; }
+
+      /* ---------- tomo's own row CSS, scoped, so the mocks carry the app's real metrics ---------- */
+      .tomo-ui {
+        --bg-1: var(--dot-soft);
+        --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+        --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
+        --fs-0: 11px;
+        --fs-1: 12px;
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        font-family: var(--font-ui);
+        font-size: var(--fs-1);
+        padding: var(--sp-1) 0;
+      }
+      .tomo-ui .side-lens {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: var(--sp-2) var(--sp-3) var(--sp-1);
+        font-size: var(--fs-0);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--fg-3);
+      }
+      .tomo-ui .side-lens .right { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--accent); }
+      .tomo-ui .state { width: 7px; height: 7px; border-radius: 50%; background: var(--line); justify-self: center; }
+      .tomo-ui .state.work { background: var(--success); }
+      .tomo-ui .state.wait { background: var(--waiting); }
+      .tomo-ui .wt-meta { color: var(--fg-3); font-size: var(--fs-0); font-family: var(--mono); }
+      .tomo-ui .pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 10px; }
+      .tomo-ui .pill.prog { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+      .tomo-ui .pill.rev { background: color-mix(in srgb, var(--waiting) 20%, transparent); color: var(--waiting); }
+      .tomo-ui .pill.done { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+      .tomo-ui .pill.todo { background: var(--dot-soft); color: var(--fg-3); }
+      .tomo-ui .num { color: var(--fg); font-family: var(--mono); }
+
+      .tomo-ui .wt-row {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr) auto;
+        grid-template-rows: 18px 15px 16px;
+        align-items: center;
+        column-gap: var(--sp-2);
+        height: 58px;
+        padding: 4px var(--sp-1) 4px var(--sp-3);
+        border-left: 2px solid transparent;
+      }
+      .tomo-ui .wt-active { background: var(--bg-1); border-left-color: var(--accent); }
+      .tomo-ui .wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
+      .tomo-ui .wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
+      .tomo-ui .wt-active .wt-name { color: var(--accent); }
+      .tomo-ui .wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
+      .tomo-ui .wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
+      .tomo-ui .wt-foot { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
+      .tomo-ui .wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; color: var(--fg-2); font-size: var(--fs-0); }
+      .tomo-ui .wt-tags { flex: 0 1 auto; color: var(--fg-3); font-size: var(--fs-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* i want to change it all */
+      .alt { display: grid; grid-template-columns: 1fr 150px; height: 100%; font-family: Georgia, "Iowan Old Style", serif; background: #f4efe6; color: #2f2a24; }
+      .alt-main { padding: 28px 24px; }
+      .alt-title { font-size: 23px; }
+      .alt-note { font-size: 13px; color: #7c7266; padding-top: 7px; }
+      .alt-bar { margin-top: 20px; height: 6px; border-radius: 3px; background: #e0d8cb; }
+      .alt-bar i { display: block; height: 100%; border-radius: 3px; background: #b4744a; }
+      .alt-side { border-left: 1px solid #e0d8cb; padding: 24px 16px; font-size: 13px; color: #7c7266; display: grid; gap: 12px; align-content: start; }
+      .alt-side .on { color: #b4744a; }
+
+      /* i want to terminalmaxx */
+      .grid9 { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 1px; background: var(--line); height: 100%; }
+      .t { background: var(--bg); padding: 8px 9px; overflow: hidden; }
+      .t .ln {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 9px;
+        line-height: 1.65;
+        color: var(--fg-2);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      /* The caret trails the last character the pane has typed. */
+      .t .ln::after {
+        content: "";
+        display: inline-block;
+        width: 4px;
+        height: 8px;
+        margin-left: 1px;
+        vertical-align: -1px;
+        background: var(--accent);
+        animation: blink 1.05s steps(1, end) infinite;
+      }
+      @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .t .ln::after { animation: none; } }
+
+      /* i want sound effects */
+      .sound { padding: 14px 16px; }
+      .kv { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px 12px; font-size: 13px; }
+      .on-pill { color: var(--success); font-size: 11px; }
+      .code { font-family: var(--mono); font-size: 11.5px; line-height: 1.8; white-space: pre; color: var(--fg-2); background: var(--dot-soft); border-radius: 6px; padding: 12px 13px; }
+      .toast { margin-top: 18px; display: inline-block; font-size: 12px; color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; }
+
+      .empty { height: 100%; display: grid; place-items: center; color: var(--dot); }
+      .empty svg { width: 66px; height: 66px; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .lockup .word, .kana, .tip, .swap-icon svg, .swap-label, .swap-label > span, .i-check path, .card { transition: none; }
+      }
+      @media (max-width: 1100px) {
+        .row { grid-template-columns: 1fr; gap: 48px; }
+        .col { justify-self: start; }
+        .deck { width: 100%; max-width: 472px; }
+      }
       @media (max-width: 560px) {
         .mark-wrap { font-size: 30px; }
         .lockup { width: 104px; height: 30px; }
-        /* A one line tooltip is wider than a phone, so let it wrap and stay inside the gutter. */
         .tip { white-space: normal; max-width: calc(100vw - 48px); }
+        .deck { height: 356px; }
+        .card { width: 100%; }
+        .screen { height: 258px; }
       }
     </style>
   </head>
@@ -226,74 +325,252 @@
     <canvas id="tide" aria-hidden="true"></canvas>
     <main>
       <div class="row">
-      <div class="col">
-        <span class="mark-wrap">
-        <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
-          <g transform="scale(0.2)">
-            <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 65.03 Q59 88.61 86 57.58" />
-            </g>
-            <g fill="currentColor">
-              <circle cx="23.62" cy="33.99" r="9.19" />
-              <circle cx="76.38" cy="33.99" r="9.19" />
-            </g>
-          </g>
-          <g class="word" transform="translate(27 2)">
-            <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3.5 3V11A2 2 0 0 0 5.5 13" />
-              <path d="M1 6H6" />
-              <circle cx="13.5" cy="9.5" r="3.5" />
-              <path d="M21 13V8.5A2.5 2.5 0 0 1 26 8.5V13" />
-              <path d="M26 8.5A2.5 2.5 0 0 1 31 8.5V13" />
-              <circle cx="38.5" cy="9.5" r="3.5" />
-            </g>
-          </g>
-        </svg>
-        <span class="kana" aria-hidden="true">とも</span>
-        </span>
-
-        <h1>a little place for your agents</h1>
-        <p class="sub">
-          tomo is your personal agent workspace. it's made to be taken apart. we dare you to.
-        </p>
-
-        <div class="actions">
-          <a class="button" href="https://github.com/simonbukin/tomo">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+        <div class="col">
+          <span class="mark-wrap">
+            <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
+              <g transform="scale(0.2)">
+                <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 65.03 Q59 88.61 86 57.58" />
+                </g>
+                <g fill="currentColor">
+                  <circle cx="23.62" cy="33.99" r="9.19" />
+                  <circle cx="76.38" cy="33.99" r="9.19" />
+                </g>
+              </g>
+              <g class="word" transform="translate(27 2)">
+                <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3.5 3V11A2 2 0 0 0 5.5 13" />
+                  <path d="M1 6H6" />
+                  <circle cx="13.5" cy="9.5" r="3.5" />
+                  <path d="M21 13V8.5A2.5 2.5 0 0 1 26 8.5V13" />
+                  <path d="M26 8.5A2.5 2.5 0 0 1 31 8.5V13" />
+                  <circle cx="38.5" cy="9.5" r="3.5" />
+                </g>
+              </g>
             </svg>
-            github
-          </a>
-          <span class="copy-wrap">
-            <button type="button" class="button copy" id="copy" aria-describedby="copyTip">
-              <span class="swap-icon">
-                <svg class="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
-                  <path d="M10.5 3.5a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 4 11" />
-                </svg>
-                <svg class="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M3 8.6 6.3 12 13 4.8" />
-                </svg>
-              </span>
-              <span class="swap-label" aria-hidden="true">
-                <span class="l-rest">copy install command</span>
-                <span class="l-done">congrats! it’s yours now.</span>
-              </span>
-            </button>
-            <span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span>
+            <span class="kana" aria-hidden="true">とも</span>
           </span>
+
+          <h1>a little place for your agents</h1>
+          <p class="sub">tomo is your personal agent workspace. it's made to be taken apart. we dare you to.</p>
+
+          <div class="actions">
+            <a class="button" href="https://github.com/simonbukin/tomo">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+              </svg>
+              github
+            </a>
+            <span class="copy-wrap">
+              <button type="button" class="button copy" id="copy" aria-describedby="copyTip">
+                <span class="swap-icon">
+                  <svg class="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+                    <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                    <path d="M10.5 3.5a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 4 11" />
+                  </svg>
+                  <svg class="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 8.6 6.3 12 13 4.8" />
+                  </svg>
+                </span>
+                <span class="swap-label" aria-hidden="true">
+                  <span class="l-rest">copy install command</span>
+                  <span class="l-done">congrats! it's yours now.</span>
+                </span>
+              </button>
+              <span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span>
+            </span>
+          </div>
+
+          <p class="foot">built with 💜 by <a href="https://simonbukin.com">simon</a></p>
         </div>
 
-        <p class="foot">built with 💜 by <a href="https://simonbukin.com">simon</a></p>
-      </div>
-      <div class="deck" id="deck"></div>
+        <div class="deck" id="deck"></div>
       </div>
     </main>
 
-    <script type="module">
-      import { mountDeck } from "./deck.js";
-      mountDeck(document.getElementById("deck"));
+    <script>
+      // ---------- the deck of what ifs ----------
+      // Every card is a mock: none of these variants exist in the app. The rows are drawn with
+      // tomo's own WorktreeRow.css, scoped to .tomo-ui, so the metrics are the app's own.
+      (function () {
+        var row = function (name, branch, foot, dot, meta) {
+          return (
+            '<div class="wt-row' + (dot === "active" ? " wt-active" : "") + '">' +
+            '<span class="state ' + (dot === "active" ? "work" : dot) + '"></span>' +
+            '<span class="wt-name-line"><span class="wt-name">' + name + "</span></span>" +
+            '<span class="wt-meta">' + (meta || "") + "</span>" +
+            '<span class="wt-sub"><span class="wt-branch">' + branch + "</span></span>" +
+            '<span class="wt-foot">' + foot + "</span>" +
+            "</div>"
+          );
+        };
+        var pane = function (label, right, rows) {
+          return (
+            '<div class="tomo-ui"><div class="side-lens">' + label +
+            (right ? '<span class="right">' + right + "</span>" : "") +
+            "</div>" + rows + "</div>"
+          );
+        };
 
+        // Nine panes, each running something a real one would be running.
+        var PANES = [
+          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "\u279c  local:  localhost:3000"],
+          ["$ cargo run -p tomod", "   Compiling tomod v0.1.0", "    Finished dev in 8.42s"],
+          ["$ claude", "\u25cf reading costing.ts", "\u25cf edited 2 files"],
+          ["$ pnpm test", "\u2713 412 passed (3.1s)"],
+          ["$ git log --oneline -2", "be861d7 deck of what ifs", "12401b5 set it left"],
+          ["$ tail -f runtime.jsonl", '{"pane":"p3","kind":"exit"}'],
+          ["$ psql holly", "holly=# select count(*);", " 58"],
+          ["$ codex", "thinking\u2026", "\u25cf writing migration"],
+          ["$ htop", "cpu  \u2587\u2585\u2583\u2582\u2581\u2582\u2584\u2586", "mem  4.2G / 16G"],
+        ];
+
+        var CARDS = [
+          {
+            caption: "i want my agents to name themselves",
+            body: pane(
+              "worktrees",
+              "",
+              row("🦦 otter", "simon/costing-rewrite", '<span class="wt-agents">claude</span>', "active", "12m") +
+                row("🦫 beaver", "simon/lr-homepage", '<span class="wt-agents">codex · waiting on you</span>', "wait", "3m") +
+                row("🐦 crane", "simon/field-primitives", '<span class="wt-agents">claude</span>', "work", "3h") +
+                row("🦭 seal", "simon/hoist-modals", '<span class="wt-agents">fable</span>', "", "1d"),
+            ),
+          },
+          {
+            caption: "i want my worktree state synced with linear",
+            body: pane(
+              "linear · holly",
+              "",
+              row("hol-3466 fix costing", "simon/hol-3466-costing", '<span class="pill prog">in progress</span>', "active", "12m") +
+                row("hol-3219 create user", "simon/hol-3219-create-user", '<span class="pill rev">in review</span>', "wait", "2h") +
+                row("hol-2988 seed study", "simon/hol-2988-seed", '<span class="pill done">done</span>', "", "1d") +
+                row("hol-3501 port lootbox", "simon/hol-3501-lootbox", '<span class="pill todo">todo</span>', "", "3d"),
+            ),
+          },
+          {
+            caption: "i want to sort my worktrees by cost",
+            body: pane(
+              "worktrees",
+              "sort: cost ↓",
+              row("scenario comparisons", "simon/scenario-comparisons", '<span class="wt-agents"><span class="num">2.4M</span> tokens · $18.60</span>', "active", "") +
+                row("labor relations ux", "simon/labor-relations-ui", '<span class="wt-agents"><span class="num">1.1M</span> tokens · $8.30</span>', "wait", "") +
+                row("seoul", "wordloader-cogitating-states", '<span class="wt-agents"><span class="num">840k</span> tokens · $6.10</span>', "work", "") +
+                row("pickerel", "simon/zany-approval-stamp-arm", '<span class="wt-agents"><span class="num">96k</span> tokens · $0.72</span>', "", ""),
+            ),
+          },
+          {
+            caption: "i want to change it all",
+            body:
+              '<div class="alt"><div class="alt-main">' +
+              '<div class="alt-title">costing rewrite</div>' +
+              '<div class="alt-note">three agents, one branch, since tuesday</div>' +
+              '<div class="alt-bar"><i style="width:62%"></i></div>' +
+              '</div><div class="alt-side">' +
+              '<div>costing rewrite</div><div class="on">homepage</div><div>field primitives</div><div>lootbox port</div>' +
+              "</div></div>",
+          },
+          {
+            caption: "i want to terminalmaxx",
+            terminals: true,
+            body: '<div class="grid9">' + PANES.map(function (_, n) { return '<div class="t"><pre class="ln" data-pane="' + n + '"></pre></div>'; }).join("") + "</div>",
+          },
+          {
+            caption: "i want sound effects when my agent finishes",
+            body:
+              '<div class="sound"><div class="kv"><span>sounds</span><span class="on-pill">on</span></div>' +
+              '<div class="code">[sounds]\nagent_done = "coin.wav"\nneeds_you  = "chime.wav"\ncrash      = "thud.wav"</div>' +
+              '<div class="toast">otter finished  ♪</div></div>',
+          },
+        ];
+
+        var BLANK = {
+          caption: "what's your tomo?",
+          body:
+            '<div class="empty"><svg viewBox="0 0 100 100" aria-hidden="true">' +
+            '<g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"><path d="M14 65.03 Q59 88.61 86 57.58"/></g>' +
+            '<g fill="currentColor"><circle cx="23.62" cy="33.99" r="9.19"/><circle cx="76.38" cy="33.99" r="9.19"/></g>' +
+            "</svg></div>",
+        };
+
+        var LAYOUT = [
+          { x: 0, y: 0, r: -1.2, z: 6 },
+          { x: 13, y: 8, r: 2.4, z: 5 },
+          { x: 25, y: 15, r: -3.2, z: 4 },
+          { x: 34, y: 21, r: 1.6, z: 3 },
+        ];
+
+        var root = document.getElementById("deck");
+        var whatIfs = CARDS.slice();
+        for (var i = whatIfs.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var held = whatIfs[i];
+          whatIfs[i] = whatIfs[j];
+          whatIfs[j] = held;
+        }
+        // Three of the six each visit, so the deck reads 1, 2, 3, then the question.
+        var deck = whatIfs.slice(0, 3).concat([BLANK]);
+
+        root.innerHTML =
+          deck
+            .map(function (card) {
+              return (
+                '<button type="button" class="card" aria-label="' + card.caption + '. Show the next one.">' +
+                '<span class="frame"><span class="bar"><i></i><i></i><i></i></span>' +
+                '<span class="screen">' + card.body + "</span></span></button>"
+              );
+            })
+            .join("") + '<p class="cap" aria-live="polite"></p>';
+
+        var cards = Array.prototype.slice.call(root.querySelectorAll(".card"));
+        var caption = root.querySelector(".cap");
+        var order = cards.map(function (_, n) { return n; });
+
+        function place() {
+          order.forEach(function (cardIndex, slot) {
+            var el = cards[cardIndex];
+            var at = LAYOUT[Math.min(slot, LAYOUT.length - 1)];
+            el.style.transform = "translate(" + at.x + "px, " + at.y + "px) rotate(" + at.r + "deg)";
+            el.style.zIndex = String(at.z - Math.max(0, slot - LAYOUT.length + 1));
+            el.style.opacity = slot < LAYOUT.length ? "1" : "0";
+            el.toggleAttribute("data-top", slot === 0);
+            el.tabIndex = slot === 0 ? 0 : -1;
+          });
+          caption.textContent = deck[order[0]].caption;
+        }
+
+        root.addEventListener("click", function (event) {
+          if (!event.target.closest(".card")) return;
+          order.push(order.shift());
+          place();
+        });
+
+        place();
+
+        // The terminals type themselves out, then start over. One timer drives all nine.
+        var screens = Array.prototype.slice.call(root.querySelectorAll(".ln"));
+        if (screens.length) {
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            screens.forEach(function (el) { el.textContent = PANES[+el.dataset.pane].join("\n"); });
+          } else {
+            var state = screens.map(function (_, n) { return { line: 0, char: 0, hold: n * 7 }; });
+            window.setInterval(function () {
+              screens.forEach(function (el, n) {
+                var script = PANES[+el.dataset.pane];
+                var at = state[n];
+                if (at.hold > 0) { at.hold -= 1; return; }
+                if (at.line >= script.length) { at.hold = 70; at.line = 0; at.char = 0; el.textContent = ""; return; }
+                at.char += 1;
+                var shown = script.slice(0, at.line).concat([script[at.line].slice(0, at.char)]);
+                el.textContent = shown.join("\n");
+                if (at.char >= script[at.line].length) { at.line += 1; at.char = 0; at.hold = 8; }
+              });
+            }, 55);
+          }
+        }
+      })();
+
+      // ---------- copy the install command ----------
       (function () {
         var button = document.getElementById("copy");
         var label = button.querySelector(".swap-label");
@@ -309,7 +586,7 @@
           widths.done = done.getBoundingClientRect().width;
           label.style.width = widths.rest + "px";
         }
-        // The labels are measured after the webfont lands, or they are measured in the fallback.
+        // Measured once the webfont lands, or measured in the fallback face.
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
         else window.addEventListener("load", measure);
         measure();
@@ -336,8 +613,7 @@
         });
       })();
 
-      // Rows of dots sliding past one another, a half beat apart. The band behind the column
-      // stays calm so the words keep their contrast, and it follows the column, which sits left.
+      // ---------- the tide ----------
       (function () {
         var canvas = document.getElementById("tide");
         var g = canvas.getContext("2d");
@@ -359,33 +635,31 @@
           g.setTransform(ratio, 0, 0, ratio, 0, 0);
           dot = getComputedStyle(document.documentElement).getPropertyValue("--dot").trim();
           rows = [];
-          for (var y = STEP; y < h; y += STEP) {
-            rows.push({ y: y, phase: Math.random() * 6.283 });
-          }
+          for (var y = STEP; y < h; y += STEP) rows.push({ y: y, phase: Math.random() * 6.283 });
         }
 
         function draw(t) {
           g.clearRect(0, 0, w, h);
           g.fillStyle = dot;
-          var box = document.querySelector(".col").getBoundingClientRect();
-          var cx = box.left + box.width * 0.42;
+          var box = document.querySelector(".row").getBoundingClientRect();
+          var cx = box.left + box.width / 2;
           var cy = box.top + box.height / 2;
-          var hush = Math.min(w, h) * 0.46;
+          var hush = Math.min(w, h) * 0.52;
           for (var i = 0; i < rows.length; i++) {
-            var row = rows[i];
+            var line = rows[i];
             for (var x = 0; x < w + STEP; x += STEP) {
-              var off = Math.sin(x / 90 + t * 0.9 + row.phase) * AMP;
+              var off = Math.sin(x / 90 + t * 0.9 + line.phase) * AMP;
               for (var k = 0; k < rings.length; k++) {
                 var ring = rings[k];
                 var age = t - ring.t;
-                var edge = Math.hypot(x - ring.x, row.y - ring.y) - age * 420;
+                var edge = Math.hypot(x - ring.x, line.y - ring.y) - age * 420;
                 if (Math.abs(edge) < 150) off += Math.cos(edge / 48) * 13 * Math.max(0, 1 - age / 1.5);
               }
-              var near = Math.hypot((x - cx) / 1.9, row.y - cy) / hush;
+              var near = Math.hypot((x - cx) / 1.6, line.y - cy) / hush;
               var calm = near < 1 ? 0.2 + near * near * 0.8 : 1;
               g.globalAlpha = (0.38 + (off / AMP + 1) * 0.22) * calm;
               g.beginPath();
-              g.arc(x, row.y + off, 1.5, 0, 6.283);
+              g.arc(x, line.y + off, 1.5, 0, 6.283);
               g.fill();
             }
           }
@@ -415,7 +689,7 @@
       })();
 
       console.log(
-        "%c\u3068\u3082%c  you found the console. the whole thing is one html file \u2014 read it, take it.",
+        "%cとも%c  you found the console. the whole thing is one html file — read it, take it.",
         "font-size:15px",
         "font-size:12px;color:#8a8a97",
       );
