@@ -95,6 +95,10 @@ export interface InspectorSection {
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */
 export interface Addon {
   id: string;
+  /** For a person: the name Settings shows. */
+  label: string;
+  /** One line on what this addon adds, shown beside the name. */
+  description: string;
   views?: readonly GlobalView[];
   commands?: readonly Action[];
   inspectorSections?: readonly InspectorSection[];

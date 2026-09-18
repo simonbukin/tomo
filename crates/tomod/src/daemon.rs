@@ -559,6 +559,14 @@ impl Daemon {
                     first_seen_ms: existing.as_ref().and_then(|m| m.first_seen_ms).or(Some(now_ms())),
                     archived_at_ms: None,
                     archived_branch: None,
+                    infra_name: Some(crate::identity::infra_name(
+                        existing.as_ref().and_then(|m| m.infra_name.as_deref()),
+                        existing
+                            .as_ref()
+                            .and_then(|m| m.metadata.display_name.as_deref())
+                            .unwrap_or_else(|| path.file_name().and_then(|n| n.to_str()).unwrap_or("wt")),
+                        &id,
+                    )),
                 };
                 let needs_write = existing
                     .as_ref()
@@ -754,7 +762,12 @@ impl Daemon {
 
     fn pane_env(&self, inner: &Inner, pane_id: &str, tab_id: &str, worktree_id: &str) -> Vec<(String, String)> {
         let worktree_path = inner.worktrees.get(worktree_id).map(|w| w.path.to_string_lossy().into_owned()).unwrap_or_default();
+        let infra_name = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == worktree_id).and_then(|m| m.infra_name).unwrap_or_default();
         vec![
+            ("TOMO_INFRA_NAME".into(), infra_name.clone()),
+            // What Compose calls a project. Everything it makes is named after this, so two
+            // worktrees of one repository do not share a container, a network or a volume.
+            ("COMPOSE_PROJECT_NAME".into(), infra_name),
             ("TOMO_PANE_ID".into(), pane_id.into()),
             ("TOMO_TAB_ID".into(), tab_id.into()),
             ("TOMO_WORKTREE_ID".into(), worktree_id.into()),
@@ -1337,7 +1350,9 @@ impl Daemon {
     }
 
     pub fn meta_row_of(inner: &Inner, w: &WorktreeState, metadata: WorktreeMetadata) -> MetaRow {
-        let archived_branch = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == w.id).and_then(|m| m.archived_branch);
+        let stored = inner.store.meta_all().unwrap_or_default().into_iter().find(|m| m.id == w.id);
+        let archived_branch = stored.as_ref().and_then(|m| m.archived_branch.clone());
+        let infra_name = stored.as_ref().and_then(|m| m.infra_name.clone());
         MetaRow {
             id: w.id.clone(),
             repo_id: w.repo_id.clone(),
@@ -1348,6 +1363,7 @@ impl Daemon {
             first_seen_ms: w.first_seen_ms,
             archived_at_ms: w.archived_at_ms,
             archived_branch,
+            infra_name,
         }
     }
 
@@ -2461,6 +2477,7 @@ mod tests {
             first_seen_ms: None,
             archived_at_ms: Some(1),
             archived_branch: branch.map(str::to_string),
+            infra_name: None,
         }
     }
 
