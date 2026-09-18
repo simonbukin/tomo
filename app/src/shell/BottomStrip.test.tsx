@@ -53,6 +53,20 @@ describe("bottom strip", () => {
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
   });
 
+  it("puts add repo on the left and settings on the right, beside the version", () => {
+    const { container } = show("open");
+    expect(container.querySelector(".bottom-left .bottom-add")).not.toBeNull();
+    expect(container.querySelector(".bottom-left")!.textContent).toContain("add repo");
+    const right = container.querySelector(".bottom-right")!;
+    expect(right.contains(screen.getByRole("button", { name: "Settings" }))).toBe(true);
+  });
+
+  it("opens the add repository dialog from the bottom strip", async () => {
+    const { container } = show("open");
+    (container.querySelector(".bottom-add") as HTMLButtonElement).click();
+    expect(getState().dialog).toEqual({ kind: "add-repo" });
+  });
+
   it("drops the bottom-left section when the left sidebar is closed", () => {
     const { container } = show("closed");
     expect(container.querySelector(".bottom-left")).toBeNull();

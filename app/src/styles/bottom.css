@@ -15,6 +15,13 @@
 .bottom-strip[data-left="minimal"] .bottom-left { justify-content: center; gap: 0; padding: 0; }
 .bottom-left .btn-icon { width: 22px; height: 22px; }
 .bottom-left .icon { width: 13px; height: 13px; }
+.bottom-add { display: inline-flex; align-items: center; gap: var(--sp-1); height: 22px; padding: 0 var(--sp-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg-2); font: inherit; font-size: var(--fs-0); cursor: pointer; white-space: nowrap; }
+.bottom-add:hover { background: var(--bg-2); color: var(--fg); }
+.bottom-add .icon { width: 13px; height: 13px; }
+.bottom-strip[data-left="minimal"] .bottom-add span { display: none; }
+.bottom-right { gap: var(--sp-1); }
+.bottom-right .btn-icon { width: 22px; height: 22px; }
+.bottom-right .icon { width: 13px; height: 13px; }
 
 .bottom-middle { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-2); min-width: 0; }
 .bottom-middle > :last-child { margin-left: auto; flex: none; }

@@ -1,5 +1,5 @@
 import { droppedAt, useFrameRate } from "../frameRate";
-import { CircleHelp, Settings2 } from "lucide-react";
+import { CircleHelp, Plus, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { runAction } from "../actions";
 import { builtins } from "../addons";
@@ -8,7 +8,7 @@ import { systemStatsSchema } from "../schemas";
 import { openSettings } from "../commands/settings";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
-import {failQuietly, formatBytes, setState, useStore} from "../store";
+import { failQuietly, formatBytes, setState, useStore } from "../store";
 import type { SidebarMode, SystemStats } from "../types";
 import { stripMetrics, systemDetail } from "./bottomModel";
 import { HealthArea } from "./Diagnostics";
@@ -31,6 +31,7 @@ export function BottomStrip({ left }: { left: SidebarMode }) {
         <SystemMetrics />
       </div>
       <div className="bottom-right">
+        <SettingsButton />
         <HealthArea />
       </div>
     </footer>
@@ -44,10 +45,20 @@ function HelpControls() {
       <IconButton label="Keyboard shortcuts" shortcut={shortcut("keyboard_shortcuts")} tooltipSide="top" onClick={() => runAction("keyboard_shortcuts")}>
         <CircleHelp className="icon" />
       </IconButton>
-      <IconButton label="Settings" shortcut={shortcut("settings")} tooltipSide="top" onClick={() => openSettings()}>
-        <Settings2 className="icon" />
-      </IconButton>
+      <button type="button" className="bottom-add" onClick={() => setState({ dialog: { kind: "add-repo" } })}>
+        <Plus className="icon" />
+        <span>add repo</span>
+      </button>
     </div>
+  );
+}
+
+function SettingsButton() {
+  const shortcut = useShortcuts();
+  return (
+    <IconButton label="Settings" shortcut={shortcut("settings")} tooltipSide="top" onClick={() => openSettings()}>
+      <Settings className="icon" />
+    </IconButton>
   );
 }
 
