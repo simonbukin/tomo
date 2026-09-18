@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>tomo</title>
-    <meta name="description" content="tomo is your personal agent workspace. it's made to be taken apart. we dare you to." />
+    <meta name="description" content="somewhere to put your agents. small, local, and yours." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" />
@@ -26,106 +26,170 @@
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) {
-          --bg: #0f0f12;
-          --fg: #e8e8ee;
-          --fg-2: #9a9aa7;
-          --fg-3: #63636f;
-          --line: #232329;
-          --dot: #36363f;
-          --dot-soft: #1a1a20;
-          --accent: #a684ff;
-          --success: #45b877;
-          --waiting: #e0a445;
+          --bg: #0f0f12; --fg: #e8e8ee; --fg-2: #9a9aa7; --fg-3: #63636f;
+          --line: #232329; --dot: #36363f; --dot-soft: #1a1a20;
+          --accent: #a684ff; --success: #45b877; --waiting: #e0a445;
         }
       }
       :root[data-theme="dark"] {
-        --bg: #0f0f12;
-        --fg: #e8e8ee;
-        --fg-2: #9a9aa7;
-        --fg-3: #63636f;
-        --line: #232329;
-        --dot: #36363f;
-        --dot-soft: #1a1a20;
-        --accent: #a684ff;
-        --success: #45b877;
-        --waiting: #e0a445;
+        --bg: #0f0f12; --fg: #e8e8ee; --fg-2: #9a9aa7; --fg-3: #63636f;
+        --line: #232329; --dot: #36363f; --dot-soft: #1a1a20;
+        --accent: #a684ff; --success: #45b877; --waiting: #e0a445;
       }
 
       * { box-sizing: border-box; }
       html, body { height: 100%; }
       body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; }
-      canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+      canvas.tide { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
       main {
-        position: relative;
-        min-height: 100%;
-        display: grid;
-        align-content: center;
-        padding-block: 56px;
-        padding-left: 16px;
-        padding-right: 16px;
+        position: relative; min-height: 100%;
+        display: grid; align-content: center; justify-items: center;
+        padding-block: 44px; padding-left: 16px; padding-right: 16px;
       }
-      .row {
-        width: 100%;
-        max-width: 1280px;
-        margin-inline: auto;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 560px;
-        gap: 72px;
-        align-items: center;
-      }
-      .col { width: 100%; max-width: 540px; justify-self: end; }
+      .stack { width: 100%; max-width: 1060px; display: grid; justify-items: start; gap: 20px; }
 
-      /* the wordmark, and the hiragana under it */
-      .mark-wrap { position: relative; display: inline-block; font-size: 35px; line-height: 0; cursor: default; }
-      .lockup { width: 122px; height: 35px; color: var(--fg); display: block; }
+      /* ---------- the line ---------- */
+      .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+      .mark-wrap { position: relative; display: inline-block; font-size: 30px; line-height: 0; cursor: default; }
+      .lockup { width: 105px; height: 30px; color: var(--fg); display: block; }
       .lockup .word { transition: opacity 240ms ease-out; }
       .kana {
-        position: absolute;
-        left: 39%;
-        top: 50%;
+        position: absolute; left: 39%; top: 50%;
         font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
-        font-size: 0.62em;
-        line-height: 1;
-        color: var(--fg);
-        opacity: 0;
-        transform: translateY(-46%);
+        font-size: 0.62em; line-height: 1; color: var(--fg);
+        opacity: 0; transform: translateY(-46%);
         transition: opacity 240ms ease-out, transform 300ms cubic-bezier(0.2, 0, 0, 1);
       }
       .mark-wrap:hover .word { opacity: 0; }
       .mark-wrap:hover .kana { opacity: 1; transform: translateY(-50%); }
+      h1 { margin: 0; font-size: clamp(19px, 2.6vw, 26px); font-weight: 500; letter-spacing: -0.012em; }
 
-      h1 {
-        font-weight: 600;
-        font-size: clamp(31px, 5vw, 48px);
-        line-height: 1.1;
-        letter-spacing: -0.022em;
-        margin: 28px 0 0;
-        max-width: 15ch;
-        text-wrap: balance;
+      /* ---------- the render ---------- */
+      .render { width: 100%; display: grid; gap: 13px; }
+      .screen-btn { width: 100%; padding: 0; border: 0; background: none; cursor: pointer; display: block; border-radius: 11px; }
+      .screen-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+      .app {
+        width: 100%; aspect-ratio: 16 / 9.4;
+        border: 1px solid var(--line); border-radius: 11px; overflow: hidden;
+        background: var(--bg); color: var(--fg);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.12);
+        display: grid; grid-template-rows: 32px 1fr 26px; text-align: left;
+        transition: background 300ms ease-out, color 300ms ease-out;
       }
-      .sub { color: var(--fg-2); font-size: 17px; line-height: 1.6; margin: 18px 0 0; max-width: 42ch; }
+      .app-bar { display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+      .app-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+      .app-bar span { margin-left: 8px; font-size: 11.5px; color: var(--fg-3); }
+      .app-body { display: grid; grid-template-columns: 234px 1fr; min-height: 0; }
+      .app-side { border-right: 1px solid var(--line); min-width: 0; overflow: hidden; position: relative; }
+      .app-main { min-width: 0; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+      .app-foot { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--fg-3); font-family: var(--mono); }
+      .app-foot .spacer { margin-left: auto; }
+      .app-foot .ok { color: var(--success); }
 
-      .actions { margin-top: 34px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+      .caption { margin: 0; font-size: 16.5px; color: var(--fg); min-height: 1.5em; }
+      .caption .hint { color: var(--fg-3); font-size: 13px; margin-left: 10px; }
+
+      /* ---------- what you can do to it ---------- */
+      .app.comic, .app.comic .tomo-ui, .app.comic .pane pre, .app.comic .app-foot {
+        font-family: "Comic Sans MS", "Chalkboard SE", cursive !important;
+      }
+      .app.bright {
+        --bg: #fffdf2; --fg: #1b1a14; --fg-2: #5a5747; --fg-3: #8f8b76;
+        --line: #e8e2c8; --dot-soft: #fdf6d8; --accent: #e0359b; --success: #17a34a; --waiting: #e07b00;
+        background: var(--bg); color: var(--fg);
+      }
+      .app.huge .tomo-ui { --fs-0: 14px; --fs-1: 16px; }
+      .app.huge .tomo-ui .wt-row { height: 74px; grid-template-rows: 23px 19px 20px; }
+      .app.huge .pane pre { font-size: 14px; }
+
+      /* ---------- tomo's own row CSS, scoped, so the mock carries the app's real metrics ---------- */
+      .tomo-ui {
+        --bg-1: var(--dot-soft);
+        --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
+        --fs-0: 11px; --fs-1: 12px; --sp-1: 4px; --sp-2: 8px; --sp-3: 12px;
+        font-family: var(--font-ui); font-size: var(--fs-1); padding: var(--sp-1) 0;
+      }
+      .tomo-ui .side-lens {
+        display: flex; align-items: center; gap: var(--sp-2);
+        padding: var(--sp-2) var(--sp-3) var(--sp-1);
+        font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3);
+      }
+      .tomo-ui .state { width: 7px; height: 7px; border-radius: 50%; background: var(--line); justify-self: center; }
+      .tomo-ui .state.work { background: var(--success); }
+      .tomo-ui .state.wait { background: var(--waiting); }
+      .tomo-ui .wt-meta { color: var(--fg-3); font-size: var(--fs-0); font-family: var(--mono); }
+      .tomo-ui .wt-row {
+        display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; grid-template-rows: 18px 15px 16px;
+        align-items: center; column-gap: var(--sp-2); height: 58px;
+        padding: 4px var(--sp-1) 4px var(--sp-3); border-left: 2px solid transparent;
+      }
+      .tomo-ui .wt-active { background: var(--bg-1); border-left-color: var(--accent); }
+      .tomo-ui .wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
+      .tomo-ui .wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
+      .tomo-ui .wt-active .wt-name { color: var(--accent); }
+      .tomo-ui .wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
+      .tomo-ui .wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
+      .tomo-ui .wt-foot { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
+      .tomo-ui .wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; color: var(--fg-2); font-size: var(--fs-0); }
+
+      /* ---------- the main area ---------- */
+      .tabs { display: flex; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); flex: none; }
+      .tab { background: var(--bg); padding: 6px 13px; font-size: 11px; color: var(--fg-3); font-family: var(--mono); }
+      .tab.on { color: var(--fg); }
+      .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); min-height: 0; }
+      .panes.nine { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+      .pane { background: var(--bg); padding: 9px 11px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+      .pane pre { margin: 0; font-family: var(--mono); font-size: 10.5px; line-height: 1.7; color: var(--fg-2); white-space: pre-wrap; word-break: break-all; }
+      .panes.nine .pane pre { font-size: 9px; line-height: 1.6; }
+      .pane pre::after {
+        content: ""; display: inline-block; width: 5px; height: 9px; margin-left: 2px;
+        vertical-align: -1px; background: var(--accent); animation: blink 1.05s steps(1, end) infinite;
+      }
+      @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+      .tank { display: block; width: 100%; height: 100%; }
+
+      .board { height: 100%; background: #0b0b0d; padding: 11px 12px; font-family: var(--mono); }
+      .bd-head { display: grid; grid-template-columns: 44px 1fr; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #6a6a58; padding-bottom: 7px; }
+      .bd-row { display: grid; grid-template-columns: 44px 1fr; align-items: baseline; font-size: 11.5px; color: #f5c518; padding: 7px 0; border-top: 1px solid #1d1d16; }
+      .bd-row b { display: block; font-weight: 400; font-size: 9.5px; letter-spacing: 0.05em; color: #b99512; padding-top: 2px; }
+
+      .label { height: 100%; padding: 16px 20px; font-family: Helvetica, Arial, sans-serif; color: var(--fg); overflow: hidden; }
+      .lb-title { font-size: 27px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+      .lb-serv { font-size: 12px; padding-top: 2px; }
+      .rule { height: 1px; background: var(--fg); margin: 6px 0; }
+      .rule.thick { height: 8px; }
+      .lb-amt { font-size: 10.5px; font-weight: 700; }
+      .lb-big { display: flex; justify-content: space-between; font-size: 19px; font-weight: 800; }
+      .lb-dv { font-size: 10px; font-weight: 700; text-align: right; padding-bottom: 2px; }
+      .lb-line { display: grid; grid-template-columns: 1fr auto 52px; gap: 10px; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--line); }
+      .lb-line b { font-weight: 700; }
+      .lb-line i { font-style: normal; font-weight: 700; text-align: right; }
+      .lb-foot { font-size: 10px; color: var(--fg-2); padding-top: 5px; }
+
+      .overlay { position: absolute; right: 13px; bottom: 13px; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; pointer-events: none; }
+      .jab {
+        margin: 0; font-size: 12px; line-height: 1.4; color: var(--fg);
+        background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+        padding: 7px 11px; max-width: 250px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+        opacity: 0; transform: translateY(7px);
+        transition: opacity 320ms ease-out, transform 320ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      .jab.in { opacity: 1; transform: none; }
+      .jab.noise { font-family: var(--mono); font-size: 11px; }
+
+      /* ---------- actions ---------- */
+      .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
       .button {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-family: var(--sans);
-        font-weight: 500;
-        font-size: 15px;
-        color: var(--bg);
-        background: var(--fg);
-        border-radius: 5px;
-        padding: 10px 17px;
-        text-decoration: none;
-        border: 1px solid var(--fg);
+        display: inline-flex; align-items: center; gap: 8px;
+        font-family: var(--sans); font-weight: 500; font-size: 15px;
+        color: var(--bg); background: var(--fg); border-radius: 5px;
+        padding: 10px 17px; text-decoration: none; border: 1px solid var(--fg);
       }
       .button:hover { opacity: 0.86; }
       .copy { color: var(--fg); background: transparent; border-color: var(--line); cursor: pointer; }
       .copy:hover { opacity: 1; border-color: var(--fg-3); }
-
-      /* the mark and the word cross over in place; the cell width follows the active label */
       .swap-icon { position: relative; width: 15px; height: 15px; flex: none; }
       .swap-icon svg { position: absolute; inset: 0; width: 15px; height: 15px; transition: opacity 150ms ease-out, transform 260ms cubic-bezier(0.2, 0, 0, 1); }
       .i-check { color: var(--success); opacity: 0; transform: scale(0.55); }
@@ -138,225 +202,42 @@
       .l-done { opacity: 0; transform: translateY(5px); }
       .copy[data-copied] .l-rest { opacity: 0; transform: translateY(-5px); }
       .copy[data-copied] .l-done { opacity: 1; transform: none; }
-
       .copy-wrap { position: relative; display: inline-flex; }
       .tip {
-        position: absolute;
-        bottom: calc(100% + 9px);
-        left: 0;
-        font-family: var(--mono);
-        font-size: 12px;
-        line-height: 1.5;
-        color: var(--fg-2);
-        background: var(--bg);
-        border: 1px solid var(--line);
-        border-radius: 5px;
-        padding: 7px 10px;
-        white-space: nowrap;
-        pointer-events: none;
-        opacity: 0;
-        transform: translateY(3px);
+        position: absolute; bottom: calc(100% + 9px); left: 0;
+        font-family: var(--mono); font-size: 12px; line-height: 1.5;
+        color: var(--fg-2); background: var(--bg); border: 1px solid var(--line);
+        border-radius: 5px; padding: 7px 10px; white-space: nowrap;
+        pointer-events: none; opacity: 0; transform: translateY(3px);
         transition: opacity 140ms ease-out, transform 140ms ease-out;
       }
       .tip::before { content: "$ "; color: var(--fg-3); }
       .copy-wrap:hover .tip, .copy:focus-visible ~ .tip { opacity: 1; transform: none; }
 
-      .foot { margin-top: 22px; color: var(--fg-3); font-size: 13.5px; }
+      .foot { margin: 0; color: var(--fg-3); font-size: 13.5px; }
       .foot a { color: var(--fg-2); text-decoration: none; border-bottom: 1px solid var(--line); }
       .foot a:hover { color: var(--fg); border-bottom-color: currentColor; }
       a { color: inherit; }
       a:focus-visible, .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-      /* ---------- the deck ---------- */
-      .deck { position: relative; width: 520px; height: 400px; padding-bottom: 44px; }
-      .card {
-        position: absolute;
-        inset: 0 auto auto 0;
-        width: 472px;
-        max-width: 100%;
-        padding: 0;
-        border: 0;
-        background: none;
-        font: inherit;
-        color: inherit;
-        text-align: left;
-        cursor: pointer;
-        transform-origin: 50% 90%;
-        transition: transform 420ms cubic-bezier(0.2, 0, 0, 1), opacity 260ms ease-out;
-      }
-      .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 10px; }
-      .card:not([data-top]) { cursor: default; }
-      .card:not([data-top]) .screen { opacity: 0; }
-      .frame {
-        display: block;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: var(--bg);
-        overflow: hidden;
-        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.12);
-      }
-      .card[data-top] .frame { border-color: var(--fg-3); }
-      .bar { display: flex; gap: 6px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); }
-      .bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
-      .screen { display: block; height: 300px; overflow: hidden; }
-      .cap { position: absolute; left: 0; right: 0; bottom: 6px; margin: 0; color: var(--fg); font-size: 15px; }
-
-      /* ---------- tomo's own row CSS, scoped, so the mocks carry the app's real metrics ---------- */
-      .tomo-ui {
-        --bg-1: var(--dot-soft);
-        --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-        --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
-        --fs-0: 11px;
-        --fs-1: 12px;
-        --sp-1: 4px;
-        --sp-2: 8px;
-        --sp-3: 12px;
-        font-family: var(--font-ui);
-        font-size: var(--fs-1);
-        padding: var(--sp-1) 0;
-      }
-      .tomo-ui .side-lens {
-        display: flex;
-        align-items: center;
-        gap: var(--sp-2);
-        padding: var(--sp-2) var(--sp-3) var(--sp-1);
-        font-size: var(--fs-0);
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--fg-3);
-      }
-      .tomo-ui .side-lens .right { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--accent); }
-      .tomo-ui .state { width: 7px; height: 7px; border-radius: 50%; background: var(--line); justify-self: center; }
-      .tomo-ui .state.work { background: var(--success); }
-      .tomo-ui .state.wait { background: var(--waiting); }
-      .tomo-ui .wt-meta { color: var(--fg-3); font-size: var(--fs-0); font-family: var(--mono); }
-      .tomo-ui .pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 10px; }
-      .tomo-ui .pill.prog { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
-      .tomo-ui .pill.rev { background: color-mix(in srgb, var(--waiting) 20%, transparent); color: var(--waiting); }
-      .tomo-ui .pill.done { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
-      .tomo-ui .pill.todo { background: var(--dot-soft); color: var(--fg-3); }
-      .tomo-ui .num { color: var(--fg); font-family: var(--mono); }
-
-      .tomo-ui .wt-row {
-        display: grid;
-        grid-template-columns: 14px minmax(0, 1fr) auto;
-        grid-template-rows: 18px 15px 16px;
-        align-items: center;
-        column-gap: var(--sp-2);
-        height: 58px;
-        padding: 4px var(--sp-1) 4px var(--sp-3);
-        border-left: 2px solid transparent;
-      }
-      .tomo-ui .wt-active { background: var(--bg-1); border-left-color: var(--accent); }
-      .tomo-ui .wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
-      .tomo-ui .wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
-      .tomo-ui .wt-active .wt-name { color: var(--accent); }
-      .tomo-ui .wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
-      .tomo-ui .wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
-      .tomo-ui .wt-foot { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
-      .tomo-ui .wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; color: var(--fg-2); font-size: var(--fs-0); }
-      .tomo-ui .wt-tags { flex: 0 1 auto; color: var(--fg-3); font-size: var(--fs-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-      /* i want my agents to be an rpg party */
-      .party { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-      .hero { display: grid; grid-template-columns: 62px 30px 1fr 52px; align-items: center; gap: 9px; font-size: 12px; }
-      .hero .nm { color: var(--fg); font-weight: 500; }
-      .hero .lv { font-family: var(--mono); font-size: 10px; color: var(--fg-3); }
-      .hero .hp { height: 8px; border-radius: 4px; background: var(--dot-soft); overflow: hidden; }
-      .hero .hp i { display: block; height: 100%; background: var(--success); transition: width 240ms linear; }
-      .hero .via { font-family: var(--mono); font-size: 10px; color: var(--fg-3); text-align: right; }
-      .battle { margin: auto 0 0; font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--fg-2); white-space: pre-wrap; min-height: 3.4em; }
-
-      /* i want it to look like it's 1995 */
-      .bbs { height: 100%; background: #04170a; padding: 12px 14px; }
-      .irc { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.75; color: #35e06a; white-space: pre-wrap; text-shadow: 0 0 6px rgba(53, 224, 106, 0.35); }
-      .irc::after { content: "\u2588"; animation: blink 1.05s steps(1, end) infinite; }
-
-      /* i want to terminalmaxx */
-      .grid9 { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 1px; background: var(--line); height: 100%; }
-      .t { background: var(--bg); padding: 8px 9px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
-      .t .ln {
-        margin: 0;
-        font-family: var(--mono);
-        font-size: 9px;
-        line-height: 1.65;
-        color: var(--fg-2);
-        white-space: pre-wrap;
-        word-break: break-all;
-      }
-      /* The caret trails the last character the pane has typed. */
-      .t .ln::after {
-        content: "";
-        display: inline-block;
-        width: 4px;
-        height: 8px;
-        margin-left: 1px;
-        vertical-align: -1px;
-        background: var(--accent);
-        animation: blink 1.05s steps(1, end) infinite;
-      }
-      @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
-      @media (prefers-reduced-motion: reduce) { .t .ln::after { animation: none; } }
-
-      /* i want it to be mean to me about it */
-      .roast { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden; }
-      .jab { margin: 0; font-size: 13px; line-height: 1.45; color: var(--fg-2); opacity: 0; transform: translateY(6px); transition: opacity 320ms ease-out, transform 320ms cubic-bezier(0.2, 0, 0, 1); }
-      .jab.in { opacity: 1; transform: none; }
-      .roast .jab:last-child { color: var(--fg); }
-
-      /* i want a nutrition label for every worktree */
-      .label { height: 100%; padding: 10px 16px; font-family: Helvetica, Arial, sans-serif; color: var(--fg); display: flex; flex-direction: column; }
-      .lb-title { font-size: 25px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
-      .lb-serv { font-size: 11px; padding-top: 1px; }
-      .rule { height: 1px; background: var(--fg); margin: 5px 0; }
-      .rule.thick { height: 7px; }
-      .lb-amt { font-size: 10px; font-weight: 700; }
-      .lb-big { display: flex; justify-content: space-between; font-size: 17px; font-weight: 800; }
-      .lb-dv { font-size: 9.5px; font-weight: 700; text-align: right; padding-bottom: 2px; }
-      .lb-line { display: grid; grid-template-columns: 1fr auto 44px; gap: 8px; font-size: 11.5px; padding: 2px 0; border-top: 1px solid var(--line); }
-      .lb-line b { font-weight: 700; }
-      .lb-line i { font-style: normal; font-weight: 700; text-align: right; }
-      .lb-foot { font-size: 9.5px; color: var(--fg-2); padding-top: 4px; }
-
-      /* i want to see my agents as if they're trains */
-      .board { height: 100%; background: #0b0b0d; padding: 12px 14px; font-family: var(--mono); }
-      .bd-head { display: grid; grid-template-columns: 52px 1fr 108px; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6a6a58; padding-bottom: 8px; }
-      .bd-row { display: grid; grid-template-columns: 52px 1fr 108px; align-items: center; font-size: 13px; color: #f5c518; padding: 6px 0; border-top: 1px solid #1d1d16; }
-      .bd-row b { font-weight: 400; letter-spacing: 0.04em; font-size: 11.5px; }
-
-      /* i want my worktrees to be fish */
-      .tank { display: block; width: 100%; height: 100%; }
-
-      /* i want a seismograph for my repo */
-      .seis { display: block; width: 100%; height: calc(100% - 30px); }
-      .seis-note { margin: 0; padding: 0 16px; font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); }
-
-      .empty { height: 100%; display: grid; place-items: center; color: var(--dot); }
-      .empty svg { width: 66px; height: 66px; }
-
       @media (prefers-reduced-motion: reduce) {
-        .lockup .word, .kana, .tip, .swap-icon svg, .swap-label, .swap-label > span, .i-check path, .card { transition: none; }
+        .lockup .word, .kana, .tip, .swap-icon svg, .swap-label, .swap-label > span,
+        .i-check path, .jab, .pane pre::after, .app { transition: none; animation: none; }
       }
-      @media (max-width: 1100px) {
-        .row { grid-template-columns: 1fr; gap: 48px; }
-        .col { justify-self: start; }
-        .deck { width: 100%; max-width: 472px; }
-      }
-      @media (max-width: 560px) {
-        .mark-wrap { font-size: 30px; }
-        .lockup { width: 104px; height: 30px; }
+      @media (max-width: 760px) {
+        .app-body { grid-template-columns: 162px 1fr; }
+        .app { aspect-ratio: 4 / 3.4; }
+        .tomo-ui .wt-row { height: 52px; }
+        h1 { font-size: 18px; }
         .tip { white-space: normal; max-width: calc(100vw - 48px); }
-        .deck { height: 356px; }
-        .card { width: 100%; }
-        .screen { height: 258px; }
       }
     </style>
   </head>
   <body>
-    <canvas id="tide" aria-hidden="true"></canvas>
+    <canvas class="tide" id="tide" aria-hidden="true"></canvas>
     <main>
-      <div class="row">
-        <div class="col">
+      <div class="stack">
+        <div class="top">
           <span class="mark-wrap">
             <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
               <g transform="scale(0.2)">
@@ -381,193 +262,243 @@
             </svg>
             <span class="kana" aria-hidden="true">とも</span>
           </span>
-
           <h1>somewhere to put your agents</h1>
-          <p class="sub">small, local, and yours.</p>
-
-          <div class="actions">
-            <a class="button" href="https://github.com/simonbukin/tomo">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-              </svg>
-              github
-            </a>
-            <span class="copy-wrap">
-              <button type="button" class="button copy" id="copy" aria-describedby="copyTip">
-                <span class="swap-icon">
-                  <svg class="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-                    <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
-                    <path d="M10.5 3.5a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 4 11" />
-                  </svg>
-                  <svg class="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 8.6 6.3 12 13 4.8" />
-                  </svg>
-                </span>
-                <span class="swap-label" aria-hidden="true">
-                  <span class="l-rest">copy install command</span>
-                  <span class="l-done">congrats! it's yours now.</span>
-                </span>
-              </button>
-              <span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span>
-            </span>
-          </div>
-
-          <p class="foot">built with 💜 by <a href="https://simonbukin.com">simon</a></p>
         </div>
 
-        <div class="deck" id="deck"></div>
+        <div class="render">
+          <button type="button" class="screen-btn" id="screen" aria-label="tomo. Click it to change something.">
+            <div class="app" id="app">
+              <div class="app-bar"><i></i><i></i><i></i><span>tomo</span></div>
+              <div class="app-body">
+                <div class="app-side" id="side"></div>
+                <div class="app-main" id="mainArea"></div>
+              </div>
+              <div class="app-foot"><span>+ add repo</span><span class="spacer"></span><span>FPS 120</span><span>MEM 4.2G</span><span class="ok">● 0.4.1</span></div>
+            </div>
+          </button>
+          <p class="caption" id="caption"></p>
+        </div>
+
+        <div class="actions">
+          <a class="button" href="https://github.com/simonbukin/tomo">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            github
+          </a>
+          <span class="copy-wrap">
+            <button type="button" class="button copy" id="copy" aria-describedby="copyTip">
+              <span class="swap-icon">
+                <svg class="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                  <path d="M10.5 3.5a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 4 11" />
+                </svg>
+                <svg class="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 8.6 6.3 12 13 4.8" />
+                </svg>
+              </span>
+              <span class="swap-label" aria-hidden="true">
+                <span class="l-rest">take it</span>
+                <span class="l-done">it's yours now.</span>
+              </span>
+            </button>
+            <span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span>
+          </span>
+        </div>
+
+        <p class="foot">made with 💜 by <a href="https://simonbukin.com">simon</a></p>
       </div>
     </main>
 
     <script>
-      // ---------- the deck of what ifs ----------
-      // Every card is a mock, and every card moves: a flat picture of a feature is a boring
-      // argument for a tool whose whole pitch is that you can go and change it. One timer drives
-      // them all. Cards behind the top one are rotated; the top one is square, because a rotated
-      // layer is rasterised and then resampled, which smears its text and its hairlines.
+      // ---------- the render ----------
+      // One app. Every click bolts another demand onto it and the app takes it, wearily. The
+      // changes stack on purpose: the mess you end up with is the argument.
       (function () {
-        var row = function (name, branch, foot, dot, meta) {
-          return (
-            '<div class="wt-row' + (dot === "active" ? " wt-active" : "") + '">' +
-            '<span class="state ' + (dot === "active" ? "work" : dot) + '"></span>' +
-            '<span class="wt-name-line"><span class="wt-name">' + name + "</span></span>" +
-            '<span class="wt-meta">' + (meta || "") + "</span>" +
-            '<span class="wt-sub"><span class="wt-branch">' + branch + "</span></span>" +
-            '<span class="wt-foot">' + foot + "</span>" +
-            "</div>"
-          );
-        };
-        var pane = function (label, right, rows) {
-          return (
-            '<div class="tomo-ui"><div class="side-lens">' + label +
-            (right ? '<span class="right">' + right + "</span>" : "") +
-            "</div>" + rows + "</div>"
-          );
-        };
         var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var app = document.getElementById("app");
+        var side = document.getElementById("side");
+        var mainArea = document.getElementById("mainArea");
+        var caption = document.getElementById("caption");
 
-        var PANES = [
-          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "➜  local:  localhost:3000"],
-          ["$ cargo run", "   Compiling orchard v0.4.1", "    Finished dev in 8.42s"],
-          ["$ claude", "● reading pricing.ts", "● edited 2 files"],
-          ["$ pnpm test", "✓ 128 passed (3.1s)"],
-          ["$ git log --oneline -2", "a91f004 split the cart", "5c2ed88 drop the old flag"],
-          ["$ tail -f runtime.jsonl", '{"pane":"p3","kind":"exit"}'],
-          ["$ psql orchard", "orchard=# select count(*);", " 58"],
-          ["$ codex", "thinking…", "● writing migration"],
-          ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
-        ];
-
-        var ROASTS = [
-          "nine agents running. nine.",
-          "thistle has been waiting on you for 41 minutes.",
-          "you opened juniper in august.",
-          "$18.60 today. it is 11am.",
-          "kestrel has no commits and a lot of confidence.",
-        ];
-
-        var DEPARTURES = [
-          ["09:42", "thistle", "ON TIME"],
-          ["09:51", "juniper", "DELAYED"],
-          ["10:03", "kestrel", "BOARDING"],
-          ["10:20", "mallow", "CANCELLED"],
-        ];
-        var STATUSES = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED", "AT PLATFORM"];
-
-        // Card zero is tomo as it ships. Without it every other card is a mutation of something
-        // the reader has never seen, and the deck is just seven unrelated jokes.
-        var STOCK = [
-          ["thistle", "feat/pricing-rewrite", "claude \u00b7 2 panes", "active", "12m"],
-          ["juniper", "feat/checkout-copy", "codex \u00b7 waiting on you", "wait", "2h"],
+        var WORKTREES = [
+          ["thistle", "feat/pricing-rewrite", "claude · 2 panes", "active", "12m"],
+          ["juniper", "feat/checkout-copy", "codex · waiting on you", "wait", "2h"],
           ["mallow", "feat/search-index", "claude", "work", "3h"],
           ["kestrel", "chore/drop-old-flag", "", "", "1d"],
         ];
 
-        var ZERO = {
-          caption: "this is tomo, before you touch it",
-          body: pane("worktrees", "", STOCK.map(function (w) {
-            return row(w[0], w[1], w[2] ? '<span class="wt-agents">' + w[2] + "</span>" : "", w[3], w[4]);
-          }).join("")),
-        };
+        var SCRIPTS = [
+          ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "➜  local:  localhost:3000", "", "  ready."],
+          ["$ claude", "● reading pricing.ts", "● edited 2 files", "● running tests", "✓ 128 passed"],
+          ["$ cargo run", "   Compiling orchard v0.4.1", "    Finished dev in 8.42s", "listening on :8080"],
+          ["$ git log --oneline -2", "a91f004 split the cart", "5c2ed88 drop the old flag"],
+          ["$ psql orchard", "orchard=# select count(*);", " 58"],
+          ["$ tail -f runtime.jsonl", '{"pane":"p3","kind":"exit"}'],
+          ["$ codex", "thinking…", "● writing migration"],
+          ["$ pnpm test --watch", "✓ 128 passed (3.1s)", "waiting for changes…"],
+          ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
+        ];
 
-        var CARDS = [
+        function sidebar() {
+          return (
+            '<div class="tomo-ui"><div class="side-lens">worktrees</div>' +
+            WORKTREES.map(function (w) {
+              return (
+                '<div class="wt-row' + (w[3] === "active" ? " wt-active" : "") + '">' +
+                '<span class="state ' + (w[3] === "active" ? "work" : w[3]) + '"></span>' +
+                '<span class="wt-name-line"><span class="wt-name">' + w[0] + "</span></span>" +
+                '<span class="wt-meta">' + w[4] + "</span>" +
+                '<span class="wt-sub"><span class="wt-branch">' + w[1] + "</span></span>" +
+                '<span class="wt-foot">' + (w[2] ? '<span class="wt-agents">' + w[2] + "</span>" : "") + "</span>" +
+                "</div>"
+              );
+            }).join("") +
+            "</div>"
+          );
+        }
+
+        function terminals(count) {
+          return (
+            '<div class="tabs"><span class="tab on">pricing.ts</span><span class="tab">dev</span><span class="tab">claude</span></div>' +
+            '<div class="panes' + (count === 9 ? " nine" : "") + '">' +
+            Array.apply(null, { length: count })
+              .map(function (_, n) { return '<div class="pane"><pre data-script="' + n + '"></pre></div>'; })
+              .join("") +
+            "</div>"
+          );
+        }
+
+        function toaster(box, lines, gap, extraClass) {
+          var at = 0, hold = 0;
+          var push = function () {
+            var el = document.createElement("p");
+            el.className = "jab" + (extraClass ? " " + extraClass : "");
+            el.textContent = lines[at % lines.length];
+            box.appendChild(el);
+            window.requestAnimationFrame(function () { el.classList.add("in"); });
+            if (box.children.length > 3) box.removeChild(box.firstChild);
+            at += 1;
+          };
+          push();
+          return reduced ? null : function () { hold += 1; if (hold < gap) return; hold = 0; push(); };
+        }
+
+        // Each demand knows how to apply itself, and what the app says about it.
+        var DEMANDS = [
+          { id: "comic", says: "oh. comic sans. sure.", css: "comic" },
+          { id: "bright", says: "and bright. of course it's bright.", css: "bright" },
+          { id: "huge", says: "bigger. yep. that's a choice.", css: "huge" },
           {
-            caption: "i want to terminalmaxx",
-            body: '<div class="grid9">' + PANES.map(function (_, n) { return '<div class="t"><pre class="ln" data-pane="' + n + '"></pre></div>'; }).join("") + "</div>",
-            start: function (screen) {
-              var lines = Array.prototype.slice.call(screen.querySelectorAll(".ln"));
-              var KEEP = 5;
-              var state = lines.map(function (_, n) { return { done: [], line: 0, char: 0, hold: n * 7 }; });
-              if (reduced) {
-                lines.forEach(function (el) { el.textContent = PANES[+el.dataset.pane].join("\n"); });
-                return null;
-              }
-              return function () {
-                lines.forEach(function (el, n) {
-                  var script = PANES[+el.dataset.pane];
-                  var at = state[n];
-                  if (at.hold > 0) { at.hold -= 1; return; }
-                  var current = script[at.line % script.length];
-                  at.char += 1;
-                  el.textContent = at.done.concat([current.slice(0, at.char)]).join("\n");
-                  if (at.char < current.length) return;
-                  // The finished line joins the scrollback; the pane never blanks, it just runs on.
-                  at.done.push(current);
-                  while (at.done.length > KEEP) at.done.shift();
-                  at.line += 1;
-                  at.char = 0;
-                  at.hold = at.line % script.length === 0 ? 40 : 8;
+            id: "tank",
+            says: "you want them swimming around. fine.",
+            apply: function () {
+              side.innerHTML = '<canvas class="tank"></canvas>';
+              var canvas = side.querySelector(".tank");
+              var g = canvas.getContext("2d");
+              var fish = [
+                { x: 0.25, y: 0.2, v: 0.0024, s: 1, name: "thistle", dead: false },
+                { x: 0.7, y: 0.42, v: -0.0016, s: 0.85, name: "juniper", dead: false },
+                { x: 0.4, y: 0.64, v: 0.0013, s: 0.75, name: "mallow", dead: false },
+                { x: 0.75, y: 0.86, v: -0.0019, s: 0.6, name: "kestrel", dead: true },
+              ];
+              var frame = 0;
+              var paint = function () {
+                var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+                if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                var css = getComputedStyle(app);
+                fish.forEach(function (f, n) {
+                  if (!reduced) f.x += f.v;
+                  if (f.x > 1.14) f.x = -0.14;
+                  if (f.x < -0.14) f.x = 1.14;
+                  var px = f.x * w, py = (f.y + Math.sin(frame / 38 + n) * 0.022) * h, size = 12 * f.s;
+                  g.save();
+                  g.translate(px, py);
+                  if (f.dead) g.rotate(Math.PI);
+                  g.scale(f.v > 0 ? 1 : -1, 1);
+                  g.globalAlpha = f.dead ? 0.32 : 0.85;
+                  g.fillStyle = css.getPropertyValue("--accent").trim();
+                  g.beginPath();
+                  g.ellipse(0, 0, size, size * 0.62, 0, 0, 6.283);
+                  g.fill();
+                  g.beginPath();
+                  g.moveTo(-size, 0);
+                  g.lineTo(-size * 1.75, -size * 0.55);
+                  g.lineTo(-size * 1.75, size * 0.55);
+                  g.closePath();
+                  g.fill();
+                  g.restore();
+                  g.globalAlpha = 0.7;
+                  g.fillStyle = css.getPropertyValue("--fg-2").trim();
+                  g.font = "10px " + css.getPropertyValue("--mono");
+                  g.textAlign = "center";
+                  g.fillText(f.name + (f.dead ? " (rip)" : ""), px, py + size * 2);
+                  g.globalAlpha = 1;
                 });
               };
+              paint();
+              return reduced ? null : function () { frame += 1; paint(); };
             },
           },
           {
-            caption: "i want it to be mean to me about it",
-            body: '<div class="roast"></div>',
-            start: function (screen) {
-              var box = screen.querySelector(".roast");
-              var at = 0;
-              var hold = 0;
-              var push = function () {
-                var line = document.createElement("p");
-                line.className = "jab";
-                line.textContent = ROASTS[at % ROASTS.length];
-                box.appendChild(line);
-                window.requestAnimationFrame(function () { line.classList.add("in"); });
-                if (box.children.length > 4) box.removeChild(box.firstChild);
-                at += 1;
-              };
-              if (reduced) { ROASTS.slice(0, 4).forEach(push); return null; }
-              push();
-              return function () {
-                hold += 1;
-                if (hold < 34) return;
-                hold = 0;
-                push();
+            id: "trains",
+            says: "trains. you want them to be trains.",
+            apply: function () {
+              side.innerHTML =
+                '<div class="board"><div class="bd-head"><span>time</span><span>worktree</span></div>' +
+                [["09:42", "thistle", "ON TIME"], ["09:51", "juniper", "DELAYED"], ["10:03", "mallow", "BOARDING"], ["10:20", "kestrel", "CANCELLED"]]
+                  .map(function (d) { return '<div class="bd-row"><span>' + d[0] + "</span><span>" + d[1] + '<b class="flap">' + d[2] + "</b></span></div>"; })
+                  .join("") +
+                "</div>";
+              var flaps = Array.prototype.slice.call(side.querySelectorAll(".flap"));
+              var options = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED BY BUS"];
+              var hold = 30, spin = null;
+              return reduced ? null : function () {
+                if (spin) {
+                  spin.left -= 1;
+                  if (spin.left > 0) {
+                    spin.el.textContent = spin.target.split("").map(function (ch, n) {
+                      return n < spin.settled ? ch : "ABCDEFGHIJKLMNOPQRSTUVWXYZ "[Math.floor(Math.random() * 27)];
+                    }).join("");
+                    if (spin.left % 2 === 0) spin.settled += 1;
+                    return;
+                  }
+                  spin.el.textContent = spin.target;
+                  spin = null;
+                  hold = 46;
+                  return;
+                }
+                hold -= 1;
+                if (hold > 0) return;
+                spin = { el: flaps[Math.floor(Math.random() * flaps.length)], target: options[Math.floor(Math.random() * options.length)], left: 26, settled: 0 };
               };
             },
           },
           {
-            caption: "i want a nutrition label for every worktree",
-            body:
-              '<div class="label"><div class="lb-title">Nutrition Facts</div>' +
-              '<div class="lb-serv">1 worktree (thistle)</div>' +
-              '<div class="rule thick"></div>' +
-              '<div class="lb-amt">Amount per session</div>' +
-              '<div class="lb-big"><span>Tokens</span><b class="tok">2.4M</b></div>' +
-              '<div class="rule"></div>' +
-              '<div class="lb-dv">% daily value</div>' +
-              '<div class="lb-line"><span>Files touched</span><b>18</b><i>36%</i></div>' +
-              '<div class="lb-line"><span>Commits</span><b>3</b><i>5%</i></div>' +
-              '<div class="lb-line"><span>Tests added</span><b>0</b><i>0%</i></div>' +
-              '<div class="lb-line"><span>Confidence</span><b>high</b><i>∞%</i></div>' +
-              '<div class="rule thick"></div>' +
-              '<div class="lb-foot">* based on a 2,000 commit diet</div></div>',
-            start: function (screen) {
-              var tok = screen.querySelector(".tok");
+            id: "nine",
+            says: "all nine at once. that's healthy.",
+            apply: function () { mainArea.innerHTML = terminals(9); return null; },
+          },
+          {
+            id: "label",
+            says: "a nutrition label. for a git worktree. ok.",
+            apply: function () {
+              mainArea.innerHTML =
+                '<div class="label"><div class="lb-title">Nutrition Facts</div>' +
+                '<div class="lb-serv">1 worktree (thistle)</div>' +
+                '<div class="rule thick"></div><div class="lb-amt">Amount per session</div>' +
+                '<div class="lb-big"><span>Tokens</span><b class="tok">2.40M</b></div>' +
+                '<div class="rule"></div><div class="lb-dv">% daily value</div>' +
+                '<div class="lb-line"><span>Files touched</span><b>18</b><i>36%</i></div>' +
+                '<div class="lb-line"><span>Commits</span><b>3</b><i>5%</i></div>' +
+                '<div class="lb-line"><span>Tests added</span><b>0</b><i>0%</i></div>' +
+                '<div class="lb-line"><span>Confidence</span><b>high</b><i>∞%</i></div>' +
+                '<div class="rule thick"></div><div class="lb-foot">* based on a 2,000 commit diet</div></div>';
+              var tok = mainArea.querySelector(".tok");
               var at = 2.4;
-              if (reduced) return null;
-              return function () {
+              return reduced ? null : function () {
                 at += 0.001;
                 if (at > 3.2) at = 2.4;
                 tok.textContent = at.toFixed(2) + "M";
@@ -575,222 +506,97 @@
             },
           },
           {
-            caption: "i want to see my agents as if they're trains",
-            body:
-              '<div class="board"><div class="bd-head"><span>time</span><span>worktree</span><span>status</span></div>' +
-              DEPARTURES.map(function (d) {
-                return '<div class="bd-row"><span>' + d[0] + "</span><span>" + d[1] + '</span><b class="flap">' + d[2] + "</b></div>";
-              }).join("") +
-              "</div>",
-            start: function (screen) {
-              var flaps = Array.prototype.slice.call(screen.querySelectorAll(".flap"));
-              var hold = 0;
-              var spin = null;
-              if (reduced) return null;
-              return function () {
-                if (spin) {
-                  spin.left -= 1;
-                  if (spin.left > 0) {
-                    spin.el.textContent = spin.target
-                      .split("")
-                      .map(function (ch, n) { return n < spin.settled ? ch : "ABCDEFGHIJKLMNOPQRSTUVWXYZ "[Math.floor(Math.random() * 27)]; })
-                      .join("");
-                    if (spin.left % 2 === 0) spin.settled += 1;
-                    return;
-                  }
-                  spin.el.textContent = spin.target;
-                  spin = null;
-                  hold = 44;
-                  return;
-                }
-                hold -= 1;
-                if (hold > 0) return;
-                var el = flaps[Math.floor(Math.random() * flaps.length)];
-                spin = { el: el, target: STATUSES[Math.floor(Math.random() * STATUSES.length)], left: 24, settled: 0 };
-              };
+            id: "judge",
+            says: "and now it has opinions about you. great.",
+            apply: function () {
+              var box = document.createElement("div");
+              box.className = "overlay";
+              mainArea.appendChild(box);
+              return toaster(box, ["nine agents. nine.", "juniper has waited 41 minutes.", "you opened kestrel in august.", "$18.60 today. it is 11am."], 34);
             },
           },
           {
-            caption: "i want my worktrees to be fish",
-            body: '<canvas class="tank"></canvas>',
-            start: function (screen) {
-              var canvas = screen.querySelector(".tank");
-              var g = canvas.getContext("2d");
-              var fish = [
-                { x: 0.2, y: 0.3, v: 0.0016, s: 1, name: "thistle", dead: false },
-                { x: 0.7, y: 0.6, v: -0.0011, s: 0.85, name: "juniper", dead: false },
-                { x: 0.45, y: 0.8, v: 0.0009, s: 0.7, name: "mallow", dead: false },
-                { x: 0.8, y: 0.22, v: -0.0014, s: 0.6, name: "kestrel", dead: true },
-              ];
-              var frame = 0;
-              var paint = function () {
-                var w = canvas.clientWidth;
-                var h = canvas.clientHeight;
-                var dpr = window.devicePixelRatio || 1;
-                if (canvas.width !== Math.round(w * dpr)) {
-                  canvas.width = Math.round(w * dpr);
-                  canvas.height = Math.round(h * dpr);
-                }
-                g.setTransform(dpr, 0, 0, dpr, 0, 0);
-                g.clearRect(0, 0, w, h);
-                var css = getComputedStyle(document.documentElement);
-                g.fillStyle = css.getPropertyValue("--accent").trim();
-                fish.forEach(function (f, n) {
-                  if (!reduced) f.x += f.v;
-                  if (f.x > 1.08) f.x = -0.08;
-                  if (f.x < -0.08) f.x = 1.08;
-                  var bob = Math.sin(frame / 34 + n) * 0.02;
-                  var px = f.x * w;
-                  var py = (f.y + bob) * h;
-                  var size = 13 * f.s;
-                  g.save();
-                  g.translate(px, py);
-                  if (f.dead) g.rotate(Math.PI);
-                  g.globalAlpha = f.dead ? 0.35 : 0.85;
-                  g.scale(f.v > 0 ? 1 : -1, 1);
-                  g.beginPath();
-                  g.ellipse(0, 0, size, size * 0.6, 0, 0, 6.283);
-                  g.fill();
-                  g.beginPath();
-                  g.moveTo(-size, 0);
-                  g.lineTo(-size * 1.8, -size * 0.55);
-                  g.lineTo(-size * 1.8, size * 0.55);
-                  g.closePath();
-                  g.fill();
-                  g.restore();
-                  g.globalAlpha = f.dead ? 0.4 : 0.75;
-                  g.fillStyle = css.getPropertyValue("--fg-2").trim();
-                  g.font = '10px ' + css.getPropertyValue("--mono");
-                  g.textAlign = "center";
-                  g.fillText(f.name + (f.dead ? "  (rip)" : ""), px, py + size * 1.9);
-                  g.fillStyle = css.getPropertyValue("--accent").trim();
-                  g.globalAlpha = 1;
-                });
-              };
-              paint();
-              if (reduced) return null;
-              return function () { frame += 1; paint(); };
-            },
-          },
-          {
-            caption: "i want a seismograph for my repo",
-            body: '<canvas class="seis"></canvas><p class="seis-note">3 agents writing · magnitude 4.1</p>',
-            start: function (screen) {
-              var canvas = screen.querySelector(".seis");
-              var g = canvas.getContext("2d");
-              var trace = [];
-              var frame = 0;
-              var paint = function () {
-                var w = canvas.clientWidth;
-                var h = canvas.clientHeight;
-                var dpr = window.devicePixelRatio || 1;
-                if (canvas.width !== Math.round(w * dpr)) {
-                  canvas.width = Math.round(w * dpr);
-                  canvas.height = Math.round(h * dpr);
-                }
-                g.setTransform(dpr, 0, 0, dpr, 0, 0);
-                g.clearRect(0, 0, w, h);
-                var css = getComputedStyle(document.documentElement);
-                g.strokeStyle = css.getPropertyValue("--accent").trim();
-                g.lineWidth = 1.4;
-                g.beginPath();
-                trace.forEach(function (v, n) {
-                  var x = (n / (trace.length - 1 || 1)) * w;
-                  var y = h / 2 + v * (h / 2.6);
-                  if (n === 0) g.moveTo(x, y);
-                  else g.lineTo(x, y);
-                });
-                g.stroke();
-              };
-              var next = function () {
-                frame += 1;
-                var quiet = Math.sin(frame / 60) * 0.1;
-                var burst = frame % 90 < 16 ? (Math.random() - 0.5) * 1.7 : (Math.random() - 0.5) * 0.24;
-                trace.push(quiet + burst);
-                if (trace.length > 120) trace.shift();
-              };
-              for (var i = 0; i < 120; i++) next();
-              paint();
-              if (reduced) return null;
-              return function () { next(); paint(); };
+            id: "noise",
+            says: "a sound every time one fails. your neighbours will love that.",
+            apply: function () {
+              var box = document.createElement("div");
+              box.className = "overlay";
+              mainArea.appendChild(box);
+              return toaster(box, ["mallow failed  ♪", "juniper wants you  ♫", "thistle finished  ♪", "kestrel crashed  ♬"], 30, "noise");
             },
           },
         ];
 
-        var BLANK = {
-          caption: "what's your tomo?",
-          body:
-            '<div class="empty"><svg viewBox="0 0 100 100" aria-hidden="true">' +
-            '<g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"><path d="M14 65.03 Q59 88.61 86 57.58"/></g>' +
-            '<g fill="currentColor"><circle cx="23.62" cy="33.99" r="9.19"/><circle cx="76.38" cy="33.99" r="9.19"/></g>' +
-            "</svg></div>",
-        };
+        var left = [];
+        var runners = [];
+        var typing = [];
 
-        var LAYOUT = [
-          { x: 0, y: 0, r: 0, z: 6 },
-          { x: 14, y: 9, r: 2.4, z: 5 },
-          { x: 26, y: 16, r: -3.2, z: 4 },
-          { x: 35, y: 22, r: 1.6, z: 3 },
-        ];
-
-        var root = document.getElementById("deck");
-        var pool = CARDS.slice();
-        for (var i = pool.length - 1; i > 0; i--) {
-          var j = Math.floor(Math.random() * (i + 1));
-          var held = pool[i];
-          pool[i] = pool[j];
-          pool[j] = held;
+        function reshuffle() {
+          left = DEMANDS.slice();
+          for (var i = left.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var held = left[i];
+            left[i] = left[j];
+            left[j] = held;
+          }
         }
-        // tomo first, then two of the what ifs, then the question.
-        var deck = [ZERO].concat(pool.slice(0, 2), [BLANK]);
 
-        root.innerHTML =
-          deck
-            .map(function (card) {
-              return (
-                '<button type="button" class="card" aria-label="' + card.caption + '. Show the next one.">' +
-                '<span class="frame"><span class="bar"><i></i><i></i><i></i></span>' +
-                '<span class="screen">' + card.body + "</span></span></button>"
-              );
-            })
-            .join("") + '<p class="cap" aria-live="polite"></p>';
-
-        var cards = Array.prototype.slice.call(root.querySelectorAll(".card"));
-        var caption = root.querySelector(".cap");
-        var order = cards.map(function (_, n) { return n; });
-
-        var ticks = deck.map(function (card, n) {
-          return card.start ? card.start(cards[n].querySelector(".screen")) : null;
-        });
-
-        function place() {
-          order.forEach(function (cardIndex, slot) {
-            var el = cards[cardIndex];
-            var at = LAYOUT[Math.min(slot, LAYOUT.length - 1)];
-            el.style.transform = "translate(" + at.x + "px, " + at.y + "px) rotate(" + at.r + "deg)";
-            el.style.zIndex = String(at.z - Math.max(0, slot - LAYOUT.length + 1));
-            el.style.opacity = slot < LAYOUT.length ? "1" : "0";
-            el.toggleAttribute("data-top", slot === 0);
-            el.tabIndex = slot === 0 ? 0 : -1;
+        function collectTyping() {
+          typing = Array.prototype.slice.call(mainArea.querySelectorAll("pre[data-script]")).map(function (el, k) {
+            return { el: el, script: SCRIPTS[(+el.dataset.script + k * 3) % SCRIPTS.length], done: [], line: 0, char: 0, hold: k * 6 };
           });
-          caption.textContent = deck[order[0]].caption;
+          if (reduced) typing.forEach(function (t) { t.el.textContent = t.script.join("\n"); });
         }
 
-        root.addEventListener("click", function (event) {
-          if (!event.target.closest(".card")) return;
-          order.push(order.shift());
-          place();
-        });
+        function stock() {
+          app.className = "app";
+          side.innerHTML = sidebar();
+          mainArea.innerHTML = terminals(4);
+          runners = [];
+          collectTyping();
+          reshuffle();
+        }
 
-        place();
-        // Only the card on top is animated; the rest are hidden behind it.
-        if (!reduced) window.setInterval(function () {
-          var run = ticks[order[0]];
-          if (run) run();
+        function grant() {
+          if (!left.length) {
+            stock();
+            caption.textContent = "fine. put it back.";
+            return;
+          }
+          var demand = left.pop();
+          if (demand.css) app.classList.add(demand.css);
+          if (demand.apply) {
+            var run = demand.apply();
+            if (run) runners.push(run);
+            collectTyping();
+          }
+          caption.textContent = demand.says;
+        }
+
+        document.getElementById("screen").addEventListener("click", grant);
+
+        stock();
+        caption.innerHTML = 'this is tomo, before you mess it up.<span class="hint">click it</span>';
+        window.setInterval(function () {
+          if (!reduced) {
+            typing.forEach(function (t) {
+              if (t.hold > 0) { t.hold -= 1; return; }
+              var current = t.script[t.line % t.script.length];
+              t.char += 1;
+              t.el.textContent = t.done.concat([current.slice(0, t.char)]).join("\n");
+              if (t.char < current.length) return;
+              t.done.push(current);
+              while (t.done.length > 5) t.done.shift();
+              t.line += 1;
+              t.char = 0;
+              t.hold = t.line % t.script.length === 0 ? 36 : 7;
+            });
+          }
+          runners.forEach(function (run) { run(); });
         }, 55);
       })();
 
-      // ---------- copy the install command ----------
+      // ---------- take it ----------
       (function () {
         var button = document.getElementById("copy");
         var label = button.querySelector(".swap-label");
@@ -806,7 +612,6 @@
           widths.done = done.getBoundingClientRect().width;
           label.style.width = widths.rest + "px";
         }
-        // Measured once the webfont lands, or measured in the fallback face.
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
         else window.addEventListener("load", measure);
         measure();
@@ -838,23 +643,17 @@
         var canvas = document.getElementById("tide");
         var g = canvas.getContext("2d");
         var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        var STEP = 26;
-        var AMP = 9;
-        var rows = [];
-        var rings = [];
-        var w = 0;
-        var h = 0;
-        var dot = "";
-        var dpr = 1;
+        var STEP = 26, AMP = 9;
+        var rows = [], rings = [];
+        var w = 0, h = 0, dpr = 1, dot = "";
 
         function build() {
-          var ratio = window.devicePixelRatio || 1;
-          dpr = ratio;
+          dpr = window.devicePixelRatio || 1;
           w = window.innerWidth;
           h = window.innerHeight;
-          canvas.width = Math.round(w * ratio);
-          canvas.height = Math.round(h * ratio);
-          g.setTransform(ratio, 0, 0, ratio, 0, 0);
+          canvas.width = Math.round(w * dpr);
+          canvas.height = Math.round(h * dpr);
+          g.setTransform(dpr, 0, 0, dpr, 0, 0);
           dot = getComputedStyle(document.documentElement).getPropertyValue("--dot").trim();
           rows = [];
           for (var y = STEP; y < h; y += STEP) rows.push({ y: y, phase: Math.random() * 6.283 });
@@ -863,10 +662,10 @@
         function draw(t) {
           g.clearRect(0, 0, w, h);
           g.fillStyle = dot;
-          var box = document.querySelector(".row").getBoundingClientRect();
+          var box = document.querySelector(".stack").getBoundingClientRect();
           var cx = box.left + box.width / 2;
           var cy = box.top + box.height / 2;
-          var hush = Math.min(w, h) * 0.52;
+          var hush = Math.max(box.width, box.height) * 0.6;
           for (var i = 0; i < rows.length; i++) {
             var line = rows[i];
             for (var x = 0; x < w + STEP; x += STEP) {
@@ -877,8 +676,8 @@
                 var edge = Math.hypot(x - ring.x, line.y - ring.y) - age * 420;
                 if (Math.abs(edge) < 150) off += Math.cos(edge / 48) * 13 * Math.max(0, 1 - age / 1.5);
               }
-              var near = Math.hypot((x - cx) / 1.6, line.y - cy) / hush;
-              var calm = near < 1 ? 0.2 + near * near * 0.8 : 1;
+              var near = Math.hypot(x - cx, (line.y - cy) * 1.4) / hush;
+              var calm = near < 1 ? 0.16 + near * near * 0.84 : 1;
               g.globalAlpha = (0.38 + (off / AMP + 1) * 0.22) * calm;
               // Snapped to the device pixel grid: a 1.5px circle on a fractional centre is mush.
               g.beginPath();
@@ -889,18 +688,15 @@
           g.globalAlpha = 1;
         }
 
-        function tick(now) {
+        function loop(now) {
           var t = now / 1000;
           rings = rings.filter(function (ring) { return t - ring.t < 1.5; });
           draw(t);
-          requestAnimationFrame(tick);
+          requestAnimationFrame(loop);
         }
 
         build();
-        window.addEventListener("resize", function () {
-          build();
-          if (reduced) draw(0);
-        });
+        window.addEventListener("resize", function () { build(); if (reduced) draw(0); });
         if (!reduced) {
           document.addEventListener("pointerdown", function (event) {
             if (event.target.closest("a, button")) return;
@@ -908,7 +704,7 @@
           });
         }
         if (reduced) draw(0);
-        else requestAnimationFrame(tick);
+        else requestAnimationFrame(loop);
       })();
 
       console.log(
