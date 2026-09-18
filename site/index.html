@@ -197,10 +197,8 @@
       .app.flip .app-body { direction: rtl; }
       .app.flip .app-body > * { direction: ltr; }
       .app.flip .app-side { border-right: 0; border-left: 1px solid var(--line); }
-      .app.zen .tabs { display: none; }
-      .app.zen .panes { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-      .app.zen .pane:not(:first-child) { display: none; }
-      .app.zen .pane pre { font-size: 15px; line-height: 1.75; }
+      .panes.solo { grid-template-columns: 1fr; }
+      .panes.solo .pane pre { font-size: 15px; line-height: 1.75; }
       .vimline {
         position: absolute; left: 0; right: 0; bottom: 26px; z-index: 6;
         display: flex; gap: 14px; padding: 3px 11px;
@@ -391,12 +389,32 @@
         var mainArea = document.getElementById("mainArea");
         var caption = document.getElementById("caption");
 
-        var WORKTREES = [
-          ["thistle", "feat/pricing-rewrite", "claude · 2 panes", "active", "12m"],
-          ["juniper", "feat/checkout-copy", "codex · waiting on you", "wait", "2h"],
-          ["mallow", "feat/search-index", "claude", "work", "3h"],
-          ["kestrel", "chore/drop-old-flag", "", "", "1d"],
+        // What the app knows, kept apart from how it is drawn. A demand changes one or the
+        // other, so "they name themselves" and "make them trains" compose instead of fighting:
+        // the board ends up listing otter and beaver.
+        var view = { names: "plain", money: false, side: "list", main: "panes" };
+
+        var BASE = [
+          { name: "thistle", animal: "🦦 otter", branch: "feat/pricing-rewrite", agent: "claude · 2 panes", state: "active", age: "12m", cost: "18.60", tokens: "2.4M", due: "09:42" },
+          { name: "juniper", animal: "🦫 beaver", branch: "feat/checkout-copy", agent: "codex · waiting on you", state: "wait", age: "2h", cost: "8.30", tokens: "1.1M", due: "09:51" },
+          { name: "mallow", animal: "🦢 crane", branch: "feat/search-index", agent: "claude", state: "work", age: "3h", cost: "6.10", tokens: "840k", due: "10:03" },
+          { name: "kestrel", animal: "🦭 seal", branch: "chore/drop-old-flag", agent: "", state: "", age: "1d", cost: "0.72", tokens: "96k", due: "10:20" },
         ];
+
+        function rows() {
+          return BASE.map(function (w) {
+            return {
+              label: view.names === "animals" ? w.animal : w.name,
+              branch: w.branch,
+              note: view.money ? "$" + w.cost + " · " + w.tokens + " tokens" : w.agent,
+              state: w.state,
+              meta: view.money ? "$" + w.cost : w.age,
+              due: w.due,
+              cost: w.cost,
+              tokens: w.tokens,
+            };
+          });
+        }
 
         var SCRIPTS = [
           ["$ pnpm dev", "VITE v8.0.1  ready in 412 ms", "➜  local:  localhost:3000", "", "  ready."],
@@ -410,38 +428,9 @@
           ["$ htop", "cpu  ▇▅▃▂▁▂▄▆", "mem  4.2G / 16G"],
         ];
 
-        function sidebar(rows) {
-          return (
-            '<div class="tomo-ui"><div class="side-lens">worktrees</div>' +
-            (rows || WORKTREES).map(function (w) {
-              return (
-                '<div class="wt-row' + (w[3] === "active" ? " wt-active" : "") + '">' +
-                '<span class="state ' + (w[3] === "active" ? "work" : w[3]) + '"></span>' +
-                '<span class="wt-name-line"><span class="wt-name">' + w[0] + "</span></span>" +
-                '<span class="wt-meta">' + w[4] + "</span>" +
-                '<span class="wt-sub"><span class="wt-branch">' + w[1] + "</span></span>" +
-                '<span class="wt-foot">' + (w[2] ? '<span class="wt-agents">' + w[2] + "</span>" : "") + "</span>" +
-                "</div>"
-              );
-            }).join("") +
-            "</div>"
-          );
-        }
-
-        function terminals(count) {
-          return (
-            '<div class="tabs"><span class="tab on">pricing.ts</span><span class="tab">dev</span><span class="tab">claude</span></div>' +
-            '<div class="panes' + (count === 9 ? " nine" : "") + '">' +
-            Array.apply(null, { length: count })
-              .map(function (_, n) { return '<div class="pane"><pre data-script="' + n + '"></pre></div>'; })
-              .join("") +
-            "</div>"
-          );
-        }
-
         var audio = null;
-        // Browsers only allow sound after a gesture, so the context is opened on the first
-        // click and kept, rather than created later when a demand happens to want it.
+        // Browsers only allow sound after a gesture, so the context opens on the first click
+        // and is kept, rather than created later when a demand happens to want it.
         function unlockAudio() {
           try {
             if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
@@ -469,6 +458,225 @@
           });
         }
 
+        var runners = { side: null, main: null, extras: [] };
+        var typing = [];
+
+        // ---- the sidebar, three ways over the same rows ----
+        function drawList() {
+          side.innerHTML =
+            '<div class="tomo-ui"><div class="side-lens">worktrees' +
+            (view.money ? '<span class="right">$33.72</span>' : "") +
+            "</div>" +
+            rows().map(function (w) {
+              return (
+                '<div class="wt-row' + (w.state === "active" ? " wt-active" : "") + '">' +
+                '<span class="state ' + (w.state === "active" ? "work" : w.state) + '"></span>' +
+                '<span class="wt-name-line"><span class="wt-name">' + w.label + "</span></span>" +
+                '<span class="wt-meta">' + w.meta + "</span>" +
+                '<span class="wt-sub"><span class="wt-branch">' + w.branch + "</span></span>" +
+                '<span class="wt-foot">' + (w.note ? '<span class="wt-agents">' + w.note + "</span>" : "") + "</span>" +
+                "</div>"
+              );
+            }).join("") +
+            "</div>";
+          return null;
+        }
+
+        function drawTank() {
+          side.innerHTML = '<canvas class="tank"></canvas>';
+          var canvas = side.querySelector(".tank");
+          var g = canvas.getContext("2d");
+          var fish = rows().map(function (w, n) {
+            return {
+              x: 0.22 + n * 0.19, y: 0.18 + n * 0.22,
+              v: (n % 2 ? -1 : 1) * (0.0013 + n * 0.0004),
+              s: 1 - n * 0.12,
+              label: w.label + (view.money ? "  $" + w.cost : ""),
+              dead: n === 3,
+            };
+          });
+          var frame = 0;
+          var paint = function () {
+            var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+            if (!w || !h) return;
+            if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, w, h);
+            var css = getComputedStyle(app);
+            fish.forEach(function (f, n) {
+              if (!reduced) f.x += f.v;
+              if (f.x > 1.16) f.x = -0.16;
+              if (f.x < -0.16) f.x = 1.16;
+              var px = f.x * w, py = (f.y + Math.sin(frame / 38 + n) * 0.022) * h, size = 12 * f.s;
+              g.save();
+              g.translate(px, py);
+              if (f.dead) g.rotate(Math.PI);
+              g.scale(f.v > 0 ? 1 : -1, 1);
+              g.globalAlpha = f.dead ? 0.32 : 0.85;
+              g.fillStyle = css.getPropertyValue("--accent").trim();
+              g.beginPath();
+              g.ellipse(0, 0, size, size * 0.62, 0, 0, 6.283);
+              g.fill();
+              g.beginPath();
+              g.moveTo(-size, 0);
+              g.lineTo(-size * 1.75, -size * 0.55);
+              g.lineTo(-size * 1.75, size * 0.55);
+              g.closePath();
+              g.fill();
+              g.restore();
+              g.globalAlpha = 0.75;
+              g.fillStyle = css.getPropertyValue("--fg-2").trim();
+              g.font = "10px " + css.getPropertyValue("--mono");
+              g.textAlign = "center";
+              g.fillText(f.label + (f.dead ? " (rip)" : ""), px, py + size * 2);
+              g.globalAlpha = 1;
+            });
+          };
+          paint();
+          return reduced ? null : function () { frame += 1; paint(); };
+        }
+
+        function drawTrains() {
+          var data = rows();
+          side.innerHTML =
+            '<div class="board"><div class="bd-head"><span>' + (view.money ? "cost" : "time") + "</span><span>worktree</span></div>" +
+            data.map(function (w) {
+              return '<div class="bd-row"><span>' + (view.money ? "$" + w.cost : w.due) + "</span><span>" + w.label + '<b class="flap"></b></span></div>';
+            }).join("") +
+            '<div class="train">🚂🚃🚃🚃</div></div>';
+
+          var flaps = Array.prototype.slice.call(side.querySelectorAll(".flap"));
+          var train = side.querySelector(".train");
+          var options = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED BY BUS", "SEE STAFF"];
+          var GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+          var seeds = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED"];
+          var cells = flaps.map(function (el, n) {
+            var target = seeds[n % seeds.length];
+            el.innerHTML = target.split("").map(function (ch) { return "<span>" + ch + "</span>"; }).join("");
+            return { el: el, spans: Array.prototype.slice.call(el.children), target: target, at: 99, step: 0, hold: 20 + n * 25 };
+          });
+          var frame = 0;
+          return reduced ? null : function () {
+            frame += 1;
+            train.style.transform = "translateX(" + (-90 + ((frame * 1.5) % 340)) + "%)";
+            cells.forEach(function (cell) {
+              if (cell.at < cell.target.length) {
+                var span = cell.spans[cell.at];
+                if (span) {
+                  if (cell.step === 0) span.classList.add("turn");
+                  if (cell.step === 1) span.textContent = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+                  if (cell.step === 2) { span.textContent = cell.target[cell.at]; span.classList.remove("turn"); }
+                }
+                cell.step += 1;
+                if (cell.step > 2) { cell.step = 0; cell.at += 1; }
+                return;
+              }
+              cell.hold -= 1;
+              if (cell.hold > 0) return;
+              cell.target = options[Math.floor(Math.random() * options.length)];
+              cell.el.innerHTML = cell.target.split("").map(function (ch) { return "<span>" + ch + "</span>"; }).join("");
+              cell.spans = Array.prototype.slice.call(cell.el.children);
+              cell.at = 0;
+              cell.step = 0;
+              cell.hold = 90 + Math.floor(Math.random() * 90);
+            });
+          };
+        }
+
+        // ---- the main area, four ways ----
+        function panesMarkup(count) {
+          return (
+            '<div class="tabs"><span class="tab on">pricing.ts</span><span class="tab">dev</span><span class="tab">claude</span></div>' +
+            '<div class="panes' + (count === 9 ? " nine" : "") + (count === 1 ? " solo" : "") + '">' +
+            Array.apply(null, { length: count })
+              .map(function (_, n) { return '<div class="pane"><pre data-script="' + n + '"></pre></div>'; })
+              .join("") +
+            "</div>"
+          );
+        }
+
+        function drawLabel() {
+          var top = rows()[0];
+          mainArea.innerHTML =
+            '<div class="label"><div class="lb-title">Nutrition Facts</div>' +
+            '<div class="lb-serv">1 worktree (' + top.label + ")</div>" +
+            '<div class="rule thick"></div><div class="lb-amt">Amount per session</div>' +
+            '<div class="lb-big"><span>Tokens</span><b class="tok">2.40M</b></div>' +
+            '<div class="rule"></div><div class="lb-dv">% daily value</div>' +
+            '<div class="lb-line"><span>Files touched</span><b>18</b><i>36%</i></div>' +
+            '<div class="lb-line"><span>Commits</span><b>3</b><i>5%</i></div>' +
+            '<div class="lb-line"><span>Tests added</span><b>0</b><i>0%</i></div>' +
+            '<div class="lb-line"><span>Spent</span><b>$' + top.cost + "</b><i>62%</i></div>" +
+            '<div class="rule thick"></div><div class="lb-foot">* based on a 2,000 commit diet</div></div>';
+          var tok = mainArea.querySelector(".tok");
+          var at = 2.4;
+          return reduced ? null : function () {
+            at += 0.001;
+            if (at > 3.2) at = 2.4;
+            tok.textContent = at.toFixed(2) + "M";
+          };
+        }
+
+        function drawSheet() {
+          var data = rows();
+          mainArea.innerHTML =
+            '<div class="sheet"><div class="sh-bar"><span class="sh-cell">D6</span>' +
+            '<span class="sh-fx">=SUM(D2:D5)</span></div>' +
+            '<div class="sh-grid"><div class="hd"></div>' +
+            ["A", "B", "C", "D"].map(function (c) { return '<div class="hd">' + c + "</div>"; }).join("") +
+            '<div class="rn">1</div><div><b>worktree</b></div><div><b>branch</b></div><div><b>agent</b></div><div><b>$</b></div>' +
+            data.map(function (w, n) {
+              return '<div class="rn">' + (n + 2) + "</div><div>" + w.label + "</div><div>" + w.branch + "</div><div>" + (w.note || "") + "</div><div>" + w.cost + "</div>";
+            }).join("") +
+            '<div class="rn">6</div><div>total</div><div></div><div></div><div class="sum">33.72</div></div></div>';
+          var grid = mainArea.querySelector(".sh-grid");
+          var boxes = Array.prototype.slice.call(grid.children).filter(function (el) {
+            return !el.classList.contains("hd") && !el.classList.contains("rn");
+          });
+          var sum = mainArea.querySelector(".sum");
+          var at = 0, hold = 0, total = 33.72;
+          return reduced ? null : function () {
+            hold += 1;
+            if (hold < 22) return;
+            hold = 0;
+            boxes.forEach(function (el) { el.classList.remove("on"); });
+            at = (at + 1) % boxes.length;
+            boxes[at].classList.add("on");
+            total += 0.03;
+            sum.textContent = total.toFixed(2);
+          };
+        }
+
+        function collectTyping() {
+          typing = Array.prototype.slice.call(mainArea.querySelectorAll("pre[data-script]")).map(function (el, k) {
+            return { el: el, script: SCRIPTS[(+el.dataset.script + k * 3) % SCRIPTS.length], done: [], line: 0, char: 0, hold: k * 6 };
+          });
+          if (reduced) typing.forEach(function (t) { t.el.textContent = t.script.join("\n"); });
+        }
+
+        function renderSide() {
+          runners.side = view.side === "tank" ? drawTank() : view.side === "trains" ? drawTrains() : drawList();
+          settle(side);
+        }
+
+        function renderMain() {
+          runners.main =
+            view.main === "label" ? drawLabel() :
+            view.main === "sheet" ? drawSheet() :
+            (mainArea.innerHTML = panesMarkup(view.main === "nine" ? 9 : view.main === "zen" ? 1 : 4), null);
+          collectTyping();
+          settle(mainArea);
+        }
+
+        // Only what was just replaced eases in; the window never blanks.
+        function settle(region) {
+          Array.prototype.forEach.call(region.children, function (child) {
+            child.classList.remove("swap-in");
+            void child.offsetWidth;
+            child.classList.add("swap-in");
+          });
+        }
+
         function toaster(box, lines, gap, extraClass, sounds) {
           var at = 0, hold = 0;
           var push = function () {
@@ -485,197 +693,43 @@
           return reduced ? null : function () { hold += 1; if (hold < gap) return; hold = 0; push(); };
         }
 
-        // Each demand knows how to apply itself, and what the app says about it.
+        function overlay(className) {
+          var box = document.createElement("div");
+          box.className = className;
+          app.appendChild(box);
+          return box;
+        }
+
+        // Each demand changes what the app knows, or how it draws, or how it looks. Those three
+        // kinds never collide, so any pile of them still makes sense.
         var DEMANDS = [
           { id: "comic", says: "oh, that's a choice.", css: "comic" },
           { id: "bright", says: "yeah, i guess we can have a light mode.", css: "bright" },
           { id: "huge", says: "your eye doctor will love you for this.", css: "huge" },
-          {
-            id: "tank",
-            owns: "side",
-            says: "...ok, i guess the agents can be fish.",
-            apply: function () {
-              side.innerHTML = '<canvas class="tank"></canvas>';
-              var canvas = side.querySelector(".tank");
-              var g = canvas.getContext("2d");
-              var fish = [
-                { x: 0.25, y: 0.2, v: 0.0024, s: 1, name: "thistle", dead: false },
-                { x: 0.7, y: 0.42, v: -0.0016, s: 0.85, name: "juniper", dead: false },
-                { x: 0.4, y: 0.64, v: 0.0013, s: 0.75, name: "mallow", dead: false },
-                { x: 0.75, y: 0.86, v: -0.0019, s: 0.6, name: "kestrel", dead: true },
-              ];
-              var frame = 0;
-              var paint = function () {
-                var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
-                if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
-                g.setTransform(dpr, 0, 0, dpr, 0, 0);
-                g.clearRect(0, 0, w, h);
-                var css = getComputedStyle(app);
-                fish.forEach(function (f, n) {
-                  if (!reduced) f.x += f.v;
-                  if (f.x > 1.14) f.x = -0.14;
-                  if (f.x < -0.14) f.x = 1.14;
-                  var px = f.x * w, py = (f.y + Math.sin(frame / 38 + n) * 0.022) * h, size = 12 * f.s;
-                  g.save();
-                  g.translate(px, py);
-                  if (f.dead) g.rotate(Math.PI);
-                  g.scale(f.v > 0 ? 1 : -1, 1);
-                  g.globalAlpha = f.dead ? 0.32 : 0.85;
-                  g.fillStyle = css.getPropertyValue("--accent").trim();
-                  g.beginPath();
-                  g.ellipse(0, 0, size, size * 0.62, 0, 0, 6.283);
-                  g.fill();
-                  g.beginPath();
-                  g.moveTo(-size, 0);
-                  g.lineTo(-size * 1.75, -size * 0.55);
-                  g.lineTo(-size * 1.75, size * 0.55);
-                  g.closePath();
-                  g.fill();
-                  g.restore();
-                  g.globalAlpha = 0.7;
-                  g.fillStyle = css.getPropertyValue("--fg-2").trim();
-                  g.font = "10px " + css.getPropertyValue("--mono");
-                  g.textAlign = "center";
-                  g.fillText(f.name + (f.dead ? " (rip)" : ""), px, py + size * 2);
-                  g.globalAlpha = 1;
-                });
-              };
-              paint();
-              return reduced ? null : function () { frame += 1; paint(); };
-            },
-          },
-          {
-            id: "trains",
-            owns: "side",
-            says: "trains. you want them to be trains.",
-            apply: function () {
-              side.innerHTML =
-                '<div class="board"><div class="bd-head"><span>time</span><span>worktree</span></div>' +
-                [["09:42", "thistle", "ON TIME"], ["09:51", "juniper", "DELAYED"], ["10:03", "mallow", "BOARDING"], ["10:20", "kestrel", "CANCELLED"]]
-                  .map(function (d) { return '<div class="bd-row"><span>' + d[0] + '</span><span>' + d[1] + '<b class="flap"></b></span></div>'; })
-                  .join("") +
-                '<div class="train">\ud83d\ude82\ud83d\ude83\ud83d\ude83\ud83d\ude83</div></div>';
-
-              var flaps = Array.prototype.slice.call(side.querySelectorAll(".flap"));
-              var train = side.querySelector(".train");
-              var options = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED", "REPLACED BY BUS", "ON TIME*", "SEE STAFF"];
-              var GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
-              var seeds = ["ON TIME", "DELAYED", "BOARDING", "CANCELLED"];
-
-              // Every cell is its own flap, so a row rolls letter by letter instead of all at once.
-              var cells = flaps.map(function (el, n) {
-                var target = seeds[n];
-                el.innerHTML = target.split("").map(function (ch) { return "<span>" + ch + "</span>"; }).join("");
-                return { el: el, spans: Array.prototype.slice.call(el.children), target: target, at: 99, hold: 20 + n * 25 };
-              });
-
-              var frame = 0;
-              return reduced ? null : function () {
-                frame += 1;
-                train.style.transform = "translateX(" + (-90 + ((frame * 1.5) % 340)) + "%)";
-
-                cells.forEach(function (cell) {
-                  if (cell.at < cell.target.length) {
-                    // three frames a letter: tip over, change, tip back
-                    var step = cell.step || 0;
-                    var span = cell.spans[cell.at];
-                    if (step === 0 && span) span.classList.add("turn");
-                    if (step === 1 && span) span.textContent = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
-                    if (step === 2 && span) { span.textContent = cell.target[cell.at]; span.classList.remove("turn"); }
-                    cell.step = step + 1;
-                    if (cell.step > 2) { cell.step = 0; cell.at += 1; }
-                    return;
-                  }
-                  cell.hold -= 1;
-                  if (cell.hold > 0) return;
-                  var next = options[Math.floor(Math.random() * options.length)];
-                  cell.target = next;
-                  cell.el.innerHTML = next.split("").map(function (ch) { return "<span>" + ch + "</span>"; }).join("");
-                  cell.spans = Array.prototype.slice.call(cell.el.children);
-                  cell.at = 0;
-                  cell.step = 0;
-                  cell.hold = 90 + Math.floor(Math.random() * 90);
-                });
-              };
-            },
-          },
-          {
-            id: "nine",
-            owns: "main",
-            says: "all nine at once. that's healthy.",
-            apply: function () { mainArea.innerHTML = terminals(9); return null; },
-          },
-          {
-            id: "label",
-            owns: "main",
-            says: "a nutrition label. for a git worktree. ok.",
-            apply: function () {
-              mainArea.innerHTML =
-                '<div class="label"><div class="lb-title">Nutrition Facts</div>' +
-                '<div class="lb-serv">1 worktree (thistle)</div>' +
-                '<div class="rule thick"></div><div class="lb-amt">Amount per session</div>' +
-                '<div class="lb-big"><span>Tokens</span><b class="tok">2.40M</b></div>' +
-                '<div class="rule"></div><div class="lb-dv">% daily value</div>' +
-                '<div class="lb-line"><span>Files touched</span><b>18</b><i>36%</i></div>' +
-                '<div class="lb-line"><span>Commits</span><b>3</b><i>5%</i></div>' +
-                '<div class="lb-line"><span>Tests added</span><b>0</b><i>0%</i></div>' +
-                '<div class="lb-line"><span>Confidence</span><b>high</b><i>∞%</i></div>' +
-                '<div class="rule thick"></div><div class="lb-foot">* based on a 2,000 commit diet</div></div>';
-              var tok = mainArea.querySelector(".tok");
-              var at = 2.4;
-              return reduced ? null : function () {
-                at += 0.001;
-                if (at > 3.2) at = 2.4;
-                tok.textContent = at.toFixed(2) + "M";
-              };
-            },
-          },
           { id: "crt", says: "ooo, how retro of you.", css: "crt" },
           { id: "tilt", says: "this is not good for your neck btw.", css: "tilt" },
           { id: "flip", says: "i guess you can put it over there.", css: "flip" },
-          { id: "zen", says: "just the one, then.", css: "zen", owns: "main" },
-          {
-            id: "animals",
-            owns: "side",
-            says: "sure, i guess the agents can be little guys.",
-            apply: function () {
-              side.innerHTML = sidebar([
-                ["\ud83e\udda6 otter", "feat/pricing-rewrite", "claude \u00b7 2 panes", "active", "12m"],
-                ["\ud83e\uddab beaver", "feat/checkout-copy", "codex \u00b7 waiting on you", "wait", "2h"],
-                ["\ud83e\udda2 crane", "feat/search-index", "claude", "work", "3h"],
-                ["\ud83e\uddad seal", "chore/drop-old-flag", "", "", "1d"],
-              ]);
-              return null;
-            },
-          },
-          {
-            id: "money",
-            owns: "side",
-            says: "racks on racks.",
-            apply: function () {
-              side.innerHTML = sidebar([
-                ["thistle", "feat/pricing-rewrite", "$18.60 \u00b7 2.4M tokens", "active", "12m"],
-                ["juniper", "feat/checkout-copy", "$8.30 \u00b7 1.1M tokens", "wait", "2h"],
-                ["mallow", "feat/search-index", "$6.10 \u00b7 840k tokens", "work", "3h"],
-                ["kestrel", "chore/drop-old-flag", "$0.72 \u00b7 96k tokens", "", "1d"],
-              ]);
-              var total = document.createElement("span");
-              total.textContent = "$33.72 today";
-              document.querySelector(".app-foot .spacer").after(total);
-              return null;
-            },
-          },
+          { id: "raw", says: "keeping it simple i see.", css: "raw", last: true },
+
+          { id: "animals", says: "sure, i guess the agents can be little guys.", knows: function () { view.names = "animals"; } },
+          { id: "money", says: "racks on racks.", knows: function () { view.money = true; } },
+
+          { id: "tank", says: "...ok, i guess the agents can be fish.", draws: function () { view.side = "tank"; } },
+          { id: "trains", says: "trains. you want them to be trains.", draws: function () { view.side = "trains"; } },
+          { id: "nine", says: "all nine at once. that's healthy.", draws: function () { view.main = "nine"; } },
+          { id: "zen", says: "just the one, then.", draws: function () { view.main = "zen"; } },
+          { id: "label", says: "a nutrition label. for a git worktree. ok.", draws: function () { view.main = "label"; } },
+          { id: "sheet", says: "oh? you miss excel?", draws: function () { view.main = "sheet"; } },
+
           {
             id: "vim",
             says: "vim keys. obviously.",
-            apply: function () {
-              var bar = document.createElement("div");
-              bar.className = "vimline";
+            adds: function () {
+              var bar = overlay("vimline");
               bar.innerHTML = '<b>-- NORMAL --</b><span>pricing.ts</span><span class="right">42,7   34%</span>';
-              app.appendChild(bar);
               var modes = ["-- NORMAL --", "-- INSERT --", "-- VISUAL --", ":w"];
-              var at = 0, hold = 0;
               var label = bar.querySelector("b");
+              var at = 0, hold = 0;
               return reduced ? null : function () {
                 hold += 1;
                 if (hold < 44) return;
@@ -686,59 +740,16 @@
             },
           },
           {
-            id: "sheet",
-            owns: "main",
-            says: "oh? you miss excel?",
-            apply: function () {
-              var COLS = ["worktree", "branch", "agent", "$"];
-              var ROWS = [
-                ["thistle", "feat/pricing-rewrite", "claude", "18.60"],
-                ["juniper", "feat/checkout-copy", "codex", "8.30"],
-                ["mallow", "feat/search-index", "claude", "6.10"],
-                ["kestrel", "chore/drop-old-flag", "", "0.72"],
-              ];
-              var cells = '<div class="sh-grid"><div class="hd"></div>' +
-                ["A", "B", "C", "D"].map(function (c) { return '<div class="hd">' + c + "</div>"; }).join("") +
-                '<div class="rn">1</div>' + COLS.map(function (c) { return "<div><b>" + c + "</b></div>"; }).join("") +
-                ROWS.map(function (r, n) {
-                  return '<div class="rn">' + (n + 2) + "</div>" + r.map(function (v) { return "<div>" + v + "</div>"; }).join("");
-                }).join("") +
-                '<div class="rn">6</div><div>total</div><div></div><div></div><div class="sum">33.72</div></div>';
-              mainArea.innerHTML =
-                '<div class="sheet"><div class="sh-bar"><span class="sh-cell">D6</span>' +
-                '<span class="sh-fx">=SUM(D2:D5)</span></div>' + cells + "</div>";
-
-              var grid = mainArea.querySelector(".sh-grid");
-              var boxes = Array.prototype.slice.call(grid.children).filter(function (el) {
-                return !el.classList.contains("hd") && !el.classList.contains("rn");
-              });
-              var sum = mainArea.querySelector(".sum");
-              var at = 0, hold = 0, total = 33.72;
-              return reduced ? null : function () {
-                hold += 1;
-                if (hold < 22) return;
-                hold = 0;
-                boxes.forEach(function (el) { el.classList.remove("on"); });
-                at = (at + 1) % boxes.length;
-                boxes[at].classList.add("on");
-                total += 0.03;
-                sum.textContent = total.toFixed(2);
-              };
-            },
-          },
-          { id: "raw", says: "keeping it simple i see.", css: "raw", last: true },
-          {
             id: "clippy",
             says: "this guy looks familiar.",
-            apply: function () {
+            adds: function () {
               var lines = [
                 "It looks like you're running nine agents. Would you like help?",
                 "I see you have not merged since Tuesday.",
                 "Would you like me to write a commit message? I will not be good at it.",
                 "It looks like you're on fire.",
               ];
-              var box = document.createElement("div");
-              box.className = "clip";
+              var box = overlay("clip");
               box.innerHTML =
                 '<div class="bubble">' + lines[0] + "</div>" +
                 '<svg viewBox="0 0 40 56" fill="none" stroke="#8a8a96" stroke-width="3.4" stroke-linecap="round">' +
@@ -746,7 +757,6 @@
                 '<circle class="eye" cx="15" cy="17" r="2.6" fill="#1b1b22" stroke="none" />' +
                 '<circle class="eye" cx="25" cy="17" r="2.6" fill="#1b1b22" stroke="none" />' +
                 "</svg>";
-              app.appendChild(box);
               var bubble = box.querySelector(".bubble");
               var at = 0, hold = 0;
               return reduced ? null : function () {
@@ -759,10 +769,24 @@
             },
           },
           {
+            id: "noise",
+            says: "a sound every time one fails. your neighbours will love that.",
+            adds: function () {
+              // It really does make the noise. That is the entire demand.
+              return toaster(
+                overlay("overlay"),
+                ["mallow failed  ♪", "juniper wants you  ♫", "thistle finished  ♪", "kestrel crashed  ♬"],
+                30,
+                "noise",
+                [[[196, 147], "sawtooth"], [[880, 1174], "sine"], [[523, 659, 784], "triangle"], [[110, 82], "square"]],
+              );
+            },
+          },
+          {
             id: "storm",
             says: "a little more visceral, sure.",
             css: "storm",
-            apply: function () {
+            adds: function () {
               var canvas = document.createElement("canvas");
               canvas.className = "rain";
               app.appendChild(canvas);
@@ -774,6 +798,7 @@
               }
               var paint = function () {
                 var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+                if (!w || !h) return;
                 if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
                 g.setTransform(dpr, 0, 0, dpr, 0, 0);
                 g.clearRect(0, 0, w, h);
@@ -802,9 +827,8 @@
           },
           {
             id: "fire",
-            owns: null,
             says: "and now it's on fire. cool. cool cool cool.",
-            apply: function () {
+            adds: function () {
               var canvas = document.createElement("canvas");
               canvas.className = "fire";
               app.appendChild(canvas);
@@ -822,11 +846,10 @@
                 palette[i * 4 + 2] = Math.round(Math.pow(t, 4.4) * 235);
                 palette[i * 4 + 3] = Math.min(255, Math.round(Math.pow(t, 0.62) * 360));
               }
-
               function size() {
                 var w = canvas.clientWidth, h = canvas.clientHeight;
                 if (!w || !h) return false;
-                var want = Math.max(240, Math.min(560, Math.round(w / 2)));
+                var want = Math.max(260, Math.min(560, Math.round(w / 2)));
                 if (want === W) return true;
                 W = want;
                 H = Math.round(want * (h / w));
@@ -836,7 +859,6 @@
                 image = bg.createImageData(W, H);
                 return true;
               }
-
               var alive = true;
               function burn() {
                 if (!alive) return;
@@ -845,11 +867,11 @@
                 if (!size()) return;
                 for (var x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.random() < 0.9 ? 255 : 140;
                 for (var y = 0; y < H - 1; y++) {
-                  var rowUp = y * W, rowDown = (y + 1) * W;
+                  var up = y * W, down = (y + 1) * W;
                   for (var x2 = 0; x2 < W; x2++) {
                     var drift = (Math.random() * 3 | 0) - 1;
-                    var next = heat[rowDown + ((x2 + drift + W) % W)] - (Math.random() * 7 | 0);
-                    heat[rowUp + x2] = next < 0 ? 0 : next;
+                    var next = heat[down + ((x2 + drift + W) % W)] - (Math.random() * 7 | 0);
+                    heat[up + x2] = next < 0 ? 0 : next;
                   }
                 }
                 var data = image.data;
@@ -869,33 +891,17 @@
                 g.imageSmoothingQuality = "high";
                 g.drawImage(buffer, 0, 0, cw, ch);
               }
-              if (reduced) { size(); return null; }
-              burn();
+              if (!reduced) burn();
               return null;
-            },
-          },
-          {
-            id: "noise",
-            says: "a sound every time one fails. your neighbours will love that.",
-            apply: function () {
-              var box = document.createElement("div");
-              box.className = "overlay";
-              app.appendChild(box);
-              // It really does make the noise. That is the entire demand.
-              return toaster(
-                box,
-                ["mallow failed  ♪", "juniper wants you  ♫", "thistle finished  ♪", "kestrel crashed  ♬"],
-                30,
-                "noise",
-                [[[196, 147], "sawtooth"], [[880, 1174], "sine"], [[523, 659, 784], "triangle"], [[110, 82], "square"]],
-              );
             },
           },
         ];
 
         var left = [];
-        var runners = [];
-        var typing = [];
+
+        // Two demands in the same group answer the same question, so the second would only
+        // undo the first. One of each per visit; the rest drop out once one lands.
+        var GROUPS = { bright: "palette", crt: "palette", tank: "side", trains: "side", nine: "main", zen: "main", label: "main", sheet: "main" };
 
         function reshuffle() {
           left = DEMANDS.slice();
@@ -905,24 +911,18 @@
             left[i] = left[j];
             left[j] = held;
           }
-          // The deck is popped from the end, so anything marked last goes to the front and is
-          // handed over last. Stripping every style first would make the rest invisible.
+          // Popped from the end, so anything marked last sorts to the front and is handed over
+          // last. Stripping every style first would leave nothing for the rest to change.
           left.sort(function (a, b) { return (a.last ? 1 : 0) - (b.last ? 1 : 0); });
-        }
-
-        function collectTyping() {
-          typing = Array.prototype.slice.call(mainArea.querySelectorAll("pre[data-script]")).map(function (el, k) {
-            return { el: el, script: SCRIPTS[(+el.dataset.script + k * 3) % SCRIPTS.length], done: [], line: 0, char: 0, hold: k * 6 };
-          });
-          if (reduced) typing.forEach(function (t) { t.el.textContent = t.script.join("\n"); });
         }
 
         function stock() {
           app.className = "app";
-          side.innerHTML = sidebar();
-          mainArea.innerHTML = terminals(4);
-          runners = [];
-          collectTyping();
+          Array.prototype.slice.call(app.querySelectorAll(".overlay, .clip, .vimline, .rain, .fire")).forEach(function (el) { el.remove(); });
+          view = { names: "plain", money: false, side: "list", main: "panes" };
+          runners = { side: null, main: null, extras: [] };
+          renderSide();
+          renderMain();
           reshuffle();
         }
 
@@ -933,23 +933,20 @@
             return;
           }
           var demand = left.pop();
-          // One takeover per region per visit. Two of them and the first would be replaced
-          // without explanation, which reads as the app forgetting what you asked for.
-          if (demand.owns) left = left.filter(function (other) { return other.owns !== demand.owns; });
+          var group = GROUPS[demand.id];
+          if (group) left = left.filter(function (other) { return GROUPS[other.id] !== group; });
+
           if (demand.css) app.classList.add(demand.css);
-          if (demand.apply) {
-            var run = demand.apply();
-            if (run) runners.push(run);
-            collectTyping();
+          if (demand.knows) { demand.knows(); renderSide(); renderMain(); }
+          if (demand.draws) {
+            demand.draws();
+            renderSide();
+            renderMain();
           }
-          // Only what actually changed eases in; the window never blanks.
-          [side, mainArea].forEach(function (region) {
-            Array.prototype.forEach.call(region.children, function (child) {
-              if (child.dataset.settled) return;
-              child.dataset.settled = "";
-              child.classList.add("swap-in");
-            });
-          });
+          if (demand.adds) {
+            var run = demand.adds();
+            if (run) runners.extras.push(run);
+          }
           caption.textContent = demand.says;
         }
 
@@ -960,6 +957,7 @@
 
         stock();
         caption.textContent = "this is tomo, before you mess it up.";
+
         window.setInterval(function () {
           if (!reduced) {
             typing.forEach(function (t) {
@@ -975,7 +973,9 @@
               t.hold = t.line % t.script.length === 0 ? 36 : 7;
             });
           }
-          runners.forEach(function (run) { run(); });
+          if (runners.side) runners.side();
+          if (runners.main) runners.main();
+          runners.extras.forEach(function (run) { run(); });
         }, 55);
       })();
 
