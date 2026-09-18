@@ -7,6 +7,7 @@ mod dispatch;
 mod events;
 mod features;
 mod git;
+mod identity;
 mod layout;
 mod login_env;
 mod monitor;

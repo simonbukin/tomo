@@ -1,3 +1,4 @@
+import { addonSummaries } from "./addons";
 import { configIssueSchema, integrationStatusSchema, statusSchema } from "./schemas";
 import { z } from "zod";
 import { Minus, Plus } from "lucide-react";
@@ -34,6 +35,7 @@ export function Settings() {
           {config && active === "keyboard" && <KeyboardSection config={config} />}
           {config && active === "agents" && <AgentsSection config={config} />}
           {config && active === "notifications" && <NotificationsSection config={config} />}
+          {active === "addons" && <AddonsSection />}
           {config && active === "integrations" && <IntegrationsSection config={config} />}
         </div>
       </div>
@@ -281,6 +283,26 @@ function NotificationsSection({ config }: { config: Config }) {
       <label className="check">
         <input type="checkbox" checked={n.sounds} onChange={(e) => setConfig("notifications.sounds", e.target.checked)} /> sounds for human checkpoints and rare town unlocks
       </label>
+    </div>
+  );
+}
+
+/** What this build of Tomo is made of. Core names no addon; this list comes from the addons. */
+function AddonsSection() {
+  const addons = addonSummaries();
+  return (
+    <div className="settings-stack">
+      <p className="settings-note">Tomo's own views are core. Everything below is an addon, and each one fills the slots core leaves open.</p>
+      <div className="addon-list">
+        {addons.map((a) => (
+          <div key={a.id} className="addon-row">
+            <span className="addon-name">{a.label}</span>
+            <span className="addon-slots num">{a.slots} slots</span>
+            <p className="addon-desc">{a.description}</p>
+          </div>
+        ))}
+      </div>
+      <p className="settings-note">{addons.length} addons loaded.</p>
     </div>
   );
 }

@@ -155,3 +155,11 @@ select { appearance: none; padding-right: 22px; background-image: url("data:imag
 .swatch:hover { border-color: var(--line-strong); background: var(--bg-1); }
 .swatch[aria-pressed="true"] { border-color: var(--accent); color: var(--fg); }
 .swatch-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+
+/* ---- addons list */
+.addon-list { display: grid; gap: var(--sp-3); }
+.addon-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-3); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--line); }
+.addon-row:last-child { border-bottom: none; padding-bottom: 0; }
+.addon-name { font-weight: 500; color: var(--fg); }
+.addon-slots { color: var(--fg-3); font-size: var(--fs-0); }
+.addon-desc { grid-column: 1 / -1; margin: 0; color: var(--fg-2); font-size: var(--fs-1); line-height: 1.45; }

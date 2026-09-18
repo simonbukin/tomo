@@ -38,6 +38,9 @@ pub struct MetaRow {
     pub first_seen_ms: Option<u64>,
     pub archived_at_ms: Option<u64>,
     pub archived_branch: Option<String>,
+    /// The name this worktree's infrastructure is created under. Minted once and then kept,
+    /// so a rename or a move cannot orphan a container or a volume.
+    pub infra_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,7 +136,8 @@ CREATE TABLE IF NOT EXISTS activity (
 CREATE INDEX IF NOT EXISTS activity_occurred_at ON activity(occurred_at_ms);
 "#;
 
-const META_COLUMNS: [(&str, &str); 4] = [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT")];
+const META_COLUMNS: [(&str, &str); 5] =
+    [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT"), ("infra_name", "TEXT")];
 
 const PANE_COLUMNS: [(&str, &str); 2] = [("kind", "TEXT"), ("url", "TEXT")];
 
@@ -241,7 +245,7 @@ impl Store {
 
     pub fn meta_all(&self) -> Result<Vec<MetaRow>> {
         let mut st = self.conn.prepare(
-            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state FROM worktree_meta",
+            "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state, infra_name FROM worktree_meta",
         )?;
         let rows = st.query_map([], |r| {
             let tags: String = r.get(7)?;
@@ -260,6 +264,7 @@ impl Store {
                 first_seen_ms: r.get::<_, Option<i64>>(9)?.map(|v| v as u64),
                 archived_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
                 archived_branch: r.get(11)?,
+                infra_name: r.get(13)?,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -267,12 +272,13 @@ impl Store {
 
     pub fn meta_upsert(&self, row: &MetaRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO worktree_meta (id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            "INSERT INTO worktree_meta (id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state, infra_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT(id) DO UPDATE SET repo_id=excluded.repo_id, path=excluded.path, gitdir=excluded.gitdir,
                display_name=excluded.display_name, project=excluded.project, priority=excluded.priority,
                tags=excluded.tags, last_active_ms=excluded.last_active_ms, first_seen_ms=excluded.first_seen_ms,
-               archived_at_ms=excluded.archived_at_ms, archived_branch=excluded.archived_branch, state=excluded.state",
+               archived_at_ms=excluded.archived_at_ms, archived_branch=excluded.archived_branch, state=excluded.state,
+               infra_name=excluded.infra_name",
             params![
                 row.id,
                 row.repo_id,
@@ -287,6 +293,7 @@ impl Store {
                 row.archived_at_ms.map(|v| v as i64),
                 row.archived_branch,
                 row.metadata.state,
+                row.infra_name,
             ],
         )?;
         Ok(())
@@ -586,6 +593,7 @@ mod tests {
             first_seen_ms: Some(5),
             archived_at_ms: Some(9),
             archived_branch: Some("feat".into()),
+            infra_name: None,
         };
         s.meta_upsert(&row).unwrap();
         let back = s.meta_all().unwrap();

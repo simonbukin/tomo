@@ -7,6 +7,8 @@ import { EndpointMark, RuntimePopover, RuntimeSignal } from "./Views";
 
 export const runtime: Addon = {
   id: "runtime",
+  label: "Runtime",
+  description: "Watches the sockets a pane's processes listen on, so a running app is something Tomo can open.",
   topbar: { marks: RuntimePopover },
   worktreeMenu: looseItems,
   paletteEntries,
