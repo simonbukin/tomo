@@ -73,6 +73,16 @@ mod tests {
         }
     }
 
+    /// The failure this whole module exists to prevent: a name that is minted but never stored
+    /// is minted again from whatever the label says next time, and the containers and volumes
+    /// made under the first name are left with nothing pointing at them.
+    #[test]
+    fn a_name_that_is_not_stored_follows_the_label_and_orphans_what_it_made() {
+        let stored = infra_name(None, "seoul", "a1b2c3d4e5f6");
+        assert_eq!(infra_name(Some(&stored), "renamed", "a1b2c3d4e5f6"), stored, "stored: the rename is free");
+        assert_ne!(infra_name(None, "renamed", "a1b2c3d4e5f6"), stored, "not stored: the rename moves the name");
+    }
+
     #[test]
     fn two_worktrees_with_one_name_do_not_share_infrastructure() {
         let a = infra_name(None, "seoul", "aaaa11112222");
