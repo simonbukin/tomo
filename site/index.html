@@ -316,6 +316,16 @@
       .get .taken { color: var(--fg); opacity: 0; pointer-events: none; }
       .get[data-taken] .offer { opacity: 0; pointer-events: none; }
       .get[data-taken] .taken { opacity: 1; }
+      /* Lights up once, then settles into the sentence it is part of. */
+      .nudge { opacity: 0; color: var(--fg-2); }
+      .nudge[data-on] { animation: nudge-in 2600ms cubic-bezier(0.2, 0, 0, 1) forwards; }
+      @keyframes nudge-in {
+        0% { opacity: 0; color: var(--accent); transform: translateY(4px); }
+        14% { opacity: 1; color: var(--accent); transform: none; }
+        55% { opacity: 1; color: var(--accent); }
+        100% { opacity: 1; color: var(--fg-2); }
+      }
+      @media (prefers-reduced-motion: reduce) { .nudge[data-on] { animation: none; opacity: 1; } }
       .copy-wrap { position: relative; display: inline-block; }
       .tip {
         position: absolute; bottom: calc(100% + 9px); left: 0;
@@ -376,15 +386,21 @@
               <div class="app-foot"><span>+ add repo</span><span class="spacer"></span><span>FPS 120</span><span>MEM 4.2G</span><span class="ok">● 0.4.1</span></div>
             </div>
             <span class="poke" aria-hidden="true">
-              <svg viewBox="0 0 48 48" fill="currentColor">
-                <path d="M20.5 41.5c-5.6 0-10.2-4.6-10.2-10.2v-7.6c0-1.6 1.3-2.9 2.9-2.9 1.6 0 2.9 1.3 2.9 2.9v2.6V9.2c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v13.1V11.6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v10.7V14c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v17.3c0 5.6-4.6 10.2-10.2 10.2h-4z" stroke="var(--bg)" stroke-width="2.2" stroke-linejoin="round" />
+              <svg viewBox="0 0 48 54">
+                <path
+                  d="M16 32V9.5a3.2 3.2 0 0 1 6.4 0V21v-4.4a3.2 3.2 0 0 1 6.4 0V23v-3.2a3.2 3.2 0 0 1 6.4 0V25v-2a3.2 3.2 0 0 1 6.4 0v12.6A15 15 0 0 1 26.6 50h-3.4a13 13 0 0 1-10.8-5.8L4.6 32.4a3.6 3.6 0 0 1 5.8-4.2L16 34.6z"
+                  fill="currentColor"
+                  stroke="var(--bg)"
+                  stroke-width="2.6"
+                  stroke-linejoin="round"
+                />
               </svg>
             </span>
           </button>
         </div>
 
         <p class="get" id="get">
-          <span class="offer">get it <a href="https://github.com/simonbukin/tomo">on github</a>, or <span class="copy-wrap"><button type="button" class="linkish" id="copy" aria-describedby="copyTip">right here</button><span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span></span>.</span>
+          <span class="offer">get it <a href="https://github.com/simonbukin/tomo">on github</a>, or <span class="copy-wrap"><button type="button" class="linkish" id="copy" aria-describedby="copyTip">right here</button><span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span></span>. <span class="nudge" id="nudge">you seem to like it.</span></span>
           <span class="taken" aria-live="polite"></span>
         </p>
 
@@ -1038,16 +1054,14 @@
           caption.textContent = demand.says;
         }
 
-        // Said once the pile has been handed back, on the line that offers you the thing.
+        // Added to the end of the offer once the pile has been handed back, so the sentence
+        // that gives you the thing is the one that lights up.
         function flatter() {
-          var sentence = document.getElementById("get");
-          var taken = sentence.querySelector(".taken");
-          if (!sentence || sentence.hasAttribute("data-taken")) return;
-          taken.textContent = "you seem to like it.";
-          sentence.setAttribute("data-taken", "");
-          window.setTimeout(function () {
-            if (taken.textContent === "you seem to like it.") sentence.removeAttribute("data-taken");
-          }, 3200);
+          var nudge = document.getElementById("nudge");
+          if (!nudge) return;
+          nudge.removeAttribute("data-on");
+          void nudge.offsetWidth;
+          nudge.setAttribute("data-on", "");
         }
 
         var render = document.getElementById("render");
