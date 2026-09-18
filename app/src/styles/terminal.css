@@ -24,7 +24,7 @@ body.pane-dragging, body.pane-dragging * { cursor: grabbing !important; }
 body.pane-dragging .xterm { pointer-events: none; }
 .pane-drop { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .pane-preview-layer { position: absolute; }
-.pane-preview { position: fixed; z-index: 6; pointer-events: none; display: flex; align-items: center; justify-content: center; padding-top: var(--pane-top); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); transition: left var(--dur-open) var(--ease-out), top var(--dur-open) var(--ease-out), width var(--dur-open) var(--ease-out), height var(--dur-open) var(--ease-out); }
+.pane-preview { position: fixed; z-index: 6; pointer-events: none; display: flex; align-items: center; justify-content: center; padding-top: var(--pane-top); color: var(--accent); font-family: var(--mono); font-size: var(--fs-0); left: 0; top: 0; will-change: transform; transition: transform var(--dur-open) var(--ease-out), width var(--dur-open) var(--ease-out), height var(--dur-open) var(--ease-out); }
 .pane-preview::before { content: ""; position: absolute; inset: var(--pane-top) 0 0; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); }
 .pane-preview-target { color: transparent; }
 .pane-preview-target::before { background: none; border-style: dashed; }

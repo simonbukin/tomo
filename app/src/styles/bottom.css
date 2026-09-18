@@ -8,7 +8,6 @@
   overflow: hidden;
   font-size: var(--fs-0);
   line-height: 1;
-  transition: grid-template-columns var(--dur-open) var(--ease-out);
 }
 .bottom-strip[data-left="closed"] { grid-template-columns: minmax(0, 1fr) minmax(max-content, var(--right-col)); }
 

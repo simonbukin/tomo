@@ -150,7 +150,7 @@ function contentBox(el: HTMLElement): Box {
   return { left: rect.left + left, top: rect.top + top, width: rect.width - left - num(style, "padding-right"), height: rect.height - top - num(style, "padding-bottom") };
 }
 
-const frame = (box: Box): CSSProperties => ({ left: box.left, top: box.top, width: box.width, height: box.height });
+const frame = (box: Box): CSSProperties => ({ transform: `translate(${box.left}px, ${box.top}px)`, width: box.width, height: box.height });
 
 /**
  * Draws the result of the drop, not the region under the pointer: the box the dragged pane takes, and the box
