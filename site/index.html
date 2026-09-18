@@ -221,6 +221,7 @@
 
       /* No blend mode: screen against a light ground is invisible, and raw html is a light
          ground. The palette carries its own alpha, so it composites correctly over anything. */
+      .cash { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
       .fire { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
       .app.tilt { transform: rotate(-2.4deg); }
       .app.flip .app-body { direction: rtl; }
@@ -228,14 +229,18 @@
       .app.flip .app-side { border-right: 0; border-left: 1px solid var(--line); }
       .panes.solo { grid-template-columns: 1fr; }
       .panes.solo .pane pre { font-size: 15px; line-height: 1.75; }
-      .vimline {
-        position: absolute; left: 0; right: 0; bottom: 26px; z-index: 6;
-        display: flex; gap: 14px; padding: 3px 11px;
-        background: var(--dot-soft); border-top: 1px solid var(--line);
-        font-family: var(--mono); font-size: 10.5px; color: var(--fg-2);
+      /* Reverse video and a command line under it, the way vim actually sits on a terminal. */
+      .vimline { position: absolute; left: 0; right: 0; bottom: 26px; z-index: 6; font-family: var(--mono); }
+      .vimline .status {
+        display: flex; gap: 16px; align-items: center; padding: 5px 12px;
+        background: var(--accent); color: var(--bg); font-size: 12.5px; font-weight: 500;
       }
-      .vimline b { color: var(--accent); font-weight: 400; }
-      .vimline .right { margin-left: auto; }
+      .vimline .status .right { margin-left: auto; }
+      .vimline .cmd {
+        display: flex; gap: 8px; padding: 5px 12px; font-size: 13px; font-weight: 600;
+        background: var(--bg); color: var(--fg); border-top: 1px solid var(--line);
+      }
+      .vimline .cmd i { font-style: normal; display: inline-block; width: 8px; height: 15px; background: var(--fg); }
 
       /* ---------- tomo's own row CSS, scoped, so the mock carries the app's real metrics ---------- */
       .tomo-ui {
@@ -438,7 +443,7 @@
         function rows() {
           return BASE.map(function (w) {
             return {
-              label: view.names === "animals" ? w.animal : w.name,
+              label: (view.money ? "\ud83d\udcb0 " : "") + (view.names === "animals" ? w.animal : w.name),
               branch: w.branch,
               note: view.money ? "$" + w.cost + " · " + w.tokens + " tokens" : w.agent,
               state: w.state,
@@ -746,7 +751,64 @@
           { id: "raw", says: "keeping it simple i see.", css: "raw", last: true },
 
           { id: "animals", says: "sure, i guess the agents can be little guys.", knows: function () { view.names = "animals"; } },
-          { id: "money", says: "racks on racks.", knows: function () { view.money = true; } },
+          {
+            id: "money",
+            says: "racks on racks.",
+            knows: function () { view.money = true; },
+            adds: function () {
+              var canvas = document.createElement("canvas");
+              canvas.className = "cash";
+              app.appendChild(canvas);
+              var g = canvas.getContext("2d");
+              var GLYPHS = ["$", "$", "$", "\ud83d\udcb5", "\ud83d\udcb0", "\ud83e\ude99"];
+              var bills = [];
+              var frame = 0;
+              return reduced ? null : function () {
+                var w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+                if (!w || !h) return;
+                if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                frame += 1;
+                // Fired up out of the sidebar, where the worktrees are, then allowed to fall.
+                if (frame % 2 === 0) {
+                  for (var i = 0; i < 3; i++) {
+                    bills.push({
+                      x: Math.random() * Math.min(240, w * 0.24),
+                      y: h * (0.2 + Math.random() * 0.6),
+                      vx: 1.4 + Math.random() * 4.2,
+                      vy: -4.2 - Math.random() * 4.4,
+                      spin: (Math.random() - 0.5) * 0.3,
+                      turn: Math.random() * 6.3,
+                      size: 13 + Math.random() * 16,
+                      ch: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+                      life: 1,
+                    });
+                  }
+                }
+                g.textAlign = "center";
+                g.textBaseline = "middle";
+                bills = bills.filter(function (b) {
+                  b.vy += 0.24;
+                  b.x += b.vx;
+                  b.y += b.vy;
+                  b.turn += b.spin;
+                  b.life -= 0.009;
+                  if (b.life <= 0 || b.y > h + 60 || b.x > w + 60) return false;
+                  g.save();
+                  g.translate(b.x, b.y);
+                  g.rotate(b.turn);
+                  g.globalAlpha = Math.min(1, b.life * 1.6);
+                  g.font = "600 " + b.size.toFixed(0) + "px " + getComputedStyle(app).getPropertyValue("--sans");
+                  g.fillStyle = b.ch === "$" ? "#22c35e" : "#fff";
+                  g.fillText(b.ch, 0, 0);
+                  g.restore();
+                  return true;
+                });
+                g.globalAlpha = 1;
+              };
+            },
+          },
 
           { id: "tank", says: "...ok, i guess the agents can be fish.", draws: function () { view.side = "tank"; } },
           { id: "trains", says: "trains. you want them to be trains.", draws: function () { view.side = "trains"; } },
@@ -760,16 +822,19 @@
             says: "vim keys. obviously.",
             adds: function () {
               var bar = overlay("vimline");
-              bar.innerHTML = '<b>-- NORMAL --</b><span>pricing.ts</span><span class="right">42,7   34%</span>';
-              var modes = ["-- NORMAL --", "-- INSERT --", "-- VISUAL --", ":w"];
-              var label = bar.querySelector("b");
+              bar.innerHTML =
+                '<div class="status"><span>pricing.ts</span><span>[+]</span>' +
+                '<span class="right">utf-8[unix]</span><span>42,7</span><span>34%</span></div>' +
+                '<div class="cmd"><span class="mode">-- NORMAL --</span><i></i></div>';
+              var beats = ["-- NORMAL --", "-- INSERT --", "-- VISUAL BLOCK --", ":w", ":wq", "E37: No write since last change"];
+              var mode = bar.querySelector(".mode");
               var at = 0, hold = 0;
               return reduced ? null : function () {
                 hold += 1;
-                if (hold < 44) return;
+                if (hold < 40) return;
                 hold = 0;
                 at += 1;
-                label.textContent = modes[at % modes.length];
+                mode.textContent = beats[at % beats.length];
               };
             },
           },
