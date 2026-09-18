@@ -121,9 +121,104 @@ pub fn parse_numstat(text: &str) -> (u32, u32) {
     })
 }
 
+/// The same summary without spawning git. A stale or missing worktree fails here at once,
+/// where a subprocess can sit on a dead mount until something kills it.
+fn summary_gix(worktree: &Path) -> Result<GitSummary> {
+    use gix::bstr::ByteSlice;
+    let repo = gix::open(worktree)?;
+    let head = repo.head()?;
+    let detached = head.referent_name().is_none();
+    let branch = head.referent_name().map(|n| n.shorten().to_str_lossy().into_owned());
+    let head_id = repo.head_id().map(|id| id.to_hex().to_string()).unwrap_or_default();
+
+    let mut s = GitSummary {
+        branch: branch.clone(),
+        head: head_id,
+        detached,
+        dirty: false,
+        files_changed: 0,
+        untracked: 0,
+        conflicts: 0,
+        insertions: 0,
+        deletions: 0,
+        ahead: None,
+        behind: None,
+        upstream: None,
+    };
+
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let status = repo.status(gix::progress::Discard)?.index_worktree_rewrites(None).into_iter(None)?;
+    for item in status {
+        let item = item?;
+        match item {
+            gix::status::Item::IndexWorktree(entry) => match entry {
+                gix::status::index_worktree::Item::DirectoryContents { entry, .. } => {
+                    if matches!(entry.status, gix::dir::entry::Status::Untracked) {
+                        s.untracked += 1;
+                    }
+                }
+                gix::status::index_worktree::Item::Modification { rela_path, .. } => {
+                    if seen.insert(rela_path.to_str_lossy().into_owned()) {
+                        s.files_changed += 1;
+                    }
+                }
+                gix::status::index_worktree::Item::Rewrite { dirwalk_entry, .. } => {
+                    if seen.insert(dirwalk_entry.rela_path.to_str_lossy().into_owned()) {
+                        s.files_changed += 1;
+                    }
+                }
+            },
+            gix::status::Item::TreeIndex(change) => {
+                let path = change.location().to_str_lossy().into_owned();
+                if seen.insert(path) {
+                    s.files_changed += 1;
+                }
+            }
+        }
+    }
+
+    if let Some(name) = head.referent_name() {
+        if let Some(Ok(upstream)) = repo.branch_remote_tracking_ref_name(name, gix::remote::Direction::Fetch) {
+            s.upstream = Some(upstream.shorten().to_str_lossy().into_owned());
+            let remote_id = repo.find_reference(upstream.as_ref()).ok().and_then(|mut r| r.peel_to_id().ok()).map(|id| id.detach());
+            if let (Ok(local), Some(remote)) = (repo.head_id(), remote_id) {
+                if let Ok((ahead, behind)) = count_ahead_behind(&repo, local.detach(), remote) {
+                    s.ahead = Some(ahead);
+                    s.behind = Some(behind);
+                }
+            }
+        }
+    }
+
+    s.dirty = s.files_changed > 0 || s.untracked > 0;
+    Ok(s)
+}
+
+/// Commits on each side that the other does not have.
+fn count_ahead_behind(repo: &gix::Repository, local: gix::ObjectId, remote: gix::ObjectId) -> Result<(u32, u32)> {
+    if local == remote {
+        return Ok((0, 0));
+    }
+    let of = |tip: gix::ObjectId| -> Result<std::collections::HashSet<gix::ObjectId>> {
+        Ok(repo.rev_walk([tip]).all()?.filter_map(|c| c.ok()).map(|c| c.id).collect())
+    };
+    let (mine, theirs) = (of(local)?, of(remote)?);
+    Ok((mine.difference(&theirs).count() as u32, theirs.difference(&mine).count() as u32))
+}
+
 pub async fn summary(worktree: &Path) -> Result<GitSummary> {
-    let status = git(worktree, &["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]).await?;
-    let mut s = parse_status(&status);
+    let dir = worktree.to_path_buf();
+    let gix = tokio::task::spawn_blocking(move || summary_gix(&dir)).await;
+    let mut s = match gix {
+        Ok(Ok(s)) => s,
+        other => {
+            if let Ok(Err(e)) = other {
+                tracing::debug!("gix summary for {}: {e}; falling back to git", worktree.display());
+            }
+            let status = git(worktree, &["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]).await?;
+            parse_status(&status)
+        }
+    };
     if s.files_changed == 0 {
         return Ok(s);
     }
@@ -220,6 +315,70 @@ pub async fn clone(url: &str, dest: &Path) -> Result<()> {
         return Err(anyhow!("git clone: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
     Ok(())
+}
+
+/// Compares the two implementations over real worktrees. Run with:
+/// `TOMO_GIT_COMPARE=/path/a:/path/b cargo test -p tomod git::compare -- --nocapture`
+#[cfg(test)]
+mod compare {
+    use super::*;
+
+    #[tokio::test]
+    async fn gix_agrees_with_git_on_every_worktree_it_is_given() {
+        let Ok(list) = std::env::var("TOMO_GIT_COMPARE") else {
+            eprintln!("set TOMO_GIT_COMPARE to a colon separated list of worktrees");
+            return;
+        };
+        let mut checked = 0;
+        let mut mismatch = Vec::new();
+        for dir in list.split(':').filter(|d| !d.is_empty()) {
+            let path = Path::new(dir);
+            if !path.is_dir() {
+                continue;
+            }
+            let Ok(want) = summary(path).await else { continue };
+            let got = match summary_gix(path) {
+                Ok(g) => g,
+                Err(e) => {
+                    mismatch.push(format!("{dir}: gix failed: {e}"));
+                    continue;
+                }
+            };
+            checked += 1;
+            let same = want.branch == got.branch
+                && want.detached == got.detached
+                && want.dirty == got.dirty
+                && want.files_changed == got.files_changed
+                && want.untracked == got.untracked
+                && want.upstream == got.upstream
+                && want.ahead == got.ahead
+                && want.behind == got.behind;
+            if !same {
+                mismatch.push(format!(
+                    "{dir}\n  git: branch={:?} dirty={} changed={} untracked={} up={:?} ahead={:?} behind={:?}\n  gix: branch={:?} dirty={} changed={} untracked={} up={:?} ahead={:?} behind={:?}",
+                    want.branch, want.dirty, want.files_changed, want.untracked, want.upstream, want.ahead, want.behind,
+                    got.branch, got.dirty, got.files_changed, got.untracked, got.upstream, got.ahead, got.behind
+                ));
+            }
+        }
+        let dirs: Vec<&Path> = list.split(':').filter(|d| !d.is_empty()).map(Path::new).filter(|p| p.is_dir()).collect();
+        let t0 = std::time::Instant::now();
+        for d in &dirs {
+            let _ = summary_gix(d);
+        }
+        let gix_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let t1 = std::time::Instant::now();
+        for d in &dirs {
+            let _ = git(d, &["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]).await;
+        }
+        let git_ms = t1.elapsed().as_secs_f64() * 1000.0;
+        println!("timing over {} worktrees: gix {gix_ms:.0} ms, git {git_ms:.0} ms ({:.1}x)", dirs.len(), git_ms / gix_ms.max(0.001));
+        println!("compared {checked} worktrees, {} disagreed", mismatch.len());
+        for m in &mismatch {
+            println!("{m}");
+        }
+        assert!(mismatch.is_empty(), "{} of {checked} disagreed", mismatch.len());
+    }
 }
 
 #[cfg(test)]

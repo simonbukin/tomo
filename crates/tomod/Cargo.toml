@@ -25,6 +25,7 @@ toml = "1.1.6"
 toml_edit = "0.25.15"
 libc = "0.2.189"
 clap = { version = "4.6.6", features = ["derive", "env"] }
+gix = { version = "0.87", default-features = false, features = ["status", "blob-diff", "max-performance-safe", "sha1"] }
 
 [features]
 # Needs zig 0.16 on PATH: libghostty builds from source.
