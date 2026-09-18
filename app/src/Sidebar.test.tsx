@@ -63,7 +63,7 @@ function renderRow(w: Worktree, agents: AgentPresence[] = []) {
 }
 
 /** One slot for each part of the row. The fixed grid needs every one of them, whatever the row holds. */
-const SLOTS = ["wt-row", "wt-name-line", "wt-meta", "wt-sub", "wt-branch", "wt-signals"] as const;
+const SLOTS = ["wt-row", "wt-name-line", "wt-meta", "wt-sub", "wt-branch", "wt-foot", "wt-agents", "wt-signals", "wt-tags"] as const;
 const slotCounts = (c: HTMLElement) => SLOTS.map((slot) => c.querySelectorAll(`.${slot}`).length);
 
 describe("worktree row height contract", () => {
@@ -75,7 +75,7 @@ describe("worktree row height contract", () => {
   ];
 
   it.each(cases)("renders the same slots for a %s row", (_name, w, agents) => {
-    expect(slotCounts(renderRow(w, agents))).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(slotCounts(renderRow(w, agents))).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
   });
 
   it.each(cases)("puts the status dot first on a %s row", (_name, w, agents) => {
@@ -83,11 +83,23 @@ describe("worktree row height contract", () => {
     expect(row.firstElementChild?.className).toMatch(/\bstate\b/);
   });
 
-  it("keeps the signal area to one line", () => {
+  it.each(cases)("keeps the signal area to one line on a %s row", (_name, w, agents) => {
+    const area = renderRow(w, agents).querySelector(".wt-signals")!;
+    expect(area.children.length).toBeLessThanOrEqual(1);
+  });
+
+  it("draws the agents under the branch, not beside it", () => {
+    const [, loud, agents] = cases[1];
+    const row = renderRow(loud, agents);
+    expect(row.querySelectorAll(".wt-agents .proc-icon")).toHaveLength(agents.length);
+    expect(row.querySelector(".wt-sub")!.contains(row.querySelector(".wt-agents"))).toBe(false);
+    expect(row.querySelector(".wt-foot")!.contains(row.querySelector(".wt-agents"))).toBe(true);
+  });
+
+  it("leaves the agents out of the signal line, which they used to share", () => {
     const [, loud, agents] = cases[1];
     const area = renderRow(loud, agents).querySelector(".wt-signals")!;
-    expect(area.children).toHaveLength(1);
-    expect(area.firstElementChild).toHaveClass("signals");
+    expect(area.querySelectorAll(".agent-line")).toHaveLength(0);
   });
 });
 
