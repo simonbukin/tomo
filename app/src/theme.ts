@@ -88,9 +88,18 @@ export function xtermTheme(theme: ResolvedTheme) {
   return { background: p.bg, foreground: p.fg, cursor: p.fg, cursorAccent: p.bg, selectionBackground: p.accent_soft };
 }
 
+// The splash in index.html reads this before the daemon has answered, so the window opens
+// on the ground the app last settled on rather than on whatever the OS prefers.
+const SCHEME_KEY = "tomo.theme.scheme";
+
 export function applyTheme(root: HTMLElement, theme: ResolvedTheme): void {
   root.dataset.theme = theme.scheme;
   Object.entries(cssVars(theme.palette)).forEach(([name, value]) => root.style.setProperty(name, value));
+  try {
+    localStorage.setItem(SCHEME_KEY, theme.scheme);
+  } catch {
+    // A webview with storage blocked still themes correctly; only the next splash guesses.
+  }
 }
 
 const darkQuery = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null);

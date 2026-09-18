@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::utils::config::Color;
 use tauri::webview::WebviewBuilder;
 use tauri::{AppHandle, Emitter, LogicalPosition, Manager, State, Webview};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -191,14 +192,38 @@ fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
     link.tx.lock().unwrap().is_some()
 }
 
+#[tauri::command]
+fn splash_ready(app: AppHandle) {
+    if let Some(window) = app.get_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 // The main webview must be a child of the window, like the browser webviews. On macOS
 // a webview created as the window content replaces the content view, and a child added
 // later lands in the old, detached view and never paints.
 fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
     let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or_else(|| tauri::Error::WindowNotFound)?;
-    let window = tauri::window::WindowBuilder::from_config(app, &config)?.build()?;
+    // The window opens hidden and the page shows it once the splash has painted, through
+    // splash_ready. Every earlier moment measured as a white window: the webview holds
+    // WebKit's blank page until its first paint, whatever background colour it carries.
+    let window = tauri::window::WindowBuilder::from_config(app, &config)?.visible(false).build()?;
+    let ground = match window.theme() {
+        Ok(tauri::Theme::Light) => Color(0xfb, 0xfa, 0xfd, 0xff),
+        _ => Color(0x17, 0x14, 0x1f, 0xff),
+    };
+    window.set_background_color(Some(ground))?;
     let size = window.inner_size()?.to_logical::<f64>(window.scale_factor()?);
-    window.add_child(WebviewBuilder::from_config(&config).auto_resize(), LogicalPosition::new(0.0, 0.0), size)?;
+    window.add_child(WebviewBuilder::from_config(&config).background_color(ground).auto_resize(), LogicalPosition::new(0.0, 0.0), size)?;
+    // A page that never loads must not leave the person with no window at all.
+    let fallback = window.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        if fallback.is_visible().is_ok_and(|v| !v) {
+            let _ = fallback.show();
+        }
+    });
     Ok(())
 }
 
@@ -221,6 +246,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             rpc,
             daemon_connected,
+            splash_ready,
             browser::browser_create,
             browser::browser_set_bounds,
             browser::browser_set_visible,
