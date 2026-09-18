@@ -1,4 +1,3 @@
-import { navigate } from "../motion";
 import { AppWindow, Bot, History, House } from "lucide-react";
 import { Fragment } from "react";
 import type { Signal } from "../activityModel";
@@ -12,7 +11,7 @@ import { byManualOrder } from "../order";
 import { useShortcuts } from "../shortcuts";
 import { summarizeState } from "../Sidebar";
 import { signalsFor } from "../Signals";
-import { agentsOf, formatBytes, needsMe, queryContext, useStore, visibleRepos, type State } from "../store";
+import { agentsOf, formatBytes, needsMe, queryContext, setUi, type State, useStore, visibleRepos } from "../store";
 import { KIND_LABEL, type Worktree } from "../types";
 
 export function railWorktrees(s: State): Worktree[] {
@@ -48,21 +47,21 @@ export function LeftRail() {
   const current = (v: State["ui"]["view"]) => (view === v ? "page" : undefined);
   return (
     <nav className="rail rail-left" aria-label="Sidebar">
-      <IconButton label="Home" shortcut={shortcut("home")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("home")} onClick={() => navigate({ view: "home" })}>
+      <IconButton label="Home" shortcut={shortcut("home")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("home")} onClick={() => setUi({ view: "home" })}>
         <House className="icon" />
       </IconButton>
-      <IconButton label={count ? `Activity, ${count} need you` : "Activity"} shortcut={shortcut("activity")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("activity")} onClick={() => navigate({ view: "activity" })}>
+      <IconButton label={count ? `Activity, ${count} need you` : "Activity"} shortcut={shortcut("activity")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("activity")} onClick={() => setUi({ view: "activity" })}>
         <History className="icon" />
         {count > 0 && <span className="rail-count" aria-hidden>{count}</span>}
       </IconButton>
-      <IconButton label="Agents" shortcut={shortcut("agents")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("agents")} onClick={() => navigate({ view: "agents" })}>
+      <IconButton label="Agents" shortcut={shortcut("agents")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("agents")} onClick={() => setUi({ view: "agents" })}>
         <Bot className="icon" />
       </IconButton>
-      <IconButton label="Apps" shortcut={shortcut("apps")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("apps")} onClick={() => navigate({ view: "apps" })}>
+      <IconButton label="Apps" shortcut={shortcut("apps")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("apps")} onClick={() => setUi({ view: "apps" })}>
         <AppWindow className="icon" />
       </IconButton>
       {addonViews().map((v) => (
-        <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current(v.id)} onClick={() => navigate({ view: v.id })}>
+        <IconButton key={v.id} label={v.label} shortcut={shortcut(v.id)} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current(v.id)} onClick={() => setUi({ view: v.id })}>
           <v.icon className="icon" />
         </IconButton>
       ))}

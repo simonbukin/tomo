@@ -87,42 +87,18 @@ Tomo is compact and information-rich. Do not add whitespace to look modern.
 
 ## Motion
 
-**Motion preserves spatial memory. Reflow the same things; reveal new layers
-from where the person acted. With no pointing action, use the centre. Motion
-must make Tomo easier to understand, never slower to use.**
+Motion confirms a change. It never entertains.
 
-Two grammars, and the difference is the whole point:
-
-- **Reveal** is for a new layer: another view, a repository or worktree, the
-  palette, a theme. The destination is already underneath, and the old
-  surface clears away from the point of interaction. `transition()` in
-  `motion.ts` does this with the View Transition API.
-- **Reflow** is for the same objects in a new arrangement: a lens change in
-  the sidebar. Rows move to their new places. `useFlip` does this.
-
-Never reveal what should reflow. A reveal says "this is somewhere else"; a
-reflow says "this is the same place, sorted differently".
-
-| What | Duration |
-|---|---|
-| hover, acknowledgement | 80 ms `--dur-fast` |
-| state mark | 100 ms `--dur-hover` |
-| palette, group expand, sidebar mode | 140 ms `--dur-open` |
-| page reveal, theme | 280 ms `--dur-reveal` |
-| lens reshuffle | 200 ms (`useFlip`) |
-
-- Three curves: `--ease-out` for hover, press, and open; `--ease-in` for
-  close; `--ease-reveal` for the reveal, which has a long tail so the edge
-  leaves quickly and settles slowly. A short reveal on `--ease-out` reads as
-  linear, because the eye only sees the fast part.
-- No springs, no bounce, no parallax, no full-page fade to black.
-- The reveal is one `clip-path` ellipse, a little wider than it is tall, so
-  the edge is not a plain circle and the compositor still has one shape to
-  clip. A mask of several gradients re-rasterises the whole screen on every
-  frame; do not reach for one without measuring first.
-- Motion is an enhancement. Where the browser cannot do a view transition the
-  state still changes at once. Under `prefers-reduced-motion` the reveal
-  becomes an 80 ms cross-fade and the reflow is instant.
+- Three durations: `--dur-fast` 80 ms (press, small state), `--dur-hover`
+  100 ms (hover and close), `--dur-open` 140 ms (open and arrival).
+- Two curves: `--ease-out` for hover, press, and open; `--ease-in` for close.
+- A view change is not animated. Reflow is: a lens change moves the rows
+  that are already there, with `useFlip`, over 200 ms. Reflow the same
+  things; do not animate the arrival of new ones.
+- Animate `transform` and `opacity` only. Everything else is layout or paint,
+  and this window is full of canvases that pay for both.
+- No springs, no bounce, no parallax. Under `prefers-reduced-motion` every
+  duration is 0 and the press scale is 1.
 
 ## Interaction
 

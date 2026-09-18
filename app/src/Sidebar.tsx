@@ -1,4 +1,3 @@
-import { navigate } from "./motion";
 import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, Star, type LucideIcon } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -137,7 +136,7 @@ export function Sidebar() {
 /** One place to go. The id is the view id, so the row and its command agree. */
 function Destination({ id, label, icon: Icon, count = 0, current, shortcut }: { id: string; label: string; icon: LucideIcon; count?: number; current: boolean; shortcut?: string }) {
   return (
-    <button type="button" className="side-row" aria-current={current ? "page" : undefined} title={shortcut ? `${label} · ${shortcut}` : label} onClick={() => navigate({ view: id })}>
+    <button type="button" className="side-row" aria-current={current ? "page" : undefined} title={shortcut ? `${label} · ${shortcut}` : label} onClick={() => setUi({ view: id })}>
       <Icon className="icon" />
       <span>{label}</span>
       {count > 0 ? <span className="side-row-count">{count}</span> : <span />}
@@ -149,7 +148,7 @@ type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: I
 
 const repoKey = (id: Id) => `repo:${id}`;
 
-const openRepoHome = (repoId: Id) => navigate({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
+const openRepoHome = (repoId: Id) => setUi({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
 
 function Group({ group, active, sortable = false }: { group: LensGroup; active: string | null; sortable?: boolean }) {
   const { repo, items } = group;

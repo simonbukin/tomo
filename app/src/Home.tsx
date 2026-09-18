@@ -1,4 +1,3 @@
-import { navigate } from "./motion";
 import { GitBranch, ListFilter, Plus, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { addonApps, branchMark } from "./addons";
 import { Wordmark } from "./Brand";
@@ -145,7 +144,7 @@ export function Home() {
           <p className="scope-tagline">{statusLine(counts)}</p>
           <div className="scope-actions">
             <Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>New worktree</Button>
-            <button className="link" onClick={() => navigate({ view: "home", home: { ...o, scope: ALL } })}>all work</button>
+            <button className="link" onClick={() => setUi({ view: "home", home: { ...o, scope: ALL } })}>all work</button>
           </div>
         </header>
       )}
@@ -158,7 +157,7 @@ export function Home() {
           <div className="repo-list">
             <div className="repo-list-head"><span /><span>repository</span><span>worktrees</span><span>agents</span><span>apps</span><span>last activity</span></div>
             {repoSummaries(inScope, repos, ctx, apps).map((r) => (
-              <div key={r.repo.id} className="repo-list-row" title={r.repo.path} onClick={() => navigate({ view: "home", home: { ...o, scope: { kind: "repo", repoId: r.repo.id } } })} onContextMenu={(e) => openMenu(e, repoMenu(r.repo))}>
+              <div key={r.repo.id} className="repo-list-row" title={r.repo.path} onClick={() => setUi({ view: "home", home: { ...o, scope: { kind: "repo", repoId: r.repo.id } } })} onContextMenu={(e) => openMenu(e, repoMenu(r.repo))}>
                 <RepoAvatar repo={r.repo} />
                 <span className="name">{r.repo.name}{!r.repo.exists && <span className="faint"> · missing</span>}</span>
                 <span className="num">{r.worktrees}</span>
