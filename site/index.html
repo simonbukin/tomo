@@ -5,32 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>tomo</title>
     <meta name="description" content="A little workspace for coding agents." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23a684ff' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%23a684ff'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
     <style>
       :root {
         --bg: #ffffff;
         --fg: #17171c;
-        --fg-2: #7a7a86;
-        --dot: #d4d4dc;
+        --fg-2: #6f6f7c;
+        --dot: #c9c9d4;
         --accent: #7d4dff;
-        --working: #2a9d5c;
-        --waiting: #d98a1a;
-        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+        --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) {
           --bg: #0f0f12;
           --fg: #e8e8ee;
-          --fg-2: #7f7f8c;
-          --dot: #26262e;
+          --fg-2: #8a8a97;
+          --dot: #36363f;
           --accent: #a684ff;
         }
       }
       :root[data-theme="dark"] {
         --bg: #0f0f12;
         --fg: #e8e8ee;
-        --fg-2: #7f7f8c;
-        --dot: #26262e;
+        --fg-2: #8a8a97;
+        --dot: #36363f;
         --accent: #a684ff;
       }
 
@@ -41,15 +42,10 @@
         color: var(--fg);
         font-family: var(--mono);
         font-size: 14px;
-        line-height: 1.7;
+        line-height: 1.75;
       }
-      canvas {
-        position: fixed;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
+      canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
       main {
         position: relative;
         min-height: 100%;
@@ -58,111 +54,128 @@
         padding: 40px 16px;
         text-align: center;
       }
-      .mark { width: 44px; height: 44px; color: var(--accent); }
-      h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.02em; margin: 20px 0 0; }
-      p { margin: 4px 0 0; color: var(--fg-2); }
-      .says { margin-top: 26px; max-width: 42ch; }
+      .lockup { width: 154px; height: 44px; color: var(--fg); display: block; margin: 0 auto; }
+      h1 {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      p { margin: 22px auto 0; max-width: 44ch; color: var(--fg-2); }
+      p.lead { color: var(--fg); margin-top: 26px; }
       a {
         display: inline-block;
-        margin-top: 30px;
+        margin-top: 32px;
         color: var(--accent);
         text-decoration: none;
         border-bottom: 1px solid transparent;
       }
       a:hover { border-bottom-color: currentColor; }
       a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+
+      @media (max-width: 480px) {
+        .lockup { width: 126px; height: 36px; }
+      }
     </style>
   </head>
   <body>
-    <canvas id="field" aria-hidden="true"></canvas>
+    <canvas id="tide" aria-hidden="true"></canvas>
     <main>
       <div>
-        <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="tomo">
-          <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 65.03 Q59 88.61 86 57.58" />
+        <h1>tomo</h1>
+        <svg class="lockup" viewBox="0 0 70 20" role="img" aria-label="tomo">
+          <g transform="scale(0.2)">
+            <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 65.03 Q59 88.61 86 57.58" />
+            </g>
+            <g fill="currentColor">
+              <circle cx="23.62" cy="33.99" r="9.19" />
+              <circle cx="76.38" cy="33.99" r="9.19" />
+            </g>
           </g>
-          <g fill="currentColor">
-            <circle cx="23.62" cy="33.99" r="9.19" />
-            <circle cx="76.38" cy="33.99" r="9.19" />
+          <g transform="translate(27 2)">
+            <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.5 3V11A2 2 0 0 0 5.5 13" />
+              <path d="M1 6H6" />
+              <circle cx="13.5" cy="9.5" r="3.5" />
+              <path d="M21 13V8.5A2.5 2.5 0 0 1 26 8.5V13" />
+              <path d="M26 8.5A2.5 2.5 0 0 1 31 8.5V13" />
+              <circle cx="38.5" cy="9.5" r="3.5" />
+            </g>
           </g>
         </svg>
-        <h1>tomo</h1>
-        <p>A little workspace for coding agents.</p>
-        <p class="says">
-          Run a dozen of them across a dozen worktrees. Tomo keeps track of which one works,
-          which one waits for you, and which one eats your machine.
+        <p class="lead">A little workspace for coding agents.</p>
+        <p>
+          Every worktree, terminal, and agent in one place. Don't like how it does something?
+          Point your agent at the source.
         </p>
         <a href="https://github.com/simonbukin/tomo">github</a>
       </div>
     </main>
 
     <script>
-      // A lattice of quiet dots. Now and then one takes an agent state and lets it go again,
-      // which is the only thing the app itself animates.
+      // Rows of dots sliding past one another, a half beat apart. The middle stays calm so the
+      // words on top of it keep their contrast.
       (function () {
-        var canvas = document.getElementById("field");
-        var ctx = canvas.getContext("2d");
+        var canvas = document.getElementById("tide");
+        var g = canvas.getContext("2d");
         var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        var STEP = 44;
-        var dots = [];
-        var styles = getComputedStyle(document.documentElement);
-        var palette = ["--dot", "--accent", "--working", "--waiting"].map(function (name) {
-          return styles.getPropertyValue(name).trim();
-        });
+        var STEP = 26;
+        var AMP = 9;
+        var rows = [];
+        var w = 0;
+        var h = 0;
+        var dot = "";
 
         function build() {
           var ratio = window.devicePixelRatio || 1;
-          canvas.width = window.innerWidth * ratio;
-          canvas.height = window.innerHeight * ratio;
-          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-          dots = [];
-          for (var x = STEP / 2; x < window.innerWidth; x += STEP) {
-            for (var y = STEP / 2; y < window.innerHeight; y += STEP) {
-              dots.push({ x: x, y: y, tone: 0, lit: 0 });
-            }
+          w = window.innerWidth;
+          h = window.innerHeight;
+          canvas.width = Math.round(w * ratio);
+          canvas.height = Math.round(h * ratio);
+          g.setTransform(ratio, 0, 0, ratio, 0, 0);
+          dot = getComputedStyle(document.documentElement).getPropertyValue("--dot").trim();
+          rows = [];
+          for (var y = STEP; y < h; y += STEP) {
+            rows.push({ y: y, phase: Math.random() * 6.283 });
           }
         }
 
-        function draw() {
-          ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-          for (var i = 0; i < dots.length; i++) {
-            var d = dots[i];
-            ctx.globalAlpha = d.lit > 0 ? 0.25 + d.lit * 0.75 : 0.5;
-            ctx.fillStyle = palette[d.tone];
-            ctx.beginPath();
-            ctx.arc(d.x, d.y, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
-        }
-
-        function tick() {
-          for (var i = 0; i < dots.length; i++) {
-            var d = dots[i];
-            if (d.lit > 0) {
-              d.lit -= 0.006;
-              if (d.lit <= 0) {
-                d.lit = 0;
-                d.tone = 0;
-              }
+        function draw(t) {
+          g.clearRect(0, 0, w, h);
+          g.fillStyle = dot;
+          var cx = w / 2;
+          var cy = h / 2;
+          var hush = Math.min(w, h) * 0.34;
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            for (var x = 0; x < w + STEP; x += STEP) {
+              var off = Math.sin(x / 90 + t * 0.9 + row.phase) * AMP;
+              var near = Math.hypot((x - cx) / 1.9, row.y - cy) / hush;
+              var calm = near < 1 ? 0.22 + near * near * 0.78 : 1;
+              g.globalAlpha = (0.38 + (off / AMP + 1) * 0.22) * calm;
+              g.beginPath();
+              g.arc(x, row.y + off, 1.5, 0, 6.283);
+              g.fill();
             }
           }
-          if (Math.random() < 0.09 && dots.length) {
-            var pick = dots[(Math.random() * dots.length) | 0];
-            pick.tone = 1 + ((Math.random() * 3) | 0);
-            pick.lit = 1;
-          }
-          draw();
+          g.globalAlpha = 1;
+        }
+
+        function tick(now) {
+          draw(now / 1000);
           requestAnimationFrame(tick);
         }
 
         build();
         window.addEventListener("resize", function () {
           build();
-          draw();
+          if (reduced) draw(0);
         });
-        if (reduced) draw();
-        else tick();
+        if (reduced) draw(0);
+        else requestAnimationFrame(tick);
       })();
     </script>
   </body>
