@@ -548,6 +548,13 @@ impl Daemon {
                     self.rebind(&mut inner, &moved.id, &id, &path).ok()?;
                     Some(MetaRow { id: id.clone(), path: path.clone(), ..moved.clone() })
                 });
+                let strays: Vec<&MetaRow> = meta_rows.iter().filter(|m| m.id != id && m.path == path).collect();
+                for stray in &strays {
+                    if let Err(e) = self.rebind(&mut inner, &stray.id, &id, &path) {
+                        tracing::warn!("rebind {} to {id}: {e}", stray.id);
+                    }
+                }
+                let existing = if strays.is_empty() { existing } else { inner.store.meta_one(&id)?.or(existing) };
                 let previous = inner.worktrees.get(&id);
                 let row = MetaRow {
                     id: id.clone(),
@@ -2576,5 +2583,77 @@ mod tests {
     #[test]
     fn pasted_wraps_the_text_in_one_bracketed_paste_and_submits() {
         assert_eq!(pasted("a\nb"), "\x1b[200~a\nb\x1b[201~\r");
+    }
+
+    fn git_in(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(dir).output().unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_row_copied_from_another_machine_joins_the_worktree_at_its_path() {
+        let dir = PathBuf::from(format!("/tmp/tomo-daemon-test-stale-id-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        git_in(&repo, &["init", "-q"]);
+        git_in(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git_in(&repo, &["worktree", "add", "-q", "-b", "feat", "../moriya"]);
+        let linked = canonical(&dir.join("moriya"));
+
+        let seams = Seams {
+            worktree_namer: None,
+            worktree_created: vec![],
+            worktree_rebound: vec![],
+            worktree_files: vec![],
+            pane_exited: vec![],
+            process_polled: vec![],
+        };
+        let daemon = Daemon::new(Paths::new(dir.join("data")), seams, Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let repo_id = daemon.lock().repos[0].id.clone();
+
+        let stale = path_id(Path::new("/Users/someone-else/Projects/moriya"));
+        {
+            let mut inner = daemon.lock();
+            let row = MetaRow {
+                id: stale.clone(),
+                repo_id,
+                path: linked.clone(),
+                gitdir: Some("moriya".into()),
+                metadata: WorktreeMetadata { display_name: Some("Moriya".into()), ..Default::default() },
+                last_active_ms: None,
+                first_seen_ms: Some(1),
+                archived_at_ms: None,
+                archived_branch: None,
+                infra_name: None,
+            };
+            inner.store.meta_upsert(&row).unwrap();
+            let tab = TabRow {
+                id: "t1".into(),
+                worktree_id: stale.clone(),
+                title: "t".into(),
+                position: 0,
+                layout: LayoutNode::Leaf { pane_id: "p1".into() },
+                active_pane_id: None,
+                is_active: true,
+            };
+            inner.store.tab_upsert(&tab).unwrap();
+            inner.tabs.insert(tab.id.clone(), tab);
+        }
+        daemon.discover(Summaries::Cached).await.unwrap();
+
+        let inner = daemon.lock();
+        let at_path: Vec<&WorktreeState> = inner.worktrees.values().filter(|w| w.path == linked).collect();
+        assert_eq!(at_path.len(), 1, "one record per path, not a live one and a ghost: {:?}", at_path.iter().map(|w| &w.id).collect::<Vec<_>>());
+        let w = at_path[0];
+        assert_eq!(w.id, path_id(&linked));
+        assert!(w.exists);
+        assert_eq!(w.metadata.display_name.as_deref(), Some("Moriya"), "the name follows the row");
+        assert_eq!(inner.tabs["t1"].worktree_id, w.id, "the tab follows the row");
+        assert!(inner.store.meta_all().unwrap().iter().all(|m| m.id != stale), "the stale row is gone from the store");
+        drop(inner);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
