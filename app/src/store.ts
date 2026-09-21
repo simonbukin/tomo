@@ -22,6 +22,7 @@ import type { Diagnostic, DiagnosticLevel,
   Tab,
   UiState,
   Worktree,
+  WorktreePrefill,
   WorktreeResources,
 } from "./types";
 import type { MenuAnchor, MenuItem } from "./components/ui";
@@ -68,7 +69,7 @@ export type RowError = { op: string; message: string };
 
 export type Dialog =
   | { kind: "add-repo" }
-  | { kind: "create-worktree"; repoId?: Id }
+  | ({ kind: "create-worktree" } & WorktreePrefill)
   | { kind: "confirm"; title: string; body: string; confirmLabel: string; destructive?: boolean; check?: string; onConfirm: (checked: boolean) => void }
   | { kind: "prompt"; title: string; initial: string; placeholder?: string; onSubmit: (value: string) => void }
   | { kind: "integrations" }

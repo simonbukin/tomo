@@ -70,6 +70,8 @@ export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" 
 /** How the sidebar arranges the same worktrees. A lens never changes worktree state. */
 export type SidebarLens = "repo" | "project" | "tag" | "focus";
 
+export type WorktreePrefill = { repoId?: Id; project?: string; tags?: string[] };
+
 export type SidebarMode = "open" | "minimal" | "closed";
 
 export type CoreSection = "worktree" | "git" | "processes" | "sessions" | "files";

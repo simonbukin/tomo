@@ -405,6 +405,10 @@ pub struct WorktreeCreate {
     /// A hint for the worktree namer when `path` is empty. Clients before the addon split send it as `town_slug`.
     #[serde(default, alias = "town_slug")]
     pub name_hint: Option<String>,
+    /// Metadata that the worktree has before `worktree.created` goes out.
+    #[serde(default)]
+    #[ts(optional)]
+    pub metadata: Option<MetadataPatch>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

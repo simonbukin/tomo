@@ -108,6 +108,7 @@ export function Sidebar() {
             <DropdownMenuTrigger render={<IconButton label={`Sort: ${ui.sidebarSort}`} />}><ArrowDownUp className="icon" /></DropdownMenuTrigger>
             <DropdownMenuContent align="end"><MenuItems items={sortMenu} /></DropdownMenuContent>
           </DropdownMenu>
+          <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={() => runAction("create_worktree")}><Plus className="icon" /></IconButton>
         </span>
       </div>
       <div className="sidebar-scroll" ref={listRef}>
@@ -161,7 +162,6 @@ function Group({ group, active, sortable = false }: { group: LensGroup; active: 
   const hidden = useStore((s) => (repo ? s.ui.hiddenRepos.includes(repo.id) : false));
   const attention = useStore((s) => items.some((w) => needsAttention(w, queryContext(s))));
   const toggle = () => group.key && toggleRepoCollapsed(group.key);
-  const shortcut = useShortcuts();
   const rows = items.map((w) => (
     <WorktreeRow key={w.id} sortId={sortable ? w.id : `${group.key}:${w.id}`} w={w} active={w.id === active} siblings={items} sortable={sortable} />
   ));
@@ -182,7 +182,7 @@ function Group({ group, active, sortable = false }: { group: LensGroup; active: 
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
         {collapsed && attention && <span className={dotClass("needs")} />}
-        {repo?.id && <IconButton label="New worktree" shortcut={shortcut("create_worktree")} onClick={(e) => { e.stopPropagation(); setState({ dialog: { kind: "create-worktree", repoId: repo.id } }); }}><Plus className="icon" /></IconButton>}
+        <IconButton label={`New worktree in ${group.label}`} onClick={(e) => { e.stopPropagation(); setState({ dialog: { kind: "create-worktree", ...group.prefill } }); }}><Plus className="icon" /></IconButton>
       </div>
       {!collapsed &&
         (sortable ? (

@@ -10,7 +10,7 @@ import { IntegrationStatusList } from "./Settings";
 import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
-import type { Branch } from "./types";
+import type { Branch, MetadataPatch, WorktreePrefill } from "./types";
 
 /** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
@@ -28,7 +28,7 @@ export function Dialogs() {
     <Dialog open={!!dialog} onOpenChange={onOpenChange}>
       <DialogContent>
         {shown.kind === "add-repo" && <AddRepo close={close} />}
-        {shown.kind === "create-worktree" && <CreateWorktree close={close} repoId={shown.repoId} />}
+        {shown.kind === "create-worktree" && <CreateWorktree close={close} prefill={shown} />}
         {shown.kind === "prompt" && <Prompt close={close} title={shown.title} initial={shown.initial} placeholder={shown.placeholder} onSubmit={shown.onSubmit} />}
         {shown.kind === "integrations" && <IntegrationsDialog close={close} />}
         {shown.kind === "config-check" && <ConfigCheckDialog close={close} />}
@@ -102,9 +102,30 @@ function AddRepo({ close }: { close: () => void }) {
   );
 }
 
-function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string }) {
+export function parseTags(text: string): string[] {
+  return [...new Set(text.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean))];
+}
+
+export function createMetadata(project: string, tags: string, state: string): MetadataPatch | undefined {
+  const tagList = parseTags(tags);
+  const patch: MetadataPatch = {
+    project: project.trim() || undefined,
+    tags: tagList.length > 0 ? tagList : undefined,
+    state: state || undefined,
+  };
+  const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+  return Object.keys(set).length > 0 ? set : undefined;
+}
+
+function CreateWorktree({ close, prefill }: { close: () => void; prefill: WorktreePrefill }) {
   const repos = useStore((s) => s.repos);
-  const [repo, setRepo] = useState(repoId ?? repos[0]?.id ?? "");
+  const states = useStore((s) => s.config)?.states ?? [];
+  const worktrees = useStore((s) => s.worktrees);
+  const knownProjects = [...new Set(worktrees.flatMap((w) => (w.metadata.project ? [w.metadata.project] : [])))].sort();
+  const [repo, setRepo] = useState(prefill.repoId ?? repos[0]?.id ?? "");
+  const [project, setProject] = useState(prefill.project ?? "");
+  const [tags, setTags] = useState((prefill.tags ?? []).join(", "));
+  const [state, setWorktreeState] = useState("");
   const [branch, setBranch] = useState("");
   const [isNew, setIsNew] = useState(true);
   const [from, setFrom] = useState("");
@@ -149,6 +170,7 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
         start_ref: b?.remote ? `${b.remote}/${wanted}` : from.trim() || null,
         path: path.trim() || null,
         name_hint: path.trim() ? null : nameHint,
+        metadata: createMetadata(project, tags, state),
       });
       close();
       openWorktree(w.id);
@@ -169,8 +191,8 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
   return (
     <>
       <DialogTitle>New worktree</DialogTitle>
-      <label>Repository</label>
-      <select value={repo} onChange={(e) => setRepo(e.target.value)}>
+      <label htmlFor="new-worktree-repo">Repository</label>
+      <select id="new-worktree-repo" value={repo} onChange={(e) => setRepo(e.target.value)}>
         {repos.map((x) => (
           <option key={x.id} value={x.id}>
             {x.name}
@@ -204,6 +226,28 @@ function CreateWorktree({ close, repoId }: { close: () => void; repoId?: string 
       <label>Location</label>
       <input className="mono" value={path} placeholder={defaultPath} onChange={(e) => setPath(e.target.value)} />
       {NameField && <NameField hidden={!!path.trim()} onHint={setNameHint} />}
+      <label htmlFor="new-worktree-project">Project</label>
+      <input id="new-worktree-project" list="new-worktree-projects" value={project} placeholder="none" onChange={(e) => setProject(e.target.value)} />
+      <datalist id="new-worktree-projects">
+        {knownProjects.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
+      <label htmlFor="new-worktree-tags">Tags (comma-separated)</label>
+      <input id="new-worktree-tags" value={tags} placeholder="none" onChange={(e) => setTags(e.target.value)} />
+      {states.length > 0 && (
+        <>
+          <label htmlFor="new-worktree-state">State</label>
+          <select id="new-worktree-state" value={state} onChange={(e) => setWorktreeState(e.target.value)}>
+            <option value="">none</option>
+            {states.map((st) => (
+              <option key={st.id} value={st.id}>
+                {st.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
       {error && <InlineError>{error}</InlineError>}
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
