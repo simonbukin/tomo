@@ -303,11 +303,27 @@ impl Store {
 
     pub fn rebind_worktree(&self, old_id: &str, new_id: &str, new_path: &Path) -> Result<()> {
         let path = new_path.to_string_lossy();
-        self.conn.execute("UPDATE worktree_meta SET id = ?2, path = ?3 WHERE id = ?1", params![old_id, new_id, path])?;
-        self.conn.execute("UPDATE tabs SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
-        self.conn.execute("UPDATE panes SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
-        self.conn.execute("UPDATE attention SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
-        self.conn.execute("UPDATE activity SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "UPDATE worktree_meta AS n SET
+               display_name = COALESCE(n.display_name, o.display_name),
+               project = COALESCE(n.project, o.project),
+               priority = COALESCE(n.priority, o.priority),
+               tags = CASE WHEN n.tags = '[]' THEN o.tags ELSE n.tags END,
+               state = COALESCE(n.state, o.state),
+               infra_name = COALESCE(n.infra_name, o.infra_name),
+               first_seen_ms = MIN(COALESCE(n.first_seen_ms, o.first_seen_ms), COALESCE(o.first_seen_ms, n.first_seen_ms)),
+               last_active_ms = MAX(COALESCE(n.last_active_ms, o.last_active_ms), COALESCE(o.last_active_ms, n.last_active_ms))
+             FROM worktree_meta AS o WHERE n.id = ?2 AND o.id = ?1",
+            params![old_id, new_id],
+        )?;
+        tx.execute("DELETE FROM worktree_meta WHERE id = ?1 AND EXISTS (SELECT 1 FROM worktree_meta WHERE id = ?2)", params![old_id, new_id])?;
+        tx.execute("UPDATE worktree_meta SET id = ?2, path = ?3 WHERE id = ?1", params![old_id, new_id, path])?;
+        tx.execute("UPDATE tabs SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
+        tx.execute("UPDATE panes SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
+        tx.execute("UPDATE attention SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
+        tx.execute("UPDATE activity SET worktree_id = ?2 WHERE worktree_id = ?1", params![old_id, new_id])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -624,6 +640,34 @@ mod tests {
         s.rebind_worktree("w", "w2", Path::new("/tmp/w2")).unwrap();
         let count = |w: &str| s.activity_list(&ActivityQuery { worktree_id: Some(w.into()), ..Default::default() }, &[]).unwrap().len();
         assert_eq!((count("w"), count("w2")), (0, 1));
+    }
+
+    #[test]
+    fn rebind_onto_a_live_row_fills_its_blanks_and_leaves_one_row() {
+        let s = Store::open_in_memory().unwrap();
+        let row = |id: &str, name: Option<&str>, project: Option<&str>, first_seen: u64| MetaRow {
+            id: id.into(),
+            repo_id: "r1".into(),
+            path: PathBuf::from("/tmp/w"),
+            gitdir: Some("w".into()),
+            metadata: WorktreeMetadata { display_name: name.map(Into::into), project: project.map(Into::into), state: None, tags: vec![] },
+            last_active_ms: None,
+            first_seen_ms: Some(first_seen),
+            archived_at_ms: None,
+            archived_branch: None,
+            infra_name: Some(format!("tomo-w-{id}")),
+        };
+        s.meta_upsert(&row("stale", Some("Moriya"), Some("old"), 1)).unwrap();
+        s.meta_upsert(&row("live", None, Some("new"), 9)).unwrap();
+        s.rebind_worktree("stale", "live", Path::new("/tmp/w")).unwrap();
+        let all = s.meta_all().unwrap();
+        assert_eq!(all.len(), 1);
+        let m = &all[0];
+        assert_eq!(m.id, "live");
+        assert_eq!(m.metadata.display_name.as_deref(), Some("Moriya"), "a blank takes the old value");
+        assert_eq!(m.metadata.project.as_deref(), Some("new"), "a set value stays");
+        assert_eq!(m.first_seen_ms, Some(1), "the earliest sighting stays");
+        assert_eq!(m.infra_name.as_deref(), Some("tomo-w-live"));
     }
 
     fn item(id: &str, kind: AttentionKind) -> AttentionItem {
