@@ -550,7 +550,8 @@ export const worktreeCreateSchema = z.object({
     new_branch: z.boolean(),
     start_ref: z.string().nullable(),
     path: z.string().nullable(),
-    name_hint: z.string().nullable()
+    name_hint: z.string().nullable(),
+    metadata: metadataPatchSchema.optional()
 });
 
 export const worktreeOpenedSchema = z.object({

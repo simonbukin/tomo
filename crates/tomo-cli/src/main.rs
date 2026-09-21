@@ -519,6 +519,7 @@ async fn run() -> Result<()> {
                     start_ref: from,
                     path,
                     name_hint: town,
+                    metadata: None,
                 }))
                 .await?;
             let repos: Vec<Repo> = c.call(Call::RepoList).await?;

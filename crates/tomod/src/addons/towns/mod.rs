@@ -126,7 +126,15 @@ mod tests {
     }
 
     fn spec(name_hint: Option<&str>) -> WorktreeCreate {
-        WorktreeCreate { repo_id: "r".into(), branch: "b".into(), new_branch: true, start_ref: None, path: None, name_hint: name_hint.map(String::from) }
+        WorktreeCreate {
+            repo_id: "r".into(),
+            branch: "b".into(),
+            new_branch: true,
+            start_ref: None,
+            path: None,
+            name_hint: name_hint.map(String::from),
+            metadata: None,
+        }
     }
 
     #[test]

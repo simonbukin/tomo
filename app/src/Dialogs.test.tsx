@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Repo } from "./types";
+import type { Repo, WorktreePrefill } from "./types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("./api", async (importOriginal) => {
@@ -29,10 +29,10 @@ const branchBox = () => screen.getByLabelText("Branch");
 const optionNames = () => screen.queryAllByRole("option").map((o) => o.querySelector(".combobox-item-text")?.textContent);
 const created = () => vi.mocked(rpc).mock.calls.find(([method]) => method === "worktree_create")?.[1] as Record<string, unknown> | undefined;
 
-async function openDialog() {
+async function openDialog(prefill: WorktreePrefill = { repoId: "r1" }) {
   const user = userEvent.setup();
   render(<Dialogs />);
-  setState({ dialog: { kind: "create-worktree", repoId: "r1" } });
+  setState({ dialog: { kind: "create-worktree", ...prefill } });
   await waitFor(() => expect(vi.mocked(rpc).mock.calls.some(([method]) => method === "branch_list")).toBe(true));
   return user;
 }
@@ -78,5 +78,22 @@ describe("new worktree dialog", () => {
     expect(branchBox()).toHaveAttribute("placeholder", "simon/<name>");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(created()).toMatchObject({ branch: "", new_branch: true }));
+    expect(created()?.metadata).toBeUndefined();
+  });
+
+  it("a plus on a tag group starts with that tag and sends it", async () => {
+    const user = await openDialog({ tags: ["labor-relations"] });
+    expect(screen.getByLabelText("Repository")).toHaveValue("r1");
+    expect(screen.getByLabelText("Tags (comma-separated)")).toHaveValue("labor-relations");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(created()).toMatchObject({ repo_id: "r1", metadata: { tags: ["labor-relations"] } }));
+  });
+
+  it("sends a typed project and clean tags", async () => {
+    const user = await openDialog();
+    await user.type(screen.getByLabelText("Project"), "  Holly ");
+    await user.type(screen.getByLabelText("Tags (comma-separated)"), "#a, b,, a");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(created()?.metadata).toEqual({ project: "Holly", tags: ["a", "b"] }));
   });
 });

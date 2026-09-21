@@ -1919,17 +1919,7 @@ impl Daemon {
     async fn metadata_set(self: &Arc<Self>, worktree_id: Id, patch: MetadataPatch) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
-        let mut next = patch.apply(&w.metadata);
-        next.display_name = next.display_name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-        next.project = next.project.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-        next.tags = next.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect();
-        next.state = next.state.map(|st| st.trim().to_string()).filter(|st| !st.is_empty());
-        if let Some(st) = &next.state {
-            if !inner.config.states.iter().any(|d| &d.id == st) {
-                let known: Vec<&str> = inner.config.states.iter().map(|d| d.id.as_str()).collect();
-                return Err(err(ErrorCode::BadRequest, format!("unknown state {st:?}; known states: {}", known.join(", "))));
-            }
-        }
+        let next = checked_metadata(&inner.config.states, patch.apply(&w.metadata))?;
         let previous_state = w.metadata.state.clone();
         let row = Self::meta_row_of(&inner, w, next.clone());
         inner.store.meta_upsert(&row).map_err(internal)?;
@@ -1977,6 +1967,9 @@ impl Daemon {
         let (repo_path, parent_dir, branch_prefix, name) = {
             let inner = self.lock();
             let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
+            if let Some(patch) = &spec.metadata {
+                checked_metadata(&inner.config.states, patch.apply(&WorktreeMetadata::default()))?;
+            }
             let name = match (&spec.path, self.seams.worktree_namer) {
                 (None, Some(namer)) => namer(&inner.store, &spec)?,
                 _ => None,
@@ -2007,6 +2000,14 @@ impl Daemon {
         let created = CreatedWorktree { id: id.clone(), repo_id: spec.repo_id.clone(), name };
         for seam in &self.seams.worktree_created {
             seam(&mut inner, &created)?;
+        }
+        if let (Some(patch), Some(w)) = (&spec.metadata, inner.worktrees.get(&id)) {
+            let metadata = checked_metadata(&inner.config.states, patch.apply(&w.metadata))?;
+            let row = Self::meta_row_of(&inner, w, metadata.clone());
+            inner.store.meta_upsert(&row).map_err(internal)?;
+            if let Some(w) = inner.worktrees.get_mut(&id) {
+                w.metadata = metadata;
+            }
         }
         let ev = events::envelope(&inner, "worktree.created", Some(&id));
         inner.hook_queue.push(ev);
@@ -2442,6 +2443,23 @@ pub fn restore_target(w: &WorktreeState, repos: &[Repo], row: &MetaRow) -> Resul
     Ok(RestoreTarget { path: w.path.clone(), repo_path, branch })
 }
 
+pub fn checked_metadata(states: &[StateDef], m: WorktreeMetadata) -> Result<WorktreeMetadata, RpcError> {
+    let text = |v: Option<String>| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let next = WorktreeMetadata {
+        display_name: text(m.display_name),
+        project: text(m.project),
+        state: text(m.state),
+        tags: m.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect(),
+    };
+    match &next.state {
+        Some(st) if !states.iter().any(|d| &d.id == st) => {
+            let known: Vec<&str> = states.iter().map(|d| d.id.as_str()).collect();
+            Err(err(ErrorCode::BadRequest, format!("unknown state {st:?}; known states: {}", known.join(", "))))
+        }
+        _ => Ok(next),
+    }
+}
+
 pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>) -> Result<ArchiveTarget, RpcError> {
     if w.is_main {
         return Err(err(ErrorCode::BadRequest, "the main worktree cannot be archived"));
@@ -2612,7 +2630,8 @@ mod tests {
         daemon.lock().config.shell = "/bin/sh".into();
         daemon.handle(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
         let repo_id = daemon.lock().repos[0].id.clone();
-        let spec = WorktreeCreate { repo_id, branch: "feat".into(), new_branch: true, start_ref: None, path: Some(dir.join("wt")), name_hint: None };
+        let spec =
+            WorktreeCreate { repo_id, branch: "feat".into(), new_branch: true, start_ref: None, path: Some(dir.join("wt")), name_hint: None, metadata: None };
         let created = daemon.handle(0, Call::WorktreeCreate(spec)).await.unwrap();
         let id = created["id"].as_str().unwrap().to_string();
 
@@ -2624,6 +2643,43 @@ mod tests {
         assert!(inner.panes[&setup_pane].pending_line.is_none(), "the hook runs as the pane command, not as typed input");
         drop(inner);
         daemon.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_worktree_is_created_with_its_metadata_before_the_created_hook_sees_it() {
+        let (dir, repo) = repo_fixture("create-metadata");
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let repo_id = daemon.lock().repos[0].id.clone();
+        let spec = |name: &str, state: Option<&str>| WorktreeCreate {
+            repo_id: repo_id.clone(),
+            branch: name.into(),
+            new_branch: true,
+            start_ref: None,
+            path: Some(dir.join(name)),
+            name_hint: None,
+            metadata: Some(MetadataPatch {
+                project: Some(Some(" Holly ".into())),
+                tags: Some(vec!["#labor-relations".into()]),
+                state: state.map(|s| Some(s.to_string())),
+                ..MetadataPatch::default()
+            }),
+        };
+
+        let refused = daemon.handle_inner(0, Call::WorktreeCreate(spec("bad", Some("no-such-state")))).await;
+        assert_eq!(refused.err().map(|e| e.code), Some(ErrorCode::BadRequest));
+        assert!(!dir.join("bad").exists(), "a refused create makes no worktree");
+
+        let created = daemon.handle_inner(0, Call::WorktreeCreate(spec("good", None))).await.unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        let inner = daemon.lock();
+        let expected = WorktreeMetadata { project: Some("Holly".into()), tags: vec!["labor-relations".into()], ..WorktreeMetadata::default() };
+        assert_eq!(inner.worktrees[&id].metadata, expected);
+        assert_eq!(inner.store.meta_one(&id).unwrap().map(|m| m.metadata), Some(expected));
+        let hook = inner.hook_queue.iter().find(|e| e.event == "worktree.created").and_then(|e| e.worktree.clone()).unwrap();
+        assert_eq!((hook.project.as_deref(), hook.tags), (Some("Holly"), vec!["labor-relations".to_string()]));
+        drop(inner);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -1,6 +1,6 @@
 import { byManualOrder } from "./order";
 import { agentsOf, needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
-import type { Id, Repo, SidebarLens, SidebarSort, Worktree } from "./types";
+import type { Id, Repo, SidebarLens, SidebarSort, Worktree, WorktreePrefill } from "./types";
 
 export const LENSES: readonly SidebarLens[] = ["repo", "project", "tag", "focus"];
 
@@ -18,6 +18,8 @@ export interface LensGroup {
   items: Worktree[];
   /** Set only in the repository lens, where a group is a real repository. */
   repo: Repo | null;
+  /** What a new worktree made from this group starts with. */
+  prefill: WorktreePrefill;
 }
 
 export interface LensOptions {
@@ -48,11 +50,12 @@ function byRepo(list: Worktree[], ctx: QueryContext, o: LensOptions): LensGroup[
       key: repo.id,
       label: repo.name,
       repo,
+      prefill: { repoId: repo.id },
       items: sortWorktrees(list.filter((w) => w.repo_id === repo.id), o.sort, ctx, o.manualOrder[repo.id] ?? []),
     }))
     .filter((g) => g.items.length > 0 || !g.repo.exists);
   const orphans = sortWorktrees(list.filter((w) => !o.repos.some((r) => r.id === w.repo_id)), o.sort, ctx);
-  return orphans.length > 0 ? [...groups, { key: "", label: OTHER_REPO.name, repo: OTHER_REPO, items: orphans }] : groups;
+  return orphans.length > 0 ? [...groups, { key: "", label: OTHER_REPO.name, repo: OTHER_REPO, prefill: {}, items: orphans }] : groups;
 }
 
 function bucket(list: Worktree[], keyOf: (w: Worktree) => string[]): Map<string, Worktree[]> {
@@ -61,10 +64,18 @@ function bucket(list: Worktree[], keyOf: (w: Worktree) => string[]): Map<string,
   return map;
 }
 
-function labelled(map: Map<string, Worktree[]>, lens: SidebarLens, ctx: QueryContext, o: LensOptions, label: (key: string) => string, rank: (key: string, items: Worktree[]) => number): LensGroup[] {
+function labelled(
+  map: Map<string, Worktree[]>,
+  lens: SidebarLens,
+  ctx: QueryContext,
+  o: LensOptions,
+  label: (key: string) => string,
+  rank: (key: string, items: Worktree[]) => number,
+  prefill: (key: string) => WorktreePrefill = () => ({}),
+): LensGroup[] {
   return [...map.entries()]
     .sort(([ka, ia], [kb, ib]) => rank(ka, ia) - rank(kb, ib) || ka.localeCompare(kb))
-    .map(([key, items]) => ({ key: `${lens}:${key}`, label: label(key), repo: null, items: sortWorktrees(items, o.sort, ctx) }));
+    .map(([key, items]) => ({ key: `${lens}:${key}`, label: label(key), repo: null, prefill: prefill(key), items: sortWorktrees(items, o.sort, ctx) }));
 }
 
 /**
@@ -76,9 +87,9 @@ export function lensGroups(list: Worktree[], lens: SidebarLens, ctx: QueryContex
     case "repo":
       return byRepo(list, ctx, o);
     case "project":
-      return labelled(bucket(list, (w) => [w.metadata.project || NO_PROJECT]), lens, ctx, o, (k) => k, (k) => (k === NO_PROJECT ? 1 : 0));
+      return labelled(bucket(list, (w) => [w.metadata.project || NO_PROJECT]), lens, ctx, o, (k) => k, (k) => (k === NO_PROJECT ? 1 : 0), (k) => (k === NO_PROJECT ? {} : { project: k }));
     case "tag":
-      return labelled(bucket(list, (w) => (w.metadata.tags.length > 0 ? w.metadata.tags : [NO_TAG])), lens, ctx, o, (k) => (k === NO_TAG ? k : `#${k}`), (k, items) => (k === NO_TAG ? Number.MAX_SAFE_INTEGER : -items.length));
+      return labelled(bucket(list, (w) => (w.metadata.tags.length > 0 ? w.metadata.tags : [NO_TAG])), lens, ctx, o, (k) => (k === NO_TAG ? k : `#${k}`), (k, items) => (k === NO_TAG ? Number.MAX_SAFE_INTEGER : -items.length), (k) => (k === NO_TAG ? {} : { tags: [k] }));
     case "focus":
       return labelled(bucket(list, (w) => [focusSection(w, ctx)]), lens, ctx, o, (k) => k, (k) => FOCUS_SECTIONS.indexOf(k as (typeof FOCUS_SECTIONS)[number]));
   }

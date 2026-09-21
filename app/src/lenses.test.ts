@@ -135,4 +135,12 @@ describe("every lens", () => {
   it("returns no group for no worktrees, except a missing repository", () => {
     for (const lens of LENSES) expect(lensGroups([], lens, ctx(), opts())).toEqual([]);
   });
+
+  it("prefills a new worktree with what its group has in common", () => {
+    const prefills = (lens: (typeof LENSES)[number]) => lensGroups(list, lens, ctx({ repos }), opts({ repos })).map((g) => [g.label, g.prefill]);
+    expect(prefills("repo")).toEqual([["r1", { repoId: "r1" }]]);
+    expect(prefills("project")).toEqual([["p", { project: "p" }], ["no project", {}]]);
+    expect(prefills("tag")).toEqual([["#t", { tags: ["t"] }], ["no tag", {}]]);
+    expect(prefills("focus").every(([, p]) => JSON.stringify(p) === "{}")).toBe(true);
+  });
 });

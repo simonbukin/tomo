@@ -226,7 +226,15 @@ async fn a_sibling_worktree_reads_the_repo_file_until_it_has_one_of_its_own() {
     let path = f.dir.join("feat-x");
     call(
         &f.daemon,
-        Call::WorktreeCreate(WorktreeCreate { repo_id, branch: "feat/x".into(), new_branch: true, start_ref: None, path: Some(path.clone()), name_hint: None }),
+        Call::WorktreeCreate(WorktreeCreate {
+            repo_id,
+            branch: "feat/x".into(),
+            new_branch: true,
+            start_ref: None,
+            path: Some(path.clone()),
+            name_hint: None,
+            metadata: None,
+        }),
     )
     .await
     .unwrap();
