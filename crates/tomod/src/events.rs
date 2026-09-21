@@ -208,25 +208,41 @@ impl Daemon {
     fn run_hook_in_pane(self: &Arc<Self>, hook: &HookDef, event: &HookEvent) {
         let Some(w) = &event.worktree else { return };
         let mut inner = self.lock();
-        let env = hook_env(event);
-        let exports: String = env.iter().map(|(k, v)| format!("export {}={}; ", k, crate::agents::shell_quote(v))).collect();
-        let line = format!("{exports}{}", hook.command);
-        let title = format!("hook: {}", event.event);
-        if let Err(e) =
-            self.spawn_in_worktree(&mut inner, &w.id, w.path.clone(), SpawnSpec { title: Some(title), ..SpawnSpec::default() }).map(|(_, pane_id)| {
-                if let Some(pane) = inner.panes.get_mut(&pane_id) {
-                    pane.pending_line = Some(line);
-                }
-                if let Some(pane) = inner.panes.get(&pane_id) {
-                    if pane.pty.is_some() {
-                        self.type_pending_when_quiet(pane_id.clone());
-                    }
-                }
-            })
-        {
+        if let Err(e) = self.open_hook_tab(&mut inner, hook, event, w) {
             tracing::warn!("pane hook for {}: {}", event.event, e.message);
         }
     }
+
+    fn open_hook_tab(self: &Arc<Self>, inner: &mut Inner, hook: &HookDef, event: &HookEvent, w: &HookWorktree) -> Result<(), RpcError> {
+        let front = match Self::active_tab(inner, &w.id) {
+            Some(tab) => tab,
+            None => self.spawn_in_worktree(inner, &w.id, w.path.clone(), SpawnSpec::default())?.0,
+        };
+        let title = hook_tab_title(&event.event);
+        let tab = Self::create_tab(inner, &w.id, Some(title.clone()));
+        let shell = inner.config.shell.clone();
+        let argv = [shell.clone(), "-c".to_string(), hook_pane_script(&hook_env(event), &hook.command, &event.event, &shell)];
+        self.spawn_in_worktree(
+            inner,
+            &w.id,
+            w.path.clone(),
+            SpawnSpec { tab_id: Some(&tab.id), command: Some(&argv), title: Some(title), ..SpawnSpec::default() },
+        )?;
+        Self::activate_tab(inner, &front)
+    }
+}
+
+pub fn hook_tab_title(event: &str) -> String {
+    match event {
+        "worktree.created" => "Setup".to_string(),
+        other => format!("hook: {other}"),
+    }
+}
+
+pub fn hook_pane_script(env: &[(String, String)], command: &str, event: &str, shell: &str) -> String {
+    let exports: String = env.iter().map(|(k, v)| format!("export {}={}\n", k, crate::agents::shell_quote(v))).collect();
+    let quote = crate::agents::shell_quote;
+    format!("{exports}{command}\nprintf '\\n[tomo] %s hook exited %s\\n' {} \"$?\"\nexec {} -l\n", quote(event), quote(shell))
 }
 
 #[cfg(test)]
@@ -362,5 +378,23 @@ mod tests {
         let runs = read_log(&dir, 2);
         assert_eq!(runs.iter().map(|r| r.event.as_str()).collect::<Vec<_>>(), vec!["e3", "e4"]);
         let _ = std::fs::remove_file(&dir);
+    }
+
+    #[test]
+    fn a_pane_hook_runs_its_command_reports_the_exit_and_leaves_a_shell() {
+        let env = vec![("TOMO_BRANCH".to_string(), "it's/main".to_string())];
+        let script = hook_pane_script(&env, "echo \"branch=$TOMO_BRANCH\"\nfalse", "worktree.created", "echo");
+        let out = std::process::Command::new("/bin/sh").args(["-c", &script]).output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains("branch=it's/main"), "{text}");
+        assert!(text.contains("[tomo] worktree.created hook exited 1"), "{text}");
+        assert!(text.trim_end().ends_with("-l"), "the last step execs the shell: {text}");
+        assert!(!text.contains("export"), "no export lines reach the terminal: {text}");
+    }
+
+    #[test]
+    fn only_the_created_hook_is_called_setup() {
+        assert_eq!(hook_tab_title("worktree.created"), "Setup");
+        assert_eq!(hook_tab_title("worktree.state_changed"), "hook: worktree.state_changed");
     }
 }

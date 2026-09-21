@@ -1107,7 +1107,7 @@ impl Daemon {
         Ok((id, cwd.to_path_buf()))
     }
 
-    fn active_tab(inner: &Inner, worktree_id: &str) -> Option<Id> {
+    pub(crate) fn active_tab(inner: &Inner, worktree_id: &str) -> Option<Id> {
         let mut tabs: Vec<&TabRow> = inner.tabs.values().filter(|t| t.worktree_id == worktree_id).collect();
         tabs.sort_by_key(|t| (!t.is_active, t.position));
         tabs.first().map(|t| t.id.clone())
@@ -1862,8 +1862,12 @@ impl Daemon {
     }
 
     async fn tab_activate(self: &Arc<Self>, tab_id: Id) -> Result<Value, RpcError> {
-        let mut inner = self.lock();
-        let worktree_id = inner.tabs.get(&tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.worktree_id.clone();
+        Self::activate_tab(&mut self.lock(), &tab_id)?;
+        Ok(Value::Null)
+    }
+
+    pub(crate) fn activate_tab(inner: &mut Inner, tab_id: &str) -> Result<(), RpcError> {
+        let worktree_id = inner.tabs.get(tab_id).ok_or_else(|| err(ErrorCode::NotFound, "tab not found"))?.worktree_id.clone();
         let changed: Vec<TabRow> = inner
             .tabs
             .values_mut()
@@ -1877,9 +1881,9 @@ impl Daemon {
             let _ = inner.store.tab_upsert(t);
         }
         if !changed.is_empty() {
-            Self::emit_tabs(&mut inner, &worktree_id);
+            Self::emit_tabs(inner, &worktree_id);
         }
-        Ok(Value::Null)
+        Ok(())
     }
 
     async fn tab_close(self: &Arc<Self>, tab_id: Id, force: bool) -> Result<Value, RpcError> {
@@ -2585,6 +2589,44 @@ mod tests {
         assert_eq!(pasted("a\nb"), "\x1b[200~a\nb\x1b[201~\r");
     }
 
+    fn no_seams() -> Seams {
+        Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![] }
+    }
+
+    fn repo_fixture(name: &str) -> (PathBuf, PathBuf) {
+        let dir = PathBuf::from(format!("/tmp/tomo-daemon-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        git_in(&repo, &["init", "-q"]);
+        git_in(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        (dir, repo)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_setup_hook_runs_in_its_own_tab_behind_a_plain_terminal() {
+        let (dir, repo) = repo_fixture("setup-tab");
+        std::fs::write(dir.join("data/config.toml"), "[[hooks]]\nevent = \"worktree.created\"\nmode = \"pane\"\ncommand = \"sleep 30\"\n").unwrap();
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.lock().config.shell = "/bin/sh".into();
+        daemon.handle(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let repo_id = daemon.lock().repos[0].id.clone();
+        let spec = WorktreeCreate { repo_id, branch: "feat".into(), new_branch: true, start_ref: None, path: Some(dir.join("wt")), name_hint: None };
+        let created = daemon.handle(0, Call::WorktreeCreate(spec)).await.unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+
+        let inner = daemon.lock();
+        let mut tabs: Vec<&TabRow> = inner.tabs.values().filter(|t| t.worktree_id == id).collect();
+        tabs.sort_by_key(|t| t.position);
+        assert_eq!(tabs.iter().map(|t| (t.title.as_str(), t.is_active)).collect::<Vec<_>>(), vec![("Tab 1", true), ("Setup", false)]);
+        let setup_pane = layout::pane_ids(&tabs[1].layout)[0].clone();
+        assert!(inner.panes[&setup_pane].pending_line.is_none(), "the hook runs as the pane command, not as typed input");
+        drop(inner);
+        daemon.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn git_in(dir: &Path, args: &[&str]) {
         let out = std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(dir).output().unwrap();
         assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
@@ -2602,15 +2644,7 @@ mod tests {
         git_in(&repo, &["worktree", "add", "-q", "-b", "feat", "../moriya"]);
         let linked = canonical(&dir.join("moriya"));
 
-        let seams = Seams {
-            worktree_namer: None,
-            worktree_created: vec![],
-            worktree_rebound: vec![],
-            worktree_files: vec![],
-            pane_exited: vec![],
-            process_polled: vec![],
-        };
-        let daemon = Daemon::new(Paths::new(dir.join("data")), seams, Box::new(())).unwrap();
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
         daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
         let repo_id = daemon.lock().repos[0].id.clone();
 
