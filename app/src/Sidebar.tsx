@@ -21,10 +21,12 @@ import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
+import { useGlide } from "./glide";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
 export function Sidebar() {
+  const nav = useGlide<HTMLElement>('[aria-current="page"]');
   const repos = useStore(visibleRepos);
   const worktrees = useStore((s) => s.worktrees);
   const selectionSize = useStore((s) => s.selection.size);
@@ -89,7 +91,8 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <SidebarHead />
-      <nav className="side-nav" aria-label="Views">
+      <nav className="side-nav" aria-label="Views" ref={nav}>
+        <span className="glide" aria-hidden />
         <Destination id="home" label="home" icon={House} current={ui.view === "home"} shortcut={shortcut("home")} />
         <Destination id="activity" label="activity" icon={History} count={needCount} current={ui.view === "activity"} shortcut={shortcut("activity")} />
         <Destination id="agents" label="agents" icon={Bot} count={agentCount} current={ui.view === "agents"} shortcut={shortcut("agents")} />

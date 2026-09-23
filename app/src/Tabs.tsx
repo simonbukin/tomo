@@ -9,6 +9,7 @@ import { keepInPlace, NewTabDrop, useTabSortable } from "./LayoutDnd";
 import { openMenu } from "./MenuHost";
 import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
+import { useGlide } from "./glide";
 import { useShortcuts } from "./shortcuts";
 import { dotClass } from "./glyphs";
 import {failQuietly, paneIds, useStore} from "./store";
@@ -28,6 +29,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const tabs = useStore((s) => s.tabs[worktreeId]) ?? [];
   const [editing, setEditing] = useState<Editing>(null);
   const shortcut = useShortcuts();
+  const bar = useGlide<HTMLDivElement>(".tab-active");
 
   const commit = () => {
     if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(failQuietly("tab_rename"));
@@ -35,7 +37,8 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   };
 
   return (
-    <div className="tabbar" role="tablist">
+    <div className="tabbar" role="tablist" ref={bar}>
+      <span className="glide" aria-hidden />
       <SortableContext items={tabs.map((t) => t.id)} strategy={keepInPlace}>
         {tabs.map((t) => (
           <TabItem key={t.id} tab={t} closable={tabs.length > 1} editing={editing} setEditing={setEditing} commit={commit} />
