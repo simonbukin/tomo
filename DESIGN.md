@@ -11,13 +11,28 @@ proportion, alignment, small marks, label-like metadata, and neat separators.
 Tomo is quiet, precise, warm, tactile, small, technical, useful, and lightly
 playful. Tomo is not an AI startup, a SaaS dashboard, cyberpunk, a gaming UI,
 an enterprise suite, an IDE clone, or a productivity cult. No gradients for
-their own sake, no sparkles, no glow, no oversized cards, no giant radii, no
+their own sake, no sparkles, no glow, no oversized cards, no rounded corners, no
 pill for every word.
+
+## The grid
+
+Tomo is built on slab: a strict grid of square cells.
+
+- The unit is `--u` (28 px). A row, a head, a button, a tab, and a status
+  cell are one unit tall. A two-line row or a stat cell is `--u2` (56 px).
+- Text sits `--inset` (14 px) in from the edge of its cell.
+- Surfaces run full bleed and sit edge to edge. Rules divide them. There is
+  no gutter between panes, cards, or columns.
+- Each column starts with its own head row. The sidebar head, the center
+  head, and the inspector head line up. The traffic lights sit in the first
+  head row; `--traffic-inset` keeps text clear of them.
+- A collapsed sidebar is one column of 28 px icon cells. Details go in the
+  hover card, not next to the icon.
 
 ## Hierarchy
 
-Build hierarchy with alignment, spacing, type weight, contrast, a subtle
-background, and a thin border. Add a container only when those fail.
+Build hierarchy with alignment, weight, contrast, and a 1 px rule. Add a
+container only when those fail.
 
 - Never put a card inside a card.
 - A group of related values is a grid with aligned columns, not a box.
@@ -26,79 +41,89 @@ background, and a thin border. Add a container only when those fail.
 
 ## Color
 
-Most of Tomo is neutral. Color carries meaning, not decoration.
+Slab is neutral ink on a neutral ground. Color carries status only.
 
-- **Accent** (`--accent`, a restrained purple) marks identity, selection,
-  active state, and focus. Never paint a large area with it.
+- **Selection is inversion.** The selected tab, row, view, lens, menu item,
+  and palette result take `--fg` as their background and `--bg` as their
+  text. `--accent` is the same value as `--fg`; there is no brand hue.
 - **Semantic state** is one vocabulary for the whole app: `--working`,
   `--waiting`, `--danger`, `--success`, plus the soft tints `--waiting-soft`
-  and `--danger-soft`. The dots and the glyphs are in `styles/base.css` and
+  and `--danger-soft`. The markers are small squares: filled for a live
+  state, hollow for a quiet one. See `styles/base.css` and
   `app/src/glyphs.ts`.
 - Do not invent a feature status color. If a feature needs a new state, add it
   to the shared vocabulary or map it onto an existing one.
 - Every color is a token. `[theme]` in `config.toml` restyles the whole app,
   so a hard-coded color breaks a user's theme. See `docs/theming.md`.
 
-Light and dark are one design with two palettes, not two designs. Write local
-CSS against the tokens and it works in both.
+Light and dark are one design with two palettes, `slab-light` and
+`slab-dark`. Write local CSS against the tokens and it works in both.
 
 ## Shape
 
-- Radius: `--radius-sm` (3 px) for a small chip or a key cap, `--radius`
-  (4 px) for a control, `--radius-md` (6 px) for a floating surface.
-- Borders are 1 px and quiet (`--line`), or 1 px and clear (`--line-strong`).
+- Every corner is square. The radius tokens are 0 and stay 0.
+- Rules are 1 px and drawn as inset box shadows, so they take no space and
+  never push a row off the grid. Use `--line` for a quiet rule and
+  `--line-strong` for a frame.
+- A separator is an element of zero height with a rule, not a margin.
 - Most UI is flat. Depth belongs to floating surfaces only: menu, popover,
-  dialog, hover preview, toast. Those use `--shadow-pop` or `--shadow-dialog`.
+  dialog, hover preview, toast. Those use `--shadow-pop` or `--shadow-dialog`,
+  a 1 px ring and one drop shadow.
 
 ## Typography
 
-Two faces. Do not add a third.
+Three faces, bundled in `app/src/assets/fonts/` under the SIL Open Font
+License. Tomo looks the same offline and never flashes a fallback face.
 
-- **Hiragino Sans** (`--font-ui`) is the human face: navigation, headings,
-  labels, buttons, body copy, and Japanese text. It ships with macOS.
-- **Commit Mono** (`--mono`) is the technical face: paths, branch names,
-  ports, ids, commands, timestamps, and code.
+- **Sofia Sans** (`--font-ui`) is the text face: navigation, labels,
+  buttons, and body copy.
+- **Sofia Sans Extra Condensed** (`--font-display`, the `.display` class) is
+  the display face: a scope name, a greeting, a stat value. Set it heavy and
+  in capitals, one or two units tall.
+- **Red Hat Mono** (`--mono`) is the technical face: paths, branch names,
+  tags, ports, ids, commands, timestamps, and numbers in tables.
 
-Neither font is bundled. Tomo does not ship font files and does not depend on
-one at startup. Each token falls back on its own: `--font-ui` to
-`-apple-system` and `system-ui`, `--mono` to `ui-monospace` and `SF Mono`. A
-machine without Commit Mono gets a clean monospace and loses nothing but the
-preferred shape.
+Terminals do not use `--mono`. They keep the font that `[terminal]` sets in
+`config.toml`.
 
-- Use mono where machine-ness helps hierarchy. Do not push every piece of
-  metadata into mono.
-- The scale is four sizes: `--fs-0` 11 px, `--fs-1` 12 px, `--fs-2` 13 px
-  (the body), `--fs-3` 14 px. A bigger size needs a reason.
-- Weight goes to 500 or 600 for a name or a title. Nothing is bold for
-  emphasis alone.
+- The scale is `--fs-0` 11 px, `--fs-1` 12 px, `--fs-2` 13 px (the body),
+  `--fs-3` 14 px, and `--fs-4` 22 px for a stat value.
+- Weight goes to 600 or 700 for a name, a head, or a title.
 - Labels are lowercase. Numbers use tabular figures so columns line up.
-- The wordmark is the word `tomo`, set in `--font-ui` at weight 700. The mark
-  is the locked smile in `app/src/brandFace.ts`. There is no third brand
-  object, and no font file for branding.
+- The wordmark is the word `tomo`. The mark is the locked smile in
+  `app/src/brandFace.ts`. The splash in `app/index.html` draws the same smile
+  and must stay.
 
-## Spacing and density
+## Density
 
 Tomo is compact and information-rich. Do not add whitespace to look modern.
 
-- Space is `--sp-1` 4, `--sp-2` 8, `--sp-3` 12, `--sp-4` 16, `--sp-5` 24.
-- Dense rows are 22 to 30 px high. The sidebar worktree row is a fixed 42 px
-  for two lines, whatever it holds.
+- Space inside a cell is `--sp-1` 4, `--sp-2` 8, `--sp-3` 12, `--sp-4` 16,
+  `--sp-5` 24. Space between cells is a rule, not a gap.
+- The sidebar worktree row is a fixed two units for three lines, whatever it
+  holds.
 - A line never wraps in a dense row. It cuts with an ellipsis.
+- Too many tabs shrink from 140 px to 72 px, then the tab row scrolls.
 
 ## Motion
 
 Motion confirms a change. It never entertains.
 
-- Three durations: `--dur-fast` 80 ms (press, small state), `--dur-hover`
-  100 ms (hover and close), `--dur-open` 140 ms (open and arrival).
-- Two curves: `--ease-out` for hover, press, and open; `--ease-in` for close.
+- One curve, `--ease-out` (`cubic-bezier(0.2, 0.8, 0.2, 1)`), and two
+  speeds: `--dur-fast` 120 ms for hover and press, `--dur-open` 240 ms for
+  open, arrival, and the selection block.
+- The selection block glides. The tab bar, the sidebar views, and each
+  segmented control hold one inverted `.glide` cell that `useGlide` in
+  `app/src/glide.ts` moves to the selected item. It jumps into place when it
+  first appears.
+- Dialogs, the palette, and toasts rise 8 px as they fade in. Nothing scales.
 - A view change is not animated. Reflow is: a lens change moves the rows
-  that are already there, with `useFlip`, over 200 ms. Reflow the same
-  things; do not animate the arrival of new ones.
-- Animate `transform` and `opacity` only. Everything else is layout or paint,
-  and this window is full of canvases that pay for both.
+  that are already there, with `useFlip`. Do not animate the arrival of new
+  rows.
+- Animate `transform`, `translate`, and `opacity` only, plus the size of the
+  selection block. This window is full of canvases that pay for layout.
 - No springs, no bounce, no parallax. Under `prefers-reduced-motion` every
-  duration is 0 and the press scale is 1.
+  duration is 0.
 
 ## Interaction
 
@@ -106,11 +131,15 @@ Base UI owns interaction. Tomo owns the design. Use the primitives in
 `app/src/components/ui/` before you build a menu, dialog, popover, tooltip,
 select, or button.
 
-- Every control shows a 2 px accent focus ring on `:focus-visible`.
+- Every control shows a 2 px ring in `--fg` on `:focus-visible`, drawn
+  inside the cell so it never breaks the grid.
 - Every icon-only control is an `IconButton` with a label. The label is the
   tooltip and the accessible name.
-- A control keeps at least `--hit-min` (24 px) of clickable area, whatever it
+- A control keeps at least `--hit-min` (28 px) of clickable area, whatever it
   looks like.
+- A drop zone is inverted: the target turns `--fg` and names the result.
+- Resizing is free. The sidebars and the splits take any width the user
+  drags to.
 - Keyboard behavior comes from the command registry. See `docs/keyboard.md`.
 
 ## Where styles live
