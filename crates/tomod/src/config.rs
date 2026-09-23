@@ -1,8 +1,8 @@
 use anyhow::Result;
 use serde::Deserialize;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use tomo_proto::{AgentCommand, Config, ConfigIssue, HookDef, HookMode, IssueLevel, NotificationSettings, StateDef, ThemeConfig, HOOK_EVENTS};
+use tomo_proto::{AgentCommand, Config, ConfigIssue, HookDef, HookMode, IssueLevel, NotificationSettings, ThemeConfig, HOOK_EVENTS};
 
 pub struct Paths {
     pub data_dir: PathBuf,
@@ -65,8 +65,7 @@ struct FileConfig {
     keybindings: BTreeMap<String, String>,
     #[serde(default)]
     agents: BTreeMap<String, AgentCommandFile>,
-    #[serde(default)]
-    states: Vec<StateFile>,
+    states: Option<toml::Value>,
     #[serde(default)]
     hooks: Vec<HookFile>,
     #[serde(default)]
@@ -87,17 +86,10 @@ struct AgentCommandFile {
 }
 
 #[derive(Debug, Deserialize)]
-struct StateFile {
-    id: String,
-    label: Option<String>,
-    order: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
 struct HookFile {
     event: String,
     command: String,
-    state: Option<String>,
+    tag: Option<String>,
     mode: Option<String>,
     timeout_s: Option<u64>,
 }
@@ -114,33 +106,12 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # scrollback_lines = 10000
 # max_panes_per_tab = 4
 
-# Workflow states. A worktree has at most one state. Order controls grouping.
-# [[states]]
-# id = "exploring"
-# label = "Exploring"
-# order = 10
-#
-# [[states]]
-# id = "active"
-# label = "Active"
-# order = 20
-#
-# [[states]]
-# id = "waiting-review"
-# label = "Waiting on review"
-# order = 30
-#
-# [[states]]
-# id = "merged"
-# label = "Merged"
-# order = 40
-
 # Hooks run ordinary commands when something happens. The event JSON arrives
 # on stdin and in TOMO_EVENT_JSON. mode = "pane" runs the command in a visible
 # terminal pane of the worktree. `worktree.before_archive` is the only hook
 # that Tomo waits for; a non-zero exit aborts the archive.
 # Events: worktree.discovered, worktree.created, worktree.before_archive,
-#   worktree.archived, worktree.restored, worktree.state_changed, pane.created,
+#   worktree.archived, worktree.restored, worktree.tags_changed, pane.created,
 #   pane.closed, agent.started, agent.working, agent.waiting, agent.idle,
 #   agent.exited, attention.created
 #
@@ -150,8 +121,8 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # mode = "pane"
 #
 # [[hooks]]
-# event = "worktree.state_changed"
-# state = "merged"
+# event = "worktree.tags_changed"
+# tag = "merged"
 # command = "~/.config/tomo/hooks/merged"
 
 # Archive deletes the heavy build directories before it removes the worktree.
@@ -273,13 +244,6 @@ fn default_agents() -> BTreeMap<String, AgentCommand> {
         .collect()
 }
 
-pub fn default_states() -> Vec<StateDef> {
-    [("exploring", "Exploring", 10), ("active", "Active", 20), ("waiting-review", "Waiting on review", 30), ("merged", "Merged", 40)]
-        .into_iter()
-        .map(|(id, label, order)| StateDef { id: id.into(), label: label.into(), order })
-        .collect()
-}
-
 pub fn expand_tilde(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();
     match s.strip_prefix("~/") {
@@ -345,22 +309,13 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
     keybindings.extend(file.keybindings);
     let mut agents = default_agents();
     agents.extend(file.agents.into_iter().map(|(k, v)| (k, AgentCommand { command: v.command, args: v.args })));
-    let states = if file.states.is_empty() {
-        default_states()
-    } else {
-        file.states
-            .into_iter()
-            .enumerate()
-            .map(|(i, s)| StateDef { label: s.label.unwrap_or_else(|| humanize(&s.id)), order: s.order.unwrap_or((i as i32 + 1) * 10), id: s.id })
-            .collect()
-    };
     let hooks = file
         .hooks
         .into_iter()
         .map(|h| HookDef {
             event: h.event,
             command: h.command,
-            state: h.state,
+            tag: h.tag,
             mode: if h.mode.as_deref() == Some("pane") { HookMode::Pane } else { HookMode::Async },
             timeout_s: h.timeout_s.unwrap_or(60),
         })
@@ -381,11 +336,11 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         max_panes_per_tab: file.max_panes_per_tab.unwrap_or(4).max(1),
         keybindings,
         agents,
-        states,
         hooks,
         notifications: NotificationSettings { desktop: file.notifications.desktop.unwrap_or(true), sounds: file.notifications.sounds.unwrap_or(false) },
     };
-    (cfg, [theme_issues, terminal_issues].concat())
+    let states_issue = file.states.map(|_| issue(IssueLevel::Warning, "states", "workflow states are gone; tags replace them. Remove [[states]]."));
+    (cfg, [theme_issues, terminal_issues, states_issue.into_iter().collect()].concat())
 }
 
 /// A value, or its fallback together with the reason the value was refused.
@@ -570,15 +525,6 @@ pub fn set_value(text: &str, key: &str, value: &serde_json::Value) -> std::resul
     Ok(out)
 }
 
-fn humanize(id: &str) -> String {
-    let text = id.replace(['-', '_'], " ");
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => text,
-    }
-}
-
 pub fn resolve_program(word: &str) -> Option<PathBuf> {
     let expanded = expand_tilde(Path::new(word));
     if expanded.components().count() > 1 {
@@ -617,15 +563,6 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
             out.push(issue(IssueLevel::Warning, "worktree_parent_dir", format!("{} does not exist yet", dir.display())));
         }
     }
-    let mut seen = HashSet::new();
-    for s in &cfg.states {
-        if s.id.trim().is_empty() || s.id.contains(char::is_whitespace) {
-            out.push(issue(IssueLevel::Error, "states", format!("state id {:?} must be a single word", s.id)));
-        }
-        if !seen.insert(s.id.clone()) {
-            out.push(issue(IssueLevel::Error, "states", format!("duplicate state id {}", s.id)));
-        }
-    }
     for (i, h) in cfg.hooks.iter().enumerate() {
         let key = format!("hooks[{i}]");
         if !HOOK_EVENTS.contains(&h.event.as_str()) {
@@ -637,13 +574,8 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
         } else if resolve_program(program).is_none() && !program.starts_with('.') {
             out.push(issue(IssueLevel::Warning, &key, format!("{program} not found on PATH; it will run through sh -c anyway")));
         }
-        if let Some(state) = &h.state {
-            if !cfg.states.iter().any(|s| &s.id == state) {
-                out.push(issue(IssueLevel::Warning, &key, format!("filters on unknown state {state:?}")));
-            }
-            if h.event != "worktree.state_changed" {
-                out.push(issue(IssueLevel::Warning, &key, "state filter only applies to worktree.state_changed"));
-            }
+        if h.tag.is_some() && h.event != "worktree.tags_changed" {
+            out.push(issue(IssueLevel::Warning, &key, "tag filter only applies to worktree.tags_changed"));
         }
         if h.timeout_s == 0 {
             out.push(issue(IssueLevel::Error, &key, "timeout_s must be greater than 0"));
@@ -687,7 +619,6 @@ mod tests {
         assert_eq!(cfg.keybindings["palette"], "mod+k");
         assert_eq!(cfg.keybindings["settings"], "mod+,");
         assert_eq!(cfg.resource_warning_bytes, 2 * 1024 * 1024 * 1024);
-        assert_eq!(cfg.states.len(), 4);
         assert!(cfg.hooks.is_empty());
     }
 
@@ -721,20 +652,19 @@ mod tests {
     }
 
     #[test]
-    fn states_and_hooks_parse_with_defaults() {
-        let (cfg, _) = parse("[[states]]\nid = \"in-flight\"\n\n[[hooks]]\nevent = \"worktree.created\"\ncommand = \"echo hi\"\nmode = \"pane\"\n");
-        assert_eq!(cfg.states[0].label, "In flight");
-        assert_eq!(cfg.states[0].order, 10);
+    fn hooks_parse_with_defaults_and_old_states_only_warn() {
+        let (cfg, issues) = parse("[[states]]\nid = \"in-flight\"\n\n[[hooks]]\nevent = \"worktree.created\"\ncommand = \"echo hi\"\nmode = \"pane\"\n");
+        assert_eq!(issue_keys(&issues), vec!["states"]);
         assert_eq!(cfg.hooks[0].mode, HookMode::Pane);
         assert_eq!(cfg.hooks[0].timeout_s, 60);
     }
 
     #[test]
-    fn check_reports_unknown_events_and_duplicate_states() {
-        let (cfg, _) = parse("[[states]]\nid = \"a\"\n[[states]]\nid = \"a\"\n[[hooks]]\nevent = \"nope.event\"\ncommand = \"sh\"\n");
+    fn check_reports_unknown_events_and_a_misplaced_tag_filter() {
+        let (cfg, _) = parse("[[hooks]]\nevent = \"nope.event\"\ncommand = \"sh\"\n[[hooks]]\nevent = \"agent.waiting\"\ntag = \"x\"\ncommand = \"sh\"\n");
         let issues = check(&cfg);
         let messages: Vec<String> = issues.iter().map(|i| i.message.clone()).collect();
-        assert!(messages.iter().any(|m| m.contains("duplicate state id a")), "{messages:?}");
+        assert!(messages.iter().any(|m| m.contains("tag filter only applies")), "{messages:?}");
         assert!(messages.iter().any(|m| m.contains("unknown event")), "{messages:?}");
     }
 

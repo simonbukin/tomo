@@ -658,17 +658,11 @@ pub struct IntegrationStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct StateDef {
-    pub id: String,
-    pub label: String,
-    pub order: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct HookDef {
     pub event: String,
     pub command: String,
-    pub state: Option<String>,
+    /// For `worktree.tags_changed`: run only when this tag is added.
+    pub tag: Option<String>,
     pub mode: HookMode,
     pub timeout_s: u64,
 }
@@ -698,7 +692,8 @@ pub struct HookEvent {
     pub event: String,
     pub at_ms: u64,
     pub worktree: Option<HookWorktree>,
-    pub previous_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub previous_tags: Vec<String>,
     pub pane: Option<HookPane>,
     pub agent: Option<HookAgent>,
     pub attention: Option<AttentionItem>,
@@ -720,8 +715,6 @@ pub struct HookWorktree {
     pub repo_path: PathBuf,
     pub branch: Option<String>,
     pub name: String,
-    pub state: Option<String>,
-    pub project: Option<String>,
     pub tags: Vec<String>,
 }
 
@@ -745,7 +738,7 @@ pub const HOOK_EVENTS: &[&str] = &[
     "worktree.before_archive",
     "worktree.archived",
     "worktree.restored",
-    "worktree.state_changed",
+    "worktree.tags_changed",
     "pane.created",
     "pane.closed",
     "agent.started",
@@ -796,8 +789,6 @@ pub struct Config {
     pub max_panes_per_tab: u32,
     pub keybindings: BTreeMap<String, String>,
     pub agents: BTreeMap<String, AgentCommand>,
-    #[serde(default)]
-    pub states: Vec<StateDef>,
     #[serde(default)]
     pub hooks: Vec<HookDef>,
     #[serde(default)]
@@ -928,9 +919,6 @@ pub struct GitSummary {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct WorktreeMetadata {
     pub display_name: Option<String>,
-    pub project: Option<String>,
-    #[serde(default)]
-    pub state: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -940,12 +928,6 @@ pub struct MetadataPatch {
     #[serde(default, with = "double_option")]
     #[ts(optional, type = "string | null")]
     pub display_name: Option<Option<String>>,
-    #[serde(default, with = "double_option")]
-    #[ts(optional, type = "string | null")]
-    pub project: Option<Option<String>>,
-    #[serde(default, with = "double_option")]
-    #[ts(optional, type = "string | null")]
-    pub state: Option<Option<String>>,
     #[serde(default)]
     #[ts(optional)]
     pub tags: Option<Vec<String>>,
@@ -968,8 +950,6 @@ impl MetadataPatch {
     pub fn apply(&self, base: &WorktreeMetadata) -> WorktreeMetadata {
         WorktreeMetadata {
             display_name: self.display_name.clone().unwrap_or_else(|| base.display_name.clone()),
-            project: self.project.clone().unwrap_or_else(|| base.project.clone()),
-            state: self.state.clone().unwrap_or_else(|| base.state.clone()),
             tags: self.tags.clone().unwrap_or_else(|| base.tags.clone()),
         }
     }
@@ -1325,13 +1305,11 @@ mod tests {
 
     #[test]
     fn metadata_patch_distinguishes_unset_from_clear() {
-        let base = WorktreeMetadata { display_name: Some("a".into()), project: Some("p".into()), state: Some("active".into()), tags: vec!["x".into()] };
-        let patch: MetadataPatch = serde_json::from_str(r#"{"project": null, "state": "merged"}"#).unwrap();
-        let out = patch.apply(&base);
-        assert_eq!(out.display_name.as_deref(), Some("a"));
-        assert_eq!(out.project, None);
-        assert_eq!(out.state.as_deref(), Some("merged"));
-        assert_eq!(out.tags, vec!["x".to_string()]);
+        let base = WorktreeMetadata { display_name: Some("a".into()), tags: vec!["x".into()] };
+        let cleared: MetadataPatch = serde_json::from_str(r#"{"display_name": null}"#).unwrap();
+        assert_eq!(cleared.apply(&base), WorktreeMetadata { display_name: None, tags: vec!["x".into()] });
+        let tagged: MetadataPatch = serde_json::from_str(r#"{"tags": ["merged"]}"#).unwrap();
+        assert_eq!(tagged.apply(&base), WorktreeMetadata { display_name: Some("a".into()), tags: vec!["merged".into()] });
     }
 
     #[test]

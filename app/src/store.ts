@@ -353,7 +353,7 @@ export function needsMe(s: State): AttentionItem[] {
 export const unviewedAttention = needsMe;
 
 export function queryContext(s: State): QueryContext {
-  return { repos: s.repos, agents: Object.values(s.agents), attention: s.attention, states: s.config?.states ?? [] };
+  return { repos: s.repos, agents: Object.values(s.agents), attention: s.attention };
 }
 
 export function agentsOf(s: State, worktreeId: Id): AgentPresence[] {

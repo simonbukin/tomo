@@ -50,7 +50,7 @@ Every agent presence, attention item, and process classification carries a
 known worktree.
 
 Tomo has no Task, Job, Run, or Project object. Organization is metadata on the
-worktree (display name, project, state, tags).
+worktree (display name and tags).
 
 Why: one durable unit makes recovery, resource roll-up, and attention routing
 simple. The user thinks in worktrees, so Tomo does too.
@@ -62,7 +62,7 @@ overwrite it.
 
 | Category                    | Examples                                                       | Rule                                                          |
 |-----------------------------|----------------------------------------------------------------|---------------------------------------------------------------|
-| Authoritative Tomo metadata | known repository roots; display name, project, state, tags, town unlocks | Only the user (through GUI, CLI, or a hook script) changes it. |
+| Authoritative Tomo metadata | known repository roots; display name, tags, town unlocks | Only the user (through GUI, CLI, or a hook script) changes it. The GitHub addon also sets its reserved tags. |
 | Cached external observation | worktree path, gitdir name, branch, dirty state, diff counts   | Rediscovered from Git on every refresh. Never trusted forever. |
 | Recoverable runtime state   | tabs, layout tree, panes, cwd, agent kind, session reference, attention, UI state | Written so a restart can rebuild the shape of the work. |
 
@@ -149,23 +149,27 @@ reference always updates. See `agents::merge` and
 Why: a hook says "waiting". A CPU sample a second later says "working" because
 the terminal repainted. The weaker signal must not win.
 
-## States and tags
+## Tags
 
-A worktree has at most one **state** and any number of **tags**. State
-answers "where is this in my workflow?"; tags answer "what is this about?".
-The state values are personal configuration (`[[states]]` in
-`config.toml`), not protocol enums. The daemon rejects a state that the
-config does not list, so every client sees the same taxonomy.
+A worktree has any number of **tags**. Tags are free text with no leading
+`#`, and the daemon removes duplicates. Tags do all of the grouping: the
+sidebar tag lens, the Home groups, and the board columns. A tag can say what
+the work is about (`labor`) or where it is in your workflow (`ready`).
 
-Why two dimensions: grouping, filtering, and hooks want one ordered axis
-(state) and one free-form axis (tags). A state disguised as a tag has no
-order and no single value.
+The GitHub addon owns six reserved tags (`draft`, `review`,
+`changes-requested`, `approved`, `merged`, `closed`). It keeps exactly one
+of them on a worktree that has a pull request. See
+[features/github.md](features/github.md).
+
+Why one dimension: a separate state field needed its own config, its own
+CLI flags, and its own hook filter. A tag does the same work, and a hook can
+act when a tag is added.
 
 ## Events and hooks
 
 Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
 worktree discovered, created, before_archive, archived, restored,
-state_changed; pane created and closed; agent started, working, waiting,
+tags_changed; pane created and closed; agent started, working, waiting,
 idle, exited; attention created; action started, exited, and crashed;
 runtime endpoint discovered and removed; checkpoint created and resolved.
 Each event runs the matching `[[hooks]]`

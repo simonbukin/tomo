@@ -48,7 +48,6 @@ export type {
   Snapshot,
   SpawnResult,
   SplitDirection,
-  StateDef,
   Ownership,
   ProcessInfo,
   Status,
@@ -65,12 +64,12 @@ import type { AgentKind } from "./generated";
 
 export type Id = string;
 
-export type SidebarSort = "name" | "recent" | "created" | "attention" | "state" | "manual";
+export type SidebarSort = "name" | "recent" | "created" | "attention" | "manual";
 
 /** How the sidebar arranges the same worktrees. A lens never changes worktree state. */
-export type SidebarLens = "repo" | "project" | "tag" | "focus";
+export type SidebarLens = "repo" | "tag" | "focus";
 
-export type WorktreePrefill = { repoId?: Id; project?: string; tags?: string[] };
+export type WorktreePrefill = { repoId?: Id; tags?: string[] };
 
 export type SidebarMode = "open" | "minimal" | "closed";
 
@@ -109,7 +108,7 @@ export interface UiState {
   paletteRecent: string[];
 }
 
-export type FilterKind = "state" | "repo" | "project" | "tag" | "agent" | "archived" | "attention";
+export type FilterKind = "repo" | "tag" | "agent" | "archived" | "attention";
 
 export interface Filter {
   kind: FilterKind;
@@ -120,7 +119,6 @@ export interface Filter {
 export type HomeScope =
   | { kind: "all" }
   | { kind: "repo"; repoId: Id }
-  | { kind: "project"; project: string }
   | { kind: "tag"; tag: string };
 
 export interface HomeOptions {
@@ -128,8 +126,8 @@ export interface HomeOptions {
   scope: HomeScope;
   filters: Filter[];
   view: "list" | "board";
-  sort: "state" | "recent" | "created" | "name";
-  group: "state" | "repo" | "project" | "tag" | "none";
+  sort: "recent" | "created" | "name";
+  group: "tag" | "repo" | "none";
   showArchived: boolean;
 }
 

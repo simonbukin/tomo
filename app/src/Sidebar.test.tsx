@@ -25,7 +25,7 @@ const base = {
   is_main: false,
   exists: true,
   git: null,
-  metadata: { display_name: null, project: null, state: null, tags: [] },
+  metadata: { display_name: null, tags: [] },
   last_active_ms: null,
   first_seen_ms: null,
   archived_at_ms: null,
@@ -69,7 +69,7 @@ const slotCounts = (c: HTMLElement) => SLOTS.map((slot) => c.querySelectorAll(`.
 describe("worktree row height contract", () => {
   const cases: [string, Worktree, AgentPresence[]][] = [
     ["quiet", worktree({ branch: null, detached: true }), []],
-    ["loud", worktree({ is_main: true, git: { dirty: true } as unknown as Worktree["git"], metadata: { ...base.metadata, state: "exploring", tags: ["lr", "ui"] } }), [agent("p1", "waiting"), agent("p2", "working")]],
+    ["loud", worktree({ is_main: true, git: { dirty: true } as unknown as Worktree["git"], metadata: { ...base.metadata, tags: ["lr", "ui", "exploring"] } }), [agent("p1", "waiting"), agent("p2", "working")]],
     ["archived", worktree({ archived_at_ms: 1 }), [agent("p1", "working")]],
     ["archiving", worktree({ archiving: true }), []],
   ];

@@ -20,7 +20,7 @@ describe("sanitizeUi", () => {
       rightWidth: 420,
       sidebarSort: "manual",
       collapsedRepos: ["r1"],
-      home: { query: "labor", scope: { kind: "all" }, filters: [{ kind: "state", value: "active" }], view: "board", sort: "recent", group: "repo", showArchived: true },
+      home: { query: "labor", scope: { kind: "all" }, filters: [{ kind: "tag", value: "active" }], view: "board", sort: "recent", group: "repo", showArchived: true },
       manualOrder: { r1: ["w2", "w1"] },
       repoOrder: ["r2", "r1"],
     };
@@ -33,6 +33,15 @@ describe("sanitizeUi", () => {
     expect(sanitizeUi({ home: { scope: { kind: "repo" } } }, []).home.scope).toEqual({ kind: "all" });
     expect(sanitizeUi({ home: { scope: "nope" } }, []).home.scope).toEqual({ kind: "all" });
     expect(sanitizeUi({ home: { scope: { kind: "elsewhere", repoId: "r1" } } }, []).home.scope).toEqual({ kind: "all" });
+  });
+
+  it("reads a saved project or state as the tag it became", () => {
+    const ui = sanitizeUi(
+      { lens: "project", home: { scope: { kind: "project", project: "labor" }, filters: [{ kind: "state", value: "merged" }, { kind: "project", value: "" }], sort: "state", group: "state" } },
+      [],
+    );
+    expect(ui.lens).toBe("tag");
+    expect(ui.home).toEqual({ ...defaultUi.home, scope: { kind: "tag", tag: "labor" }, filters: [{ kind: "tag", value: "merged" }] });
   });
 
   it("clamps sidebar widths and rejects non-numbers", () => {

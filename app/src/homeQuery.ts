@@ -1,31 +1,14 @@
 import { byManualOrder, mainFirst } from "./order";
 import { needsMeItem } from "./activityModel";
-import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, StateDef, Worktree } from "./types";
+import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
 
 export interface QueryContext {
   repos: Repo[];
   agents: AgentPresence[];
   attention: AttentionItem[];
-  states: StateDef[];
 }
 
-export const NO_STATE = "no state";
 export const NO_TAG = "no tag";
-
-export function orderedStates(states: StateDef[]): StateDef[] {
-  return [...states].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-}
-
-export function stateLabel(states: StateDef[], id: string | null | undefined): string | null {
-  if (!id) return null;
-  return states.find((s) => s.id === id)?.label ?? id;
-}
-
-function stateRank(states: StateDef[], id: string | null): number {
-  if (!id) return Number.MAX_SAFE_INTEGER;
-  const idx = orderedStates(states).findIndex((s) => s.id === id);
-  return idx < 0 ? Number.MAX_SAFE_INTEGER - 1 : idx;
-}
 
 export function repoName(repos: Repo[], repoId: string): string {
   return repos.find((r) => r.id === repoId)?.name ?? "?";
@@ -49,12 +32,8 @@ function agentStateOf(w: Worktree, ctx: QueryContext): string {
 
 export function matchesFilter(w: Worktree, f: Filter, ctx: QueryContext): boolean {
   switch (f.kind) {
-    case "state":
-      return (w.metadata.state ?? "") === f.value;
     case "repo":
       return w.repo_id === f.value;
-    case "project":
-      return (w.metadata.project ?? "") === f.value;
     case "tag":
       return w.metadata.tags.includes(f.value);
     case "agent":
@@ -69,7 +48,7 @@ export function matchesFilter(w: Worktree, f: Filter, ctx: QueryContext): boolea
 export function matchesQuery(w: Worktree, query: string, ctx: QueryContext): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const hay = [w.name, w.branch ?? "", w.metadata.project ?? "", w.metadata.state ?? "", stateLabel(ctx.states, w.metadata.state) ?? "", w.metadata.tags.join(" "), repoName(ctx.repos, w.repo_id), w.path]
+  const hay = [w.name, w.branch ?? "", w.metadata.tags.join(" "), repoName(ctx.repos, w.repo_id), w.path]
     .join(" ")
     .toLowerCase();
   return hay.includes(q);
@@ -100,49 +79,39 @@ export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | Side
         return (b.first_seen_ms ?? 0) - (a.first_seen_ms ?? 0) || a.name.localeCompare(b.name);
       case "attention":
         return rank(a) - rank(b) || recent(b) - recent(a) || a.name.localeCompare(b.name);
-      case "state":
-        return stateRank(ctx.states, a.metadata.state) - stateRank(ctx.states, b.metadata.state) || recent(b) - recent(a) || a.name.localeCompare(b.name);
     }
   }));
 }
 
-export function groupKey(w: Worktree, group: HomeOptions["group"], ctx: QueryContext): string {
+/** The tags after a board drag from the column `from` to the column `to`. Column keys are `#tag` or `NO_TAG`. */
+export function movedTags(tags: readonly string[], from: string, to: string): string[] {
+  const tagOf = (key: string) => (key === NO_TAG ? null : key.replace(/^#/, ""));
+  const [source, target] = [tagOf(from), tagOf(to)];
+  const kept = tags.filter((t) => t !== source);
+  return target === null || kept.includes(target) ? kept : [...kept, target];
+}
+
+/** A worktree belongs to each of its tags, and to one group of every other grouping. */
+export function groupKeys(w: Worktree, group: HomeOptions["group"], ctx: QueryContext): string[] {
   switch (group) {
-    case "state":
-      return stateLabel(ctx.states, w.metadata.state) ?? NO_STATE;
-    case "repo":
-      return repoName(ctx.repos, w.repo_id);
-    case "project":
-      return w.metadata.project ?? "no project";
     case "tag":
-      return w.metadata.tags[0] ? `#${w.metadata.tags[0]}` : NO_TAG;
+      return w.metadata.tags.length > 0 ? w.metadata.tags.map((t) => `#${t}`) : [NO_TAG];
+    case "repo":
+      return [repoName(ctx.repos, w.repo_id)];
     case "none":
-      return "";
+      return [""];
   }
 }
 
-/** A worktree belongs to one group of every lens but tags, where it belongs to each of its tags. */
-export function groupKeys(w: Worktree, group: HomeOptions["group"], ctx: QueryContext): string[] {
-  if (group !== "tag") return [groupKey(w, group, ctx)];
-  return w.metadata.tags.length > 0 ? w.metadata.tags.map((t) => `#${t}`) : [NO_TAG];
-}
-
 export function groupWorktrees(list: Worktree[], group: HomeOptions["group"], ctx: QueryContext): { key: string; items: Worktree[] }[] {
-  const order = group === "state" ? [...orderedStates(ctx.states).map((s) => s.label), NO_STATE] : null;
   const map = new Map<string, Worktree[]>();
-  if (group === "state") for (const key of order ?? []) map.set(key, []);
   for (const w of list) {
     for (const key of groupKeys(w, group, ctx)) map.set(key, [...(map.get(key) ?? []), w]);
   }
   const keys = [...map.keys()].sort((a, b) => {
-    if (order) {
-      const ia = order.indexOf(a);
-      const ib = order.indexOf(b);
-      return (ia < 0 ? order.length - 1 : ia) - (ib < 0 ? order.length - 1 : ib) || a.localeCompare(b);
-    }
     if (a.startsWith("no ")) return 1;
     if (b.startsWith("no ")) return -1;
     return a.localeCompare(b);
   });
-  return keys.map((key) => ({ key, items: map.get(key) ?? [] })).filter((g) => g.items.length > 0 || (group === "state" && g.key !== NO_STATE));
+  return keys.map((key) => ({ key, items: map.get(key) ?? [] }));
 }

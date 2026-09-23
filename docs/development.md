@@ -173,7 +173,8 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Default keybindings                   | `config::default_keybindings`           |
 | Which hooks run for an event          | `events::matching_hooks`, `Daemon::dispatch` |
 | The only synchronous hook             | `Daemon::gate` (`worktree.before_archive`) |
-| Which states are valid                | `config.states`, checked in `MetadataSet` |
+| How tags are cleaned                  | `normalized_metadata`, called in `MetadataSet` |
+| Which GitHub tag a pull request gets  | `addons::github::model::pr_tag` |
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Town naming and unlocks               | `addons::towns::{name_worktree, unlock, rebind}`, joined through `Seams` |

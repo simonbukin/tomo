@@ -78,8 +78,6 @@ enum Cmd {
     Config(ConfigCmd),
     #[command(subcommand, about = "Workflow hooks")]
     Hooks(HooksCmd),
-    #[command(subcommand, about = "Workflow states")]
-    States(StatesCmd),
     #[command(subcommand, about = "Repo-defined actions from .tomo.toml")]
     Action(ActionCmd),
     #[command(about = "Ports that processes in Tomo panes listen on")]
@@ -128,11 +126,6 @@ enum HooksCmd {
         #[arg(short = 'n', long, default_value_t = 20)]
         limit: usize,
     },
-}
-
-#[derive(Subcommand)]
-enum StatesCmd {
-    List,
 }
 
 #[derive(Subcommand)]
@@ -207,18 +200,10 @@ enum MetadataCmd {
         worktree: Option<String>,
         #[arg(long)]
         name: Option<String>,
-        #[arg(long)]
-        project: Option<String>,
         #[arg(long, help = "Comma-separated tags; replaces the tag list")]
         tags: Option<String>,
-        #[arg(long, help = "Workflow state id from config.toml")]
-        state: Option<String>,
-        #[arg(long)]
-        clear_state: bool,
         #[arg(long)]
         clear_name: bool,
-        #[arg(long)]
-        clear_project: bool,
         #[arg(long)]
         clear_tags: bool,
     },
@@ -592,12 +577,10 @@ async fn run() -> Result<()> {
             let m: WorktreeMetadata = c.call(Call::MetadataGet { worktree_id: id }).await?;
             print::metadata(&m, json);
         }
-        Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Set { worktree, name, project, tags, state, clear_state, clear_name, clear_project, clear_tags })) => {
+        Cmd::Worktree(WorktreeCmd::Metadata(MetadataCmd::Set { worktree, name, tags, clear_name, clear_tags })) => {
             let id = resolve_worktree_id(&c, worktree).await?;
             let patch = MetadataPatch {
                 display_name: if clear_name { Some(None) } else { name.map(Some) },
-                project: if clear_project { Some(None) } else { project.map(Some) },
-                state: if clear_state { Some(None) } else { state.map(Some) },
                 tags: if clear_tags { Some(vec![]) } else { tags.map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()) },
             };
             let m: WorktreeMetadata = c.call(Call::MetadataSet { worktree_id: id, patch }).await?;
@@ -763,10 +746,6 @@ async fn run() -> Result<()> {
         Cmd::Hooks(HooksCmd::Log { limit }) => {
             let runs: Vec<HookRun> = c.call(Call::HookLog { limit: Some(limit) }).await?;
             print::hook_runs(&runs, json);
-        }
-        Cmd::States(StatesCmd::List) => {
-            let cfg: Config = c.call(Call::ConfigGet).await?;
-            print::states(&cfg.states, json);
         }
         Cmd::Integrations(IntegrationsCmd::Install) => {
             let i: Integrations = c.call(Call::IntegrationsInstall).await?;

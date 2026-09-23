@@ -60,7 +60,6 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
     }
     for w in ws {
         let repo = repos.iter().find(|r| r.id == w.repo_id).map(|r| r.name.as_str()).unwrap_or("?");
-        let prio = w.metadata.state.as_deref().map(|s| format!(" [{s}]")).unwrap_or_default();
         let tags = if w.metadata.tags.is_empty() { String::new() } else { format!(" #{}", w.metadata.tags.join(" #")) };
         let branch = if w.detached { "detached".to_string() } else { w.branch.clone().unwrap_or_default() };
         let dirty = w.git.as_ref().map_or("", |g| if g.dirty { " *" } else { "" });
@@ -71,8 +70,7 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
         } else {
             " (missing)"
         };
-        let project = w.metadata.project.as_deref().map(|p| format!(" [{p}]")).unwrap_or_default();
-        println!("{}  {} / {}{}{}{}  {}{}{}", w.id, repo, w.name, project, prio, tags, branch, dirty, missing);
+        println!("{}  {} / {}{}  {}{}{}", w.id, repo, w.name, tags, branch, dirty, missing);
         println!("    {}", w.path.display());
         for a in agents.iter().filter(|a| a.worktree_id == w.id) {
             println!("    {} {:<7} {:?}", a.state.glyph(), a.kind.label(), a.state);
@@ -85,8 +83,6 @@ pub fn metadata(m: &WorktreeMetadata, json: bool) {
         return emit_json(m);
     }
     println!("display_name {}", m.display_name.as_deref().unwrap_or("-"));
-    println!("project      {}", m.project.as_deref().unwrap_or("-"));
-    println!("state        {}", m.state.as_deref().unwrap_or("-"));
     println!("tags         {}", if m.tags.is_empty() { "-".to_string() } else { m.tags.join(", ") });
 }
 
@@ -332,15 +328,6 @@ pub fn hook_runs(runs: &[HookRun], json: bool) {
                 println!("      {line}");
             }
         }
-    }
-}
-
-pub fn states(states: &[StateDef], json: bool) {
-    if json {
-        return emit_json(&states);
-    }
-    for s in states {
-        println!("{:<3} {:<16} {}", s.order, s.id, s.label);
     }
 }
 

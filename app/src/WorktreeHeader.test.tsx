@@ -19,7 +19,7 @@ beforeEach(() => {
     ...initial,
     loaded: true,
     worktrees: [wt],
-    config: { keybindings: { reveal_finder: "mod+shift+f" }, editor_command: ["zed", "{path}"], states: [], notifications: { desktop: false, sounds: false } } as never,
+    config: { keybindings: { reveal_finder: "mod+shift+f" }, editor_command: ["zed", "{path}"], notifications: { desktop: false, sounds: false } } as never,
     ui: { ...defaultUi, view: "worktree", activeWorktreeId: "w1" },
   });
 });

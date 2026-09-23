@@ -13,8 +13,8 @@ and the GUI as one surface, because most failures cross all three.
 | 1 | Add a path that is not a Git repository | `tomo repo add /tmp` | Git error returned as `git` error code; GUI toast; nothing stored | Med | Low | Med |
 | 2 | Create a worktree with an invalid branch name | branch `bad name` | Git rejects; error surfaces verbatim; no directory created | Med | Low | Med |
 | 3 | Create a worktree at an existing path | path exists | Git rejects; no metadata written | Med | Low | Med |
-| 4 | Metadata with whitespace or `#` | name `"  "`, tag `"#lr "` | Name trimmed to unset; tags trimmed and `#` stripped | High | Low | Med |
-| 5 | Unknown workflow state from the CLI | `--state nope` | Bad request that lists the known states | Med | Low | Low |
+| 4 | Metadata with whitespace, `#`, or a duplicate tag | name `"  "`, tags `"#lr ,lr"` | Name trimmed to unset; tags trimmed, `#` stripped, and duplicates removed | High | Low | Med |
+| 5 | Old `[[states]]` table in config.toml | `[[states]]` present | Ignored; `tomo config check` gives a warning with the key `states` | Med | Low | Low |
 | 6 | Empty notify message | `tomo notify ""` | Rejected as bad request | Low | Low | Low |
 | 7 | Invalid base64 in `pane_send` | garbage | Bad request; nothing written to the PTY | Low | Low | Low |
 | 8 | Pane resize to 0×0 | cols 0 | PTY resized to at least 2×2; stored size clamped | Low | Low | Low |
@@ -87,7 +87,7 @@ and the GUI as one surface, because most failures cross all three.
 - [ ] Set `editor_command = ["nope"]`; "open in editor" falls back to Finder
 - [ ] Close every pane of a worktree; a fresh shell appears
 - [ ] Set `shell = "/nope"`; pane creation fails and `tomo pane list` shows no orphan
-- [ ] `tomo worktree metadata set --state nope` is rejected with the known states
+- [ ] Put `[[states]]` in config.toml; the daemon starts and `tomo config check` warns on `states`
 - [ ] Archive a dirty worktree; the branch has a `tomo: archive checkpoint` commit with the untracked files
 - [ ] Archive a worktree with a merge conflict; the archive is refused and every pane stays open
 - [ ] Add an `[[actions]]` entry without `id`; the other actions still list and a warning shows once

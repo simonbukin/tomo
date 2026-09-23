@@ -11,8 +11,6 @@ export function sameScope(a: HomeScope, b: HomeScope): boolean {
       return true;
     case "repo":
       return a.repoId === (b as { repoId: string }).repoId;
-    case "project":
-      return a.project === (b as { project: string }).project;
     case "tag":
       return a.tag === (b as { tag: string }).tag;
   }
@@ -25,8 +23,6 @@ export function scopeWorktrees(list: Worktree[], scope: HomeScope): Worktree[] {
       return list;
     case "repo":
       return list.filter((w) => w.repo_id === scope.repoId);
-    case "project":
-      return list.filter((w) => (w.metadata.project ?? "") === scope.project);
     case "tag":
       return list.filter((w) => w.metadata.tags.includes(scope.tag));
   }
@@ -38,8 +34,6 @@ export function scopeTitle(scope: HomeScope, repos: Repo[]): string {
       return "all work";
     case "repo":
       return repoName(repos, scope.repoId);
-    case "project":
-      return scope.project || "no project";
     case "tag":
       return `#${scope.tag}`;
   }

@@ -38,7 +38,7 @@
 .wt-header { display: flex; align-items: center; gap: var(--sp-3); flex: 1; height: 100%; padding: 0 0 0 var(--sp-3); min-width: 0; }
 .wt-header-name { font-weight: 600; color: var(--fg); white-space: nowrap; }
 .wt-header-branch { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.wt-header-state { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-1); color: var(--fg-2); white-space: nowrap; }
+.wt-header-tags { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-1); color: var(--fg-2); white-space: nowrap; }
 .actionbar { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
 .action-btn { position: relative; }
 .action-btn .state { margin-right: 1px; }
@@ -79,6 +79,11 @@
 .side-section .section-label .icon { flex: none; width: 12px; height: 12px; color: var(--fg-3); }
 .kv { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: center; column-gap: var(--sp-2); min-height: 24px; font-size: var(--fs-1); }
 .kv label { color: var(--fg-2); font-size: var(--fs-1); }
+.kv-top { align-items: start; }
+.kv-top > label { line-height: 24px; }
+.tag-edit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); min-width: 0; padding: 2px 0; }
+.tag-edit .chip { padding: 0 0 0 6px; }
+.tag-edit .combobox-input { flex: 1; min-width: 72px; padding: 2px 7px; font-size: var(--fs-1); }
 .kv input { padding: 2px 7px; font-size: var(--fs-1); }
 .kv span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kv .mono { font-size: var(--fs-0); }

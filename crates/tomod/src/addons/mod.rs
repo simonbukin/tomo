@@ -242,6 +242,9 @@ mod tests {
         assert!(super::github::known_pr(&b.lock(), &worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
         assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len(), seen_by_a.endpoints.len()), (1, 1, 1));
         assert!(super::github::known_pr(&a.lock(), &worktree_id, &[]).is_some());
+        assert_eq!(a.lock().worktrees[&worktree_id].metadata.tags, vec!["review"], "an open pull request sets its GitHub tag");
+        assert!(a.lock().hook_queue.iter().any(|e| e.event == "worktree.tags_changed"));
+        assert!(b.lock().worktrees.values().all(|w| w.metadata.tags.is_empty()));
         a.shutdown();
         b.shutdown();
         let _ = std::fs::remove_dir_all(&dir);

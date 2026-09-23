@@ -2,7 +2,7 @@ import { defaultAppearance, sanitizeAppearance } from "./appearance";
 import { LENSES } from "./lenses";
 import type { CoreSection, Filter, FilterKind, HomeOptions, HomeScope, Id, SidebarMode, SidebarSort, UiState } from "./types";
 
-export const defaultHome: HomeOptions = { query: "", scope: { kind: "all" }, filters: [], view: "list", sort: "state", group: "state", showArchived: false };
+export const defaultHome: HomeOptions = { query: "", scope: { kind: "all" }, filters: [], view: "list", sort: "recent", group: "tag", showArchived: false };
 
 export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showMain: false, showArchivedInSidebar: false, collapsedRepos: [], collapsedSections: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
 
@@ -12,8 +12,9 @@ export const SIDEBAR_MAX_WIDTH = 480;
 const MODES: readonly SidebarMode[] = ["open", "minimal", "closed"];
 const CORE_SECTIONS: readonly CoreSection[] = ["worktree", "git", "processes", "sessions", "files"];
 const CORE_VIEWS: readonly string[] = ["home", "worktree", "activity", "agents", "apps", "settings"];
-const SORTS: readonly SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
-const FILTER_KINDS: readonly FilterKind[] = ["state", "repo", "project", "tag", "agent", "archived", "attention"];
+const SORTS: readonly SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
+const FILTER_KINDS: readonly FilterKind[] = ["repo", "tag", "agent", "archived", "attention"];
+const TAG_KINDS_BEFORE_TAGS = ["project", "state"];
 
 const record = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const oneOf = <T extends string>(allowed: readonly T[], value: unknown, fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
@@ -27,12 +28,16 @@ const stringLists = (v: unknown): Record<string, Id[]> =>
   Object.fromEntries(Object.entries(record(v)).filter(([, x]) => Array.isArray(x)).map(([k, x]) => [k, strings(x)]));
 
 const filters = (v: unknown): Filter[] =>
-  (Array.isArray(v) ? v : []).map(record).filter((f) => FILTER_KINDS.includes(f.kind as FilterKind) && typeof f.value === "string").map((f) => ({ kind: f.kind as FilterKind, value: f.value as string }));
+  (Array.isArray(v) ? v : [])
+    .map(record)
+    .map((f) => (TAG_KINDS_BEFORE_TAGS.includes(f.kind as string) ? { ...f, kind: "tag" } : f))
+    .filter((f) => FILTER_KINDS.includes(f.kind as FilterKind) && typeof f.value === "string" && f.value !== "")
+    .map((f) => ({ kind: f.kind as FilterKind, value: f.value as string }));
 
 const scope = (v: unknown): HomeScope => {
   const s = record(v);
   if (s.kind === "repo" && typeof s.repoId === "string") return { kind: "repo", repoId: s.repoId };
-  if (s.kind === "project" && typeof s.project === "string") return { kind: "project", project: s.project };
+  if (s.kind === "project" && typeof s.project === "string" && s.project) return { kind: "tag", tag: s.project };
   if (s.kind === "tag" && typeof s.tag === "string") return { kind: "tag", tag: s.tag };
   return { kind: "all" };
 };
@@ -45,8 +50,8 @@ function sanitizeHome(v: unknown): HomeOptions {
     scope: scope(h.scope),
     filters: filters(h.filters),
     view: oneOf(["list", "board"], h.view, defaultHome.view),
-    sort: oneOf(["state", "recent", "created", "name"], h.sort, defaultHome.sort),
-    group: oneOf(["state", "repo", "project", "none"], h.group, defaultHome.group),
+    sort: oneOf(["recent", "created", "name"], h.sort, defaultHome.sort),
+    group: oneOf(["tag", "repo", "none"], h.group, defaultHome.group),
     showArchived: bool(h.showArchived, defaultHome.showArchived),
   };
 }
@@ -70,7 +75,7 @@ export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonView
     rightWidth: width(s.rightWidth, defaultUi.rightWidth),
     rightSection: typeof s.rightSection === "string" && [...CORE_SECTIONS, ...addonSectionIds].includes(s.rightSection) ? s.rightSection : null,
     sidebarSort: oneOf(SORTS, s.sidebarSort, defaultUi.sidebarSort),
-    lens: oneOf(LENSES, s.lens, defaultUi.lens),
+    lens: s.lens === "project" ? "tag" : oneOf(LENSES, s.lens, defaultUi.lens),
     showMain: bool(s.showMain, defaultUi.showMain),
     showArchivedInSidebar: bool(s.showArchivedInSidebar, defaultUi.showArchivedInSidebar),
     collapsedRepos: strings(s.collapsedRepos),

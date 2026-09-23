@@ -1,5 +1,6 @@
 //! GitHub: the pull request of a worktree's branch, read with the `gh` CLI. See docs/features/github.md.
 //! No poller: `gh` runs only inside a `pr_status` call, and a young pull request comes from the cache.
+//! Each answer with a pull request sets one of the GitHub tags in `model::PR_TAGS` on the worktree.
 
 mod model;
 
@@ -46,6 +47,15 @@ pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
     let update = model::update(before.as_ref(), &result);
     if let Some(pr) = update.merged {
         Daemon::record(inner, model::merged_event(&worktree_id, pr));
+    }
+    if let Some((pr, w)) = result.pr.as_ref().zip(inner.worktrees.get(&worktree_id)) {
+        let tags = model::with_pr_tag(&w.metadata.tags, pr);
+        if tags != w.metadata.tags {
+            let next = WorktreeMetadata { tags, ..w.metadata.clone() };
+            if let Err(e) = Daemon::write_metadata(inner, &worktree_id, next) {
+                tracing::warn!("github tag for {worktree_id}: {}", e.message);
+            }
+        }
     }
     if update.changed {
         Daemon::emit(inner, Event::PrChanged { worktree_id, pr: result.pr });

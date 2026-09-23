@@ -21,8 +21,6 @@ pub fn worktree_payload(inner: &Inner, w: &WorktreeState) -> HookWorktree {
         repo_path: inner.repos.iter().find(|r| r.id == w.repo_id).map(|r| r.path.clone()).unwrap_or_default(),
         branch: w.branch.clone(),
         name: Daemon::worktree_view(inner, w).name,
-        state: w.metadata.state.clone(),
-        project: w.metadata.project.clone(),
         tags: w.metadata.tags.clone(),
     }
 }
@@ -41,8 +39,8 @@ pub fn matching_hooks(config: &Config, event: &HookEvent) -> Vec<HookDef> {
         .hooks
         .iter()
         .filter(|h| h.event == event.event)
-        .filter(|h| match &h.state {
-            Some(wanted) => event.worktree.as_ref().and_then(|w| w.state.as_deref()) == Some(wanted.as_str()),
+        .filter(|h| match &h.tag {
+            Some(wanted) => event.worktree.as_ref().is_some_and(|w| w.tags.contains(wanted)) && !event.previous_tags.contains(wanted),
             None => true,
         })
         .cloned()
@@ -56,7 +54,7 @@ pub fn hook_env(event: &HookEvent) -> Vec<(String, String)> {
         env.push(("TOMO_WORKTREE_PATH".into(), w.path.to_string_lossy().into_owned()));
         env.push(("TOMO_REPO_PATH".into(), w.repo_path.to_string_lossy().into_owned()));
         env.push(("TOMO_BRANCH".into(), w.branch.clone().unwrap_or_default()));
-        env.push(("TOMO_STATE".into(), w.state.clone().unwrap_or_default()));
+        env.push(("TOMO_TAGS".into(), w.tags.join(",")));
     }
     if let Some(p) = &event.pane {
         env.push(("TOMO_PANE_ID".into(), p.id.clone()));
@@ -264,17 +262,16 @@ mod tests {
             max_panes_per_tab: 4,
             keybindings: Default::default(),
             agents: Default::default(),
-            states: vec![],
             hooks,
             notifications: Default::default(),
         }
     }
 
-    fn hook(event: &str, state: Option<&str>) -> HookDef {
-        HookDef { event: event.into(), command: "true".into(), state: state.map(String::from), mode: HookMode::Async, timeout_s: 5 }
+    fn hook(event: &str, tag: Option<&str>) -> HookDef {
+        HookDef { event: event.into(), command: "true".into(), tag: tag.map(String::from), mode: HookMode::Async, timeout_s: 5 }
     }
 
-    fn wt(state: Option<&str>) -> HookWorktree {
+    fn wt(tags: &[&str]) -> HookWorktree {
         HookWorktree {
             id: "w".into(),
             path: "/tmp".into(),
@@ -282,25 +279,28 @@ mod tests {
             repo_path: "/tmp".into(),
             branch: None,
             name: "w".into(),
-            state: state.map(String::from),
-            project: None,
-            tags: vec![],
+            tags: tags.iter().map(|t| t.to_string()).collect(),
         }
     }
 
     #[test]
-    fn hooks_match_on_event_and_optional_state() {
-        let c = cfg(vec![hook("worktree.state_changed", Some("merged")), hook("worktree.state_changed", None), hook("agent.waiting", None)]);
-        let merged = HookEvent { event: "worktree.state_changed".into(), worktree: Some(wt(Some("merged"))), ..Default::default() };
-        assert_eq!(matching_hooks(&c, &merged).len(), 2);
-        let active = HookEvent { event: "worktree.state_changed".into(), worktree: Some(wt(Some("active"))), ..Default::default() };
-        assert_eq!(matching_hooks(&c, &active).len(), 1);
+    fn a_tag_filter_matches_only_when_the_tag_is_added() {
+        let c = cfg(vec![hook("worktree.tags_changed", Some("merged")), hook("worktree.tags_changed", None), hook("agent.waiting", None)]);
+        let changed = |now: &[&str], before: &[&str]| HookEvent {
+            event: "worktree.tags_changed".into(),
+            worktree: Some(wt(now)),
+            previous_tags: before.iter().map(|t| t.to_string()).collect(),
+            ..Default::default()
+        };
+        assert_eq!(matching_hooks(&c, &changed(&["merged"], &["review"])).len(), 2);
+        assert_eq!(matching_hooks(&c, &changed(&["merged", "x"], &["merged"])).len(), 1, "merged was already there");
+        assert_eq!(matching_hooks(&c, &changed(&["review"], &[])).len(), 1);
         assert!(matching_hooks(&c, &HookEvent { event: "pane.created".into(), ..Default::default() }).is_empty());
     }
 
     #[tokio::test]
     async fn run_process_reports_exit_timeout_and_missing_program() {
-        let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(None)), ..Default::default() };
+        let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(&[])), ..Default::default() };
         let ok = run_process(
             &HookDef { command: "test \"$TOMO_EVENT\" = worktree.created && cat >/dev/null".into(), ..hook("worktree.created", None) },
             &ev,
@@ -347,7 +347,7 @@ mod tests {
     async fn timeout_kills_the_whole_process_tree() {
         let marker = std::env::temp_dir().join(format!("tomo-hook-tree-{}", std::process::id()));
         let cmd = format!("(sh -c 'sleep 30; touch {m}' &) ; sleep 30; touch {m}", m = marker.display());
-        let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(None)), ..Default::default() };
+        let ev = HookEvent { event: "worktree.created".into(), worktree: Some(wt(&[])), ..Default::default() };
         let run =
             run_process(&HookDef { command: cmd, timeout_s: 1, ..hook("worktree.created", None) }, &ev, None, Path::new("/tmp/s"), Path::new("tomo")).await;
         assert!(!run.ok && run.output_tail.contains("killed"));
@@ -395,6 +395,6 @@ mod tests {
     #[test]
     fn only_the_created_hook_is_called_setup() {
         assert_eq!(hook_tab_title("worktree.created"), "Setup");
-        assert_eq!(hook_tab_title("worktree.state_changed"), "hook: worktree.state_changed");
+        assert_eq!(hook_tab_title("worktree.tags_changed"), "hook: worktree.tags_changed");
     }
 }

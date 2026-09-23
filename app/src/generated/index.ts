@@ -74,7 +74,6 @@ export * from "./RuntimeProtocol";
 export * from "./Snapshot";
 export * from "./SpawnResult";
 export * from "./SplitDirection";
-export * from "./StateDef";
 export * from "./Status";
 export * from "./SystemStats";
 export * from "./Tab";

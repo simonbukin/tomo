@@ -8,7 +8,6 @@ DURATION="${1:-300}"; REPORT="${2:-/tmp/tomo-soak-report.md}"; INTERVAL=10
 daemon_fresh "[agents.claude]
 command = \"$FIX/fake-agent\"
 args = [\"--tomo\", \"$T\"]"
-STATES=(exploring active waiting-review merged)
 TAGS=(lr engine ui infra japanese)
 WTS=()
 for r in 1 2 3 4 5; do
@@ -18,7 +17,7 @@ done
 WTS=($($T worktree list --json | jq_ "print(' '.join(w['id'] for w in d))"))
 i=0
 for wt in "${WTS[@]}"; do
-  $T worktree metadata set "$wt" --state "${STATES[$((i % 4))]}" --tags "${TAGS[$((i % 5))]},${TAGS[$(((i+1) % 5))]}" >/dev/null 2>&1
+  $T worktree metadata set "$wt" --tags "${TAGS[$((i % 5))]},${TAGS[$(((i+1) % 5))]}" >/dev/null 2>&1
   i=$((i+1))
 done
 echo "worktrees: ${#WTS[@]}"
@@ -46,7 +45,7 @@ $RPC events "$DURATION" > /tmp/tomo-soak-events.txt &
 while [ "$elapsed" -lt "$DURATION" ]; do
   k=$((n % ${#AGENTS[@]})); $RPC send "${AGENTS[$k]}" "work 3\r" 2>/dev/null
   [ $((n % 3)) = 0 ] && $RPC send "${AGENTS[$(((k+1) % ${#AGENTS[@]}))]}" "wait\r" 2>/dev/null
-  [ $((n % 4)) = 0 ] && $T worktree metadata set "${WTS[$((n % ${#WTS[@]}))]}" --state "${STATES[$((n % 4))]}" >/dev/null 2>&1
+  [ $((n % 4)) = 0 ] && $T worktree metadata set "${WTS[$((n % ${#WTS[@]}))]}" --tags "${TAGS[$((n % 5))]},${TAGS[$(((n+2) % 5))]}" >/dev/null 2>&1
   sleep "$INTERVAL"; elapsed=$((elapsed + INTERVAL)); n=$((n+1))
   sample
   [ "$elapsed" -ge 60 ] && [ -z "$FIRST_RSS" ] && FIRST_RSS=$RSS_KB

@@ -394,7 +394,8 @@ view and the town dataset load lazily.
 
 GitHub background work: none in the daemon. `gh` runs only inside a
 `pr_status` call. The rail marker, the NOW signals, and the town history
-read the cache and start no work. See
+read the cache and start no work. A new answer with a pull request sets one
+reserved tag on the worktree, inside the same call. See
 [features/github.md](features/github.md#background-work).
 
 Usage background work: one daemon task, started by `addons::start`, with the
@@ -1283,7 +1284,8 @@ and Agentation do not add nouns to a Core enum.
 | `agent_exited` | `ActivityKind::AgentExited` | core `CoreActivity::AgentExited` |
 | `checkpoint_created` | `ActivityKind::CheckpointCreated` | core `CoreActivity::CheckpointCreated` |
 | `checkpoint_resolved` | `ActivityKind::CheckpointResolved` | core `CoreActivity::CheckpointResolved` |
-| `state_changed` | `ActivityKind::StateChanged` | core `CoreActivity::StateChanged` |
+| `state_changed` | `ActivityKind::StateChanged` | core `CoreActivity::StateChanged`; nothing records it since tags replaced workflow states |
+| `tags_changed` | none | core `CoreActivity::TagsChanged` |
 | `archived` | `ActivityKind::Archived` | core `CoreActivity::Archived` |
 | `restored` | `ActivityKind::Restored` | core `CoreActivity::Restored` |
 | `hook_failed` | `ActivityKind::HookFailed` | core `CoreActivity::HookFailed` |

@@ -11,4 +11,4 @@ import type { HookWorktree } from "./HookWorktree";
 /**
  * Payload every hook receives on stdin. Fields are present when they apply.
  */
-export type HookEvent = { event: string, at_ms: number, worktree: HookWorktree | null, previous_state: string | null, pane: HookPane | null, agent: HookAgent | null, attention: AttentionItem | null, action: HookAction | null, };
+export type HookEvent = { event: string, at_ms: number, worktree: HookWorktree | null, previous_tags?: Array<string>, pane: HookPane | null, agent: HookAgent | null, attention: AttentionItem | null, action: HookAction | null, };

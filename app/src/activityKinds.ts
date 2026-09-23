@@ -36,6 +36,7 @@ const CORE_ACTIVITY: Record<CoreActivity, ActivityKindView> = {
   checkpoint_created: { status: "needs", url: appUrl, actions: [goToAgent] },
   checkpoint_resolved: { status: "complete" },
   state_changed: { who: you },
+  tags_changed: {},
   archived: { who: you, actions: [restore] },
   restored: { who: you },
   hook_failed: { status: "failed" },

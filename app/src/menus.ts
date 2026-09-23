@@ -1,9 +1,8 @@
-import { archiveWorktree, bulkAddTag, bulkArchive, bulkMetadata, bulkPrompt, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
 import { browserCommand, openBrowser } from "./browser/browser";
 import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
 import type { MenuItem } from "./components/ui";
-import { orderedStates } from "./homeQuery";
 import { chordFor, effectiveBindings } from "./shortcuts";
 import { activeTab, clearSelection, getState, paneIds, setState, type State } from "./store";
 import type { Id, Pane, Repo, Tab, Worktree } from "./types";
@@ -27,15 +26,6 @@ export function editorName(command: string[] | undefined): string {
 
 export function toggledTag(tags: string[], tag: string): string[] {
   return tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
-}
-
-function stateItems(s: State, current: string | null, apply: (state: string | null) => void): MenuItem[] {
-  const states = orderedStates(s.config?.states ?? []);
-  return [
-    ...states.map((st) => ({ label: st.label, checked: current === st.id, run: () => apply(st.id) })),
-    sep,
-    { label: "clear state", checked: current === null, run: () => apply(null) },
-  ];
 }
 
 function tagItems(s: State, w: Worktree): MenuItem[] {
@@ -67,9 +57,7 @@ function worktreeDetailItems(w: Worktree, s: State): MenuItem[] {
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   return [
-    { label: "state", disabled: busy, submenu: stateItems(s, w.metadata.state, (state) => setMetadata(w.id, { state })) },
     { label: "tags", disabled: busy, submenu: tagItems(s, w) },
-    { label: "set project...", disabled: busy, run: () => promptMetadata("project", w.id) },
     { label: "rename...", disabled: busy, run: () => promptMetadata("display_name", w.id) },
     sep,
     { label: `open in ${editorName(s.config?.editor_command)}`, disabled: !w.exists || busy, run: () => openExternalFor(w.id, "editor") },
@@ -121,13 +109,10 @@ export function bulkMenu(ids: Id[]): MenuItem[] {
   const s = getState();
   const ws = ids.map((id) => s.worktrees.find((w) => w.id === id)).filter((w): w is Worktree => !!w);
   const anyArchived = ws.some((w) => !!w.archived_at_ms);
-  const shared = ws.every((w) => w.metadata.state === ws[0]?.metadata.state) ? (ws[0]?.metadata.state ?? null) : undefined;
   return [
     { label: `${ids.length} worktrees`, disabled: true },
     sep,
-    { label: "state", submenu: stateItems(s, shared === undefined ? "" : shared, (state) => bulkMetadata(ids, { state })) },
-    { label: "set project...", run: () => bulkPrompt("project", ids) },
-    { label: "set tags...", run: () => bulkPrompt("tags", ids) },
+    { label: "set tags...", run: () => bulkPromptTags(ids) },
     { label: "add tag...", run: () => bulkAddTag(ids) },
     sep,
     { label: "archive...", danger: true, run: () => bulkArchive(ids) },
