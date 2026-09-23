@@ -62,6 +62,12 @@ function bucket(list: Worktree[], keyOf: (w: Worktree) => string[]): Map<string,
   return map;
 }
 
+/** A new worktree for a tag starts in the repository of the tag's worktrees, when they share one. */
+export function tagPrefill(tag: string, worktrees: readonly Worktree[]): WorktreePrefill {
+  const repos = new Set(worktrees.map((w) => w.repo_id));
+  return repos.size === 1 ? { repoId: [...repos][0], tags: [tag] } : { tags: [tag] };
+}
+
 function labelled(
   map: Map<string, Worktree[]>,
   lens: SidebarLens,
@@ -69,11 +75,11 @@ function labelled(
   o: LensOptions,
   label: (key: string) => string,
   rank: (key: string, items: Worktree[]) => number,
-  prefill: (key: string) => WorktreePrefill = () => ({}),
+  prefill: (key: string, items: Worktree[]) => WorktreePrefill = () => ({}),
 ): LensGroup[] {
   return [...map.entries()]
     .sort(([ka, ia], [kb, ib]) => rank(ka, ia) - rank(kb, ib) || ka.localeCompare(kb))
-    .map(([key, items]) => ({ key: `${lens}:${key}`, label: label(key), repo: null, prefill: prefill(key), items: sortWorktrees(items, o.sort, ctx) }));
+    .map(([key, items]) => ({ key: `${lens}:${key}`, label: label(key), repo: null, prefill: prefill(key, items), items: sortWorktrees(items, o.sort, ctx) }));
 }
 
 /**
@@ -85,7 +91,7 @@ export function lensGroups(list: Worktree[], lens: SidebarLens, ctx: QueryContex
     case "repo":
       return byRepo(list, ctx, o);
     case "tag":
-      return labelled(bucket(list, (w) => (w.metadata.tags.length > 0 ? w.metadata.tags : [NO_TAG])), lens, ctx, o, (k) => (k === NO_TAG ? k : `#${k}`), (k, items) => (k === NO_TAG ? Number.MAX_SAFE_INTEGER : -items.length), (k) => (k === NO_TAG ? {} : { tags: [k] }));
+      return labelled(bucket(list, (w) => (w.metadata.tags.length > 0 ? w.metadata.tags : [NO_TAG])), lens, ctx, o, (k) => (k === NO_TAG ? k : `#${k}`), (k, items) => (k === NO_TAG ? Number.MAX_SAFE_INTEGER : -items.length), (k, items) => (k === NO_TAG ? {} : tagPrefill(k, items)));
     case "focus":
       return labelled(bucket(list, (w) => [focusSection(w, ctx)]), lens, ctx, o, (k) => k, (k) => FOCUS_SECTIONS.indexOf(k as (typeof FOCUS_SECTIONS)[number]));
   }

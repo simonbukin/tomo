@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Repo, WorktreePrefill } from "./types";
+import type { Repo, Worktree, WorktreePrefill } from "./types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("./api", async (importOriginal) => {
@@ -18,7 +18,7 @@ vi.mock("./api", async (importOriginal) => {
 });
 vi.mock("./actions", async (importOriginal) => ({ ...(await importOriginal<typeof import("./actions")>()), openWorktree: vi.fn() }));
 
-const { Dialogs } = await import("./Dialogs");
+const { Dialogs, defaultRepoId } = await import("./Dialogs");
 const { rpc } = await import("./api");
 const { getState, setState } = await import("./store");
 
@@ -42,6 +42,22 @@ beforeEach(() => {
   setState({ ...initial, loaded: true, repos: [repo] });
 });
 afterEach(cleanup);
+
+describe("default repository", () => {
+  const repos = [{ id: "tomo" }, { id: "holly" }] as Repo[];
+  const wt = (id: string, repo_id: string, archived_at_ms: number | null = null) => ({ id, repo_id, archived_at_ms }) as unknown as Worktree;
+  const worktrees = [wt("a", "holly"), wt("b", "holly"), wt("c", "tomo"), wt("d", "tomo", 1), wt("e", "tomo", 2)];
+
+  it("uses the open worktree's repository", () => {
+    expect(defaultRepoId(repos, worktrees, "c")).toBe("tomo");
+  });
+
+  it("otherwise uses the repository with the most live worktrees, not the first one added", () => {
+    expect(defaultRepoId(repos, worktrees, null)).toBe("holly");
+    expect(defaultRepoId(repos, [], null)).toBe("tomo");
+    expect(defaultRepoId([], worktrees, null)).toBe("");
+  });
+});
 
 describe("new worktree dialog", () => {
   it("filters the branch list while the user types", async () => {

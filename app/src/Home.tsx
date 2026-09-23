@@ -20,7 +20,8 @@ import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
-import type { Filter, FilterKind, HomeOptions, Worktree } from "./types";
+import { tagPrefill } from "./lenses";
+import type { Filter, FilterKind, HomeOptions, Worktree, WorktreePrefill } from "./types";
 
 const SCOPE_EVENTS = 8;
 
@@ -51,6 +52,7 @@ export function Home() {
   const counts = tally(inScope, ctx, apps);
   const scope = o.scope;
   const scopeRepo = scope.kind === "repo" ? repos.find((r) => r.id === scope.repoId) : undefined;
+  const scopePrefill: WorktreePrefill = scope.kind === "repo" ? { repoId: scope.repoId } : scope.kind === "tag" ? tagPrefill(scope.tag, inScope) : {};
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
   const empty = homeEmpty(s.repos.length, s.worktrees.filter((w) => !w.archived_at_ms).length, visible.length);
@@ -138,7 +140,7 @@ export function Home() {
           {scopeRepo && <div className="scope-path mono">{scopeRepo.path}</div>}
           <p className="scope-tagline">{statusLine(counts)}</p>
           <div className="scope-actions">
-            <Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>New worktree</Button>
+            <Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", ...scopePrefill } })}>New worktree</Button>
             <button className="link" onClick={() => setUi({ view: "home", home: { ...o, scope: ALL } })}>all work</button>
           </div>
         </header>
@@ -171,13 +173,13 @@ export function Home() {
         </div>
       )}
       {o.scope.kind === "all" && empty === "no-worktrees" && <EmptyState title="No active worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>} />}
-      {o.scope.kind !== "all" && visible.length === 0 && !searching && <EmptyState title="No worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>New worktree</Button>} />}
+      {o.scope.kind !== "all" && visible.length === 0 && !searching && <EmptyState title="No worktrees." action={<Button variant="default" onClick={() => setState({ dialog: { kind: "create-worktree", ...scopePrefill } })}>New worktree</Button>} />}
       {searching && visible.length === 0 && <EmptyState title="No worktrees match." action={<Button variant="link" onClick={() => set({ query: "", filters: [] })}>clear search and filters</Button>} />}
       {scopePage && visible.length > 0 && (
         <>
           <div className="scope-cards">
             {visible.map((w) => <WorktreeCard key={w.id} w={w} />)}
-            <button type="button" className="card-new" onClick={() => setState({ dialog: { kind: "create-worktree", repoId: scopeRepo?.id } })}>
+            <button type="button" className="card-new" onClick={() => setState({ dialog: { kind: "create-worktree", ...scopePrefill } })}>
               <Plus className="icon" /> create worktree
             </button>
           </div>

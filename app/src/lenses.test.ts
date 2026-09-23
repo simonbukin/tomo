@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FOCUS_SECTIONS, LENSES, lensGroups, type LensOptions } from "./lenses";
+import { FOCUS_SECTIONS, LENSES, lensGroups, tagPrefill, type LensOptions } from "./lenses";
 import type { QueryContext } from "./homeQuery";
 import type { AgentPresence, AgentState, Repo, Worktree } from "./types";
 
@@ -124,10 +124,16 @@ describe("every lens", () => {
     for (const lens of LENSES) expect(lensGroups([], lens, ctx(), opts())).toEqual([]);
   });
 
+  it("starts a tag's new worktree in the repository its worktrees share, and in none when they differ", () => {
+    const one = [wt({ id: "a", repo_id: "holly" }), wt({ id: "b", repo_id: "holly" })];
+    expect(tagPrefill("labor", one)).toEqual({ repoId: "holly", tags: ["labor"] });
+    expect(tagPrefill("labor", [...one, wt({ id: "c", repo_id: "tomo" })])).toEqual({ tags: ["labor"] });
+  });
+
   it("prefills a new worktree with what its group has in common", () => {
     const prefills = (lens: (typeof LENSES)[number]) => lensGroups(list, lens, ctx({ repos }), opts({ repos })).map((g) => [g.label, g.prefill]);
     expect(prefills("repo")).toEqual([["r1", { repoId: "r1" }]]);
-    expect(prefills("tag")).toEqual([["#t", { tags: ["t"] }], ["no tag", {}]]);
+    expect(prefills("tag")).toEqual([["#t", { repoId: "r1", tags: ["t"] }], ["no tag", {}]]);
     expect(prefills("focus").every(([, p]) => JSON.stringify(p) === "{}")).toBe(true);
   });
 });
