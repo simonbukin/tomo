@@ -22,6 +22,8 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 12;
 const HIDE_DELAY_MS = 180;
 const DRAG_THRESHOLD_PX = 3;
+const CARD_W = 280;
+const CARD_MAX_H = 7 * 28;
 
 const ringPoints = RINGS.flat();
 const minLon = Math.min(...ringPoints.map((p) => p[0])) - 0.3;
@@ -36,6 +38,8 @@ function project(lon: number, lat: number): [number, number] {
 }
 
 const OUTLINE_PATH = RINGS.map((ring) => "M" + ring.map(([lon, lat]) => project(lon, lat).map((v) => v.toFixed(1)).join(" ")).join("L") + "Z").join("");
+
+const square = (x: number, y: number, size: number, className: string) => <rect x={x - size / 2} y={y - size / 2} width={size} height={size} className={className} />;
 
 type View = { k: number; tx: number; ty: number };
 const HOME: View = { k: 1, tx: 0, ty: 0 };
@@ -127,9 +131,9 @@ export function Towns() {
   const r = (base: number) => base / view.k;
   const cardStyle = (h: Hover): React.CSSProperties => {
     const box = mapRef.current?.getBoundingClientRect();
-    const flipX = box ? h.x > box.width - 240 : false;
-    const flipY = box ? h.y > box.height - 150 : false;
-    return { left: flipX ? h.x - 232 : h.x + 14, top: flipY ? h.y - 130 : h.y + 14 };
+    const flipX = box ? h.x > box.width - CARD_W - 20 : false;
+    const flipY = box ? h.y > box.height - CARD_MAX_H - 20 : false;
+    return { left: flipX ? h.x - CARD_W - 14 : h.x + 14, top: flipY ? h.y - CARD_MAX_H - 14 : h.y + 14 };
   };
 
   return (
@@ -152,14 +156,16 @@ export function Towns() {
             {ALL.map((t) => {
               if (unlockBySlug.has(t.slug)) return null;
               const [x, y] = project(t.lon, t.lat);
-              return <g key={t.slug} onMouseEnter={(e) => show(t, e)} onMouseLeave={scheduleHide}><circle cx={x} cy={y} r={r(7)} className="town-hit" /><circle cx={x} cy={y} r={r(3)} className={`town-dot rarity-${t.rarity}`} /></g>;
+              return <g key={t.slug} className={`rarity-${t.rarity}`} onMouseEnter={(e) => show(t, e)} onMouseLeave={scheduleHide}>{square(x, y, r(12), "town-hit")}{square(x, y, r(2.4), "town-dot")}</g>;
             })}
             {unlocked.map(({ town }) => {
               const [x, y] = project(town.lon, town.lat);
               return (
                 <g key={town.slug} className={`town-unlocked rarity-${town.rarity}${town.slug === selected ? " town-selected" : ""}`} onMouseEnter={(e) => show(town, e)} onMouseLeave={scheduleHide} onClick={() => selectOnMap(town.slug)}>
-                  <circle cx={x} cy={y} r={r(11)} className="town-ring" />
-                  <circle cx={x} cy={y} r={r(6)} className="town-core" />
+                  {square(x, y, r(18), "town-hit")}
+                  {square(x, y, r(10), "town-ring")}
+                  {square(x, y, r(4), "town-core")}
+                  {town.slug === selected && square(x, y, r(18), "town-selection")}
                 </g>
               );
             })}
@@ -174,11 +180,11 @@ export function Towns() {
       </div>
       <div className="towns-list">
         {selectedTown && <TownDetail key={selectedTown.slug} town={selectedTown} onClose={() => setSelected(null)} />}
-        <div className="section-label">collection<span className="right">{unlocked.length} / {ALL.length}</span></div>
+        <div className="section-label">Collection<span className="right mono">{unlocked.length} / {ALL.length}</span></div>
         <div className="rarity-row">
           {counts.map((c) => (
-            <span key={c.r} className="rarity-count" title={c.r}>
-              <span className={`rarity-dot rarity-${c.r}`} /> {c.have}<span className="faint">/{c.total}</span>
+            <span key={c.r} className="rarity-count" title={`${c.have} of ${c.total} ${c.r}`}>
+              <span className={`rarity-dot rarity-${c.r}`} />{c.have}
             </span>
           ))}
         </div>
@@ -190,25 +196,14 @@ export function Towns() {
             action={<Button size="sm" onClick={() => setState({ dialog: { kind: "create-worktree" } })}>New worktree</Button>}
           />
         )}
-        {unlocked.map(({ town, unlock }) => {
-          const w = worktrees.find((x) => x.id === unlock.worktree_id);
-          return (
-            <div key={town.slug} className={`town-row${town.slug === selected ? " town-row-selected" : ""}`} onClick={() => setSelected(town.slug)}>
-              <span className={`rarity-dot rarity-${town.rarity}`} title={town.rarity} />
-              <div className="town-main">
-                <div>
-                  <button className="link town-name" aria-pressed={town.slug === selected} onClick={(e) => { e.stopPropagation(); setSelected(town.slug); }}>{town.name}</button>
-                  <span className="muted"> {town.ja}</span>
-                </div>
-                <div className="faint">
-                  {town.pref} · {town.rarity}
-                  {w && <> · <button className="link" onClick={(e) => { e.stopPropagation(); openWorktree(w.id); }}>{w.name}</button></>}
-                  {" · "}{day(unlock.unlocked_at_ms)}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {unlocked.map(({ town }) => (
+          <button key={town.slug} type="button" className={`town-row${town.slug === selected ? " town-row-selected" : ""}`} aria-pressed={town.slug === selected} onClick={() => setSelected(town.slug)}>
+            <span className={`rarity-dot rarity-${town.rarity}`} />
+            <span className="town-name">{town.name}</span>
+            <span className="town-ja">{town.ja}</span>
+            <span className="town-rarity">{town.rarity}</span>
+          </button>
+        ))}
         {unlocked.length > 0 && <div className="faint towns-note">{ALL.length - unlockBySlug.size} towns still locked</div>}
       </div>
     </div>
@@ -243,33 +238,43 @@ function TownDetail({ town, onClose }: { town: Town; onClose: () => void }) {
   const liveTree = h && (h.status === "active" || h.status === "missing");
   return (
     <section className="town-detail rise" aria-label={`${town.name} history`}>
-      <div className="town-detail-head">
+      <div className="town-head">
         <span className={`rarity-dot rarity-${town.rarity}`} />
         <strong>{town.name}</strong>
-        <span className="muted">{town.ja}</span>
+        <span className="town-ja">{town.ja}</span>
         <IconButton label="Close town details" className="town-detail-close" onClick={onClose}><X className="icon" /></IconButton>
       </div>
-      <div className="faint">{town.pref} · {town.kind} · {town.rarity}</div>
+      <div className="town-fact"><label>place</label><span>{town.pref} · {town.kind}</span></div>
+      <div className="town-fact"><label>rarity</label><span>{town.rarity}</span></div>
       {error && <InlineError>history unavailable: {error}</InlineError>}
-      {!h && !error && <SkeletonRows count={5} className="compact" label="loading town history" />}
+      {!h && !error && <SkeletonRows count={4} className="compact" label="loading town history" />}
       {h && (
-        <div className="town-facts">
-          <div className="kv"><label>unlocked</label><span>{day(h.unlock.unlocked_at_ms)}</span></div>
-          <div className="kv">
+        <>
+          <div className="town-fact"><label>unlocked</label><span>{day(h.unlock.unlocked_at_ms)}</span></div>
+          <div className="town-fact">
             <label>worktree</label>
-            <span className="mono" title={h.worktree_name ?? undefined}>
-              {h.status === "active" ? <button className="link mono" onClick={() => openWorktree(h.unlock.worktree_id)}>{h.branch ?? h.worktree_name ?? "open"}</button> : (h.branch ?? "—")}
+            <span title={h.worktree_name ?? undefined}>
+              {h.status === "active" ? <button className="link" onClick={() => openWorktree(h.unlock.worktree_id)}>{h.branch ?? h.worktree_name ?? "open"}</button> : (h.branch ?? "—")}
             </span>
           </div>
-          <div className="kv"><label>status</label><span>{h.status}</span></div>
-          <div className="kv"><label>{liveTree ? "head" : "final commit"}</label><span className="mono" title={h.final_commit ?? undefined}>{h.final_commit?.slice(0, 7) ?? "—"}</span></div>
-          {h.pr && <div className="kv"><label>pull request</label><span><button className="link" onClick={() => openUrl(h.pr!.url).catch(failToast("Could not open the link"))}>#{h.pr.number} {h.pr.state}</button></span></div>}
-          <div className="kv"><label>repo</label><span>{h.repo_name ?? "—"}</span></div>
-          {h.archived_at_ms != null && <div className="kv"><label>archived</label><span>{day(h.archived_at_ms)}</span></div>}
-        </div>
+          <div className="town-fact"><label>status</label><span>{h.status}</span></div>
+          <div className="town-fact"><label>{liveTree ? "head" : "final commit"}</label><span title={h.final_commit ?? undefined}>{h.final_commit?.slice(0, 7) ?? "—"}</span></div>
+          {h.pr && <div className="town-fact"><label>PR</label><span><button className="link" onClick={() => openUrl(h.pr!.url).catch(failToast("Could not open the link"))}>#{h.pr.number} {h.pr.state}</button></span></div>}
+          <div className="town-fact"><label>repo</label><span>{h.repo_name ?? "—"}</span></div>
+          {h.archived_at_ms != null && <div className="town-fact"><label>archived</label><span>{day(h.archived_at_ms)}</span></div>}
+        </>
       )}
-      <button className="link" onClick={() => openUrl(town.wiki).catch(failToast("Could not open the link"))}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
+      <WikiRow town={town} />
     </section>
+  );
+}
+
+function WikiRow({ town }: { town: Town }) {
+  return (
+    <button type="button" className="town-wiki" onClick={() => openUrl(town.wiki).catch(failToast("Could not open the link"))}>
+      <span>Wikipedia</span>
+      <ExternalLink className="icon" />
+    </button>
   );
 }
 
@@ -277,19 +282,17 @@ function TownCard({ hover, style, onEnter, onLeave, worktreeName, openWorktree }
   const t = hover.town;
   return (
     <div className="town-card rise" style={style} onMouseEnter={onEnter} onMouseLeave={onLeave}>
-      <div className="town-card-title">
+      <div className="town-head">
         <span className={`rarity-dot rarity-${t.rarity}`} />
         <strong>{t.name}</strong>
-        <span className="muted">{t.ja}</span>
+        <span className="town-ja">{t.ja}</span>
       </div>
-      <div className="faint">{t.pref} · {t.kind} · {t.rarity}{t.population != null ? ` · ${t.population.toLocaleString()} people` : ""}</div>
-      {hover.unlock && (
-        <div className="faint">
-          unlocked {day(hover.unlock.unlocked_at_ms)}
-          {worktreeName && <> · <button className="link" onClick={openWorktree}>{worktreeName}</button></>}
-        </div>
-      )}
-      <button className="link" onClick={() => openUrl(t.wiki).catch(failToast("Could not open the link"))}><ExternalLink className="icon" width={12} height={12} /> wikipedia</button>
+      <div className="town-fact"><label>place</label><span>{t.pref} · {t.kind}</span></div>
+      <div className="town-fact"><label>rarity</label><span>{t.rarity}</span></div>
+      {t.population != null && <div className="town-fact"><label>people</label><span>{t.population.toLocaleString()}</span></div>}
+      {hover.unlock && <div className="town-fact"><label>unlocked</label><span>{day(hover.unlock.unlocked_at_ms)}</span></div>}
+      {hover.unlock && worktreeName && <div className="town-fact"><label>worktree</label><span><button className="link" onClick={openWorktree}>{worktreeName}</button></span></div>}
+      <WikiRow town={t} />
     </div>
   );
 }
