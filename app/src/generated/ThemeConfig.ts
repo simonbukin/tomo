@@ -8,7 +8,7 @@
  */
 export type ThemeConfig = { 
 /**
- * Base theme id: `system`, `murasaki-dark`, `murasaki-light`, `paper`, or `ink`.
+ * Base theme id: `system`, `slab-dark`, or `slab-light`.
  */
 name: string, 
 /**
@@ -20,6 +20,6 @@ light: string,
  */
 dark: string, 
 /**
- * Token overrides keyed by token name (`bg`, `surface`, ...). Values are `#rgb` or `#rrggbb`; `accent` also takes a preset name.
+ * Token overrides keyed by token name (`bg`, `surface`, ...). Values are `#rgb` or `#rrggbb`.
  */
 colors: { [key in string]: string }, };

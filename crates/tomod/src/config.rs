@@ -142,17 +142,15 @@ command = "rm -rf node_modules target dist .next .turbo .venv build"
 # command = "claude"
 # args = []
 
-# Theme. name: system | murasaki-dark | murasaki-light | paper | ink.
+# Theme. name: system | slab-dark | slab-light.
 # With system, Tomo follows the macOS appearance and uses `light` or `dark`.
 # Color keys override the base theme: bg, surface, surface_hover, fg,
 # fg_muted, fg_faint, border, border_strong, accent, accent_soft, working,
-# waiting, danger, success. Use #rgb or #rrggbb. accent also takes
-# murasaki | sora | sakura | sumi.
+# waiting, danger, success. Use #rgb or #rrggbb.
 # [theme]
 # name = "system"
-# light = "murasaki-light"
-# dark = "murasaki-dark"
-# accent = "sora"
+# light = "slab-light"
+# dark = "slab-dark"
 
 # [terminal]
 # font_family = "CommitMono, Menlo, monospace"
@@ -180,8 +178,9 @@ pub const THEME_TOKENS: [&str; 14] = [
     "danger",
     "success",
 ];
-const BASE_THEMES: [&str; 5] = ["system", "murasaki-dark", "murasaki-light", "paper", "ink"];
-const ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
+const BASE_THEMES: [&str; 3] = ["system", "slab-dark", "slab-light"];
+/// Accent presets from before slab, which has no hue. A preset now gives a warning and no color.
+const RETIRED_ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
 const SETTABLE_KEYS: [&str; 14] = [
     "shell",
     "editor_command",
@@ -362,8 +361,8 @@ fn unknown_keys<'a>(section: &'a str, table: &'a toml::Table, known: &'a [&'a st
 
 fn theme_id(name: &str) -> Option<&'static str> {
     match name.trim().to_lowercase().replace([' ', '_'], "-").as_str() {
-        "dark" => Some("murasaki-dark"),
-        "light" => Some("murasaki-light"),
+        "dark" | "murasaki-dark" | "ink" => Some("slab-dark"),
+        "light" | "murasaki-light" | "paper" => Some("slab-light"),
         other => BASE_THEMES.into_iter().find(|t| *t == other),
     }
 }
@@ -391,7 +390,9 @@ fn theme_color(key: &str, value: &toml::Value) -> Result<(String, String), Confi
     let refuse = |message: String| Err(issue(IssueLevel::Error, &format!("theme.{key}"), message));
     match value.as_str().map(|s| s.trim().to_lowercase()) {
         Some(s) if is_hex_color(&s) => Ok((key.to_string(), s)),
-        Some(s) if key == "accent" && ACCENT_PRESETS.contains(&s.as_str()) => Ok((key.to_string(), s)),
+        Some(s) if key == "accent" && RETIRED_ACCENT_PRESETS.contains(&s.as_str()) => {
+            Err(issue(IssueLevel::Warning, "theme.accent", format!("the {s} preset is gone; slab has no hue, so Tomo ignores it")))
+        }
         Some(_) => refuse(format!("{value} is not a color; use #rgb or #rrggbb")),
         None => refuse(format!("must be a color string, not {value}")),
     }
@@ -683,13 +684,13 @@ mod tests {
     #[test]
     fn valid_theme_table_and_terminal_section() {
         let (cfg, issues) = parse(
-            "[theme]\nname = \"Murasaki Light\"\nlight = \"paper\"\ndark = \"ink\"\nbg = \"#0F0F12\"\nsurface = \"#17171c\"\naccent = \"sora\"\n\n[terminal]\nfont_family = \"Berkeley Mono\"\nfont_size = 15\n",
+            "[theme]\nname = \"Slab Light\"\nlight = \"slab-light\"\ndark = \"slab-dark\"\nbg = \"#0F0F12\"\nsurface = \"#17171c\"\naccent = \"#abc\"\n\n[terminal]\nfont_family = \"Berkeley Mono\"\nfont_size = 15\n",
         );
         assert!(issues.is_empty(), "{issues:?}");
-        assert_eq!(cfg.theme.name, "murasaki-light");
-        assert_eq!((cfg.theme.light.as_str(), cfg.theme.dark.as_str()), ("paper", "ink"));
+        assert_eq!(cfg.theme.name, "slab-light");
+        assert_eq!((cfg.theme.light.as_str(), cfg.theme.dark.as_str()), ("slab-light", "slab-dark"));
         assert_eq!(cfg.theme.colors["bg"], "#0f0f12");
-        assert_eq!(cfg.theme.colors["accent"], "sora");
+        assert_eq!(cfg.theme.colors["accent"], "#abc");
         assert_eq!((cfg.font_family.as_str(), cfg.font_size), ("Berkeley Mono", 15));
     }
 
@@ -698,15 +699,24 @@ mod tests {
         let (cfg, issues) = parse("[theme]\naccent = \"#abc\"\n");
         assert!(issues.is_empty(), "{issues:?}");
         assert_eq!(cfg.theme.name, "system");
-        assert_eq!(cfg.theme.dark, "murasaki-dark");
+        assert_eq!(cfg.theme.dark, "slab-dark");
         assert_eq!(cfg.theme.colors.len(), 1);
     }
 
     #[test]
-    fn malformed_theme_falls_back_to_murasaki_and_keeps_the_rest_of_the_file() {
+    fn a_murasaki_config_reads_as_slab_and_its_accent_preset_only_warns() {
+        let (cfg, issues) = parse("[theme]\naccent = \"sakura\"\nname = \"murasaki-dark\"\nlight = \"paper\"\ndark = \"ink\"\n");
+        assert_eq!((cfg.theme.name.as_str(), cfg.theme.light.as_str(), cfg.theme.dark.as_str()), ("slab-dark", "slab-light", "slab-dark"));
+        assert!(cfg.theme.colors.is_empty());
+        assert_eq!(issue_keys(&issues), vec!["theme.accent"]);
+        assert_eq!(issues[0].level, IssueLevel::Warning);
+    }
+
+    #[test]
+    fn malformed_theme_falls_back_to_slab_and_keeps_the_rest_of_the_file() {
         let (cfg, issues) = parse("[theme]\nname = \"neon\"\ndark = \"system\"\nbg = \"blue\"\nfg = 5\naccent = \"#12345\"\nsparkle = \"#fff\"\nborder = \"#FFF\"\n\n[terminal]\nfont_size = 400\nligatures = true\n\n[keybindings]\nhome = \"mod+j\"\n");
         assert_eq!(cfg.theme.name, "system");
-        assert_eq!(cfg.theme.dark, "murasaki-dark");
+        assert_eq!(cfg.theme.dark, "slab-dark");
         assert_eq!(cfg.theme.colors.keys().collect::<Vec<_>>(), vec!["border"]);
         assert_eq!(cfg.font_size, 13);
         assert_eq!(cfg.keybindings["home"], "mod+j");
@@ -721,7 +731,7 @@ mod tests {
     fn legacy_top_level_theme_and_font_keys_still_work() {
         let (cfg, issues) = parse("theme = \"dark\"\nfont_family = \"Menlo\"\nfont_size = 15\n");
         assert!(issues.is_empty(), "{issues:?}");
-        assert_eq!(cfg.theme.name, "murasaki-dark");
+        assert_eq!(cfg.theme.name, "slab-dark");
         assert_eq!((cfg.font_family.as_str(), cfg.font_size), ("Menlo", 15));
         let (cfg, _) = parse("font_size = 15\n[terminal]\nfont_size = 16\n");
         assert_eq!(cfg.font_size, 16);
@@ -743,14 +753,14 @@ mod tests {
     fn set_value_round_trip_keeps_comments_and_formatting() {
         let out = set_value(COMMENTED, "keybindings.home", &json!("mod+shift+h")).unwrap();
         assert_eq!(out, COMMENTED.replace("\"mod+j\"", "\"mod+shift+h\""));
-        let out = set_value(&out, "theme.name", &json!("paper")).unwrap();
+        let out = set_value(&out, "theme.name", &json!("slab-light")).unwrap();
         let out = set_value(&out, "terminal.font_size", &json!(15)).unwrap();
         let out = set_value(&out, "notifications.sounds", &json!(true)).unwrap();
         assert!(out.starts_with(&COMMENTED.replace("\"mod+j\"", "\"mod+shift+h\"")), "{out}");
-        assert!(out.contains("[theme]\nname = \"paper\"\n"), "{out}");
+        assert!(out.contains("[theme]\nname = \"slab-light\"\n"), "{out}");
         let (cfg, issues) = parse(&out);
         assert!(issues.is_empty(), "{issues:?}");
-        assert_eq!((cfg.theme.name.as_str(), cfg.font_size, cfg.notifications.sounds), ("paper", 15, true));
+        assert_eq!((cfg.theme.name.as_str(), cfg.font_size, cfg.notifications.sounds), ("slab-light", 15, true));
         assert_eq!(cfg.keybindings["home"], "mod+shift+h");
         let removed = set_value(&out, "keybindings.home", &serde_json::Value::Null).unwrap();
         assert!(!removed.contains("mod+shift+h") && removed.contains("# keys I like"), "{removed}");
@@ -770,11 +780,11 @@ mod tests {
 
     #[test]
     fn set_value_turns_a_legacy_theme_string_into_a_table() {
-        let out = set_value("theme = \"dark\"\n", "theme.accent", &json!("sakura")).unwrap();
+        let out = set_value("theme = \"dark\"\n", "theme.danger", &json!("#f00")).unwrap();
         let (cfg, issues) = parse(&out);
         assert!(issues.is_empty(), "{issues:?} in {out}");
-        assert_eq!(cfg.theme.name, "murasaki-dark");
-        assert_eq!(cfg.theme.colors["accent"], "sakura");
+        assert_eq!(cfg.theme.name, "slab-dark");
+        assert_eq!(cfg.theme.colors["danger"], "#f00");
     }
 
     #[test]

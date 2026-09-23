@@ -9,8 +9,9 @@ html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: var(--font-ui);
   font-size: var(--fs-2);
+  font-weight: 500;
   line-height: 1.5;
-  font-feature-settings: "kern" 1, "tnum" 1, "cv11" 1;
+  font-feature-settings: "kern" 1, "tnum" 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   background: var(--bg);
@@ -20,13 +21,14 @@ body {
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 
-::selection { background: var(--accent-soft); color: var(--fg); }
-:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
-input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+::selection { background: var(--fg); color: var(--bg); }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
 
 /* ---- text defaults and the small shared helpers */
-.mono { font-family: var(--mono); font-feature-settings: "kern" 1, "liga" 0, "calt" 0, "tnum" 1; }
-code { font-family: var(--mono); font-size: 0.92em; background: var(--bg-2); padding: 1px 4px; border-radius: var(--radius-sm); }
+.mono { font-family: var(--mono); font-weight: 400; font-feature-settings: "kern" 1, "liga" 0, "calt" 0, "tnum" 1; }
+.display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.3px; }
+code { font-family: var(--mono); font-size: 0.92em; background: var(--bg-2); padding: 1px 4px; }
 svg.icon { width: 14px; height: 14px; flex: none; }
 .muted { color: var(--fg-2); }
 .faint { color: var(--fg-3); }
@@ -36,26 +38,27 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .hot { color: var(--danger); }
 .accent { color: var(--accent); }
 
-.section-label { display: flex; align-items: center; gap: var(--sp-2); height: 26px; font-size: var(--fs-1); color: var(--fg-2); }
+.section-label { display: flex; align-items: center; gap: var(--sp-2); height: var(--u); font-size: var(--fs-2); font-weight: 700; color: var(--fg); }
 .section-label .right { margin-left: auto; color: var(--fg-3); font-variant-numeric: tabular-nums; }
 
-/* ---- status dots: the one vocabulary for agent, git, pr, and check state */
-.state { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex: none; border: 1.5px solid var(--fg-3); background: transparent; }
-.state-working { background: var(--working); border-color: var(--working); }
-.state-waiting { background: var(--waiting); border-color: var(--waiting); box-shadow: 0 0 0 2px var(--waiting-soft); }
-.state-idle { border-color: var(--fg-2); }
-.state-exited { border-color: var(--fg-3); }
-.state-unknown { background: var(--fg-3); border-color: var(--fg-3); }
-.state-none { border-color: var(--line-strong); }
-.state-dirty { background: var(--fg-3); border-color: var(--fg-3); }
-.state-selected { background: var(--accent); border-color: var(--accent); }
-.state-archiving { border-color: var(--fg-3); background: var(--fg-3); animation: pulse 1.2s ease-in-out infinite; }
-.state-full, .state-ok, .pr-open, .check-passed { background: var(--working); border-color: var(--working); }
-.state-partial, .state-warning, .check-pending { background: var(--waiting); border-color: var(--waiting); }
-.state-process_only { border-color: var(--waiting); }
-.state-unavailable { border-color: var(--fg-3); }
-.state-fail, .state-error, .pr-closed, .check-failed { background: var(--danger); border-color: var(--danger); }
-.pr-merged { background: var(--accent); border-color: var(--accent); }
+/* ---- status squares: the one vocabulary for agent, git, pr, and check state.
+ * A filled square is a live state; a hollow square is a quiet one. */
+.state { display: inline-block; width: 8px; height: 8px; flex: none; background: transparent; box-shadow: inset 0 0 0 1px var(--fg-3); position: relative; z-index: 3; }
+.state-working { background: var(--working); box-shadow: none; }
+.state-waiting { background: var(--waiting); box-shadow: none; }
+.state-idle { box-shadow: inset 0 0 0 1px var(--fg-2); }
+.state-exited { box-shadow: inset 0 0 0 1px var(--fg-3); }
+.state-unknown { background: var(--fg-3); box-shadow: none; }
+.state-none { box-shadow: inset 0 0 0 1px var(--line-strong); }
+.state-dirty { background: var(--fg-3); box-shadow: none; }
+.state-selected { background: var(--fg); box-shadow: none; }
+.state-archiving { background: var(--fg-3); box-shadow: none; animation: pulse 1.2s ease-in-out infinite; }
+.state-full, .state-ok, .pr-open, .check-passed { background: var(--working); box-shadow: none; }
+.state-partial, .state-warning, .check-pending { background: var(--waiting); box-shadow: none; }
+.state-process_only { box-shadow: inset 0 0 0 1px var(--waiting); }
+.state-unavailable { box-shadow: inset 0 0 0 1px var(--fg-3); }
+.state-fail, .state-error, .pr-closed, .check-failed { background: var(--danger); box-shadow: none; }
+.pr-merged { background: var(--fg-2); box-shadow: none; }
 
 /* An icon tinted by status. Two classes, so a tint beats the plain color of the icon. */
 .icon.tint-working { color: var(--working); }
@@ -72,13 +75,15 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .icon.branch-pending { color: var(--waiting); }
 .icon.branch-failed { color: var(--danger); }
 .icon.branch-closed { color: var(--danger); }
-.icon.branch-merged { color: var(--accent); }
-.check-none { border-color: var(--line-strong); }
+.icon.branch-merged { color: var(--fg-2); }
+.check-none { box-shadow: inset 0 0 0 1px var(--line-strong); }
 
 /* ---- motion: the shared keyframes and the reduced-motion guard */
-@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; translate: 0 12px; } }
+@keyframes fade { from { opacity: 0; } }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-.rise { animation: rise var(--dur-open) ease-out both; }
+.rise { animation: rise var(--dur-open) var(--ease-out) backwards; }
+.fade-in { animation: fade var(--dur-fast) var(--ease-out) backwards; }
 .no-anim * { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

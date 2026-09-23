@@ -7,17 +7,17 @@
     <style>
       /* The window stays hidden until the mark below has painted, so this is the first thing
          anyone sees. It is inline because a linked stylesheet is one more round trip. */
-      html, body { height: 100%; margin: 0; background: #17141f; }
-      :root[data-theme="light"], :root[data-theme="light"] body { background: #fbfafd; }
+      html, body { height: 100%; margin: 0; background: #0e0e0e; }
+      :root[data-theme="light"], :root[data-theme="light"] body { background: #efeee9; }
       #boot {
         position: fixed;
         inset: 0;
         display: grid;
         place-items: center;
-        color: #c9c4d6;
+        color: #ecebe8;
         transition: opacity 180ms ease-out;
       }
-      :root[data-theme="light"] #boot { color: #4a4458; }
+      :root[data-theme="light"] #boot { color: #121212; }
       #boot[data-done] { opacity: 0; pointer-events: none; }
       #boot svg { width: 64px; height: 64px; }
       @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }

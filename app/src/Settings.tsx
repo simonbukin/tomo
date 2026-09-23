@@ -10,7 +10,7 @@ import { Button, IconButton, Select } from "./components/ui";
 import { describeBinding } from "./keys";
 import { bindingFromEvent, SETTINGS_SECTIONS, splitList, type SettingsSection } from "./settingsModel";
 import { failToast, getState, setState, setUi, showStatus, toast, useStore } from "./store";
-import { ACCENT_PRESETS, BASE_THEMES, THEME_LABELS, TOKENS, useResolvedTheme, type AccentPreset, type ThemeName, type Token } from "./theme";
+import { BASE_THEMES, THEME_LABELS, TOKENS, useResolvedTheme, type ThemeName, type Token } from "./theme";
 import type { Config, ConfigIssue, IntegrationStatus } from "./types";
 
 /** Settings reads and writes config.toml through the daemon; only zoom stays in UI state. */
@@ -138,7 +138,6 @@ function AppearanceSection({ config }: { config: Config }) {
   const zoom = useStore((s) => s.ui.appearance.zoom);
   const names = (["system", ...BASE_THEMES] as ThemeName[]).map((value) => ({ value, label: THEME_LABELS[value] }));
   const bases = BASE_THEMES.map((value) => ({ value, label: THEME_LABELS[value] }));
-  const accent = theme.colors.accent ?? "murasaki";
   return (
     <div className="settings-grid">
       <Row label="theme">
@@ -154,16 +153,6 @@ function AppearanceSection({ config }: { config: Config }) {
           </Row>
         </>
       )}
-      <Row label="accent">
-        <span className="swatches">
-          {(Object.keys(ACCENT_PRESETS) as AccentPreset[]).map((id) => (
-            <button key={id} className="swatch" aria-pressed={accent === id} onClick={() => setConfig("theme.accent", id === "murasaki" ? null : id)}>
-              <span className="swatch-dot" style={{ background: ACCENT_PRESETS[id][resolved.scheme] }} />
-              {id}
-            </button>
-          ))}
-        </span>
-      </Row>
       <Row label="colors" note="a color here overrides the base theme in [theme]">
         <div className="token-grid">
           {TOKENS.map((t) => (

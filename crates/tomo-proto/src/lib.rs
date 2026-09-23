@@ -812,19 +812,19 @@ impl Default for NotificationSettings {
 /// `[theme]` after validation. Invalid values are already dropped and reported by `config_check`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThemeConfig {
-    /// Base theme id: `system`, `murasaki-dark`, `murasaki-light`, `paper`, or `ink`.
+    /// Base theme id: `system`, `slab-dark`, or `slab-light`.
     pub name: String,
     /// Base theme for a light OS appearance when `name` is `system`.
     pub light: String,
     /// Base theme for a dark OS appearance when `name` is `system`.
     pub dark: String,
-    /// Token overrides keyed by token name (`bg`, `surface`, ...). Values are `#rgb` or `#rrggbb`; `accent` also takes a preset name.
+    /// Token overrides keyed by token name (`bg`, `surface`, ...). Values are `#rgb` or `#rrggbb`.
     pub colors: BTreeMap<String, String>,
 }
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        ThemeConfig { name: "system".into(), light: "murasaki-light".into(), dark: "murasaki-dark".into(), colors: BTreeMap::new() }
+        ThemeConfig { name: "system".into(), light: "slab-light".into(), dark: "slab-dark".into(), colors: BTreeMap::new() }
     }
 }
 
