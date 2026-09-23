@@ -6,8 +6,7 @@ button, .btn { transition: background-color var(--dur-hover) var(--ease-out), co
 button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disabled):not(.btn-link):active { transform: scale(var(--press-scale)); }
 .wt-row, .wt-list-row, .card, .town-row, .activity-row, .file-row, .session-row { transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
 .wt-row:active, .wt-list-row:active, .town-row:active, .file-row:active { background: var(--bg-2); }
-.tab { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), box-shadow var(--dur-open) var(--ease-out); }
-.tab:active { background: var(--bg-1); }
+.tab { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .seg { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .menu-item, .select-item { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .menu-popup, .popover, .select-popup, .dialog, .dialog-backdrop { transition-timing-function: var(--ease-out); transition-duration: var(--dur-open); }
@@ -18,9 +17,6 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 
 /* ---- focus: the ring itself is in base.css; here is what each surface does with it */
 .wt-row:focus-visible, .wt-list-row:focus-visible, .town-row:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
-.pane { border-color: var(--line); transition: border-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out); }
-.pane-active { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
-.split .pane:not(.pane-active) .pane-legend .chip strong { color: var(--fg-2); }
 
 /* ---- hit targets: compact visuals, at least --hit-min of clickable area */
 .btn-icon, button.link, .btn-link, .repo-toggle { position: relative; }
