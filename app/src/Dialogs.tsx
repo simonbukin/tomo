@@ -10,7 +10,7 @@ import { IntegrationStatusList } from "./Settings";
 import { DiagnosticsDialog } from "./shell/Diagnostics";
 import { InlineError } from "./states";
 import { setState, useStore, type Dialog as DialogSpec } from "./store";
-import type { Branch, MetadataPatch, WorktreePrefill } from "./types";
+import type { Branch, MetadataPatch, Repo, Worktree, WorktreePrefill } from "./types";
 
 /** Store-driven dialogs. The shell (portal, focus trap, Escape, focus return) comes from the Dialog primitive. */
 export function Dialogs() {
@@ -107,9 +107,18 @@ export function createMetadata(tags: string): MetadataPatch | undefined {
   return tagList.length > 0 ? { tags: tagList } : undefined;
 }
 
+/** The repository a new worktree starts in without a prefill: the open worktree's, else the one with the most live worktrees. */
+export function defaultRepoId(repos: readonly Repo[], worktrees: readonly Worktree[], activeWorktreeId: string | null): string {
+  const active = worktrees.find((w) => w.id === activeWorktreeId)?.repo_id;
+  if (active && repos.some((r) => r.id === active)) return active;
+  const live = (id: string) => worktrees.filter((w) => w.repo_id === id && !w.archived_at_ms).length;
+  return [...repos].sort((a, b) => live(b.id) - live(a.id))[0]?.id ?? "";
+}
+
 function CreateWorktree({ close, prefill }: { close: () => void; prefill: WorktreePrefill }) {
   const repos = useStore((s) => s.repos);
-  const [repo, setRepo] = useState(prefill.repoId ?? repos[0]?.id ?? "");
+  const fallbackRepo = useStore((s) => defaultRepoId(s.repos, s.worktrees, s.ui.activeWorktreeId));
+  const [repo, setRepo] = useState(prefill.repoId ?? fallbackRepo);
   const [tags, setTags] = useState((prefill.tags ?? []).join(", "));
   const [branch, setBranch] = useState("");
   const [isNew, setIsNew] = useState(true);
