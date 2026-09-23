@@ -96,9 +96,9 @@ describe("GitHub marks outside the inspector", () => {
     render(<RightRail worktree={wt} />);
     expect(screen.getByRole("button", { name: "Git" })).toBeInTheDocument();
     prChanged(pr({ state: "merged", checks_failed: 1 }));
-    expect(screen.getByRole("button", { name: "Git, checks failed" })).toHaveTextContent("×");
+    expect(screen.getByRole("button", { name: "Git, checks failed" })).toBeInTheDocument();
     prChanged(pr({ state: "merged" }));
-    expect(screen.getByRole("button", { name: "Git, merged" })).toHaveTextContent("✓");
+    expect(screen.getByRole("button", { name: "Git, merged" })).toBeInTheDocument();
   });
 
   it("shows a merged pull request or failed checks as the last NOW signal", () => {

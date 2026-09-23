@@ -1,36 +1,38 @@
-/* Bottom strip: three sections on the shell columns. A section is never narrower than its content, so health and version always show. */
+/* Bottom strip: one unit tall, three sections on the shell columns. A cell is one unit square or one unit tall.
+ * A section is never narrower than its content, so health and version always show. */
 .bottom-strip {
   display: grid;
   grid-template-columns: minmax(max-content, var(--left-col)) minmax(0, 1fr) minmax(max-content, var(--right-col));
   align-items: stretch;
   gap: 0;
+  height: var(--u);
   padding: 0;
   overflow: hidden;
+  border-top: 0;
+  box-shadow: inset 0 1px 0 var(--line);
   font-size: var(--fs-0);
   line-height: 1;
 }
 .bottom-strip[data-left="closed"] { grid-template-columns: minmax(0, 1fr) minmax(max-content, var(--right-col)); }
 
-.bottom-left { display: flex; align-items: center; gap: 2px; padding: 0 var(--sp-2); border-right: 1px solid var(--line); min-width: 0; }
-.bottom-strip[data-left="minimal"] .bottom-left { justify-content: center; gap: 0; padding: 0; }
-.bottom-left .btn-icon { width: 22px; height: 22px; }
-.bottom-left .icon { width: 13px; height: 13px; }
-.bottom-add { display: inline-flex; align-items: center; gap: var(--sp-1); height: 22px; padding: 0 var(--sp-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg-2); font: inherit; font-size: var(--fs-0); cursor: pointer; white-space: nowrap; }
+.bottom-left, .bottom-right { display: flex; align-items: stretch; min-width: 0; }
+.bottom-left { box-shadow: inset -1px 0 0 var(--line); }
+.bottom-right { justify-content: flex-end; box-shadow: inset 1px 0 0 var(--line); }
+.bottom-strip[data-left="minimal"] .bottom-left { justify-content: center; }
+.bottom-left .btn-icon, .bottom-right .btn-icon { width: var(--u); height: var(--u); }
+.bottom-left .icon, .bottom-right .icon { width: 13px; height: 13px; }
+.bottom-add { display: inline-flex; align-items: center; gap: var(--sp-1); height: var(--u); padding: 0 var(--sp-2); border: 0; background: none; color: var(--fg-2); font: inherit; font-size: var(--fs-0); cursor: pointer; white-space: nowrap; }
 .bottom-add:hover { background: var(--bg-2); color: var(--fg); }
 .bottom-add .icon { width: 13px; height: 13px; }
 .bottom-strip[data-left="minimal"] .bottom-add span { display: none; }
-.bottom-right { gap: var(--sp-1); }
-.bottom-right .btn-icon { width: 22px; height: 22px; }
-.bottom-right .icon { width: 13px; height: 13px; }
 
-.bottom-middle { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-2); min-width: 0; }
+.bottom-middle { display: flex; align-items: stretch; gap: 0; min-width: 0; }
 .bottom-middle > :last-child { margin-left: auto; flex: none; }
-.bottom-items { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; overflow: hidden; }
-.bottom-status { display: flex; justify-content: center; min-width: 0; overflow: hidden; white-space: nowrap; }
-.bottom-metrics { display: flex; justify-content: flex-end; min-width: 0; overflow: hidden; }
-.bottom-right { display: flex; align-items: center; justify-content: flex-end; padding: 0 var(--sp-2); border-left: 1px solid var(--line); }
+.bottom-items, .bottom-status, .bottom-metrics { display: flex; align-items: stretch; min-width: 0; overflow: hidden; }
+.bottom-status { justify-content: center; white-space: nowrap; }
+.bottom-metrics { justify-content: flex-end; }
 
-.bottom-item { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 var(--sp-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--fg-2); font: inherit; white-space: nowrap; cursor: default; }
+.bottom-item { display: inline-flex; align-items: center; gap: 6px; height: var(--u); padding: 0 var(--sp-2); border: 0; background: transparent; color: var(--fg-2); font: inherit; white-space: nowrap; cursor: default; }
 .bottom-item:hover, .bottom-item[data-popup-open] { background: var(--bg-2); color: var(--fg-1); }
 .bottom-item .num, .bottom-pop .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
@@ -72,5 +74,5 @@
 .diag-actions { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
 .diagnostics-dialog { display: grid; gap: var(--sp-2); max-height: 60vh; overflow: auto; overscroll-behavior: contain; font-size: var(--fs-1); }
 
-.frame-meter { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.frame-meter { display: inline-flex; align-items: center; height: var(--u); padding: 0 var(--sp-2); border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .frame-meter:hover .num { color: var(--fg); }
