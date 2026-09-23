@@ -107,8 +107,10 @@ pub fn reconcile(current: &[RuntimeEndpoint], gone_ms: &HashMap<Id, u64>, observ
 }
 
 /// 400 ms connect, `HEAD /`, and a look at the first bytes. Anything that is
-/// not an HTTP status line is plain TCP.
+/// not an HTTP status line is plain TCP. `lsof` writes an IPv6 host in brackets,
+/// and the resolver refuses the brackets.
 pub fn probe(host: &str, port: u16) -> RuntimeProtocol {
+    let host = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(host);
     let addrs = (host, port).to_socket_addrs().map(|a| a.collect::<Vec<_>>()).unwrap_or_default();
     for addr in addrs {
         let Ok(mut s) = TcpStream::connect_timeout(&addr, PROBE_TIMEOUT) else { continue };
@@ -226,5 +228,16 @@ mod tests {
         assert_eq!(probe("127.0.0.1", hp), RuntimeProtocol::Http);
         assert_eq!(probe("127.0.0.1", tp), RuntimeProtocol::Tcp);
         assert_eq!(probe("127.0.0.1", 1), RuntimeProtocol::Tcp);
+    }
+
+    #[test]
+    fn probe_reaches_an_ipv6_host_in_the_brackets_that_lsof_writes() {
+        let Ok(http) = std::net::TcpListener::bind("[::1]:0") else { return };
+        let port = http.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut s, _) = http.accept().unwrap();
+            let _ = s.write_all(b"HTTP/1.1 200 OK\r\n\r\n");
+        });
+        assert_eq!(probe("[::1]", port), RuntimeProtocol::Http);
     }
 }
