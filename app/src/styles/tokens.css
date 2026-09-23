@@ -1,60 +1,67 @@
-/* Tokens: the whole design system, in one file, in the groups DESIGN.md names.
+/* Tokens: the whole slab design system, in one file, in the groups DESIGN.md names.
  * The 14 color names are the [theme] contract from config.toml (snake_case becomes
  * kebab-case). theme.ts sets them on :root at runtime, so the values here are the
- * Murasaki first paint only. Everything else derives from them or is a plain scale.
+ * first paint only. Everything else derives from them or is a plain scale.
  * The short derived names (--bg-1, --fg-2, --line) keep their old spelling: the app
  * reads them about 250 times, and a rename buys nothing that the groups below do not.
  * Local CSS owns everything smaller than these. Do not add a component token here.
  */
 :root {
-  /* surfaces */
-  --bg: #ffffff;
-  --surface: #f5f6f8;
-  --surface-hover: #e8e8ee;
+  /* surfaces: ink, the raised surface, hover, and the quiet track */
+  --bg: #efeee9;
+  --surface: #e7e5df;
+  --surface-hover: #dcdad3;
   --bg-1: var(--surface);
   --bg-2: var(--surface-hover);
+  --surface-3: var(--accent-soft);
 
   /* text */
-  --fg: #17171c;
-  --fg-muted: #7a7a86;
-  --fg-faint: #a8a8b3;
+  --fg: #121212;
+  --fg-muted: #5b5954;
+  --fg-faint: #85827b;
   --fg-1: color-mix(in srgb, var(--fg) 55%, var(--fg-muted));
   --fg-2: var(--fg-muted);
   --fg-3: var(--fg-faint);
 
-  /* borders */
-  --border: #e3e3e9;
-  --border-strong: #c8c8d2;
+  /* rules: 1px, drawn as inset shadows so they take no space */
+  --border: #cfccc4;
+  --border-strong: #b4b1a8;
   --line: var(--border);
   --line-strong: var(--border-strong);
 
-  /* identity: selection, focus, and active state. Never a large painted area. */
-  --accent: #7d4dff;
-  --accent-soft: #ede7ff;
+  /* the accent is the text color: selection is inversion, not a hue */
+  --accent: #121212;
+  --accent-soft: #cbc8c0;
 
-  /* semantic state: one vocabulary for agents, git, checks, and runtimes */
-  --working: #2a9d5c;
-  --waiting: #d98a1a;
-  --danger: #d9433b;
-  --success: #2a9d5c;
-  --waiting-soft: color-mix(in srgb, var(--waiting) 12%, var(--bg));
-  --danger-soft: color-mix(in srgb, var(--danger) 13%, var(--bg));
+  /* status: the only color the chrome draws */
+  --working: #2f8a44;
+  --waiting: #a66f0c;
+  --danger: #c4412c;
+  --success: #2f8a44;
+  --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
+  --danger-soft: color-mix(in srgb, var(--danger) 14%, var(--bg));
 
-  /* floating surfaces: menu, popover, dialog, preview, toast. Flat everywhere else. */
-  --shadow-pop: 0 8px 24px rgba(20, 20, 30, 0.18), 0 1px 2px rgba(20, 20, 30, 0.1);
-  --shadow-dialog: 0 16px 48px rgba(20, 20, 30, 0.28), 0 1px 2px rgba(20, 20, 30, 0.1);
-  --backdrop: rgba(20, 20, 30, 0.3);
+  /* floating surfaces carry the one shadow; everything else is flat */
+  --shadow-pop: 0 0 0 1px var(--border), 0 24px 48px rgba(0, 0, 0, 0.18);
+  --shadow-dialog: 0 0 0 1px var(--border), 0 24px 48px rgba(0, 0, 0, 0.22);
+  --backdrop: rgba(0, 0, 0, 0.2);
   --z-float: 80;
   --z-dialog: 90;
 
-  /* typography */
-  --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
-  --mono: "CommitMono", "Commit Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* the grid: a row is one unit, a head is two, text sits half a unit in */
+  --u: 28px;
+  --u2: 56px;
+  --inset: 14px;
+
+  /* typography: text, display, and mono. Terminals keep the configured font. */
+  --font-ui: "Sofia Sans", -apple-system, system-ui, sans-serif;
+  --font-display: "Sofia Sans Extra Condensed", "Arial Narrow", -apple-system, sans-serif;
+  --mono: "Red Hat Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --fs-0: 11px;
   --fs-1: 12px;
   --fs-2: 13px;
   --fs-3: 14px;
-  --fs-4: 19px;
+  --fs-4: 22px;
 
   /* spacing */
   --sp-1: 4px;
@@ -63,73 +70,69 @@
   --sp-4: 16px;
   --sp-5: 24px;
 
-  /* shape */
-  --radius-sm: 3px;
-  --radius: 4px;
-  --radius-md: 6px;
+  /* shape: square everywhere */
+  --radius-sm: 0;
+  --radius: 0;
+  --radius-md: 0;
 
-  /* motion: three durations, two curves, one press */
-  --ease-out: cubic-bezier(0.2, 0, 0, 1);
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --dur-fast: 80ms;
-  --dur-hover: 100ms;
-  --dur-open: 140ms;
-  --press-scale: 0.97;
+  /* motion: one curve, two speeds, no scale */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-hover: 120ms;
+  --dur-open: 240ms;
+  --press-scale: 1;
 
   /* the smallest clickable area, whatever the control looks like */
-  --hit-min: 24px;
+  --hit-min: 28px;
 
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f0f12;
-    --surface: #151519;
-    --surface-hover: #1a1a21;
-    --fg: #e8e8ee;
-    --fg-muted: #7f7f8c;
-    --fg-faint: #52525e;
-    --border: #232329;
-    --border-strong: #34343e;
-    --accent: #a684ff;
-    --accent-soft: #261d45;
-    --working: #4cc57e;
-    --waiting: #f0a23a;
-    --danger: #f26b63;
-    --success: #4cc57e;
-    --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
-    --danger-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
-    --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
-    --backdrop: rgba(0, 0, 0, 0.45);
+    --bg: #0e0e0e;
+    --surface: #151515;
+    --surface-hover: #1d1d1d;
+    --fg: #ecebe8;
+    --fg-muted: #9d9c97;
+    --fg-faint: #6d6c68;
+    --border: #2a2a2a;
+    --border-strong: #3a3a3a;
+    --accent: #ecebe8;
+    --accent-soft: #292929;
+    --working: #7fd28a;
+    --waiting: #e8b14c;
+    --danger: #ff7a66;
+    --success: #7fd28a;
+    --shadow-pop: 0 0 0 1px var(--border), 0 24px 48px rgba(0, 0, 0, 0.5);
+    --shadow-dialog: 0 0 0 1px var(--border), 0 24px 48px rgba(0, 0, 0, 0.5);
+    --backdrop: rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0f0f12;
-  --surface: #151519;
-  --surface-hover: #1a1a21;
-  --fg: #e8e8ee;
-  --fg-muted: #7f7f8c;
-  --fg-faint: #52525e;
-  --border: #232329;
-  --border-strong: #34343e;
-  --accent: #a684ff;
-  --accent-soft: #261d45;
-  --working: #4cc57e;
-  --waiting: #f0a23a;
-  --danger: #f26b63;
-  --success: #4cc57e;
-  --waiting-soft: color-mix(in srgb, var(--waiting) 14%, var(--bg));
-  --danger-soft: color-mix(in srgb, var(--danger) 17%, var(--bg));
-  --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
-  --backdrop: rgba(0, 0, 0, 0.45);
+  --bg: #0e0e0e;
+  --surface: #151515;
+  --surface-hover: #1d1d1d;
+  --fg: #ecebe8;
+  --fg-muted: #9d9c97;
+  --fg-faint: #6d6c68;
+  --border: #2a2a2a;
+  --border-strong: #3a3a3a;
+  --accent: #ecebe8;
+  --accent-soft: #292929;
+  --working: #7fd28a;
+  --waiting: #e8b14c;
+  --danger: #ff7a66;
+  --success: #7fd28a;
+  --shadow-pop: 0 0 0 1px var(--border), 0 24px 48px rgba(0, 0, 0, 0.5);
+  --shadow-dialog: 0 0 0 1px var(--border), 0 24px 48px rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0ms; --dur-hover: 0ms; --dur-open: 0ms; --press-scale: 1; }
+  :root { --dur-fast: 0ms; --dur-hover: 0ms; --dur-open: 0ms; }
 }
