@@ -5,16 +5,14 @@ import { focusPane, openEndpoint, openExternalFor, resolveCheckpoint } from "./a
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, Tooltip } from "./components/ui";
 import { dotClass } from "./glyphs";
 import { GitPreview } from "./HoverPreviews";
-import { stateLabel } from "./homeQuery";
 import { editorName, overflowMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { RowError } from "./RowError";
 import { useStore } from "./store";
 import { KIND_LABEL, type Worktree } from "./types";
 
-/** The top-middle control plane: name, branch, state on the left; addon buttons, the editor button, addon marks, and the overflow menu on the right. */
+/** The top-middle control plane: name, branch, tags on the left; addon buttons, the editor button, addon marks, and the overflow menu on the right. */
 export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
-  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   return (
     <div className="wt-header" data-tauri-drag-region>
@@ -28,10 +26,9 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
           {w.git?.dirty ? " *" : ""}
         </span>
       </HoverCard>
-      {state && (
-        <span className="wt-header-state" data-tauri-drag-region>
-          <span className="state state-none" />
-          {state}
+      {w.metadata.tags.length > 0 && (
+        <span className="wt-header-tags" data-tauri-drag-region>
+          {w.metadata.tags.map((t) => `#${t}`).join(" ")}
         </span>
       )}
       <RowError worktreeId={w.id} />

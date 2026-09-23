@@ -12,6 +12,7 @@ pull requests. Log in with `gh auth login` first.
 | Right rail, `Pull request` button | `×` for failed checks, else `✓` for a merged pull request |
 | NOW signals (Home, sidebar, left rail preview) | `merged`, else `checks failed`, after the core signals. A card shows three signals at most. |
 | Repo avatar (sidebar, Home) | the image of the owner, for an `origin` remote on `github.com` |
+| Worktree tags | one reserved tag that shows the pull request; see "Tags" below |
 | Activity | one `pr_merged` event when an answer shows a merged pull request and the cached answer did not |
 | Town history | the `pr` field: the cached pull request, else the newest `pr_merged` event |
 | CLI | `tomo pr [worktree] [--json]` (see [cli.md](../cli.md#pr)) |
@@ -32,6 +33,24 @@ The daemon emits `pr_changed { worktree_id, pr }` when the new pull request
 is not equal to the cached one. A new fetch of an open pull request always
 differs, because `fetched_at_ms` changes. The first answer for a worktree
 after a daemon start always emits the event.
+
+## Tags
+
+The addon owns six reserved tags: `draft`, `review`, `changes-requested`,
+`approved`, `merged`, and `closed`. When a new `gh` answer has a pull
+request, the addon sets one reserved tag on the worktree and removes the
+other five. Other tags stay. The rules, in this order:
+
+1. A merged pull request gets `merged`. A closed pull request gets `closed`.
+2. A draft gets `draft`.
+3. The review decision gives `changes-requested` or `approved`.
+4. All other pull requests get `review`.
+
+An answer without a pull request changes no tags. An answer from the cache
+changes no tags. A tag change goes through the same path as
+`tomo worktree metadata set`, so it fires `worktree.tags_changed` and
+records `tags_changed`; see [../hooks.md](../hooks.md). If you remove a
+reserved tag by hand, the next answer puts it back.
 
 ## Background work
 

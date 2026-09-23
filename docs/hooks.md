@@ -20,8 +20,8 @@ command = "pnpm install"
 mode = "pane"
 
 [[hooks]]
-event = "worktree.state_changed"
-state = "merged"
+event = "worktree.tags_changed"
+tag = "merged"
 command = "~/.config/tomo/hooks/merged"
 timeout_s = 120
 ```
@@ -30,12 +30,16 @@ timeout_s = 120
 |-------------|----------|---------------------------------------------------------------------|
 | `event`     | yes      | One event name from the table below                                 |
 | `command`   | yes      | Shell string. Tomo runs it with `sh -c` in the worktree directory   |
-| `state`     | no       | Only for `worktree.state_changed`: run only when the new state matches |
+| `tag`       | no       | Only for `worktree.tags_changed`: run only when the change adds this tag |
 | `mode`      | no       | `async` (default) or `pane`                                         |
 | `timeout_s` | no       | Seconds before Tomo kills the hook. Default 60                      |
 
-`tomo config check` reports unknown events, missing programs, and a `state`
-filter on an event other than `worktree.state_changed`.
+`tomo config check` reports unknown events, missing programs, and a `tag`
+filter on an event other than `worktree.tags_changed`.
+
+A `tag` filter matches only a tag that is new: the tag is in the new tags
+and not in `previous_tags`. A change that keeps `merged` and adds `x` does
+not run a `tag = "merged"` hook.
 
 ## Events
 
@@ -46,7 +50,7 @@ filter on an event other than `worktree.state_changed`.
 | `worktree.before_archive` | Before an archive changes anything. Synchronous gate.            | `worktree`                        |
 | `worktree.archived`       | Git removed the worktree and Tomo marked it archived             | `worktree`                        |
 | `worktree.restored`       | `tomo worktree restore` recreated the worktree                   | `worktree`                        |
-| `worktree.state_changed`  | The metadata state changed                                       | `worktree`, `previous_state`      |
+| `worktree.tags_changed`   | A tag was added to or removed from the worktree                  | `worktree`, `previous_tags`       |
 | `pane.created`            | A pane got its PTY                                               | `worktree`, `pane`                |
 | `pane.closed`             | A pane was removed                                               | `worktree`, `pane`                |
 | `agent.started`           | An agent presence appeared in a pane                             | `worktree`, `pane`, `agent`       |
@@ -91,11 +95,8 @@ Every hook receives one JSON document on stdin. The same document is in
     "repo_path": "/Users/me/Projects/holly",
     "branch": "feat/labor-relations",
     "name": "Aogashima",
-    "state": "active",
-    "project": "Holly",
     "tags": ["labor-relations"]
   },
-  "previous_state": null,
   "pane": { "id": "5cac1495a647", "tab_id": "ab30d81bed9a", "cwd": "/Users/me/work/aogashima" },
   "agent": { "kind": "claude", "state": "waiting", "session_ref": "4c424b05-..." },
   "attention": null,
@@ -104,7 +105,8 @@ Every hook receives one JSON document on stdin. The same document is in
 ```
 
 `action` is `{ "id": "storybook", "label": "Storybook" }` on the two
-`action.*` events.
+`action.*` events. `previous_tags` is an array of the tags before the
+change. The envelope does not have it when that array is empty.
 
 The Rust type is `HookEvent` in `crates/tomo-proto`; the TypeScript type is
 generated in `app/src/generated/HookEvent.ts`.
@@ -119,7 +121,7 @@ generated in `app/src/generated/HookEvent.ts`.
 | `TOMO_WORKTREE_PATH`| `worktree` present      | Worktree directory                     |
 | `TOMO_REPO_PATH`    | `worktree` present      | Repository directory                   |
 | `TOMO_BRANCH`       | `worktree` present      | Branch name, empty when detached       |
-| `TOMO_STATE`        | `worktree` present      | Workflow state, empty when unset       |
+| `TOMO_TAGS`         | `worktree` present      | Tags joined with `,`, empty when none  |
 | `TOMO_PANE_ID`      | `pane` present          | Pane id                                |
 | `TOMO_AGENT_KIND`   | `agent` present         | `claude`, `codex`, or `pi`             |
 | `TOMO_AGENT_STATE`  | `agent` present         | Agent state name                       |
@@ -199,10 +201,12 @@ executable.
 
 ### Review workflow
 
-An agent finishes its work and asks for review:
+An agent finishes its work and adds the tag `ready`. `--tags` replaces the
+whole list, so the script reads the current tags first:
 
 ```bash
-tomo worktree metadata set . --state waiting-review
+tags=$(tomo --json worktree metadata get . | python3 -c 'import json,sys; print(",".join(json.load(sys.stdin)["tags"] + ["ready"]))')
+tomo worktree metadata set . --tags "$tags"
 tomo notify "Implementation finished; review requested"
 ```
 
@@ -210,8 +214,8 @@ A hook tells you when that happens:
 
 ```toml
 [[hooks]]
-event = "worktree.state_changed"
-state = "waiting-review"
+event = "worktree.tags_changed"
+tag = "ready"
 command = "~/.config/tomo/hooks/review-requested"
 ```
 
@@ -224,13 +228,15 @@ osascript -e "display notification \"$name is waiting for review\" with title \"
 
 ### Merge cleanup
 
-When you set the state to `merged`, the hook checks that the branch is gone
-from the default branch and archives the worktree. The branch stays in Git.
+When the worktree gets the tag `merged`, the hook checks that the branch is
+merged into the default branch and archives the worktree. The branch stays in
+Git. The GitHub addon adds `merged` when it sees a merged pull request; see
+[features/github.md](features/github.md).
 
 ```toml
 [[hooks]]
-event = "worktree.state_changed"
-state = "merged"
+event = "worktree.tags_changed"
+tag = "merged"
 command = "~/.config/tomo/hooks/merged"
 ```
 

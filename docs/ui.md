@@ -48,7 +48,7 @@ A healthy quiet worktree shows at most `Claude ●` and `App ↗`. The dots
 and colors are the shared status vocabulary from `base.css` and
 `app/src/signals.css`. No new colors,
 no cards inside cards. The list row keeps its grid and puts the signals in
-the `agents` column. The board card shows name, `project · state`, the
+the `agents` column. The board card shows name, the repo, the
 signals, then `+12 −4` when the diff is not empty.
 
 ## Activity view
@@ -91,7 +91,7 @@ so a branch name from a pull request works with one paste.
   every sort mode.
 - Every worktree row has the same height: two lines, 42 px. The first line
   holds the status dot, the name, the star, and the row menu. The second
-  line holds the state, the branch, the tags, and then the signals. Neither
+  line holds the archive mark, the branch, the tags, and then the signals. Neither
   line wraps. Each part cuts with an ellipsis, and the signals keep their
   width before the branch does.
 - Drag a worktree row or a repo header to reorder it. The first drop
@@ -156,8 +156,11 @@ so a branch name from a pull request works with one paste.
   the line. Double-click a divider to set that split to 50/50.
 - Rest the pointer on a background terminal tab to see the last lines of
   its output (`pane_tail`, plain text, no terminal rendering).
-- Home board: drag a card to another state column. This only sets
-  `worktree.state`. The order inside a column stays the configured sort.
+- Home board: group by `tag` gives one column for each tag and one column
+  for no tag. A worktree with two tags has a card in each column. Drag a
+  card from column A to column B to replace tag A with tag B. A drop on the
+  no-tag column only removes tag A. The order inside a column stays the
+  configured sort.
 
 Keyboard parity (palette groups `Tabs` and `Panes`, defaults in
 [data-model.md](data-model.md)): `move_tab_left`, `move_tab_right`,

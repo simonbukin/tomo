@@ -15,13 +15,13 @@ import { useFlip } from "./useFlip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
-import { needsAttention, stateLabel } from "./homeQuery";
+import { needsAttention } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
 
-const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "state", "manual"];
+const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
 export function Sidebar() {
   const repos = useStore(visibleRepos);
@@ -29,14 +29,13 @@ export function Sidebar() {
   const selectionSize = useStore((s) => s.selection.size);
   const agents = useStore((s) => s.agents);
   const attention = useStore((s) => s.attention);
-  const states = useStore((s) => s.config?.states ?? []);
   const ui = useStore((s) => s.ui);
   const needCount = useStore((s) => needsMe(s).length);
   const agentCount = rosterSize(Object.values(agents));
   const appCount = useStore((s) => addonApps(s).length);
   const shortcut = useShortcuts();
   const active = ui.view === "worktree" ? ui.activeWorktreeId : null;
-  const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention, states }), [repos, agents, attention, states]);
+  const ctx = useMemo(() => ({ repos, agents: Object.values(agents), attention }), [repos, agents, attention]);
   const shown = worktrees.filter((w) => (ui.showArchivedInSidebar || !w.archived_at_ms) && (ui.showMain || !w.is_main));
   const manual = ui.sidebarSort === "manual";
   const draggable = ui.lens === "repo";
@@ -235,7 +234,6 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
   const selected = useStore((s) => s.selection.has(w.id));
   const agents = useStore((s) => agentsOf(s, w.id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
-  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
@@ -268,8 +266,8 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
       </span>
       <span className="wt-sub">
         <span className="wt-branch" title={w.path}>
-          {busy ? <span className="wt-state">archiving...</span> : archived ? "archived" : state ? <span className="wt-state">{state}</span> : null}
-          {(busy || archived || state) && " "}
+          {busy ? <span className="wt-state">archiving...</span> : archived ? "archived" : null}
+          {(busy || archived) && " "}
           {branch}
           {w.git?.dirty ? " *" : ""}
         </span>

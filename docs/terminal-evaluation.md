@@ -22,7 +22,7 @@ justified? The harnesses run without model tokens and without the GUI.
 provenance trees (PRD §24), split-sequence replay, scrollback tail, and a
 400-step randomized layout torture with JSON round trips.
 
-`scripts/soak/busy.sh 120`: 5 repos, 25 worktrees with states and tags,
+`scripts/soak/busy.sh 120`: 5 repos, 25 worktrees with tags,
 10 panes, 6 fake agents working and waiting every 10 s, 3 dev-server-like
 loops, one fake Playwright tree, a 200 MB hog, 5 MB of scrollback.
 

@@ -54,8 +54,8 @@ Add `--json` to any of them.
 Everything below is a file you can edit.
 
 - **Config** lives in `~/Library/Application Support/tomo/config.toml`. Tomo
-  writes a commented default on first run. Themes, fonts, keybindings, your own
-  workflow states.
+  writes a commented default on first run. Themes, fonts, and keybindings.
+  Tags group your worktrees and need no config.
 - **Actions** are commands a repository declares in `.tomo.toml`. They become
   buttons and palette entries in every worktree of it.
 - **Hooks** run your commands on events like `agent.waiting` or

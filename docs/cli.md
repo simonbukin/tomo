@@ -79,8 +79,7 @@ tomo worktree archive <worktree> [--no-checkpoint] [--discard]
 tomo worktree restore <worktree>
 tomo worktree open <worktree>
 tomo worktree metadata get [worktree]
-tomo worktree metadata set [worktree] [--name N] [--project P] [--state S] [--tags a,b]
-                                     [--clear-name] [--clear-project] [--clear-state] [--clear-tags]
+tomo worktree metadata set [worktree] [--name N] [--tags a,b] [--clear-name] [--clear-tags]
 ```
 
 `create` runs `git worktree add`. Without `--path` Tomo names the directory
@@ -139,22 +138,14 @@ Both refuse the main worktree. See
 `open` makes sure the worktree has a tab and a pane, then focuses that pane
 in the GUI.
 
-`metadata set --tags` replaces the whole tag list. Tags keep no leading `#`.
-`--state` must name a state from `[[states]]` in the config; an unknown
-state is a bad request that lists the known ones. A state change fires
-`worktree.state_changed` with the previous state.
+`metadata set --tags` replaces the whole tag list. Tags keep no leading `#`,
+and Tomo removes a tag that occurs two times. A tag change fires
+`worktree.tags_changed` with the previous tags. The GitHub addon owns six
+reserved tags; see [features/github.md](features/github.md).
 
 ```bash
-tomo worktree metadata set . --state waiting-review
+tomo worktree metadata set . --tags labor,ready
 ```
-
-### states
-
-```bash
-tomo states list
-```
-
-Prints the configured workflow states with order, id, and label.
 
 ### action
 
@@ -437,7 +428,7 @@ Prints the most recent hook runs from `<data dir>/hooks.log`: status,
 event, duration, exit code, command, and the last output lines of a failed
 run. Hook scripts get these variables: `TOMO_EVENT`, `TOMO_EVENT_JSON`,
 `TOMO_WORKTREE_ID`, `TOMO_WORKTREE_PATH`, `TOMO_REPO_PATH`, `TOMO_BRANCH`,
-`TOMO_STATE`, `TOMO_PANE_ID`, `TOMO_AGENT_KIND`, `TOMO_AGENT_STATE`,
+`TOMO_TAGS`, `TOMO_PANE_ID`, `TOMO_AGENT_KIND`, `TOMO_AGENT_STATE`,
 `TOMO_SOCKET`, `TOMO_BIN`. See [hooks.md](hooks.md).
 
 ## Exit codes

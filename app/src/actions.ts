@@ -6,7 +6,6 @@ import { stepZoom, type Appearance } from "./appearance";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { RpcFailure, rpc, rpcParsed } from "./api";
 import { openInBrowser } from "./browser/browser";
-import { orderedStates } from "./homeQuery";
 import {activeTab, agentsOf, clearSelection, errorText, failQuietly, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, toast} from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
@@ -267,12 +266,12 @@ export function restoreWorktree(worktreeId: Id): void {
     }, failOn(worktreeId, "restore"));
 }
 
-export async function bulkMetadata(ids: Id[], patch: Record<string, unknown>): Promise<void> {
-  await Promise.allSettled(ids.map((id) => setMetadata(id, patch)));
+export function parseTags(text: string): string[] {
+  return [...new Set(text.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean))];
 }
 
-export function setWorktreeState(worktreeId: Id, state: string | null): Promise<void> {
-  return setMetadata(worktreeId, { state });
+export async function bulkMetadata(ids: Id[], patch: Record<string, unknown>): Promise<void> {
+  await Promise.allSettled(ids.map((id) => setMetadata(id, patch)));
 }
 
 function tabOfPane(paneId: Id): Tab | null {
@@ -319,18 +318,13 @@ export function bulkAddTag(ids: Id[]): void {
   });
 }
 
-export function bulkPrompt(field: "project" | "tags", ids: Id[]): void {
-  const title = field === "project" ? `Project for ${ids.length} worktrees` : `Tags for ${ids.length} worktrees (replaces)`;
+export function bulkPromptTags(ids: Id[]): void {
   setState({
     dialog: {
       kind: "prompt",
-      title,
+      title: `Tags for ${ids.length} worktrees (replaces)`,
       initial: "",
-      onSubmit: (value) => {
-        const trimmed = value.trim();
-        const patch = field === "tags" ? { tags: trimmed ? trimmed.split(",").map((t) => t.trim()).filter(Boolean) : [] } : { project: trimmed || null };
-        bulkMetadata(ids, patch);
-      },
+      onSubmit: (value) => bulkMetadata(ids, { tags: parseTags(value) }),
     },
   });
 }
@@ -444,10 +438,10 @@ export async function setMetadata(worktreeId: Id, patch: Record<string, unknown>
   }
 }
 
-export function promptMetadata(field: "display_name" | "project" | "tags", worktreeId?: Id): void {
+export function promptMetadata(field: "display_name" | "tags", worktreeId?: Id): void {
   const w = worktreeId ? byId(worktreeId) : currentWorktree();
   if (!w) return;
-  const labels = { display_name: "Display name", project: "Project", tags: "Tags (comma-separated)" };
+  const labels = { display_name: "Display name", tags: "Tags (comma-separated)" };
   const initial = field === "tags" ? w.metadata.tags.join(", ") : (w.metadata[field] ?? "");
   setState({
     dialog: {
@@ -456,7 +450,7 @@ export function promptMetadata(field: "display_name" | "project" | "tags", workt
       initial,
       onSubmit: (value) => {
         const trimmed = value.trim();
-        const patch = field === "tags" ? { tags: trimmed ? trimmed.split(",").map((t) => t.trim()).filter(Boolean) : [] } : { [field]: trimmed || null };
+        const patch = field === "tags" ? { tags: parseTags(trimmed) } : { [field]: trimmed || null };
         setMetadata(w.id, patch);
       },
     },
@@ -517,7 +511,6 @@ export const actions: Action[] = [
   { id: "config_check", label: "Check config...", run: () => setState({ dialog: { kind: "config-check" } }) },
   { id: "hook_log", label: "Hook log...", run: () => setState({ dialog: { kind: "hook-log" } }) },
   { id: "set_display_name", label: "Set worktree display name...", run: () => promptMetadata("display_name"), whenWorktree: true },
-  { id: "set_project", label: "Set worktree project...", run: () => promptMetadata("project"), whenWorktree: true },
   { id: "set_tags", label: "Set worktree tags...", run: () => promptMetadata("tags"), whenWorktree: true },
   { id: "open_editor", label: "Open worktree in editor", run: () => openExternal("editor"), whenWorktree: true },
   { id: "reveal_finder", label: "Reveal worktree in Finder", run: () => openExternal("finder"), whenWorktree: true },
@@ -537,7 +530,7 @@ export const actions: Action[] = [
   { id: "collapse_repos", label: "Collapse all repos", run: () => setAllReposCollapsed(true) },
   { id: "expand_repos", label: "Expand all repos", run: () => setAllReposCollapsed(false) },
   { id: "clear_selection", label: "Clear selection", run: clearSelection, when: () => getState().selection.size > 0 },
-  ...(["name", "recent", "created", "attention", "state", "manual"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
+  ...(["name", "recent", "created", "attention", "manual"] as SidebarSort[]).map((sort) => ({ id: `sort_${sort}`, label: `Sort sidebar by ${sort}`, run: () => setUi({ sidebarSort: sort }) })),
 ];
 
 export function setAppearance(patch: Partial<Appearance>): void {
@@ -548,15 +541,6 @@ export function applyZoom(dir: "in" | "out" | "reset"): void {
   const zoom = stepZoom(getState().ui.appearance.zoom, dir);
   setAppearance({ zoom });
   showStatus(`Zoom ${Math.round(zoom * 100)}%`);
-}
-
-export function stateActions(): Action[] {
-  const current = currentWorktree();
-  const states = orderedStates(getState().config?.states ?? []);
-  return [
-    ...states.map((s) => ({ id: `state_${s.id}`, label: `state ${s.label}`, group: "Worktrees" as const, run: () => setWorktreeState(currentWorktree()!.id, s.id), whenWorktree: true, when: () => current?.metadata.state !== s.id })),
-    { id: "state_clear", label: "state clear", group: "Worktrees", run: () => setWorktreeState(currentWorktree()!.id, null), whenWorktree: true, when: () => !!current?.metadata.state },
-  ];
 }
 
 const COMMAND_GROUPS: Record<string, CommandGroup> = {
@@ -599,7 +583,6 @@ const COMMAND_GROUPS: Record<string, CommandGroup> = {
   create_worktree: "Worktrees",
   refresh: "Worktrees",
   set_display_name: "Worktrees",
-  set_project: "Worktrees",
   set_tags: "Worktrees",
   open_editor: "Worktrees",
   reveal_finder: "Worktrees",
@@ -619,12 +602,11 @@ const COMMAND_GROUPS: Record<string, CommandGroup> = {
   sort_recent: "Worktrees",
   sort_created: "Worktrees",
   sort_attention: "Worktrees",
-  sort_state: "Worktrees",
   sort_manual: "Worktrees",
 };
 
 export function allActions(): Action[] {
-  return [...actions, ...builtins.flatMap((a) => a.commands ?? []), ...stateActions(), ...moduleCommands()].map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
+  return [...actions, ...builtins.flatMap((a) => a.commands ?? []), ...moduleCommands()].map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
 }
 
 export function runAction(id: string): void {

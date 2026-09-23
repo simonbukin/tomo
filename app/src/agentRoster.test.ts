@@ -19,7 +19,7 @@ const wt = (over: Omit<Partial<Worktree>, "metadata"> & { id: string; metadata?:
   tab_count: 0,
   pane_count: 0,
   ...over,
-  metadata: { display_name: null, project: null, state: null, tags: [], ...over.metadata },
+  metadata: { display_name: null, tags: [], ...over.metadata },
 });
 
 const repo = (id: string, name = id): Repo => ({ id, path: `/r/${id}`, name, exists: true, remote_url: null });

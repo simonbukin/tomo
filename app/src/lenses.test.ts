@@ -20,7 +20,7 @@ const wt = (over: Partial<Worktree> & { id: string }): Worktree => ({
   tab_count: 0,
   pane_count: 0,
   ...over,
-  metadata: { display_name: null, project: null, state: null, tags: [], ...over.metadata },
+  metadata: { display_name: null, tags: [], ...over.metadata },
 });
 
 const repo = (id: string, over: Partial<Repo> = {}): Repo => ({ id, path: `/r/${id}`, name: id, exists: true, remote_url: null, ...over });
@@ -28,7 +28,7 @@ const repo = (id: string, over: Partial<Repo> = {}): Repo => ({ id, path: `/r/${
 const agent = (worktree_id: string, state: AgentState) =>
   ({ pane_id: `p-${worktree_id}-${state}`, worktree_id, kind: "claude", state, session_ref: null, updated_at_ms: 0, pid: null }) as unknown as AgentPresence;
 
-const ctx = (over: Partial<QueryContext> = {}): QueryContext => ({ repos: [], agents: [], attention: [], states: [], ...over });
+const ctx = (over: Partial<QueryContext> = {}): QueryContext => ({ repos: [], agents: [], attention: [], ...over });
 const opts = (over: Partial<LensOptions> = {}): LensOptions => ({ repos: [], sort: "name", manualOrder: {}, repoOrder: [], ...over });
 
 const labels = (groups: { label: string }[]) => groups.map((g) => g.label);
@@ -60,18 +60,6 @@ describe("repository lens", () => {
     const repos = [repo("r1"), repo("r2")];
     const groups = lensGroups([wt({ id: "a", repo_id: "r1" })], "repo", ctx({ repos }), opts({ repos }));
     expect(labels(groups)).toEqual(["r1"]);
-  });
-});
-
-describe("project lens", () => {
-  it("groups by project metadata and puts worktrees with no project last", () => {
-    const list = [
-      wt({ id: "a", metadata: { project: "japanese" } as Worktree["metadata"] }),
-      wt({ id: "b" }),
-      wt({ id: "c", metadata: { project: "atlas" } as Worktree["metadata"] }),
-    ];
-    const groups = lensGroups(list, "project", ctx(), opts());
-    expect(labels(groups)).toEqual(["atlas", "japanese", "no project"]);
   });
 });
 
@@ -116,7 +104,7 @@ describe("focus lens", () => {
 
 describe("every lens", () => {
   const repos = [repo("r1")];
-  const list = [wt({ id: "a" }), wt({ id: "b", metadata: { project: "p", tags: ["t"] } as Worktree["metadata"] })];
+  const list = [wt({ id: "a" }), wt({ id: "b", metadata: { tags: ["t"] } as Worktree["metadata"] })];
 
   it("gives every group a unique key", () => {
     for (const lens of LENSES) {
@@ -139,7 +127,6 @@ describe("every lens", () => {
   it("prefills a new worktree with what its group has in common", () => {
     const prefills = (lens: (typeof LENSES)[number]) => lensGroups(list, lens, ctx({ repos }), opts({ repos })).map((g) => [g.label, g.prefill]);
     expect(prefills("repo")).toEqual([["r1", { repoId: "r1" }]]);
-    expect(prefills("project")).toEqual([["p", { project: "p" }], ["no project", {}]]);
     expect(prefills("tag")).toEqual([["#t", { tags: ["t"] }], ["no tag", {}]]);
     expect(prefills("focus").every(([, p]) => JSON.stringify(p) === "{}")).toBe(true);
   });

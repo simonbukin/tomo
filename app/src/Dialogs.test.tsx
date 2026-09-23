@@ -89,11 +89,10 @@ describe("new worktree dialog", () => {
     await waitFor(() => expect(created()).toMatchObject({ repo_id: "r1", metadata: { tags: ["labor-relations"] } }));
   });
 
-  it("sends a typed project and clean tags", async () => {
+  it("sends clean tags", async () => {
     const user = await openDialog();
-    await user.type(screen.getByLabelText("Project"), "  Holly ");
     await user.type(screen.getByLabelText("Tags (comma-separated)"), "#a, b,, a");
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(created()?.metadata).toEqual({ project: "Holly", tags: ["a", "b"] }));
+    await waitFor(() => expect(created()?.metadata).toEqual({ tags: ["a", "b"] }));
   });
 });

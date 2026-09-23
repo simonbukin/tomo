@@ -11,7 +11,7 @@ export const aWorktree = (patch: Partial<Worktree> = {}): Worktree => ({
   is_main: false,
   exists: true,
   git: null,
-  metadata: { display_name: null, project: null, state: null, tags: [] },
+  metadata: { display_name: null, tags: [] },
   last_active_ms: null,
   first_seen_ms: null,
   archived_at_ms: null,

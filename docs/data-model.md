@@ -30,15 +30,21 @@ No table stores a branch name.
 | `path`           | C        | Last known canonical path                               |
 | `gitdir`         | C        | Name under `<common>/worktrees/`; NULL for the main worktree |
 | `display_name`   | A        | Optional; the path's last component is the fallback     |
-| `project`        | A        | Optional grouping label                                 |
-| `state`          | A        | Workflow state id from `[[states]]` in config; NULL when unset |
+| `project`        | —        | Unused. A value that is still there reads as a tag; the next write sets NULL |
+| `state`          | —        | Unused. A value that is still there reads as a tag; the next write sets NULL |
 | `priority`       | —        | Unused since Phase 2.5; always written as NULL          |
-| `tags`           | A        | JSON array of strings; unparsable text reads as `[]`    |
+| `tags`           | A        | JSON array of strings; unparsable text reads as `[]`. No leading `#`, no duplicates |
 | `last_active_ms` | R        | Set when a worktree is opened or a pane is focused      |
 | `first_seen_ms`  | C        | When discovery first saw the worktree                   |
 | `archived_at_ms` | C        | Set by `worktree archive`; NULL once the path exists again |
 | `archived_branch`| C        | Branch at archive time; used by `worktree restore`      |
 | `town_slug`      | —        | Unused since Phase 2. Old databases keep the column; a new database does not get it. The `towns` table owns the mapping |
+
+Tags are the only way to group worktrees. An old database can have a
+`project` or `state` value from before tags replaced them. When Tomo reads
+such a row, it adds each value to the end of `tags`, unless the tag is
+already there. The next write of the row saves the new tags and sets both
+old columns to NULL. There is no separate migration step.
 
 Discovery inserts a row for every worktree it sees, so metadata can attach
 to it later. Deleting a row loses organization only; the worktree stays
@@ -205,8 +211,7 @@ commented copy when the file is missing.
 | `[notifications]`     | `desktop = true`, `sounds = false`        | Desktop notifications and rare sounds   |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
-| `[[states]]`          | exploring, active, waiting-review, merged | `id`, `label` (default: humanized id), `order` (default: position × 10) |
-| `[[hooks]]`           | none                                      | `event`, `command`, optional `state`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
+| `[[hooks]]`           | none                                      | `event`, `command`, optional `tag`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
 | `[notifications] desktop` | `true`                                | A desktop notification for a new attention item while the Tomo window is not focused. See [ui.md](ui.md) |
 | `[notifications] sounds`  | `false`                               | A short chime for a human checkpoint and a rare town unlock |
 
@@ -228,11 +233,13 @@ move_pane_left/right/up/down = "mod+ctrl+alt+<arrow>"
 equalize_panes = "mod+alt+e"
 ```
 
-`tomo config check` validates the file: unknown hook events, duplicate
-state ids, missing programs, bad keybindings, cleanup entries that are
+`tomo config check` validates the file: unknown hook events, a hook `tag`
+filter on an event other than `worktree.tags_changed`, missing programs, bad keybindings, cleanup entries that are
 not plain names, bad theme and terminal values, an `agents.*.args` entry
 that starts with a Unicode dash (U+2010 to U+2015 or U+2212, which the
-agent reads as text and not as a flag), and a file that does not parse. Malformed config never stops the daemon; it logs a warning and uses
+agent reads as text and not as a flag), and a file that does not parse. Tags replace the old `[[states]]` table.
+If the file still has it, Tomo ignores it and the check gives a warning with
+the key `states`. Malformed config never stops the daemon; it logs a warning and uses
 defaults. The daemon reloads the file when it changes and sends
 `config_changed`. `config_set` edits one key in place and keeps comments.
 

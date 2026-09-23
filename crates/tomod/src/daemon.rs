@@ -1942,24 +1942,31 @@ impl Daemon {
     async fn metadata_set(self: &Arc<Self>, worktree_id: Id, patch: MetadataPatch) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
-        let next = checked_metadata(&inner.config.states, patch.apply(&w.metadata))?;
-        let previous_state = w.metadata.state.clone();
-        let row = Self::meta_row_of(&inner, w, next.clone());
-        inner.store.meta_upsert(&row).map_err(internal)?;
-        inner.worktrees.get_mut(&worktree_id).unwrap().metadata = next.clone();
-        if previous_state != next.state {
-            let mut ev = events::envelope(&inner, "worktree.state_changed", Some(&worktree_id));
-            ev.previous_state = previous_state.clone();
-            inner.hook_queue.push(ev);
-            let mut ev = activity::event(CoreActivity::StateChanged, Some(&worktree_id), format!("state → {}", next.state.as_deref().unwrap_or("none")));
-            ev.detail = Some(Self::worktree_name(&inner, &worktree_id));
-            ev.payload = json!({ "state": next.state, "previous_state": previous_state });
-            Self::record(&mut inner, ev);
-        }
-        Self::emit(&mut inner, Event::MetadataChanged { worktree_id: worktree_id.clone(), metadata: next.clone() });
-        let worktrees = Self::worktree_views(&inner);
-        Self::emit(&mut inner, Event::WorktreesChanged { worktrees });
+        let next = normalized_metadata(patch.apply(&w.metadata));
+        Self::write_metadata(&mut inner, &worktree_id, next.clone())?;
         ok(next)
+    }
+
+    /// Saves the metadata, and tells hooks, activity, and clients when it changed.
+    pub fn write_metadata(inner: &mut Inner, worktree_id: &str, next: WorktreeMetadata) -> Result<(), RpcError> {
+        let w = inner.worktrees.get(worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+        let previous_tags = w.metadata.tags.clone();
+        let row = Self::meta_row_of(inner, w, next.clone());
+        inner.store.meta_upsert(&row).map_err(internal)?;
+        inner.worktrees.get_mut(worktree_id).unwrap().metadata = next.clone();
+        if let Some(title) = tags_change_title(&previous_tags, &next.tags) {
+            let mut ev = events::envelope(inner, "worktree.tags_changed", Some(worktree_id));
+            ev.previous_tags = previous_tags.clone();
+            inner.hook_queue.push(ev);
+            let mut ev = activity::event(CoreActivity::TagsChanged, Some(worktree_id), title);
+            ev.detail = Some(Self::worktree_name(inner, worktree_id));
+            ev.payload = json!({ "tags": next.tags, "previous_tags": previous_tags });
+            Self::record(inner, ev);
+        }
+        Self::emit(inner, Event::MetadataChanged { worktree_id: worktree_id.to_string(), metadata: next });
+        let worktrees = Self::worktree_views(inner);
+        Self::emit(inner, Event::WorktreesChanged { worktrees });
+        Ok(())
     }
 
     async fn worktree_open(self: &Arc<Self>, worktree_id: Id) -> Result<Value, RpcError> {
@@ -1990,9 +1997,6 @@ impl Daemon {
         let (repo_path, parent_dir, branch_prefix, name) = {
             let inner = self.lock();
             let repo = inner.repos.iter().find(|r| r.id == spec.repo_id).ok_or_else(|| err(ErrorCode::NotFound, "repo not found"))?;
-            if let Some(patch) = &spec.metadata {
-                checked_metadata(&inner.config.states, patch.apply(&WorktreeMetadata::default()))?;
-            }
             let name = match (&spec.path, self.seams.worktree_namer) {
                 (None, Some(namer)) => namer(&inner.store, &spec)?,
                 _ => None,
@@ -2025,7 +2029,7 @@ impl Daemon {
             seam(&mut inner, &created)?;
         }
         if let (Some(patch), Some(w)) = (&spec.metadata, inner.worktrees.get(&id)) {
-            let metadata = checked_metadata(&inner.config.states, patch.apply(&w.metadata))?;
+            let metadata = normalized_metadata(patch.apply(&w.metadata));
             let row = Self::meta_row_of(&inner, w, metadata.clone());
             inner.store.meta_upsert(&row).map_err(internal)?;
             if let Some(w) = inner.worktrees.get_mut(&id) {
@@ -2467,21 +2471,23 @@ pub fn restore_target(w: &WorktreeState, repos: &[Repo], row: &MetaRow) -> Resul
     Ok(RestoreTarget { path: w.path.clone(), repo_path, branch })
 }
 
-pub fn checked_metadata(states: &[StateDef], m: WorktreeMetadata) -> Result<WorktreeMetadata, RpcError> {
-    let text = |v: Option<String>| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    let next = WorktreeMetadata {
-        display_name: text(m.display_name),
-        project: text(m.project),
-        state: text(m.state),
-        tags: m.tags.into_iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect(),
-    };
-    match &next.state {
-        Some(st) if !states.iter().any(|d| &d.id == st) => {
-            let known: Vec<&str> = states.iter().map(|d| d.id.as_str()).collect();
-            Err(err(ErrorCode::BadRequest, format!("unknown state {st:?}; known states: {}", known.join(", "))))
+pub fn normalized_metadata(m: WorktreeMetadata) -> WorktreeMetadata {
+    let tags = m.tags.iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).fold(Vec::new(), |mut acc: Vec<String>, t| {
+        if !acc.contains(&t) {
+            acc.push(t);
         }
-        _ => Ok(next),
-    }
+        acc
+    });
+    WorktreeMetadata { display_name: m.display_name.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()), tags }
+}
+
+/// `tagged #a · untagged #b` for a change of tags, or None when the set is the same.
+pub fn tags_change_title(before: &[String], after: &[String]) -> Option<String> {
+    let list = |word: &str, tags: Vec<&String>| (!tags.is_empty()).then(|| format!("{word} {}", tags.iter().map(|t| format!("#{t}")).collect::<Vec<_>>().join(" ")));
+    let added = list("tagged", after.iter().filter(|t| !before.contains(t)).collect());
+    let removed = list("untagged", before.iter().filter(|t| !after.contains(t)).collect());
+    let parts: Vec<String> = [added, removed].into_iter().flatten().collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>) -> Result<ArchiveTarget, RpcError> {
@@ -2676,33 +2682,24 @@ mod tests {
         let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
         daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
         let repo_id = daemon.lock().repos[0].id.clone();
-        let spec = |name: &str, state: Option<&str>| WorktreeCreate {
+        let spec = |name: &str| WorktreeCreate {
             repo_id: repo_id.clone(),
             branch: name.into(),
             new_branch: true,
             start_ref: None,
             path: Some(dir.join(name)),
             name_hint: None,
-            metadata: Some(MetadataPatch {
-                project: Some(Some(" Holly ".into())),
-                tags: Some(vec!["#labor-relations".into()]),
-                state: state.map(|s| Some(s.to_string())),
-                ..MetadataPatch::default()
-            }),
+            metadata: Some(MetadataPatch { tags: Some(vec!["#labor-relations".into(), " labor-relations ".into()]), ..MetadataPatch::default() }),
         };
 
-        let refused = daemon.handle_inner(0, Call::WorktreeCreate(spec("bad", Some("no-such-state")))).await;
-        assert_eq!(refused.err().map(|e| e.code), Some(ErrorCode::BadRequest));
-        assert!(!dir.join("bad").exists(), "a refused create makes no worktree");
-
-        let created = daemon.handle_inner(0, Call::WorktreeCreate(spec("good", None))).await.unwrap();
+        let created = daemon.handle_inner(0, Call::WorktreeCreate(spec("good"))).await.unwrap();
         let id = created["id"].as_str().unwrap().to_string();
         let inner = daemon.lock();
-        let expected = WorktreeMetadata { project: Some("Holly".into()), tags: vec!["labor-relations".into()], ..WorktreeMetadata::default() };
+        let expected = WorktreeMetadata { tags: vec!["labor-relations".into()], ..WorktreeMetadata::default() };
         assert_eq!(inner.worktrees[&id].metadata, expected);
         assert_eq!(inner.store.meta_one(&id).unwrap().map(|m| m.metadata), Some(expected));
         let hook = inner.hook_queue.iter().find(|e| e.event == "worktree.created").and_then(|e| e.worktree.clone()).unwrap();
-        assert_eq!((hook.project.as_deref(), hook.tags), (Some("Holly"), vec!["labor-relations".to_string()]));
+        assert_eq!(hook.tags, vec!["labor-relations".to_string()]);
         drop(inner);
         let _ = std::fs::remove_dir_all(&dir);
     }

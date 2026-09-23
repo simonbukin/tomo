@@ -19,7 +19,8 @@ that link is what `--needs-me` uses.
 | `agent_exited`        | core       | An agent exited                                             |                     |
 | `checkpoint_created`  | core       | `tomo checkpoint`                                           | the checkpoint item |
 | `checkpoint_resolved` | core       | `tomo checkpoint resolve`                                   | the same item       |
-| `state_changed`       | core       | The worktree state changed; title `state → <x>`             |                     |
+| `tags_changed`        | core       | The worktree tags changed; title `tagged #a · untagged #b`  |                     |
+| `state_changed`       | core       | Nothing records it now. Old rows from workflow states stay in history |          |
 | `archived`            | core       | A worktree was archived                                     |                     |
 | `restored`            | core       | A worktree was restored                                     |                     |
 | `hook_failed`         | core       | A hook exited non-zero, timed out, or did not start         |                     |

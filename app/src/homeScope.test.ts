@@ -21,7 +21,7 @@ const wt = (over: Omit<Partial<Worktree>, "metadata"> & { id: string; metadata?:
   tab_count: 0,
   pane_count: 0,
   ...over,
-  metadata: { display_name: null, project: null, state: null, tags: [], ...over.metadata },
+  metadata: { display_name: null, tags: [], ...over.metadata },
 });
 
 const repo = (id: string, over: Partial<Repo> = {}): Repo => ({ id, path: `/r/${id}`, name: id, exists: true, remote_url: null, ...over });
@@ -29,14 +29,14 @@ const repo = (id: string, over: Partial<Repo> = {}): Repo => ({ id, path: `/r/${
 const agent = (worktree_id: string, state: AgentState) =>
   ({ pane_id: `p-${worktree_id}-${state}`, worktree_id, kind: "claude", state, session_ref: null, updated_at_ms: 0, pid: null }) as unknown as AgentPresence;
 
-const ctx = (over: Partial<QueryContext> = {}): QueryContext => ({ repos: [], agents: [], attention: [], states: [], ...over });
+const ctx = (over: Partial<QueryContext> = {}): QueryContext => ({ repos: [], agents: [], attention: [], ...over });
 
 const app = (worktreeId: string): AppRow => ({ id: `${worktreeId}-app`, worktreeId, paneId: null, label: "web", url: null, port: null, detail: null, source: null });
 
 describe("scopeWorktrees", () => {
   const list = [
-    wt({ id: "a", repo_id: "r1", metadata: { project: "atlas", tags: ["design"] } }),
-    wt({ id: "b", repo_id: "r2", metadata: { project: "atlas", tags: [] } }),
+    wt({ id: "a", repo_id: "r1", metadata: { tags: ["design"] } }),
+    wt({ id: "b", repo_id: "r2", metadata: { tags: [] } }),
     wt({ id: "c", repo_id: "r1" }),
   ];
 
@@ -48,21 +48,13 @@ describe("scopeWorktrees", () => {
     expect(scopeWorktrees(list, { kind: "repo", repoId: "r1" }).map((w) => w.id)).toEqual(["a", "c"]);
   });
 
-  it("filters by project across repositories", () => {
-    expect(scopeWorktrees(list, { kind: "project", project: "atlas" }).map((w) => w.id)).toEqual(["a", "b"]);
-  });
-
   it("filters by tag", () => {
     expect(scopeWorktrees(list, { kind: "tag", tag: "design" }).map((w) => w.id)).toEqual(["a"]);
-  });
-
-  it("treats a missing project as the empty project", () => {
-    expect(scopeWorktrees(list, { kind: "project", project: "" }).map((w) => w.id)).toEqual(["c"]);
   });
 });
 
 describe("sameScope", () => {
-  const cases: HomeScope[] = [ALL, { kind: "repo", repoId: "r1" }, { kind: "project", project: "atlas" }, { kind: "tag", tag: "design" }];
+  const cases: HomeScope[] = [ALL, { kind: "repo", repoId: "r1" }, { kind: "tag", tag: "design" }];
 
   it("matches a scope with itself", () => {
     for (const s of cases) expect(sameScope(s, { ...s })).toBe(true);
@@ -165,7 +157,6 @@ describe("scopeTitle", () => {
     const repos = [repo("r1", { name: "tomo" })];
     expect(scopeTitle(ALL, repos)).toBe("all work");
     expect(scopeTitle({ kind: "repo", repoId: "r1" }, repos)).toBe("tomo");
-    expect(scopeTitle({ kind: "project", project: "atlas" }, repos)).toBe("atlas");
     expect(scopeTitle({ kind: "tag", tag: "design" }, repos)).toBe("#design");
   });
 });

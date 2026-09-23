@@ -42,7 +42,9 @@ pub enum CoreActivity {
     AgentExited,
     CheckpointCreated,
     CheckpointResolved,
+    /// Stored by builds before tags replaced workflow states. Nothing records it now.
     StateChanged,
+    TagsChanged,
     Archived,
     Restored,
     HookFailed,

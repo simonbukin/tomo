@@ -8,7 +8,7 @@ const labels = (items: MenuItem[]) => items.map((it) => ("separator" in it ? "�
 const entry = (items: MenuItem[], label: string) => items.find((it): it is MenuEntry => !("separator" in it) && it.label === label)!;
 
 const leaf = (pane_id: string) => ({ type: "leaf", pane_id });
-const worktree = { id: "w1", name: "aogashima", repo_id: "r1", path: "/src/aogashima", branch: "feat/x", exists: true, archived_at_ms: null, archiving: false, is_main: false, metadata: { state: null, tags: ["ui"], project: null, display_name: null } } as unknown as Worktree;
+const worktree = { id: "w1", name: "aogashima", repo_id: "r1", path: "/src/aogashima", branch: "feat/x", exists: true, archived_at_ms: null, archiving: false, is_main: false, metadata: { tags: ["ui"], display_name: null } } as unknown as Worktree;
 const tabs = [
   { id: "t1", worktree_id: "w1", title: "one", position: 0, is_active: true, active_pane_id: "p1", layout: { type: "split", id: "s1", direction: "horizontal", ratio: 0.5, first: leaf("p1"), second: leaf("p2") } },
   { id: "t2", worktree_id: "w1", title: "two", position: 1, is_active: false, active_pane_id: "p3", layout: leaf("p3") },
@@ -25,13 +25,13 @@ const state = {
     p2: pane("p2", "t1"),
     p3: pane("p3", "t2"),
   },
-  config: { keybindings: { new_terminal: "mod+d", close_pane: "mod+w" }, editor_command: ["zed", "{path}"], states: [] },
+  config: { keybindings: { new_terminal: "mod+d", close_pane: "mod+w" }, editor_command: ["zed", "{path}"] },
   ui: { ...base.ui, view: "worktree", activeWorktreeId: "w1" },
 } as unknown as State;
 
 describe("worktree menu", () => {
   it("follows the PRD order", () => {
-    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "—", "state", "tags", "set project...", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
+    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "—", "tags", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
   });
 
   it("copies path, branch, and worktree id, and skips a missing branch", () => {

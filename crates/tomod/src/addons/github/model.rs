@@ -84,6 +84,26 @@ pub fn merged_event(worktree_id: &str, pr: &PullRequest) -> ActivityEvent {
     }
 }
 
+/// The tags that GitHub owns. A worktree carries at most one of them, and only this addon sets them.
+pub const PR_TAGS: [&str; 6] = ["draft", "review", "changes-requested", "approved", "merged", "closed"];
+
+pub fn pr_tag(pr: &PullRequest) -> &'static str {
+    match (pr.state.as_str(), pr.draft, pr.review_decision.as_deref()) {
+        ("merged", _, _) => "merged",
+        ("closed", _, _) => "closed",
+        (_, true, _) => "draft",
+        (_, _, Some("changes_requested")) => "changes-requested",
+        (_, _, Some("approved")) => "approved",
+        _ => "review",
+    }
+}
+
+/// The user's tags with the one GitHub tag that fits the pull request in place of any other.
+pub fn with_pr_tag(tags: &[String], pr: &PullRequest) -> Vec<String> {
+    let tag = pr_tag(pr);
+    tags.iter().filter(|t| t.as_str() == tag || !PR_TAGS.contains(&t.as_str())).cloned().chain((!tags.iter().any(|t| t == tag)).then(|| tag.to_string())).collect()
+}
+
 /// A pull request link: the number, the URL, and the state.
 #[derive(Debug, PartialEq)]
 pub struct KnownPr {
@@ -221,5 +241,17 @@ mod tests {
         assert_eq!(known_pr(Some(&found(None)), &events), Some(KnownPr { number: 12, url: "https://github.com/o/r/pull/12".into(), state: "merged".into() }));
         assert_eq!(known_pr(None, &events[2..]), None);
         assert_eq!(known_pr(None, &[event(GitHubActivity::PrMerged, 1, json!({ "number": 1, "url": "" }))]), None);
+    }
+
+    #[test]
+    fn a_pull_request_swaps_the_github_tag_and_keeps_the_rest() {
+        let tags = |t: &[&str]| t.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let open = pr("open", 1);
+        assert_eq!(with_pr_tag(&tags(&["labor", "draft"]), &open), tags(&["labor", "review"]));
+        assert_eq!(with_pr_tag(&tags(&["review", "labor"]), &open), tags(&["review", "labor"]), "the order stays when nothing changes");
+        assert_eq!(with_pr_tag(&tags(&["labor"]), &pr("merged", 1)), tags(&["labor", "merged"]));
+        assert_eq!(pr_tag(&PullRequest { draft: true, ..open.clone() }), "draft");
+        assert_eq!(pr_tag(&PullRequest { review_decision: Some("changes_requested".into()), ..open.clone() }), "changes-requested");
+        assert_eq!(pr_tag(&PullRequest { review_decision: Some("approved".into()), ..open }), "approved");
     }
 }

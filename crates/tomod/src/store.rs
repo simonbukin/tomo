@@ -137,6 +137,17 @@ CREATE INDEX IF NOT EXISTS activity_occurred_at ON activity(occurred_at_ms);
 const META_SELECT: &str =
     "SELECT id, repo_id, path, gitdir, display_name, project, priority, tags, last_active_ms, first_seen_ms, archived_at_ms, archived_branch, state, infra_name FROM worktree_meta";
 
+/// Project and workflow state were separate fields before tags replaced them. A row that still has
+/// them reads them as tags, and the next write clears the old columns.
+fn with_legacy_tags(tags: Vec<String>, legacy: [Option<String>; 2]) -> Vec<String> {
+    legacy.into_iter().flatten().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).fold(tags, |mut acc, t| {
+        if !acc.contains(&t) {
+            acc.push(t);
+        }
+        acc
+    })
+}
+
 fn meta_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<MetaRow> {
     let tags: String = r.get(7)?;
     Ok(MetaRow {
@@ -144,7 +155,7 @@ fn meta_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<MetaRow> {
         repo_id: r.get(1)?,
         path: PathBuf::from(r.get::<_, String>(2)?),
         gitdir: r.get(3)?,
-        metadata: WorktreeMetadata { display_name: r.get(4)?, project: r.get(5)?, state: r.get(12)?, tags: serde_json::from_str(&tags).unwrap_or_default() },
+        metadata: WorktreeMetadata { display_name: r.get(4)?, tags: with_legacy_tags(serde_json::from_str(&tags).unwrap_or_default(), [r.get(5)?, r.get(12)?]) },
         last_active_ms: r.get::<_, Option<i64>>(8)?.map(|v| v as u64),
         first_seen_ms: r.get::<_, Option<i64>>(9)?.map(|v| v as u64),
         archived_at_ms: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
@@ -287,14 +298,14 @@ impl Store {
                 row.path.to_string_lossy(),
                 row.gitdir,
                 row.metadata.display_name,
-                row.metadata.project,
+                Option::<String>::None,
                 Option::<i64>::None,
                 serde_json::to_string(&row.metadata.tags)?,
                 row.last_active_ms.map(|v| v as i64),
                 row.first_seen_ms.map(|v| v as i64),
                 row.archived_at_ms.map(|v| v as i64),
                 row.archived_branch,
-                row.metadata.state,
+                Option::<String>::None,
                 row.infra_name,
             ],
         )?;
@@ -606,7 +617,7 @@ mod tests {
             repo_id: "r1".into(),
             path: PathBuf::from("/tmp/w1"),
             gitdir: Some("w1".into()),
-            metadata: WorktreeMetadata { display_name: Some("Labor".into()), project: Some("Holly".into()), state: None, tags: vec!["lr".into()] },
+            metadata: WorktreeMetadata { display_name: Some("Labor".into()), tags: vec!["lr".into()] },
             last_active_ms: None,
             first_seen_ms: Some(5),
             archived_at_ms: Some(9),
@@ -620,6 +631,20 @@ mod tests {
         let all = s.meta_all().unwrap();
         assert_eq!(all.len(), 1);
         assert!(all[0].metadata.tags.is_empty());
+    }
+
+    #[test]
+    fn an_old_project_and_state_read_as_tags_and_the_next_write_clears_them() {
+        let s = Store::open_in_memory().unwrap();
+        s.conn
+            .execute("INSERT INTO worktree_meta (id, repo_id, path, project, state, tags) VALUES ('w', 'r', '/tmp/w', 'labor', 'merged', '[\"labor\",\"x\"]')", [])
+            .unwrap();
+        let row = s.meta_one("w").unwrap().unwrap();
+        assert_eq!(row.metadata.tags, vec!["labor", "x", "merged"]);
+        s.meta_upsert(&row).unwrap();
+        let old: (Option<String>, Option<String>) = s.conn.query_row("SELECT project, state FROM worktree_meta WHERE id = 'w'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(old, (None, None));
+        assert_eq!(s.meta_one("w").unwrap().unwrap().metadata.tags, vec!["labor", "x", "merged"]);
     }
 
     #[test]
@@ -645,27 +670,27 @@ mod tests {
     #[test]
     fn rebind_onto_a_live_row_fills_its_blanks_and_leaves_one_row() {
         let s = Store::open_in_memory().unwrap();
-        let row = |id: &str, name: Option<&str>, project: Option<&str>, first_seen: u64| MetaRow {
+        let row = |id: &str, name: Option<&str>, tags: &[&str], first_seen: u64| MetaRow {
             id: id.into(),
             repo_id: "r1".into(),
             path: PathBuf::from("/tmp/w"),
             gitdir: Some("w".into()),
-            metadata: WorktreeMetadata { display_name: name.map(Into::into), project: project.map(Into::into), state: None, tags: vec![] },
+            metadata: WorktreeMetadata { display_name: name.map(Into::into), tags: tags.iter().map(|t| t.to_string()).collect() },
             last_active_ms: None,
             first_seen_ms: Some(first_seen),
             archived_at_ms: None,
             archived_branch: None,
             infra_name: Some(format!("tomo-w-{id}")),
         };
-        s.meta_upsert(&row("stale", Some("Moriya"), Some("old"), 1)).unwrap();
-        s.meta_upsert(&row("live", None, Some("new"), 9)).unwrap();
+        s.meta_upsert(&row("stale", Some("Moriya"), &["old"], 1)).unwrap();
+        s.meta_upsert(&row("live", None, &["new"], 9)).unwrap();
         s.rebind_worktree("stale", "live", Path::new("/tmp/w")).unwrap();
         let all = s.meta_all().unwrap();
         assert_eq!(all.len(), 1);
         let m = &all[0];
         assert_eq!(m.id, "live");
         assert_eq!(m.metadata.display_name.as_deref(), Some("Moriya"), "a blank takes the old value");
-        assert_eq!(m.metadata.project.as_deref(), Some("new"), "a set value stays");
+        assert_eq!(m.metadata.tags, vec!["new"], "a set value stays");
         assert_eq!(m.first_seen_ms, Some(1), "the earliest sighting stays");
         assert_eq!(m.infra_name.as_deref(), Some("tomo-w-live"));
     }
@@ -726,7 +751,7 @@ mod tests {
         assert_eq!(ids(ActivityQuery::default()), vec!["c", "b"]);
     }
 
-    const STORED_KINDS: [&str; 16] = [
+    const STORED_KINDS: [&str; 17] = [
         "agent_started",
         "agent_waiting",
         "agent_exited",
@@ -739,6 +764,7 @@ mod tests {
         "endpoint_discovered",
         "annotations_sent",
         "state_changed",
+        "tags_changed",
         "archived",
         "restored",
         "hook_failed",

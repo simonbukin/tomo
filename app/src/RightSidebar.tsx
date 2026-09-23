@@ -1,14 +1,13 @@
-import { ChevronDown, ChevronRight, File, Folder, RotateCw } from "lucide-react";
+import { ChevronDown, ChevronRight, File, Folder, RotateCw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { rpc, rpcParsed } from "./api";
 import { agentSessionSchema, fsEntrySchema, processInfoSchema } from "./schemas";
 import { openMenu } from "./MenuHost";
-import { Combobox, IconButton, plainTextInput, Select, SkeletonRows, Tooltip } from "./components/ui";
+import { Combobox, IconButton, plainTextInput, SkeletonRows, Tooltip } from "./components/ui";
 import { fileMenu } from "./menus";
-import { setMetadata, spawnAgent } from "./actions";
+import { parseTags, setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
-import { orderedStates } from "./homeQuery";
 import { useFlip } from "./useFlip";
 import { InspectorSection } from "./sections";
 import {failQuietly, failToast, formatBytes, useStore} from "./store";
@@ -36,42 +35,42 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
 
 function MetadataSection({ w }: { w: Worktree }) {
   const m = w.metadata;
-  const states = useStore((s) => orderedStates(s.config?.states ?? []));
-  const projects = useStore((s) => [...new Set(s.worktrees.map((x) => x.metadata.project).filter((p): p is string => !!p))].sort());
+  const known = useStore((s) => [...new Set(s.worktrees.flatMap((x) => x.metadata.tags))].sort());
   const [name, setName] = useState(m.display_name ?? "");
-  const [project, setProject] = useState(m.project ?? "");
-  const [tags, setTags] = useState(m.tags.join(", "));
+  const [draft, setDraft] = useState("");
   useEffect(() => {
     setName(m.display_name ?? "");
-    setProject(m.project ?? "");
-    setTags(m.tags.join(", "));
-  }, [w.id, m.display_name, m.project, m.tags.join(",")]);
-  const commit = (patch: Record<string, unknown>) => setMetadata(w.id, patch);
+    setDraft("");
+  }, [w.id, m.display_name]);
+  const setTags = (tags: string[]) => setMetadata(w.id, { tags });
+  const add = (text: string) => {
+    const next = parseTags(text).filter((t) => !m.tags.includes(t));
+    setDraft("");
+    if (next.length > 0) setTags([...m.tags, ...next]);
+  };
   return (
     <InspectorSection id="worktree">
-      <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} {...plainTextInput} onChange={(e) => setName(e.target.value)} onBlur={() => commit({ display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
-      <div className="kv"><label>project</label>
-        <Combobox
-          aria-label="Project"
-          value={project}
-          items={projects}
-          placeholder="none"
-          onValueChange={setProject}
-          onSelect={(v) => commit({ project: v })}
-          onBlur={() => commit({ project: project.trim() || null })}
-          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        />
+      <div className="kv"><label>name</label><input value={name} placeholder={w.path.split("/").pop()} {...plainTextInput} onChange={(e) => setName(e.target.value)} onBlur={() => setMetadata(w.id, { display_name: name.trim() || null })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
+      <div className="kv kv-top"><label>tags</label>
+        <div className="tag-edit">
+          {m.tags.map((t) => (
+            <span key={t} className="chip">
+              #{t}
+              <IconButton label={`Remove tag ${t}`} onClick={() => setTags(m.tags.filter((x) => x !== t))}><X className="icon" /></IconButton>
+            </span>
+          ))}
+          <Combobox
+            aria-label="Add tag"
+            value={draft}
+            items={known.filter((t) => !m.tags.includes(t))}
+            placeholder="add tag"
+            onValueChange={setDraft}
+            onSelect={add}
+            onBlur={() => add(draft)}
+            onKeyDown={(e) => e.key === "Enter" && add(draft)}
+          />
+        </div>
       </div>
-      <div className="kv"><label>state</label>
-        <Select
-          aria-label="Workflow state"
-          size="sm"
-          value={m.state ?? ""}
-          onValueChange={(v) => commit({ state: v || null })}
-          options={[{ value: "", label: "no state" }, ...states.map((s) => ({ value: s.id, label: s.label })), ...(m.state && !states.some((s) => s.id === m.state) ? [{ value: m.state, label: m.state }] : [])]}
-        />
-      </div>
-      <div className="kv"><label>tags</label><input value={tags} placeholder="a, b" {...plainTextInput} onChange={(e) => setTags(e.target.value)} onBlur={() => commit({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></div>
     </InspectorSection>
   );
 }

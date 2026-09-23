@@ -49,7 +49,7 @@ export function paletteEntries(s: State): PaletteEntry[] {
   const worktrees: PaletteEntry[] = s.worktrees.map((w) => ({
     key: `wt:${w.id}`,
     label: w.name,
-    hint: [repoName(s, w.repo_id), w.metadata.project, w.branch, w.archived_at_ms ? "archived" : null].filter(Boolean).join(" · "),
+    hint: [repoName(s, w.repo_id), w.branch, w.archived_at_ms ? "archived" : null].filter(Boolean).join(" · "),
     context: w.id === current?.id,
     children: () => worktreeChildren(getState(), w),
   }));

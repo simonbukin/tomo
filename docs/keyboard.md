@@ -88,7 +88,7 @@ store state as a parameter, so tests call them with a fixture state.
 
 | Object | Items |
 |--------|-------|
-| Worktree | open, new tab, new terminal, new claude, new codex, new pi · state ›, tags ›, set project, rename · open in (editor), reveal in finder, copy › (path, branch, worktree id) · archive or restore |
+| Worktree | open, new tab, new terminal, new claude, new codex, new pi · tags ›, rename · open in (editor), reveal in finder, copy › (path, branch, worktree id) · archive or restore |
 | Tab | rename · move left, move right · close, close others |
 | Pane | split right, split down, zoom, equalize, rotate, swap with › · send to › · rename pane, copy › (cwd, session id) · kill process tree, close |
 | Browser pane | back, forward, reload · open in external browser, copy › (url) · send to › · close |

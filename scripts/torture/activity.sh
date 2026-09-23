@@ -51,15 +51,15 @@ wait_for "has_kind checkpoint_created" 12 && check 0 "tomo checkpoint inside a p
 CK=$(field checkpoint_created attention_id)
 $T attention list --json | jq_ "import sys; sys.exit(0 if any(a['id']=='$CK' and a['kind']=='checkpoint' and a['url']=='http://localhost:1' and a['level']=='attention' for a in d) else 1)" && check 0 "checkpoint attention item has kind checkpoint and the url" || check 1 "checkpoint attention" "$($T attention list)"
 
-# 5. crash, stop, exit, state, archive
+# 5. crash, stop, exit, tags, archive
 $T action run crash "$WT" >/dev/null
 wait_for "has_kind action_crashed" 10 && [ "$(field action_crashed detail)" = "exit code 2" ] && check 0 "exit 2 records ActionCrashed" || check 1 "crashed" "$(kinds)"
 $T action stop serve "$WT" >/dev/null
 wait_for "has_kind action_stopped" 4 && check 0 "action stop records ActionStopped" || check 1 "stopped" "$(kinds)"
 $RPC send "$A" 'quit\r'
 wait_for "has_kind agent_exited" 12 && check 0 "quit records AgentExited" || check 1 "agent exited" "$(kinds)"
-$T worktree metadata set "$WT" --state active >/dev/null
-[ "$(field state_changed title)" = "state → active" ] && check 0 "state change records 'state → active'" || check 1 "state changed" "$(field state_changed title)"
+$T worktree metadata set "$WT" --tags active >/dev/null
+[ "$(field tags_changed title)" = "tagged #active" ] && check 0 "tag change records 'tagged #active'" || check 1 "tags changed" "$(field tags_changed title)"
 $T worktree archive "$WT" >/dev/null 2>&1
 wait_for "has_kind archived" 6 && check 0 "archive records Archived" || check 1 "archived" "$(kinds)"
 
@@ -68,7 +68,7 @@ act | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 ts = [e['occurred_at_ms'] for e in d]
-allowed = {'action_started','agent_started','agent_waiting','checkpoint_created','action_crashed','action_stopped','agent_exited','state_changed','archived'}
+allowed = {'action_started','agent_started','agent_waiting','checkpoint_created','action_crashed','action_stopped','agent_exited','tags_changed','archived'}
 kinds = {e['kind'] for e in d}
 sys.exit(0 if ts == sorted(ts, reverse=True) and kinds == allowed and all(e['worktree_id']=='$WT' for e in d) else 1)
 " && check 0 "stream is newest first, only the listed kinds, no pane noise" || check 1 "stream shape" "$(kinds)"

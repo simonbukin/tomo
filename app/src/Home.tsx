@@ -10,7 +10,7 @@ import { homeEmpty } from "./emptyStates";
 import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
-import { NO_STATE, filterWorktrees, groupWorktrees, needsAttention, orderedStates, sortWorktrees, stateLabel } from "./homeQuery";
+import { filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees } from "./homeQuery";
 import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
@@ -30,17 +30,16 @@ const AGENT_SIGNALS = ["agent"] as const;
 const LENS_TABS: readonly { group: HomeOptions["group"]; label: string }[] = [
   { group: "none", label: "All" },
   { group: "repo", label: "Repositories" },
-  { group: "project", label: "Projects" },
   { group: "tag", label: "Tags" },
 ];
 
-const KIND_LABEL: Record<FilterKind, string> = { state: "state", repo: "repo", project: "project", tag: "tag", agent: "agent", archived: "archived", attention: "attention" };
+const KIND_LABEL: Record<FilterKind, string> = { repo: "repo", tag: "tag", agent: "agent", archived: "archived", attention: "attention" };
 
 export function Home() {
   const s = useStore((x) => x);
   const o = s.ui.home;
   const set = (patch: Partial<HomeOptions>) => setUi({ home: { ...o, ...patch } });
-  const ctx = useMemo(() => queryContext(s), [s.repos, s.agents, s.attention, s.config?.states]);
+  const ctx = useMemo(() => queryContext(s), [s.repos, s.agents, s.attention]);
   const repos = visibleRepos(s);
   const known = s.worktrees.filter((w) => (repos.some((r) => r.id === w.repo_id) || !s.repos.some((r) => r.id === w.repo_id)) && (s.ui.showMain || !w.is_main));
   const inScope = scopeWorktrees(known, o.scope);
@@ -55,27 +54,23 @@ export function Home() {
   const repoFor = (key: string) => (o.group === "repo" ? repos.find((r) => r.name === key) : undefined);
   const groups = groupWorktrees(visible, o.group, ctx);
   const empty = homeEmpty(s.repos.length, s.worktrees.filter((w) => !w.archived_at_ms).length, visible.length);
-  const stateIdOf = (key: string) => (key === NO_STATE ? null : orderedStates(ctx.states).find((st) => st.label === key)?.id ?? key);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [dragged, setDragged] = useState<Worktree | null>(null);
-  const onDragStart = ({ active }: DragStartEvent) => setDragged(s.worktrees.find((w) => w.id === active.id) ?? null);
+  const cardOf = (data: Record<string, unknown> | undefined) => ({ w: s.worktrees.find((x) => x.id === data?.worktreeId), from: data?.from as string | undefined });
+  const onDragStart = ({ active }: DragStartEvent) => setDragged(cardOf(active.data.current).w ?? null);
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     setDragged(null);
-    const key = over?.data.current?.key as string | undefined;
-    const w = s.worktrees.find((x) => x.id === active.id);
-    if (w && key !== undefined && w.metadata.state !== stateIdOf(key)) setMetadata(w.id, { state: stateIdOf(key) });
+    const to = over?.data.current?.key as string | undefined;
+    const { w, from } = cardOf(active.data.current);
+    if (w && from !== undefined && to !== undefined && from !== to) setMetadata(w.id, { tags: movedTags(w.metadata.tags, from, to) });
   };
 
   const addFilter = (f: Filter) => set({ filters: o.filters.some((x) => x.kind === f.kind && x.value === f.value) ? o.filters : [...o.filters, f] });
   const removeFilter = (f: Filter) => set({ filters: o.filters.filter((x) => !(x.kind === f.kind && x.value === f.value)) });
   const values = (kind: FilterKind): { value: string; label: string }[] => {
     switch (kind) {
-      case "state":
-        return orderedStates(ctx.states).map((st) => ({ value: st.id, label: st.label })).concat({ value: "", label: "no state" });
       case "repo":
         return s.repos.map((r) => ({ value: r.id, label: r.name }));
-      case "project":
-        return [...new Set(s.worktrees.map((w) => w.metadata.project).filter((p): p is string => !!p))].sort().map((p) => ({ value: p, label: p }));
       case "tag":
         return [...new Set(s.worktrees.flatMap((w) => w.metadata.tags))].sort().map((t) => ({ value: t, label: `#${t}` }));
       case "agent":
@@ -93,8 +88,8 @@ export function Home() {
     }));
   const displayMenu = (): MenuItem[] => [
     { label: "view", submenu: (["list", "board"] as const).map((v) => ({ label: v, checked: o.view === v, run: () => set({ view: v }) })) },
-    { label: "group by", submenu: (["state", "repo", "project", "tag", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
-    { label: "sort", submenu: (["state", "recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
+    { label: "group by", submenu: (["tag", "repo", "none"] as const).map((g) => ({ label: g, checked: o.group === g, run: () => set({ group: g }) })) },
+    { label: "sort", submenu: (["recent", "created", "name"] as const).map((v) => ({ label: v, checked: o.sort === v, run: () => set({ sort: v }) })) },
     { separator: true },
     { label: "show main worktree", checked: s.ui.showMain, run: () => setUi({ showMain: !s.ui.showMain }) },
     { label: "show archived", checked: o.showArchived, run: () => set({ showArchived: !o.showArchived }) },
@@ -109,7 +104,7 @@ export function Home() {
       <div className="home-bar">
         <label className="home-search">
           <Search className="icon" />
-          <input placeholder="search worktrees, branches, projects, tags" value={o.query} onChange={(e) => set({ query: e.target.value })} autoFocus />
+          <input placeholder="search worktrees, branches, tags" value={o.query} onChange={(e) => set({ query: e.target.value })} autoFocus />
         </label>
         <DropdownMenu>
           <DropdownMenuTrigger className="ghost"><ListFilter className="icon" /> filter</DropdownMenuTrigger>
@@ -193,9 +188,9 @@ export function Home() {
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragged(null)}>
           <div className="board">
             {groups.map((g) => (
-              <BoardColumn key={g.key || "all"} groupKey={g.key} droppable={o.group === "state"}>
+              <BoardColumn key={g.key || "all"} groupKey={g.key} droppable={o.group === "tag"}>
                 <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key || "all"}<span className="right">{g.items.length}</span></div>
-                <div className="board-cards">{g.items.map((w) => <WorktreeCard key={w.id} w={w} draggable={o.group === "state"} />)}</div>
+                <div className="board-cards">{g.items.map((w) => <WorktreeCard key={w.id} w={w} column={o.group === "tag" ? g.key : undefined} />)}</div>
               </BoardColumn>
             ))}
           </div>
@@ -243,7 +238,6 @@ function Row({ w }: { w: Worktree }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
-  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
@@ -258,8 +252,8 @@ function Row({ w }: { w: Worktree }) {
     >
       <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
       <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
-      <span className="muted">{w.metadata.project ?? repo}</span>
-      <span className="muted">{busy ? "archiving..." : archived ? "archived" : (state ?? "")}</span>
+      <span className="muted">{repo}</span>
+      <span className="muted">{busy ? "archiving..." : archived ? "archived" : ""}</span>
       <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
       <span className="agents">
         <RowError worktreeId={w.id} />
@@ -273,7 +267,7 @@ function Row({ w }: { w: Worktree }) {
   );
 }
 
-/** A drop between columns only sets `worktree.state`. Order inside a column stays the configured sort. */
+/** A drop between tag columns swaps the source tag for the target tag. Order inside a column stays the configured sort. */
 function BoardColumn({ groupKey, droppable, children }: { groupKey: string; droppable: boolean; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${groupKey}`, data: { key: groupKey }, disabled: !droppable });
   return (
@@ -283,19 +277,19 @@ function BoardColumn({ groupKey, droppable, children }: { groupKey: string; drop
   );
 }
 
-export function WorktreeCard({ w, draggable = false }: { w: Worktree; draggable?: boolean }) {
+/** A card with a `column` can be dragged to another tag column. A worktree with two tags has a card in each. */
+export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
-  const state = useStore((s) => stateLabel(s.config?.states ?? [], w.metadata.state));
   const mark = useStore((s) => branchMark(s, w));
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
-  const sub = [w.metadata.project ?? repo, busy ? "archiving..." : archived ? "archived" : state].filter(Boolean).join(" · ");
+  const sub = [repo, busy ? "archiving..." : archived ? "archived" : null].filter(Boolean).join(" · ");
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   const summary = summarizeState(agents, attention);
-  const drag = useDraggable({ id: w.id, disabled: !draggable || archived || busy });
+  const drag = useDraggable({ id: `${column ?? ""}|${w.id}`, data: { worktreeId: w.id, from: column }, disabled: column === undefined || archived || busy });
   return (
     <div
       ref={drag.setNodeRef}
@@ -304,7 +298,7 @@ export function WorktreeCard({ w, draggable = false }: { w: Worktree; draggable?
       className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}${drag.isDragging ? " card-dragging" : ""}`}
       onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
-      title={[w.path, state ? `state: ${state}` : null, busy ? "archiving..." : null].filter(Boolean).join("\n")}
+      title={[w.path, busy ? "archiving..." : null].filter(Boolean).join("\n")}
     >
       <div className="card-title">
         <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />

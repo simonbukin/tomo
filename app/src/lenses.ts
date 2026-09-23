@@ -2,11 +2,10 @@ import { byManualOrder } from "./order";
 import { agentsOf, needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
 import type { Id, Repo, SidebarLens, SidebarSort, Worktree, WorktreePrefill } from "./types";
 
-export const LENSES: readonly SidebarLens[] = ["repo", "project", "tag", "focus"];
+export const LENSES: readonly SidebarLens[] = ["repo", "tag", "focus"];
 
 export const LENS_LABEL: Record<SidebarLens, string> = {
   repo: "repositories",
-  project: "projects",
   tag: "tags",
   focus: "focus",
 };
@@ -29,7 +28,6 @@ export interface LensOptions {
   repoOrder: Id[];
 }
 
-const NO_PROJECT = "no project";
 const NO_TAG = "no tag";
 
 export const FOCUS_SECTIONS = ["needs attention", "active", "recent", "archived"] as const;
@@ -86,8 +84,6 @@ export function lensGroups(list: Worktree[], lens: SidebarLens, ctx: QueryContex
   switch (lens) {
     case "repo":
       return byRepo(list, ctx, o);
-    case "project":
-      return labelled(bucket(list, (w) => [w.metadata.project || NO_PROJECT]), lens, ctx, o, (k) => k, (k) => (k === NO_PROJECT ? 1 : 0), (k) => (k === NO_PROJECT ? {} : { project: k }));
     case "tag":
       return labelled(bucket(list, (w) => (w.metadata.tags.length > 0 ? w.metadata.tags : [NO_TAG])), lens, ctx, o, (k) => (k === NO_TAG ? k : `#${k}`), (k, items) => (k === NO_TAG ? Number.MAX_SAFE_INTEGER : -items.length), (k) => (k === NO_TAG ? {} : { tags: [k] }));
     case "focus":

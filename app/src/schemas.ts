@@ -119,12 +119,6 @@ export const themeConfigSchema = z.object({
     colors: z.any()
 });
 
-export const stateDefSchema = z.object({
-    id: z.string(),
-    label: z.string(),
-    order: z.number()
-});
-
 export const notificationSettingsSchema = z.object({
     desktop: z.boolean(),
     sounds: z.boolean()
@@ -132,7 +126,7 @@ export const notificationSettingsSchema = z.object({
 
 export const issueLevelSchema = z.union([z.literal("warning"), z.literal("error")]);
 
-export const coreActivitySchema = z.union([z.literal("agent_started"), z.literal("agent_waiting"), z.literal("agent_exited"), z.literal("checkpoint_created"), z.literal("checkpoint_resolved"), z.literal("state_changed"), z.literal("archived"), z.literal("restored"), z.literal("hook_failed")]);
+export const coreActivitySchema = z.union([z.literal("agent_started"), z.literal("agent_waiting"), z.literal("agent_exited"), z.literal("checkpoint_created"), z.literal("checkpoint_resolved"), z.literal("state_changed"), z.literal("tags_changed"), z.literal("archived"), z.literal("restored"), z.literal("hook_failed")]);
 
 export const diagnosticLevelSchema = z.union([z.literal("info"), z.literal("warning"), z.literal("error")]);
 
@@ -165,8 +159,6 @@ export const repoSchema = z.object({
 
 export const worktreeMetadataSchema = z.object({
     display_name: z.string().nullable(),
-    project: z.string().nullable(),
-    state: z.string().nullable(),
     tags: z.array(z.string())
 });
 
@@ -318,8 +310,6 @@ export const hookWorktreeSchema = z.object({
     repo_path: z.string(),
     branch: z.string().nullable(),
     name: z.string(),
-    state: z.string().nullable(),
-    project: z.string().nullable(),
     tags: z.array(z.string())
 });
 
@@ -362,8 +352,6 @@ export const layoutNodeSchema: z.ZodSchema<LayoutNode> = z.lazy(() => z.union([z
 
 export const metadataPatchSchema = z.object({
     display_name: z.string().optional().nullable(),
-    project: z.string().optional().nullable(),
-    state: z.string().optional().nullable(),
     tags: z.array(z.string()).optional()
 });
 
@@ -568,7 +556,7 @@ export const actionRunResultSchema = z.object({
 export const hookDefSchema = z.object({
     event: z.string(),
     command: z.string(),
-    state: z.string().nullable(),
+    tag: z.string().nullable(),
     mode: hookModeSchema,
     timeout_s: z.number()
 });
@@ -593,7 +581,6 @@ export const configSchema = z.object({
     max_panes_per_tab: z.number(),
     keybindings: z.any(),
     agents: z.any(),
-    states: z.array(stateDefSchema),
     hooks: z.array(hookDefSchema),
     notifications: notificationSettingsSchema
 });
@@ -602,7 +589,7 @@ export const hookEventSchema = z.object({
     event: z.string(),
     at_ms: z.number(),
     worktree: hookWorktreeSchema.nullable(),
-    previous_state: z.string().nullable(),
+    previous_tags: z.array(z.string()).optional(),
     pane: hookPaneSchema.nullable(),
     agent: hookAgentSchema.nullable(),
     attention: attentionItemSchema.nullable(),
