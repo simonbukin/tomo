@@ -32,7 +32,7 @@ body.pane-dragging .xterm { pointer-events: none; }
 .pane-dead .pane-body { opacity: 0.55; }
 .pane-legend { display: flex; align-items: stretch; flex: none; height: var(--u); box-shadow: inset 0 -1px 0 var(--line); font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); transition: color var(--dur-hover) var(--ease-out); }
 .pane-active .pane-legend { color: var(--fg); }
-.pane-legend .chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 60%; padding: 0 var(--sp-2) 0 var(--inset); background: none; border: none; color: inherit; font-size: inherit; }
+.pane-legend .chip { display: inline-flex; align-items: center; gap: 6px; height: auto; min-width: 0; max-width: 60%; padding: 0 var(--sp-2) 0 var(--inset); background: none; border: none; box-shadow: none; color: inherit; font-family: inherit; font-size: inherit; }
 .pane-legend .chip strong { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pane-legend .chip .agent-state { color: var(--fg-3); }
 .pane-legend .chip.right { margin-left: auto; max-width: 40%; padding: 0; color: var(--fg-3); }

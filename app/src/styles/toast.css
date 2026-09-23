@@ -7,15 +7,15 @@
 .status-message[data-leaving] { opacity: 0; }
 
 /* ---- toast dock */
-@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes toast-in { from { opacity: 0; translate: 0 8px; } }
 .toast-dock { position: fixed; right: 12px; bottom: calc(var(--u) + 12px); z-index: var(--z-float); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: calc(100vw - 24px); pointer-events: none; }
-.toast { pointer-events: auto; display: grid; grid-template-columns: 1em minmax(0, 1fr) auto; column-gap: var(--sp-2); align-items: start; width: 320px; max-width: 100%; padding: 6px 4px 6px 10px; background: var(--bg-1); border: 1px solid var(--line-strong); border-left-width: 2px; border-radius: var(--radius); box-shadow: var(--shadow-pop); font-size: var(--fs-1); color: var(--fg-1); animation: toast-in var(--dur-open) var(--ease-out) backwards; transition: opacity var(--dur-hover) var(--ease-in), transform var(--dur-hover) var(--ease-in); }
-.toast[data-leaving] { opacity: 0; transform: translateY(4px); }
-.toast-error { border-left-color: var(--danger); }
-.toast-warning { border-left-color: var(--waiting); }
+.toast { pointer-events: auto; display: grid; grid-template-columns: 1em minmax(0, 1fr) auto; column-gap: var(--sp-2); align-items: start; width: 320px; max-width: 100%; min-height: var(--u2); padding: 6px 0 6px var(--inset); background: var(--bg-1); border: 0; box-shadow: inset 2px 0 0 var(--line-strong), var(--shadow-pop); font-size: var(--fs-1); color: var(--fg-1); animation: toast-in var(--dur-open) var(--ease-out) backwards; transition: opacity var(--dur-hover) var(--ease-in), translate var(--dur-hover) var(--ease-in); }
+.toast[data-leaving] { opacity: 0; translate: 0 4px; }
+.toast-error { box-shadow: inset 2px 0 0 var(--danger), var(--shadow-pop); }
+.toast-warning { box-shadow: inset 2px 0 0 var(--waiting), var(--shadow-pop); }
 .toast > .glyph { line-height: 20px; }
 .toast-body { min-width: 0; display: flex; flex-direction: column; padding-top: 1px; }
 .toast-title { color: var(--fg); font-weight: 600; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast-detail { color: var(--fg-2); line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast-actions { display: flex; gap: var(--sp-3); margin-top: 3px; }
-.toast-close { align-self: start; }
+.toast-close { align-self: start; width: var(--u); height: var(--u); margin-top: -6px; }
