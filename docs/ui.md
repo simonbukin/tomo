@@ -269,38 +269,38 @@ as a submenu opens.
 
 `app/src/styles/tokens.css` holds every token, in the groups `DESIGN.md`
 names: surfaces, text, borders, identity, semantic state, floating, type,
-space, shape, and motion. Hiragino Sans is the interface font. CommitMono is
-for terminal-adjacent text: branches, paths, ids, commands, process rows, and
-shortcuts. Tomo ships neither font, so each token falls back to a system face.
-Murasaki `--accent` marks active state, selection, and focus only.
+space, shape, and motion. Sofia Sans is the interface font, Sofia Sans Extra
+Condensed is the display face, and Red Hat Mono is for terminal-adjacent
+text: branches, paths, ids, commands, process rows, and shortcuts. Tomo
+bundles all three. Selection is inversion: `--accent` is the text color.
 Semantic colors (`--working`, `--waiting`, `--danger`, `--success`) keep their
 meaning everywhere.
 
-Spacing uses 4, 8, 12, 16, 24. Radius is 3 to 6 px. Motion is 80 to 140 ms and
-only for floating surfaces and small state changes. Shell geometry
-(`--title-h`, `--bar-h`, `--bottom-h`) lives in `layout.css`, not in
-`tokens.css`. Do not add a component token such as
+Rows and cells are one unit, `--u` (28 px), or two, `--u2`. Text sits
+`--inset` (14 px) in. Spacing inside a cell uses 4, 8, 12, 16, 24. Every
+radius is 0. Motion is 120 or 240 ms on one curve. `--traffic-inset` lives
+in `layout.css`, not in `tokens.css`. Do not add a component token such as
 `--sidebar-row-active-hover-background`. Write local CSS instead.
 
 ### Motion tokens
 
-`tokens.css` holds three durations and two curves. It has no separate motion
-block.
+`tokens.css` holds one curve and two speeds. `--ease-in` and `--dur-hover`
+stay as names for the same values, so older CSS still reads.
 
 | Token | Value | Use |
 |-------|-------|-----|
-| `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | hover, press, open |
-| `--ease-in` | `cubic-bezier(0.4, 0, 1, 1)` | close |
-| `--dur-fast` | 80 ms | the press scale (`--press-scale`, 0.97) and small state changes |
-| `--dur-hover` | 100 ms | background and color on hover, and a surface that closes |
-| `--dur-open` | 140 ms | menus, popovers, dialogs, attention arrival |
-| `--hit-min` | 24 px | the smallest clickable area |
+| `--ease-out` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | every transition |
+| `--ease-in` | the same curve | close |
+| `--dur-fast` | 120 ms | hover, press, and small state changes |
+| `--dur-hover` | 120 ms | background and color on hover, and a surface that closes |
+| `--dur-open` | 240 ms | menus, popovers, dialogs, the selection block |
+| `--press-scale` | 1 | nothing scales |
+| `--hit-min` | 28 px | the smallest clickable area |
 
 The focus ring is 2 px and lives in `base.css`. The town reveal keeps its own
 `--dur-reveal` in `addons/towns/towns.css`, because one addon uses it.
 
-Under `prefers-reduced-motion: reduce` every duration is 0 and the press
-scale is 1. The guard in `base.css` also stops every animation. No springs,
+Under `prefers-reduced-motion: reduce` every duration is 0. The guard in `base.css` also stops every animation. No springs,
 no bounce. `styles/interaction.css` applies the tokens.
 
 ## States

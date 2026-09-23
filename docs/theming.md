@@ -6,7 +6,7 @@ view and the file edit the same values.
 
 ## Source of truth
 
-- `config.toml` holds the theme, the accent, the color overrides, the
+- `config.toml` holds the theme, the color overrides, the
   terminal font, keybindings, agents, notifications, hooks, and the editor
   command.
 - The Settings view writes to `config.toml` through the daemon call
@@ -23,57 +23,56 @@ view and the file edit the same values.
 
 ```toml
 [theme]
-name = "system"          # system | murasaki-dark | murasaki-light | paper | ink
-light = "murasaki-light" # used when name = "system" and macOS is light
-dark = "ink"             # used when name = "system" and macOS is dark
+name = "system"      # system | slab-dark | slab-light
+light = "slab-light" # used when name = "system" and macOS is light
+dark = "slab-dark"   # used when name = "system" and macOS is dark
 
 # Every color key is optional. A key overrides the base theme.
-accent = "sora"          # #rgb, #rrggbb, or murasaki | sora | sakura | sumi
-bg = "#0f0f12"
-surface = "#17171c"
-surface_hover = "#202027"
-fg = "#f7f7fa"
-fg_muted = "#9696a3"
-fg_faint = "#646470"
-border = "#2b2b33"
-border_strong = "#41414c"
-accent_soft = "#241a42"
-working = "#4cc57e"
-waiting = "#f0a23a"
-danger = "#f26b63"
-success = "#4cc57e"
+# These are the slab-dark values.
+bg = "#0e0e0e"
+surface = "#151515"
+surface_hover = "#1d1d1d"
+fg = "#ecebe8"
+fg_muted = "#9d9c97"
+fg_faint = "#6d6c68"
+border = "#2a2a2a"
+border_strong = "#3a3a3a"
+accent = "#ecebe8"   # the selection color; slab uses the text color
+accent_soft = "#292929"
+working = "#7fd28a"
+waiting = "#e8b14c"
+danger = "#ff7a66"
+success = "#7fd28a"
 
 [terminal]
 font_family = "CommitMono, Menlo, monospace"
 font_size = 13           # 6 to 72
 ```
 
-Theme names ignore case, spaces, and underscores, so `"Murasaki Dark"` is
-the same as `murasaki-dark`. The old top-level keys still work:
-`theme = "dark"` means `murasaki-dark`, `theme = "light"` means
-`murasaki-light`, and top-level `font_family` and `font_size` apply when
+Theme names ignore case, spaces, and underscores, so `"Slab Dark"` is the
+same as `slab-dark`. Older names still work: `dark`, `murasaki-dark`, and
+`ink` mean `slab-dark`; `light`, `murasaki-light`, and `paper` mean
+`slab-light`. Top-level `font_family` and `font_size` apply when
 `[terminal]` does not set them.
 
 When you set `accent` and not `accent_soft`, Tomo mixes the soft tint from
-the accent and `bg`. An accent preset has one color for light themes and one
-for dark themes.
+the accent and `bg`. The accent presets (`murasaki`, `sora`, `sakura`,
+`sumi`) are gone. A preset name gives a warning and Tomo ignores it.
 
 ## Built-in themes
 
-| Name             | Scheme | Notes                          |
-|------------------|--------|--------------------------------|
-| `murasaki-light` | light  | the default light theme        |
-| `murasaki-dark`  | dark   | the default dark theme         |
-| `paper`          | light  | warm off-white ground          |
-| `ink`            | dark   | black ground, higher contrast  |
-| `system`         | either | follows the macOS appearance live, with `light` and `dark` |
+| Name         | Scheme | Notes                                  |
+|--------------|--------|----------------------------------------|
+| `slab-light` | light  | ink on a warm grey ground              |
+| `slab-dark`  | dark   | light ink on a near-black ground       |
+| `system`     | either | follows the macOS appearance live, with `light` and `dark` |
 
 ## Bad values
 
 A bad value never stops Tomo. Each problem shows in `tomo config check` and
 in the Settings header, and Tomo uses the fallback:
 
-- an unknown theme name uses the default (`system` with Murasaki);
+- an unknown theme name uses the default (`system` with the slab themes);
 - a color that is not `#rgb` or `#rrggbb` is ignored and the base color
   stays;
 - an unknown key in `[theme]` or `[terminal]` is a warning and is ignored;
@@ -89,8 +88,8 @@ place of a table. A refused write does not change the file.
 
 The 14 color keys map one to one onto CSS custom properties on `:root`:
 `surface_hover` becomes `--surface-hover`. `app/src/theme.ts` holds the
-built-in palettes and `resolveTheme`, which merges the base theme, the accent
-preset, and the overrides. `applyTheme` sets the variables and
+built-in palettes and `resolveTheme`, which merges the base theme and the
+overrides. `applyTheme` sets the variables and
 `data-theme="light|dark"`. The xterm theme comes from the same resolved
 palette.
 
@@ -99,18 +98,18 @@ duration of its own. A theme change therefore reaches every surface, and
 `[theme]` stays the one theming surface. `app/src/WorktreeRow.css` is the
 example that a unit test enforces. See [ui.md](ui.md).
 
-`app/src/styles/tokens.css` holds the Murasaki values for the first paint
+`app/src/styles/tokens.css` holds the slab values for the first paint
 and derives the short names (`--bg-1`, `--fg-2`, `--line`, `--line-strong`,
 and so on) from the tokens. A custom stylesheet later only has to set the
 tokens on `:root`. A unit test makes sure that the first-paint values in
-`tokens.css` agree with the Murasaki palettes in `theme.ts`.
+`tokens.css` agree with the slab palettes in `theme.ts`.
 
 ## Settings view
 
 Open it with ⌘, (`settings` in `[keybindings]`), the gear in the bottom
 strip, or `Settings…` in the palette. Sections:
 
-- **appearance**: theme, light and dark theme for `system`, accent, color
+- **appearance**: theme, light and dark theme for `system`, color
   overrides, and zoom (UI state).
 - **terminal**: font family, font size, scrollback lines, shell.
 - **keyboard**: every binding in `[keybindings]`. Click a shortcut and press
