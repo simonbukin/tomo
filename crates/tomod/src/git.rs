@@ -80,6 +80,11 @@ pub async fn common_dir(path: &Path) -> Result<PathBuf> {
     Ok(std::fs::canonicalize(&abs).unwrap_or(abs))
 }
 
+/// Tracked files and untracked files that `.gitignore` does not exclude.
+pub async fn files(path: &Path) -> Result<Vec<String>> {
+    Ok(git(path, &["ls-files", "-z", "--cached", "--others", "--exclude-standard"]).await?.split('\0').filter(|f| !f.is_empty()).map(str::to_owned).collect())
+}
+
 pub async fn list_worktrees(repo: &Path) -> Result<Vec<WorktreeEntry>> {
     Ok(parse_worktree_list(&git(repo, &["worktree", "list", "--porcelain"]).await?))
 }

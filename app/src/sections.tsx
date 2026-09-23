@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Cpu, Folder, GitBranch, MessagesSquare, Tag } from "lucide-react";
+import { ChevronDown, Cpu, Folder, GitBranch, MessagesSquare, Tag } from "lucide-react";
 import type { ReactNode } from "react";
 import { gitMarkers, inspectorSections } from "./addons";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./components/ui";
@@ -59,11 +59,11 @@ export function InspectorSection({ id, control, className, children }: { id: Rig
       <section className={className ? `side-section ${className}` : "side-section"} data-section={id}>
         <div className="section-label">
           <CollapsibleTrigger className="section-fold">
-            {open ? <ChevronDown className="icon chevron" aria-hidden /> : <ChevronRight className="icon chevron" aria-hidden />}
             {Icon && <Icon className="icon" aria-hidden />}
             {section?.label.toLowerCase() ?? id}
           </CollapsibleTrigger>
           {control}
+          <ChevronDown className="icon chevron" data-open={open} aria-hidden onClick={() => toggleSection(id, !open)} />
         </div>
         <CollapsiblePanel>{children}</CollapsiblePanel>
       </section>

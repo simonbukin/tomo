@@ -4,11 +4,12 @@ import { z } from "zod";
 import { rpc, rpcParsed } from "./api";
 import { agentSessionSchema, fsEntrySchema, processInfoSchema } from "./schemas";
 import { openMenu } from "./MenuHost";
-import { Combobox, IconButton, plainTextInput, Select, SkeletonRows } from "./components/ui";
+import { Combobox, IconButton, plainTextInput, Select, SkeletonRows, Tooltip } from "./components/ui";
 import { fileMenu } from "./menus";
 import { setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { orderedStates } from "./homeQuery";
+import { useFlip } from "./useFlip";
 import { InspectorSection } from "./sections";
 import {failQuietly, failToast, formatBytes, useStore} from "./store";
 import { gitDetails, inspectorSections } from "./addons";
@@ -111,6 +112,9 @@ function ProcessSection({ w }: { w: Worktree }) {
     return () => window.clearInterval(t);
   }, [w.id]);
   const kill = (pid: number) => rpc("process_kill_tree", { pid }).catch(failToast("Kill failed"));
+  const rows = [...procs].sort((a, b) => b.rss_bytes - a.rss_bytes).slice(0, 25);
+  const list = useRef<HTMLDivElement>(null);
+  useFlip(list, [rows.map((p) => p.pid).join(",")]);
   return (
     <InspectorSection id="processes">
       {res ? (
@@ -122,16 +126,19 @@ function ProcessSection({ w }: { w: Worktree }) {
       ) : (
         <div className="muted">nothing running</div>
       )}
-      <div className="proc-list">
-        {[...procs].sort((a, b) => b.rss_bytes - a.rss_bytes).slice(0, 25).map((p) => (
-          <div key={p.pid} className="proc-row" title={p.cmd}>
-            <span className="num">{p.pid}</span>
-            <span className="proc-name" style={{ paddingLeft: p.depth * 8 }}>{p.name}{p.ownership === "observed" ? <span className="muted"> (observed)</span> : null}</span>
-            <span className="num">{formatBytes(p.rss_bytes)}</span>
-            {p.ownership === "owned" && p.depth > 0 && <button className="link" title="Kill this process and its children" onClick={() => kill(p.pid)}>kill</button>}
-          </div>
-        ))}
-      </div>
+      {procs.length > 0 && (
+        <div className="proc-list" ref={list}>
+          <div className="proc-row proc-head"><span>name</span><span className="num">cpu</span><span className="num">mem</span><span /></div>
+          {rows.map((p) => (
+            <div key={p.pid} data-flip={p.pid} className="proc-row" title={`${p.pid}  ${p.cmd}`}>
+              <span className="proc-name">{p.name}{p.ownership === "observed" ? <span className="muted"> (observed)</span> : null}</span>
+              <span className="num">{p.cpu_percent.toFixed(0)}%</span>
+              <span className="num">{formatBytes(p.rss_bytes)}</span>
+              {p.ownership === "owned" && p.depth > 0 ? <button className="link" title="Kill this process and its children" onClick={() => kill(p.pid)}>kill</button> : <span />}
+            </div>
+          ))}
+        </div>
+      )}
     </InspectorSection>
   );
 }
@@ -173,15 +180,47 @@ function SessionsSection({ w }: { w: Worktree }) {
   );
 }
 
-export type FileSort = "recent" | "name";
-
-/** `name` is the order the daemon sends: directories first, then name. `recent` is newest first. */
-export function sortEntries(entries: FsEntry[], by: FileSort): FsEntry[] {
-  return by === "name" ? entries : [...entries].sort((a, b) => b.modified_ms - a.modified_ms);
-}
+export type FileView = "recent" | "tree";
 
 function FilesSection({ w }: { w: Worktree }) {
-  const [sort, setSort] = useState<FileSort>("recent");
+  const [view, setView] = useState<FileView>("recent");
+  return (
+    <InspectorSection id="files" className="side-files" control={<button className="link" title={view === "recent" ? "Newest changes first. Click to show the tree." : "The folder tree. Click to show the newest changes."} onClick={() => setView(view === "recent" ? "tree" : "recent")}>{view}</button>}>
+      {view === "recent" ? <RecentFiles w={w} /> : <FileTree w={w} />}
+    </InspectorSection>
+  );
+}
+
+const openInEditor = (w: Worktree, rel: string) => rpc("open_external", { worktree_id: w.id, rel_path: rel, target: "editor" }).catch(failQuietly("open_external"));
+
+function RecentFiles({ w }: { w: Worktree }) {
+  const [files, setFiles] = useState<FsEntry[] | null>(null);
+  useEffect(() => {
+    setFiles(null);
+    if (!w.exists) return;
+    const load = () => rpcParsed("fs_recent", z.array(fsEntrySchema), { worktree_id: w.id, limit: 50 }).then(setFiles).catch(failQuietly("fs_recent"));
+    load();
+    const t = window.setInterval(load, 10_000);
+    return () => window.clearInterval(t);
+  }, [w.id, w.exists]);
+  return (
+    <div className="file-tree">
+      {files === null && w.exists && <SkeletonRows count={3} className="compact" label="looking for files" />}
+      {files?.length === 0 && <div className="muted">no files</div>}
+      {files?.map((e) => (
+        <Tooltip key={e.rel_path} content={<span className="mono">{e.rel_path}</span>} side="left">
+          <div className="file-row" onContextMenu={(ev) => openMenu(ev, fileMenu(w, e.rel_path))} onDoubleClick={() => openInEditor(w, e.rel_path)}>
+            <File className="icon" />
+            <span className="file-name">{e.name}</span>
+            <span className="file-age">{ago(e.modified_ms)}</span>
+          </div>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
+function FileTree({ w }: { w: Worktree }) {
   const [selected, setSelected] = useState<string>("");
   const [dirs, setDirs] = useState<Record<string, FsEntry[]>>({});
   const [openDirs, setOpenDirs] = useState<Set<string>>(new Set([""]));
@@ -202,23 +241,20 @@ function FilesSection({ w }: { w: Worktree }) {
     setOpenDirs(next);
   };
   const render = (rel: string, depth: number): React.ReactNode =>
-    sortEntries(dirs[rel] ?? [], sort).map((e) => (
+    (dirs[rel] ?? []).map((e) => (
       <div key={e.rel_path}>
-        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && rpc("open_external", { worktree_id: w.id, rel_path: e.rel_path, target: "editor" }).catch(failQuietly("open_external"))}>
+        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 8 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && openInEditor(w, e.rel_path)}>
           {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />}
           <span className="file-name">{e.name}</span>
-          {e.modified_ms > 0 && <span className="file-age">{ago(e.modified_ms)}</span>}
         </div>
         {e.is_dir && openDirs.has(e.rel_path) && render(e.rel_path, depth + 1)}
       </div>
     ));
   return (
-    <InspectorSection id="files" className="side-files" control={<button className="link" title={sort === "recent" ? "Sorted by change time. Click to sort by name." : "Sorted by name. Click to sort by change time."} onClick={() => setSort(sort === "recent" ? "name" : "recent")}>{sort}</button>}>
-      <div className="file-tree">
-        <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")} onContextMenu={(ev) => { setSelected(""); openMenu(ev, fileMenu(w, "")); }}><Folder className="icon" /> {w.name}/</div>
-        {render("", 1)}
-      </div>
-    </InspectorSection>
+    <div className="file-tree">
+      <div className={`file-row${selected === "" ? " file-selected" : ""}`} onClick={() => setSelected("")} onContextMenu={(ev) => { setSelected(""); openMenu(ev, fileMenu(w, "")); }}><Folder className="icon" /> {w.name}/</div>
+      {render("", 1)}
+    </div>
   );
 }
 
