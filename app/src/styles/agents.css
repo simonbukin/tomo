@@ -1,15 +1,15 @@
 /* Agents: one roster of where the agents are. Presence, not orchestration. */
 
-.agents { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); font-size: var(--fs-1); }
-.agents-bar { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); min-height: 26px; }
+.agents { flex: 1; overflow-y: auto; padding: 0 0 var(--sp-5); font-size: var(--fs-1); }
+.agents-bar { display: flex; align-items: center; gap: var(--sp-3); height: var(--u); padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); }
 .agents-title { color: var(--fg-2); }
-.agents-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-.agents-head, .agents-row { display: grid; grid-template-columns: 14px 120px 110px minmax(0, 1fr) 80px; align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); }
-.agents-head { height: 22px; font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); border-bottom: 1px solid var(--line); }
+.agents-list { display: flex; flex-direction: column; }
+.agents-head, .agents-row { display: grid; grid-template-columns: 14px 120px 110px minmax(0, 1fr) 80px; align-items: center; column-gap: var(--sp-3); height: var(--u); padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); }
+.agents-head { font-size: var(--fs-0); color: var(--fg-3); }
 .agents-head > :last-child { text-align: right; }
-.agents-row { height: 30px; border-bottom: 1px solid var(--line); color: var(--fg-1); cursor: pointer; transition: background-color var(--dur-fast) ease-out; }
+.agents-row { color: var(--fg-1); cursor: pointer; transition: background-color var(--dur-fast) var(--ease-out); }
 .agents-row:hover { background: var(--bg-1); }
 .agents-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agents-kind { display: inline-flex; align-items: center; gap: 5px; color: var(--fg); font-weight: 500; }
-.agents-where { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
-.agents-elapsed { text-align: right; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.agents-where { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); }
+.agents-elapsed { text-align: right; color: var(--fg-2); font-family: var(--mono); font-variant-numeric: tabular-nums; }

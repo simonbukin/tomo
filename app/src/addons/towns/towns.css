@@ -12,7 +12,8 @@
 .towns-map svg { width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .towns-map svg.map-dragging { cursor: grabbing; }
 .map-land { fill: var(--bg-2); stroke: var(--line-strong); stroke-width: 1px; vector-effect: non-scaling-stroke; }
-.map-controls { position: absolute; top: var(--sp-4); right: var(--sp-4); display: flex; flex-direction: column; gap: 2px; background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
+.map-controls { position: absolute; top: var(--inset); right: var(--inset); display: flex; flex-direction: column; gap: 0; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+.map-controls .btn-icon { width: var(--u); height: var(--u); }
 .town-dot { fill: currentColor; opacity: 0.28; cursor: default; }
 .town-dot:hover { opacity: 0.7; }
 .town-hit { fill: transparent; stroke: none; pointer-events: all; }
@@ -32,25 +33,26 @@
 .town-card-title strong { font-weight: 500; }
 .town-card .link, .town-card .btn-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
 .town-card .link svg, .town-card .btn-link svg { width: 12px; height: 12px; flex: none; }
-.towns-list { border-left: 1px solid var(--line); padding: var(--sp-2) var(--sp-4) var(--sp-5); overflow-y: auto; }
-.rarity-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-3); font-size: var(--fs-1); }
+.towns-list { box-shadow: inset 1px 0 0 var(--line); padding: 0 0 var(--sp-5); overflow-y: auto; }
+.towns-list .section-label { padding: 0 var(--inset); }
+.rarity-row { display: flex; align-items: center; gap: var(--sp-3); height: var(--u); padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); font-family: var(--mono); font-size: var(--fs-1); }
 .rarity-count { display: inline-flex; align-items: center; gap: 5px; }
-.towns-empty { padding: var(--sp-4) 0; }
-.town-row { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: var(--sp-2); align-items: start; padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
+.towns-empty { padding: var(--sp-4) var(--inset); }
+.town-row { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: var(--sp-2); align-items: start; padding: var(--sp-2) var(--inset); box-shadow: inset 0 -1px 0 var(--line); }
 .town-row .rarity-dot { margin-top: 6px; }
 .town-main { min-width: 0; font-size: var(--fs-1); }
 .town-name { font-size: var(--fs-2); color: var(--fg); }
-.towns-note { margin-top: var(--sp-3); }
-.town-suggest { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); font-size: var(--fs-1); }
+.towns-note { margin: var(--sp-3) var(--inset) 0; }
+.town-suggest { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--u); margin: var(--sp-3) var(--inset) 0; padding: 0 var(--inset); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--fs-1); }
 .town-suggest .link, .town-suggest .btn-link { margin-left: auto; }
 
 /* ---- selection and history detail */
 .town-unlocked { cursor: pointer; }
 .town-selected .town-ring { opacity: 0.5; stroke: currentColor; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-.town-row { cursor: default; margin: 0 calc(var(--sp-2) * -1); padding-left: var(--sp-2); padding-right: var(--sp-2); border-radius: var(--radius-sm); }
+.town-row { cursor: default; }
 .town-row:hover { background: var(--bg-1); }
-.town-row-selected, .town-row-selected:hover { background: var(--accent-soft); }
-.town-detail { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-2) 0 var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg-1); font-size: var(--fs-1); }
+.town-row-selected, .town-row-selected:hover { background: var(--surface-3); }
+.town-detail { display: flex; flex-direction: column; gap: var(--sp-1); margin: 0; padding: var(--sp-2) var(--inset) var(--sp-3); box-shadow: inset 0 -1px 0 var(--line); background: var(--bg-1); font-size: var(--fs-1); }
 .town-detail-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); }
 .town-detail-head strong { font-weight: 600; }
 .town-detail-close { margin-left: auto; }

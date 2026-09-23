@@ -1,16 +1,16 @@
 /* Apps: what is running, across every worktree. Core draws it; an addon finds it. */
 
-.apps { flex: 1; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); font-size: var(--fs-1); }
-.apps-bar { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); min-height: 26px; }
+.apps { flex: 1; overflow-y: auto; padding: 0 0 var(--sp-5); font-size: var(--fs-1); }
+.apps-bar { display: flex; align-items: center; gap: var(--sp-3); height: var(--u); padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); }
 .apps-title { color: var(--fg-2); }
-.apps-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-.apps-head, .apps-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1.2fr) 110px minmax(0, 150px); align-items: center; column-gap: var(--sp-3); padding: 0 var(--sp-2); }
-.apps-head { height: 22px; font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); border-bottom: 1px solid var(--line); }
-.apps-row { height: 30px; border-bottom: 1px solid var(--line); color: var(--fg-1); transition: background-color var(--dur-fast) ease-out; }
+.apps-list { display: flex; flex-direction: column; }
+.apps-head, .apps-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1.2fr) 110px minmax(0, 150px); align-items: center; column-gap: var(--sp-3); height: var(--u); padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); }
+.apps-head { font-size: var(--fs-0); color: var(--fg-3); }
+.apps-row { color: var(--fg-1); transition: background-color var(--dur-fast) var(--ease-out); }
 .apps-row:hover { background: var(--bg-1); }
 .apps-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .apps-name { color: var(--fg); font-weight: 500; }
 .apps-name .faint { font-weight: 400; }
-.apps-where { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
-.apps-address { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.apps-where { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); }
+.apps-address { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); font-variant-numeric: tabular-nums; }
 .apps-actions { display: inline-flex; gap: var(--sp-3); justify-content: flex-end; }
