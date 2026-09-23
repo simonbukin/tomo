@@ -438,16 +438,17 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
   (`.rail-marker`), over the icon, so the rail stays one straight column
   of icons. A click opens the inspector at that section (`rightSection` in
   UI state).
-- The Files section lists one directory at a time, newest first. The daemon
-  call `fs_list` gives `modified_ms` for each entry, and the client sorts.
-  Each row shows a short age (`now`, `12m`, `3h`, `2d`) at the right. The
-  link in the heading changes the sort: `recent` (the default) or `name`,
-  which is the daemon order, directories first and then name. The sort does
-  not persist. A click on a directory opens it in place, a double click on a
-  file opens the editor, and a right click gives the file menu: open in
-  editor, reveal in finder, copy path, copy relative path (`fileMenu` in
-  `menus.ts`). The read is one directory deep, with no watcher, so a new
-  file appears when the section loads that directory again.
+- The Files section has two views. The link in the heading changes the
+  view, and the view does not persist. `recent` (the default) is a flat list
+  of the 50 newest files, from the daemon call `fs_recent`. That call reads
+  `git ls-files`, so it skips the files that `.gitignore` excludes. Each row
+  shows the file name and a short age (`now`, `12m`, `3h`, `2d`). A hover
+  shows the full path. The list loads again every 10 seconds. `tree` reads
+  one directory at a time with `fs_list`, in the daemon order: directories
+  first, then name. A click on a directory opens it in place. In both views,
+  a double click on a file opens the editor, and a right click gives the
+  file menu: open in editor, reveal in finder, copy path, copy relative path
+  (`fileMenu` in `menus.ts`).
 - The rail and the open inspector read one table of id, label, and icon in
   `app/src/sections.tsx`. `SectionLabel` draws each inspector heading: the
   icon, the lowercase label, then the control of the section (`refresh`,

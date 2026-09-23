@@ -296,6 +296,12 @@ pub enum Call {
         worktree_id: Id,
         rel_path: String,
     },
+    /// The files that Git tracks or would track in a worktree, newest change first.
+    FsRecent {
+        worktree_id: Id,
+        #[serde(default)]
+        limit: Option<usize>,
+    },
     OpenExternal {
         worktree_id: Id,
         rel_path: String,

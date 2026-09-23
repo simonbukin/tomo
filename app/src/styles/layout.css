@@ -77,7 +77,6 @@
 .side-section { padding: var(--sp-2) var(--sp-3) var(--sp-3); border-bottom: 1px solid var(--line); }
 .side-section .section-label { gap: var(--sp-1); }
 .side-section .section-label .icon { flex: none; width: 12px; height: 12px; color: var(--fg-3); }
-.side-section .section-label .link, .side-section .section-label .btn-link { margin-left: auto; }
 .kv { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: center; column-gap: var(--sp-2); min-height: 24px; font-size: var(--fs-1); }
 .kv label { color: var(--fg-2); font-size: var(--fs-1); }
 .kv input { padding: 2px 7px; font-size: var(--fs-1); }
@@ -85,13 +84,17 @@
 .kv .mono { font-size: var(--fs-0); }
 .kv .ins, .kv .del { margin-right: var(--sp-2); }
 .proc-list { margin-top: var(--sp-2); font-size: var(--fs-1); font-family: var(--mono); }
-.proc-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 58px auto; align-items: center; column-gap: var(--sp-2); height: 22px; }
+.proc-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px 58px 24px; align-items: center; column-gap: var(--sp-2); height: 22px; }
+.proc-head { height: 20px; color: var(--fg-3); font-family: var(--font-ui); font-size: var(--fs-0); border-bottom: 1px solid var(--line); }
+.proc-head .num { color: inherit; }
+.proc-row .link { justify-self: end; }
 .proc-row .num { text-align: right; color: var(--fg-2); font-variant-numeric: tabular-nums; }
 .proc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-files { flex: 1; display: flex; flex-direction: column; min-height: 200px; border-bottom: none; }
 
-.section-fold { display: inline-flex; align-items: center; gap: var(--sp-1); flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
-.section-fold .chevron { width: 12px; height: 12px; flex: none; color: var(--fg-3); }
+.section-fold { display: inline-flex; align-items: center; justify-content: flex-start; gap: var(--sp-1); flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.side-section .section-label .chevron { transform: rotate(-90deg); transition: transform var(--dur-open) var(--ease-out); }
+.side-section .section-label .chevron[data-open="true"] { transform: none; }
 .collapsible-panel { overflow: hidden; }
 
 .proc-total { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--sp-3); align-items: baseline; font-size: var(--fs-1); }

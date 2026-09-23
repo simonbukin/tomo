@@ -36,6 +36,7 @@ fn is_slow(call: &Call) -> bool {
                 | Call::WorktreeRestore { .. }
                 | Call::GitSummary { .. }
                 | Call::BranchList { .. }
+                | Call::FsRecent { .. }
                 | Call::SystemStats
         )
 }

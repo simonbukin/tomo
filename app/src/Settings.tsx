@@ -1,7 +1,7 @@
 import { addonSummaries } from "./addons";
 import { configIssueSchema, integrationStatusSchema, statusSchema } from "./schemas";
 import { z } from "zod";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { allActions, applyZoom } from "./actions";
 import { rpc, rpcParsed } from "./api";
@@ -9,7 +9,7 @@ import { openConfigFile, setConfig } from "./commands/settings";
 import { Button, IconButton, Select } from "./components/ui";
 import { describeBinding } from "./keys";
 import { bindingFromEvent, SETTINGS_SECTIONS, splitList, type SettingsSection } from "./settingsModel";
-import { failToast, setState, showStatus, toast, useStore } from "./store";
+import { failToast, getState, setState, setUi, showStatus, toast, useStore } from "./store";
 import { ACCENT_PRESETS, BASE_THEMES, THEME_LABELS, TOKENS, useResolvedTheme, type AccentPreset, type ThemeName, type Token } from "./theme";
 import type { Config, ConfigIssue, IntegrationStatus } from "./types";
 
@@ -70,6 +70,9 @@ function ConfigFile({ config }: { config: Config | null }) {
       <Button size="sm" onClick={openConfigFile}>
         open file
       </Button>
+      <IconButton label="Close settings" onClick={() => setUi({ view: getState().ui.activeWorktreeId ? "worktree" : "home" })}>
+        <X className="icon" />
+      </IconButton>
     </div>
   );
 }

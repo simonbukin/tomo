@@ -1706,6 +1706,29 @@ impl Daemon {
         ok(entries)
     }
 
+    async fn fs_recent(self: &Arc<Self>, worktree_id: Id, limit: Option<usize>) -> Result<Value, RpcError> {
+        let root = self.lock().worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
+        let files = git::files(&root).await.map_err(|e| err(ErrorCode::Io, e.to_string()))?;
+        let limit = limit.unwrap_or(50);
+        let entries = tokio::task::spawn_blocking(move || {
+            let mut entries: Vec<FsEntry> = files
+                .into_iter()
+                .filter_map(|rel| {
+                    let meta = std::fs::metadata(root.join(&rel)).ok().filter(|m| m.is_file())?;
+                    let modified_ms = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as u64;
+                    let name = rel.rsplit('/').next().unwrap_or(&rel).to_owned();
+                    Some(FsEntry { is_dir: false, size: meta.len(), modified_ms, name, rel_path: rel })
+                })
+                .collect();
+            entries.sort_by_key(|e| std::cmp::Reverse(e.modified_ms));
+            entries.truncate(limit);
+            entries
+        })
+        .await
+        .map_err(|e| err(ErrorCode::Io, e.to_string()))?;
+        ok(entries)
+    }
+
     async fn notify(self: &Arc<Self>, pane_id: Option<Id>, worktree_id: Option<Id>, level: AttentionLevel, message: String) -> Result<Value, RpcError> {
         let message = message.trim().to_string();
         if message.is_empty() {
@@ -2338,6 +2361,7 @@ impl Daemon {
                 ok(git::list_branches(&repo_path, limit.unwrap_or(git::BRANCH_LIMIT)).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?)
             }
             Call::FsList { worktree_id, rel_path } => self.fs_list(worktree_id, rel_path).await,
+            Call::FsRecent { worktree_id, limit } => self.fs_recent(worktree_id, limit).await,
             Call::OpenExternal { worktree_id, rel_path, target } => self.open_external(worktree_id, rel_path, target).await,
             Call::OpenLocation { path, line, col } => self.open_location(path, line, col).await,
             Call::SessionList { worktree_id, limit } => {
