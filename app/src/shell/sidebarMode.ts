@@ -3,7 +3,7 @@ import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../uiState";
 
 export type Side = "left" | "right";
 
-export const RAIL_WIDTH = 48;
+export const RAIL_WIDTH = 28;
 export const MIDDLE_MIN_WIDTH = 400;
 export const SNAP_CLOSED_BELOW = RAIL_WIDTH / 2;
 export const SNAP_MINIMAL_BELOW = (RAIL_WIDTH + SIDEBAR_MIN_WIDTH) / 2;

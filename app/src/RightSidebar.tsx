@@ -9,6 +9,7 @@ import { fileMenu } from "./menus";
 import { parseTags, setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { useFlip } from "./useFlip";
+import { InspectorHead } from "./shell/TopStrip";
 import { InspectorSection } from "./sections";
 import {failQuietly, failToast, formatBytes, useStore} from "./store";
 import { gitDetails, inspectorSections } from "./addons";
@@ -23,12 +24,15 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
   }, [section]);
   return (
     <aside className="rightbar" ref={ref}>
-      <MetadataSection w={worktree} />
-      <GitSection w={worktree} />
-      {inspectorSections().map(({ id, component: Section }) => <Section key={id} worktree={worktree} />)}
-      <ProcessSection w={worktree} />
-      <SessionsSection w={worktree} />
-      <FilesSection w={worktree} />
+      <InspectorHead />
+      <div className="rightbar-scroll">
+        <MetadataSection w={worktree} />
+        <GitSection w={worktree} />
+        {inspectorSections().map(({ id, component: Section }) => <Section key={id} worktree={worktree} />)}
+        <ProcessSection w={worktree} />
+        <SessionsSection w={worktree} />
+        <FilesSection w={worktree} />
+      </div>
     </aside>
   );
 }

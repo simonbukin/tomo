@@ -47,12 +47,12 @@ export function LeftRail() {
   const current = (v: State["ui"]["view"]) => (view === v ? "page" : undefined);
   return (
     <nav className="rail rail-left" aria-label="Sidebar">
+      <div className="column-head rail-head" data-tauri-drag-region />
       <IconButton label="Home" shortcut={shortcut("home")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("home")} onClick={() => setUi({ view: "home" })}>
         <House className="icon" />
       </IconButton>
       <IconButton label={count ? `Activity, ${count} need you` : "Activity"} shortcut={shortcut("activity")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("activity")} onClick={() => setUi({ view: "activity" })}>
         <History className="icon" />
-        {count > 0 && <span className="rail-count" aria-hidden>{count}</span>}
       </IconButton>
       <IconButton label="Agents" shortcut={shortcut("agents")} tooltipSide="right" tooltipDelay={0} className="rail-btn" aria-current={current("agents")} onClick={() => setUi({ view: "agents" })}>
         <Bot className="icon" />

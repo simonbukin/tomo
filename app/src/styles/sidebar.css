@@ -4,54 +4,55 @@
  */
 
 .sidebar { grid-area: left; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--line); overflow: hidden; }
-.sidebar-scroll { overflow-y: auto; flex: 1; padding: var(--sp-1) 0 var(--sp-5); }
-.sidebar-empty { padding: var(--sp-4); color: var(--fg-2); line-height: 1.6; font-size: var(--fs-1); }
-.selection-bar { display: flex; align-items: center; gap: var(--sp-2); height: 26px; padding: 0 var(--sp-3); margin: 0 0 var(--sp-1); font-size: var(--fs-1); color: var(--accent); background: var(--accent-soft); }
+.sidebar-scroll { overflow-y: auto; flex: 1; }
+.sidebar-empty { padding: var(--sp-3) var(--inset); color: var(--fg-2); line-height: 20px; font-size: var(--fs-2); }
+.selection-bar { display: flex; align-items: center; gap: var(--inset); height: var(--u); padding: 0 var(--inset); font-size: var(--fs-2); color: var(--bg); background: var(--fg); }
+.selection-bar .link { color: inherit; }
 
 /* ---- destinations: one row per place, above the worktree tree */
-.side-nav { display: flex; flex-direction: column; flex: none; padding: var(--sp-1); }
-.side-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); height: 26px; padding: 0 var(--sp-2); border-radius: var(--radius); background: none; color: var(--fg-1); font-size: var(--fs-1); text-align: left; }
-.side-row:hover { background: var(--bg-1); color: var(--fg); }
-.side-row[aria-current] { background: var(--accent-soft); color: var(--accent); }
+.side-nav { display: flex; flex-direction: column; flex: none; box-shadow: inset 0 -1px 0 var(--line); }
+.side-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: var(--inset); height: var(--u); padding: 0 var(--inset); background: none; color: var(--fg); font-size: var(--fs-2); font-weight: 500; text-align: left; justify-content: stretch; }
+.side-row:hover { background: var(--bg-2); color: var(--fg); }
+.side-row[aria-current] { background: var(--fg); color: var(--bg); }
 .side-row .icon { width: 14px; height: 14px; }
-.side-row-count { font-variant-numeric: tabular-nums; font-size: var(--fs-0); color: var(--fg-3); }
-.side-row[aria-current] .side-row-count { color: var(--accent); }
-.side-lens { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-1); font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); }
-.side-lens-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.side-row-count { font-family: var(--mono); font-weight: 400; font-variant-numeric: tabular-nums; font-size: var(--fs-1); color: var(--fg-3); }
+.side-row[aria-current] .side-row-count { color: inherit; }
+.side-lens { display: flex; align-items: center; height: var(--u); padding-left: var(--inset); font-size: var(--fs-2); font-weight: 700; color: var(--fg); background: var(--bg-1); box-shadow: inset 0 -1px 0 var(--line); flex: none; }
+.side-lens::first-letter { text-transform: uppercase; }
+.side-lens-actions { display: inline-flex; align-items: stretch; margin-left: auto; height: 100%; }
 
-.repo-group { padding: var(--sp-1) 0; }
-.repo-head { padding: 0 var(--sp-1) 0 var(--sp-2); cursor: default; }
+.repo-group { }
+.repo-head { height: var(--u); gap: 10px; padding: 0 0 0 var(--inset); cursor: default; box-shadow: inset 0 -1px 0 var(--line); font-weight: 400; }
+.repo-head:hover { background: var(--bg-2); }
 .repo-head .btn-icon { visibility: hidden; margin-left: auto; }
 .repo-head:hover .btn-icon, .repo-head:focus-within .btn-icon { visibility: visible; }
 .repo-toggle { display: inline-flex; align-items: center; color: var(--fg-3); }
 .repo-toggle .chevron { width: 12px; height: 12px; }
-.repo-name { color: var(--fg-2); font-weight: 500; }
-.repo-head:hover .repo-name { color: var(--fg-1); }
-.repo-avatar { border-radius: var(--radius-sm); flex: none; }
+.repo-name { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); }
+.repo-head:hover .repo-name { color: var(--fg); }
+.repo-head .faint { font-family: var(--mono); font-size: var(--fs-1); }
+.repo-avatar { flex: none; }
 
 /* The layout of a worktree row lives in app/src/WorktreeRow.css. What stays
    here is what another component also uses, or what the row shares with the rails. */
-.tag { color: var(--fg-3); font-size: var(--fs-0); }
+.tag { color: var(--fg-3); font-family: var(--mono); font-size: var(--fs-1); }
 
 /* ---- main worktree and manual order */
 .wt-main-star { width: 10px; height: 10px; flex: none; color: var(--fg-2); fill: currentColor; margin-left: 5px; vertical-align: -1px; }
 .signal-waiting-note { color: var(--waiting); font-size: var(--fs-0); }
-.repo-group.is-dragging { position: relative; z-index: 2; background: var(--bg-1); box-shadow: var(--shadow-pop); border-radius: var(--radius-sm); cursor: grabbing; }
+.repo-group.is-dragging { position: relative; z-index: 2; background: var(--bg-2); box-shadow: var(--shadow-pop); cursor: grabbing; }
 .wt-row[aria-roledescription="sortable"]:focus-visible, .repo-head[aria-roledescription="sortable"]:focus-visible { outline-offset: -2px; }
 
-/* ---- minimal rails: left navigation and right inspector */
-.rail { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: var(--sp-1) 0; background: var(--bg); overflow: hidden; }
+/* ---- minimal rails: one column of unit squares. Details live in each square's tooltip. */
+.rail { display: flex; flex-direction: column; align-items: stretch; min-width: 0; background: var(--bg); overflow: hidden; }
 .rail-left { grid-area: left; border-right: 1px solid var(--line); }
 .rail-right { grid-area: right; border-left: 1px solid var(--line); }
-/* A rail item spans the rail, so its edge is the rail edge and a tooltip sits against it. */
-.rail-btn.btn-icon { width: 100%; height: 28px; flex: none; }
-.rail-btn[aria-current] { background: var(--accent-soft); color: var(--accent); }
-.rail-count { position: absolute; top: -1px; right: -2px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--waiting-soft); color: var(--waiting); font-family: var(--mono); font-size: 9px; line-height: 13px; text-align: center; pointer-events: none; }
-.rail-btn .rail-marker { position: absolute; top: 1px; right: 2px; font-family: var(--mono); font-size: 9px; line-height: 1; pointer-events: none; }
-.rail-sep { flex: none; width: 20px; height: 1px; margin: var(--sp-1) 0; background: var(--line); }
-.rail-scroll { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-top: 2px; }
-.rail-wt { position: relative; flex: none; width: 100%; height: 28px; padding: 0; background: none; border-radius: var(--radius); font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
-.rail-wt:hover { background: var(--bg-1); color: var(--fg); }
-.rail-wt[aria-current] { background: var(--accent-soft); color: var(--accent); }
-.rail-wt[aria-current]::after { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 1px 1px 0; background: var(--accent); }
+.rail-btn.btn-icon { width: 100%; height: var(--u); flex: none; }
+.rail-btn[aria-current] { background: var(--fg); color: var(--bg); }
+.rail-sep { flex: none; height: 0; box-shadow: 0 0 0 0.5px var(--line); }
+.rail-scroll { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; box-shadow: inset 0 1px 0 var(--line); }
+.rail-wt { position: relative; flex: none; width: 100%; height: var(--u); padding: 0; background: none; color: var(--fg-2); }
+.rail-wt:hover { background: var(--bg-2); color: var(--fg); }
+.rail-wt[aria-current] { background: var(--fg); color: var(--bg); }
 .rail-wt .state { width: 8px; height: 8px; }
+.rail-wt[aria-current] .state-none, .rail-wt[aria-current] .state-idle { box-shadow: inset 0 0 0 1px var(--bg); }

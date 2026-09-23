@@ -12,6 +12,7 @@ import { RowError } from "./RowError";
 import { Signals } from "./Signals";
 import { agentStatus, dotClass, tintClass } from "./glyphs";
 import { useFlip } from "./useFlip";
+import { SidebarHead } from "./shell/TopStrip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
@@ -87,6 +88,7 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
+      <SidebarHead />
       <nav className="side-nav" aria-label="Views">
         <Destination id="home" label="home" icon={House} current={ui.view === "home"} shortcut={shortcut("home")} />
         <Destination id="activity" label="activity" icon={History} count={needCount} current={ui.view === "activity"} shortcut={shortcut("activity")} />

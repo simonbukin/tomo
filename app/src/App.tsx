@@ -34,7 +34,7 @@ import { ResizeHandle } from "./shell/ResizeHandle";
 import { RightRail } from "./shell/RightRail";
 import { shellLayout } from "./shell/sidebarMode";
 import { ToastDock } from "./shell/ToastDock";
-import { TopStrip } from "./shell/TopStrip";
+import { CenterHead } from "./shell/TopStrip";
 import { ShellLoading } from "./states";
 import { useWindowChrome, useWindowWidth } from "./windowChrome";
 
@@ -140,11 +140,11 @@ function Shell() {
   const CoreCenter = CORE_CENTER[ui.view];
   const layout = shellLayout(ui, windowWidth, !!showWorktree);
   return (
-    <div className="app" style={{ ["--left-col" as string]: `${layout.leftCol}px`, ["--right-col" as string]: `${layout.rightCol}px` }}>
-      <TopStrip worktree={showWorktree ? worktree : null} layout={layout} />
+    <div className="app" data-left={layout.left} data-right={layout.right} style={{ ["--left-col" as string]: `${layout.leftCol}px`, ["--right-col" as string]: `${layout.rightCol}px` }}>
       {layout.left === "open" && <Sidebar />}
       {layout.left === "minimal" && <LeftRail />}
       <main className="center">
+        <CenterHead worktree={showWorktree ? worktree : null} layout={layout} />
         {!loaded && <ShellLoading connected={connected} />}
         {loaded && !showWorktree && addonView && (
           <Suspense fallback={<addonView.fallback />}>

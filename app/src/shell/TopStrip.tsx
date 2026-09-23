@@ -9,8 +9,8 @@ import type { SidebarMode, Worktree } from "../types";
 import { WorktreeHeader } from "../WorktreeHeader";
 import type { ShellLayout, Side } from "./sidebarMode";
 
-const VIEW_TITLE: Record<string, string> = { home: "home", activity: "activity", agents: "agents", apps: "apps", settings: "settings", worktree: "worktree" };
-const viewTitle = (view: string) => VIEW_TITLE[view] ?? addonViews().find((v) => v.id === view)?.title ?? "home";
+const VIEW_TITLE: Record<string, string> = { home: "Home", activity: "Activity", agents: "Agents", apps: "Apps", settings: "Settings", worktree: "Worktree" };
+const viewTitle = (view: string) => VIEW_TITLE[view] ?? addonViews().find((v) => v.id === view)?.title ?? "Home";
 
 const TOGGLE_ICON: Record<Side, Record<SidebarMode, LucideIcon>> = {
   left: { open: PanelLeft, minimal: PanelLeftDashed, closed: PanelLeftOpen },
@@ -28,32 +28,41 @@ export function SidebarToggle({ side, mode }: { side: Side; mode: SidebarMode })
   );
 }
 
-/** Traffic-light safe area, the Tomo mark, and the left sidebar control. Its width never drops under the safe area. */
-export function TopLeft({ mode }: { mode: SidebarMode }) {
+/** The open sidebar's head row: the traffic-light space, the Tomo mark, and the sidebar control. */
+export function SidebarHead() {
   const shortcut = useShortcuts();
   return (
-    <div className="top-left" data-mode={mode} data-tauri-drag-region>
+    <div className="column-head side-head" data-tauri-drag-region>
       <button type="button" className="top-brand" aria-label="Home" title={shortcut("home") ? `Home · ${shortcut("home")}` : "Home"} onClick={() => runAction("home")}>
         <Mark size={15} />
         <Wordmark height={13} />
       </button>
-      <SidebarToggle side="left" mode={mode} />
+      <SidebarToggle side="left" mode="open" />
     </div>
   );
 }
 
-/** The fixed top strip: three regions on the shell columns. Empty space drags the window. */
-export function TopStrip({ worktree, layout }: { worktree: Worktree | null; layout: ShellLayout }) {
+/**
+ * The center column's head row: the worktree identity, or the view title. When the sidebar is a rail
+ * or closed, the row starts past the traffic lights and carries the sidebar control.
+ */
+export function CenterHead({ worktree, layout }: { worktree: Worktree | null; layout: ShellLayout }) {
   const view = useStore((s) => s.ui.view);
   return (
-    <header className="topbar" data-tauri-drag-region>
-      <TopLeft mode={layout.left} />
-      <div className="top-middle" data-tauri-drag-region>
-        {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="top-title" data-tauri-drag-region>{viewTitle(view)}</span>}
-      </div>
-      <div className="top-right" data-tauri-drag-region>
-        {worktree && <SidebarToggle side="right" mode={layout.right} />}
-      </div>
+    <header className="column-head center-head" data-left={layout.left} data-tauri-drag-region>
+      {layout.left !== "open" && <SidebarToggle side="left" mode={layout.left} />}
+      {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="center-title" data-tauri-drag-region>{viewTitle(view)}</span>}
+      {worktree && layout.right === "closed" && <SidebarToggle side="right" mode="closed" />}
     </header>
+  );
+}
+
+/** The open inspector's head row. */
+export function InspectorHead() {
+  return (
+    <div className="column-head inspector-head" data-tauri-drag-region>
+      <span className="inspector-title mono" data-tauri-drag-region>inspector</span>
+      <SidebarToggle side="right" mode="open" />
+    </div>
   );
 }
