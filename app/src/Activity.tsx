@@ -13,6 +13,7 @@ import { ProcessIcon } from "./ProcessIcon";
 import { EmptyState } from "./states";
 import { setState, useStore } from "./store";
 import { KIND_LABEL, type ActivityEvent } from "./types";
+import { useGlide } from "./glide";
 
 const PAGE = 200;
 
@@ -29,6 +30,7 @@ export function fetchActivity(beforeMs: number | null): Promise<number> {
 }
 
 export function Activity() {
+  const segments = useGlide<HTMLSpanElement>(".seg-active");
   const activity = useStore((s) => s.activity);
   const openIds = useStore((s) => s.attention.filter((a) => needsMeItem(a, Object.values(s.agents))).map((a) => a.id));
   const [filter, setFilter] = useState<Filter>("all");
@@ -50,7 +52,8 @@ export function Activity() {
   return (
     <div className="activity">
       <div className="activity-bar">
-        <span className="segmented">
+        <span className="segmented" ref={segments}>
+          <span className="glide" aria-hidden />
           {filters.map((f) => (
             <button key={f.id} className={`seg${filter === f.id ? " seg-active" : ""}`} onClick={() => setFilter(f.id)}>{f.label}</button>
           ))}

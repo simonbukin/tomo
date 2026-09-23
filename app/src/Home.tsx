@@ -22,6 +22,7 @@ import { RepoAvatar } from "./Sidebar";
 import { summarizeState } from "./Sidebar";
 import { tagPrefill } from "./lenses";
 import type { Filter, FilterKind, HomeOptions, Worktree, WorktreePrefill } from "./types";
+import { useGlide } from "./glide";
 
 const SCOPE_EVENTS = 8;
 
@@ -37,6 +38,7 @@ const LENS_TABS: readonly { group: HomeOptions["group"]; label: string }[] = [
 const KIND_LABEL: Record<FilterKind, string> = { repo: "repo", tag: "tag", agent: "agent", archived: "archived", attention: "attention" };
 
 export function Home() {
+  const lenses = useGlide<HTMLSpanElement>(".seg-active");
   const s = useStore((x) => x);
   const o = s.ui.home;
   const set = (patch: Partial<HomeOptions>) => setUi({ home: { ...o, ...patch } });
@@ -127,7 +129,8 @@ export function Home() {
         <span className="faint">{visible.length} of {s.worktrees.length}</span>
       </div>
       <div className="home-lenses">
-        <span className="segmented">
+        <span className="segmented" ref={lenses}>
+          <span className="glide" aria-hidden />
           {LENS_TABS.map((t) => (
             <button key={t.group} className={`seg${o.group === t.group ? " seg-active" : ""}`} onClick={() => set({ group: t.group })}>{t.label}</button>
           ))}

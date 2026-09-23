@@ -51,3 +51,11 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .row-error { background: none; border: none; padding: 0 4px; font-size: var(--fs-0); color: var(--danger); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .row-error:hover { background: var(--danger-soft); }
 
+
+/* ---- the selection block: one inverted cell that glides to the selected item */
+.tabbar, .side-nav, .segmented { position: relative; }
+.glide { position: absolute; left: 0; top: 0; z-index: 0; width: 0; height: 0; background: var(--fg); pointer-events: none; opacity: 0; }
+.glide[data-ready] { transition: transform var(--dur-open) var(--ease-out), width var(--dur-open) var(--ease-out), height var(--dur-open) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+.tabbar > .tab, .side-nav > .side-row, .segmented > .seg { position: relative; z-index: 1; }
+.tabbar > .tab-active, .tabbar > .tab-active:hover, .side-nav > .side-row[aria-current], .side-nav > .side-row[aria-current]:hover, .segmented > .seg-active, .segmented > .seg-active:hover { background: transparent; }
+.tabbar > .tab-active { transition: color var(--dur-open) var(--ease-out); }
