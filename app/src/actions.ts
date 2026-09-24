@@ -6,7 +6,7 @@ import { stepZoom, type Appearance } from "./appearance";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { RpcFailure, rpc, rpcParsed } from "./api";
 import { openInBrowser } from "./browser/browser";
-import {activeTab, agentsOf, clearSelection, errorText, failQuietly, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, toast} from "./store";
+import {activeTab, agentsOf, clearSelection, errorText, failQuietly, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, splitsAllowed, toast} from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
 
@@ -20,6 +20,8 @@ export interface Action {
   run: () => void | Promise<void>;
   whenWorktree?: boolean;
   when?: () => boolean;
+  /** False when a setting turns the command off. It then leaves the palette, the keys, the menu bar, and the shortcut list. */
+  offered?: () => boolean;
   /** Section in the keyboard shortcut reference and the palette. */
   group?: CommandGroup;
 }
@@ -174,7 +176,7 @@ export async function spawnAgent(kind: AgentKind, worktreeId?: Id, opts: SpawnOp
     toast({ level: "info", title: "Open a worktree first" });
     return;
   }
-  const from = !opts.newTab && w.id === currentWorktree()?.id ? focusedPaneId() : null;
+  const from = !opts.newTab && splitsAllowed(getState()) && w.id === currentWorktree()?.id ? focusedPaneId() : null;
   try {
     const r = await rpcParsed("agent_spawn", spawnResultSchema, { kind, worktree_id: w.id, cwd: null, tab_id: null, split_from: from, resume: opts.resume ?? null, new_tab: !!opts.newTab, extra_args: [] });
     if (w.id !== getState().ui.activeWorktreeId) await openWorktree(w.id);
@@ -489,8 +491,8 @@ export const actions: Action[] = [
   { id: "next_attention", label: "Next attention item", run: nextAttention },
   { id: "prev_worktree", label: "Previous worktree", run: () => cycleWorktree(-1) },
   { id: "next_worktree", label: "Next worktree", run: () => cycleWorktree(1) },
-  { id: "new_terminal", label: "New terminal (split right)", run: () => splitPane("horizontal"), whenWorktree: true },
-  { id: "split_vertical", label: "New terminal (split down)", run: () => splitPane("vertical"), whenWorktree: true },
+  { id: "new_terminal", label: "New terminal (split right)", run: () => splitPane("horizontal"), whenWorktree: true, offered: () => splitsAllowed(getState()) },
+  { id: "split_vertical", label: "New terminal (split down)", run: () => splitPane("vertical"), whenWorktree: true, offered: () => splitsAllowed(getState()) },
   { id: "new_tab", label: "New tab", run: newTab, whenWorktree: true },
   { id: "close_pane", label: "Close pane", run: () => closePane(), whenWorktree: true },
   { id: "zoom_pane", label: "Zoom pane", run: () => toggleZoom(), whenWorktree: true },
@@ -605,8 +607,10 @@ const COMMAND_GROUPS: Record<string, CommandGroup> = {
   sort_manual: "Worktrees",
 };
 
-export function allActions(): Action[] {
-  return [...actions, ...builtins.flatMap((a) => a.commands ?? []), ...moduleCommands()].map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
+export function allActions({ withUnoffered = false } = {}): Action[] {
+  return [...actions, ...builtins.flatMap((a) => a.commands ?? []), ...moduleCommands()]
+    .filter((a) => withUnoffered || !a.offered || a.offered())
+    .map((a) => (a.group ? a : { ...a, group: COMMAND_GROUPS[a.id] }));
 }
 
 export function runAction(id: string): void {

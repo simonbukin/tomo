@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnchoredMenu, Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, MenuItems, Popover, PopoverContent, PopoverTrigger, Select, TooltipProvider, type MenuItem } from "./index";
+import { tidySeparators } from "./menu";
 
 afterEach(cleanup);
 
@@ -17,6 +18,15 @@ function items(run: (label: string) => void): MenuItem[] {
 }
 
 describe("menu", () => {
+  it("drops separators at the ends and in runs", () => {
+    const sep: MenuItem = { separator: true };
+    const a: MenuItem = { label: "a", run: () => {} };
+    const b: MenuItem = { label: "b", run: () => {} };
+    expect(tidySeparators([sep, a, sep, sep, b, sep])).toEqual([a, sep, b]);
+    expect(tidySeparators([sep, sep])).toEqual([]);
+    expect(tidySeparators([a, b])).toEqual([a, b]);
+  });
+
   it("opens from a trigger, runs an item, and closes", async () => {
     const user = userEvent.setup();
     const run = vi.fn();

@@ -200,12 +200,17 @@ function TerminalSection({ config }: { config: Config }) {
       <Row label="shell" note="new terminals use this shell">
         <TextField label="Shell" value={config.shell} onCommit={(v) => setConfig("shell", v.trim() || null)} />
       </Row>
+      <Row label="panes" note="off: one terminal per tab, and no splits or pane drags">
+        <label className="check">
+          <input type="checkbox" checked={config.max_panes_per_tab > 1} onChange={(e) => setConfig("max_panes_per_tab", e.target.checked ? null : 1)} /> split tabs into panes
+        </label>
+      </Row>
     </div>
   );
 }
 
 function KeyboardSection({ config }: { config: Config }) {
-  const labels = Object.fromEntries(allActions().map((a) => [a.id, a.label]));
+  const labels = Object.fromEntries(allActions({ withUnoffered: true }).map((a) => [a.id, a.label]));
   return (
     <div className="settings-keys">
       <div className="settings-note">click a shortcut, then press the new keys. reset returns to the default.</div>

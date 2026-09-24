@@ -4,7 +4,7 @@ import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
 import type { MenuItem } from "./components/ui";
 import { chordFor, effectiveBindings } from "./shortcuts";
-import { activeTab, clearSelection, getState, paneIds, setState, type State } from "./store";
+import { activeTab, clearSelection, getState, paneIds, setState, splitsAllowed, type State } from "./store";
 import type { Id, Pane, Repo, Tab, Worktree } from "./types";
 
 const sep: MenuItem = { separator: true };
@@ -83,10 +83,18 @@ export function overflowMenu(w: Worktree, s: State = getState()): MenuItem[] {
   const multi = tab ? paneIds(tab.layout).length > 1 : false;
   return [
     ...acts,
-    { label: "split right", shortcut: shortcutIn(s, "new_terminal"), run: () => splitPane("horizontal") },
-    { label: "split down", shortcut: shortcutIn(s, "split_vertical"), run: () => splitPane("vertical") },
-    { label: "equalize panes", shortcut: shortcutIn(s, "equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },
-    { label: "rotate split", shortcut: shortcutIn(s, "rotate_split"), disabled: !multi, run: () => rotateSplit(tab!.id) },
+    ...(splitsAllowed(s)
+      ? [
+          { label: "split right", shortcut: shortcutIn(s, "new_terminal"), run: () => splitPane("horizontal") },
+          { label: "split down", shortcut: shortcutIn(s, "split_vertical"), run: () => splitPane("vertical") },
+        ]
+      : []),
+    ...(splitsAllowed(s) || multi
+      ? [
+          { label: "equalize panes", shortcut: shortcutIn(s, "equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },
+          { label: "rotate split", shortcut: shortcutIn(s, "rotate_split"), disabled: !multi, run: () => rotateSplit(tab!.id) },
+        ]
+      : []),
     sep,
     ...worktreeDetailItems(w, s),
   ];
@@ -150,22 +158,29 @@ export function isLastPane(paneId: Id, s: State = getState()): boolean {
   return tabs.length <= 1 && tabs.every((t) => paneIds(t.layout).length <= 1);
 }
 
+const SPAWN_AGENTS = ["claude", "codex", "pi"] as const;
+
 /** New tabs first, then splits of the focused pane in the current tab. */
 export function spawnMenu(worktreeId: Id, s: State = getState()): MenuItem[] {
   const tab = activeTab(s, worktreeId);
   const pane = tab?.active_pane_id ?? null;
-  const agents = ["claude", "codex", "pi"] as const;
   return [
     { label: "terminal", shortcut: shortcutIn(s, "new_tab"), run: () => newTabIn(worktreeId) },
     { label: "browser", shortcut: shortcutIn(s, "new_browser"), run: () => openBrowser(worktreeId) },
-    ...agents.map((kind): MenuItem => ({ label: kind, run: () => spawnAgent(kind, worktreeId, { newTab: true }) })),
+    ...SPAWN_AGENTS.map((kind): MenuItem => ({ label: kind, run: () => spawnAgent(kind, worktreeId, { newTab: true }) })),
+    ...(splitsAllowed(s) ? splitItems(s, worktreeId, tab, pane) : []),
+  ];
+}
+
+function splitItems(s: State, worktreeId: Id, tab: Tab | null, pane: Id | null): MenuItem[] {
+  return [
     sep,
     { label: "split right", shortcut: shortcutIn(s, "new_terminal"), disabled: !pane, run: () => splitPaneById(pane!, "horizontal") },
     { label: "split down", shortcut: shortcutIn(s, "split_vertical"), disabled: !pane, run: () => splitPaneById(pane!, "vertical") },
     {
       label: "split with",
       disabled: !pane,
-      submenu: [{ label: "browser", run: () => openBrowser(worktreeId, null, tab!.id) }, ...agents.map((kind): MenuItem => ({ label: kind, run: () => spawnAgent(kind, worktreeId) }))],
+      submenu: [{ label: "browser", run: () => openBrowser(worktreeId, null, tab!.id) }, ...SPAWN_AGENTS.map((kind): MenuItem => ({ label: kind, run: () => spawnAgent(kind, worktreeId) }))],
     },
   ];
 }
@@ -188,14 +203,21 @@ export function paneMenu(paneId: Id, s: State = getState()): MenuItem[] {
   const zoomed = tab ? s.zoomed[tab.id] === paneId : false;
   const multi = others.length > 0;
   return [
-    { label: "split right", shortcut: key("new_terminal"), run: () => splitPaneById(paneId, "horizontal") },
-    { label: "split down", shortcut: key("split_vertical"), run: () => splitPaneById(paneId, "vertical") },
-    { label: zoomed ? "unzoom" : "zoom", shortcut: key("zoom_pane"), disabled: !zoomed && !multi, run: () => toggleZoom(paneId) },
-    { label: "equalize", shortcut: key("equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },
-    { label: "rotate", shortcut: key("rotate_split"), disabled: !multi, run: () => rotateSplit(tab!.id) },
-    { label: "swap with", disabled: !multi, submenu: others.map((id) => ({ label: s.panes[id]?.title ?? id, run: () => swapPanes(paneId, id) })) },
-    sep,
-    sendToItem(s, pane),
+    ...(splitsAllowed(s)
+      ? [
+          { label: "split right", shortcut: key("new_terminal"), run: () => splitPaneById(paneId, "horizontal") },
+          { label: "split down", shortcut: key("split_vertical"), run: () => splitPaneById(paneId, "vertical") },
+        ]
+      : []),
+    ...(splitsAllowed(s) || multi
+      ? [
+          { label: zoomed ? "unzoom" : "zoom", shortcut: key("zoom_pane"), disabled: !zoomed && !multi, run: () => toggleZoom(paneId) },
+          { label: "equalize", shortcut: key("equalize_panes"), disabled: !multi, run: () => equalizeTab(tab!.id) },
+          { label: "rotate", shortcut: key("rotate_split"), disabled: !multi, run: () => rotateSplit(tab!.id) },
+          { label: "swap with", disabled: !multi, submenu: others.map((id) => ({ label: s.panes[id]?.title ?? id, run: () => swapPanes(paneId, id) })) },
+        ]
+      : []),
+    ...(splitsAllowed(s) ? [sep, sendToItem(s, pane)] : []),
     sep,
     { label: "rename pane...", run: () => renamePane(paneId) },
     copyMenu([
