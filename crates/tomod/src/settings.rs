@@ -23,7 +23,7 @@ pub fn issues_summary(issues: &[ConfigIssue]) -> Option<String> {
 /// A reload and each change in the config problems are diagnostics. A new error is also a notice.
 pub fn reload(daemon: &Daemon) -> Config {
     let loaded = config::load_checked(&daemon.paths.config).map(|(cfg, parse_issues)| {
-        let issues = [parse_issues, config::check(&cfg)].concat();
+        let issues = [parse_issues, config::check(&cfg, &daemon.seams.hook_events)].concat();
         let integrations = crate::providers::status(&cfg);
         (cfg, issues, integrations)
     });

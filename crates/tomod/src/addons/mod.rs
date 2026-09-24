@@ -23,7 +23,7 @@ pub fn state_mut(inner: &mut Inner) -> &mut State {
 }
 
 pub fn seams() -> Seams {
-    Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![] }
+    Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![], hook_events: vec![] }
 }
 
 pub fn migrate(_store: &Store) -> anyhow::Result<()> {

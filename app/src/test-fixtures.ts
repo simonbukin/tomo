@@ -37,7 +37,6 @@ export const aPane = (patch: Partial<Pane> = {}): Pane => ({
   agent: null,
   created_at_ms: 0,
   source: null,
-  action_id: null,
   process_cmd: null,
   kind: "terminal",
   url: null,

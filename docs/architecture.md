@@ -169,8 +169,8 @@ Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
 worktree discovered, created, before_archive, archived, restored,
 tags_changed; pane created and closed; agent started, working, waiting,
 idle, exited; attention created; checkpoint created and resolved.
-`HOOK_EVENTS` also keeps the names of the `action.*`, `runtime.*`, and
-`annotation.sent` events for addons; Core does not fire them.
+An addon registers the events it fires through the `hook_events` seam, and
+adds its own fields to an event under its own key.
 Each event runs the matching `[[hooks]]`
 entries from `config.toml` as ordinary processes with the event JSON on
 stdin. A hook that wants to change Tomo calls the `tomo` CLI, so the GUI,
@@ -195,14 +195,14 @@ never ran.
 ## Feature boundary: pane sources
 
 A pane that an addon starts carries a `PaneSource` (`kind`, `id`, `label`).
-Core keeps the source in memory, shows it as `Pane.source` and as the older
-`Pane.action_id`, and gives it to the `pane_exited` seam. An addon can read
+Core keeps the source in memory, shows it as `Pane.source`, and gives it to
+the `pane_exited` seam. An addon can read
 a file at each worktree root, such as `.tomo.toml`, through the
 `worktree_files` seam: Core calls its reload after each discovery, and the
 watcher calls it when that file changes. For an example, see the Actions
 addon on the `simon-main` branch.
 
-Why a source and not `action_id` in Core: the source is provenance that any
+Why a source and not an Action id in Core: the source is provenance that any
 spawner can set, and Core never reads its `kind`.
 
 ## Feature boundary: Browser panes
@@ -314,6 +314,9 @@ Protocol version 3 adds:
   `worktree_archive`, which now returns an `ArchiveResult`;
 - `Pane.action_id` and `GitSummary.conflicts`;
 - the `action` field on `HookEvent`.
+
+`Pane.action_id` and the typed `action` field are gone again: an addon adds
+hook fields under its own key, and a client reads `Pane.source`.
 
 Phase 3 adds, at the same protocol version:
 
