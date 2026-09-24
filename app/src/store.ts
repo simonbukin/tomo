@@ -356,6 +356,9 @@ export function queryContext(s: State): QueryContext {
   return { repos: s.repos, agents: Object.values(s.agents), attention: s.attention };
 }
 
+/** False when `max_panes_per_tab` is 1: every terminal gets its own tab, and the window offers no split. */
+export const splitsAllowed = (s: State): boolean => (s.config?.max_panes_per_tab ?? 4) > 1;
+
 export function agentsOf(s: State, worktreeId: Id): AgentPresence[] {
   return Object.values(s.agents).filter((a) => a.worktree_id === worktreeId && a.state !== "exited");
 }

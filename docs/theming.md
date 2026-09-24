@@ -111,7 +111,8 @@ strip, or `Settings…` in the palette. Sections:
 
 - **appearance**: theme, light and dark theme for `system`, color
   overrides, and zoom (UI state).
-- **terminal**: font family, font size, scrollback lines, shell.
+- **terminal**: font family, font size, scrollback lines, shell, and
+  whether tabs split into panes (`max_panes_per_tab`; off sets it to 1).
 - **keyboard**: every binding in `[keybindings]`. Click a shortcut and press
   the new keys. A binding must use ⌘, ⌃, or ⌥ (or an F key). `reset` removes
   the key so the default applies.

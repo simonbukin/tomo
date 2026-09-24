@@ -110,10 +110,11 @@ X=$($T pane create --worktree "$WT2"); sleep 0.3
 rpc_code pane_move "{\"pane_id\":\"$X\",\"target_pane_id\":\"$P2\",\"place\":\"left\"}" bad_request && pass "cross-worktree move is rejected" || fail "cross-worktree move"
 step 5 "worktree unchanged after the rejected move"
 
-H=$($T pane split "$P2" -- sh -c 'i=0; while [ $i -lt 20000 ]; do echo spam $i; i=$((i+1)); done; sleep 60')
+# Q2 shares a tab that still has room under max_panes_per_tab = 3.
+H=$($T pane split "$Q2" -- sh -c 'i=0; while [ $i -lt 20000 ]; do echo spam $i; i=$((i+1)); done; sleep 60')
 bad=0
 for p in left right top bottom center left top right bottom center; do
-  move "{\"pane_id\":\"$H\",\"target_pane_id\":\"$Q3\",\"place\":\"$p\"}" || bad=$((bad+1))
+  move "{\"pane_id\":\"$H\",\"target_pane_id\":\"$Q2\",\"place\":\"$p\"}" || bad=$((bad+1))
   all_valid 6 >/dev/null || bad=$((bad+1))
 done
 expect "moves while a pane prints heavily" "$bad" 0

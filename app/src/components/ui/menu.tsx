@@ -104,9 +104,18 @@ export function DropdownMenuSub({ label, icon, disabled, children }: { label: Re
   );
 }
 
+/** Drops separators at the ends and runs of separators, so a list can leave out items without fixing its dividers. */
+export function tidySeparators(items: MenuItem[]): MenuItem[] {
+  const isSep = (it: MenuItem | undefined) => !!it && "separator" in it;
+  const kept = items.filter((it, i) => !isSep(it) || !isSep(items[i + 1]));
+  const start = kept.findIndex((it) => !isSep(it));
+  const end = kept.length - [...kept].reverse().findIndex((it) => !isSep(it));
+  return start < 0 ? [] : kept.slice(start, end);
+}
+
 /** Renders a declarative item list with the menu parts above. Accepts a function so items are computed when the menu opens. */
 export function MenuItems({ items }: { items: MenuItem[] | (() => MenuItem[]) }) {
-  const list = typeof items === "function" ? items() : items;
+  const list = tidySeparators(typeof items === "function" ? items() : items);
   return (
     <>
       {list.map((it, i) => {

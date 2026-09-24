@@ -5,7 +5,7 @@ import { allActions, runAction, type Action } from "./actions";
 import { addonViews } from "./addons";
 import { parseBinding } from "./keys";
 import { effectiveBindings } from "./shortcuts";
-import { recordDiagnostic, useStore } from "./store";
+import { recordDiagnostic, splitsAllowed, useStore } from "./store";
 
 export type Predefined = "About" | "Services" | "Hide" | "HideOthers" | "ShowAll" | "Quit" | "Undo" | "Redo" | "Cut" | "Copy" | "Paste" | "SelectAll" | "Minimize" | "Fullscreen";
 
@@ -71,16 +71,17 @@ function tauriItem(it: MenuBarItem, run: (id: string) => void) {
 }
 
 export async function installAppMenu(spec: MenuBarMenu[], run: (id: string) => void): Promise<void> {
-  // ponytail: the previous menu resource is not closed on a rebuild; it happens only when the config keybindings change.
+  // ponytail: the previous menu resource is not closed on a rebuild; it happens only when the keybindings or the split setting change.
   const menu = await Menu.new({ items: spec.map((m) => ({ text: m.text, items: m.items.map((it) => tauriItem(it, run)) })) });
   await menu.setAsAppMenu();
 }
 
-/** Builds the macOS menu bar from the command registry and rebuilds it when the keybindings change. */
+/** Builds the macOS menu bar from the command registry and rebuilds it when the keybindings or the offered commands change. */
 export function useAppMenu(): void {
   const bindings = useStore((s) => s.config?.keybindings);
+  const splits = useStore(splitsAllowed);
   useEffect(() => {
     if (!bindings || !isTauri()) return;
     installAppMenu(menuBarSpec(allActions(), effectiveBindings(bindings)), runAction).catch((e) => recordDiagnostic("error", "app", `menu bar: ${String(e)}`));
-  }, [bindings]);
+  }, [bindings, splits]);
 }

@@ -1126,7 +1126,7 @@ impl Daemon {
             .or_else(|| split_from.and_then(|p| inner.panes.get(p)).map(|p| p.row.tab_id.clone()))
             .or_else(|| Self::active_tab(inner, worktree_id))
         {
-            Some(t) if inner.tabs.contains_key(&t) && !(tab_id.is_none() && split_from.is_none() && crowded(inner, &t)) => t,
+            Some(t) if inner.tabs.contains_key(&t) && !(tab_id.is_none() && crowded(inner, &t)) => t,
             _ => Self::create_tab(inner, worktree_id, None).id,
         };
         let (kind, session_ref, pending) = match agent {
@@ -2735,6 +2735,28 @@ mod tests {
         daemon.handle_inner(0, Call::PaneKillTree { pane_id: created.pane.id }).await.unwrap();
 
         wait_for(|| (unsafe { libc::kill(child, 0) } != 0).then_some(())).await;
+        daemon.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_split_into_a_full_tab_opens_a_new_tab() {
+        let (dir, repo) = repo_fixture("split-full-tab");
+        std::fs::write(dir.join("data/config.toml"), "max_panes_per_tab = 1\n").unwrap();
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.lock().config.shell = "/bin/sh".into();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let worktree_id = daemon.lock().worktrees.keys().next().unwrap().clone();
+        let spec = PaneCreate { worktree_id: Some(worktree_id.clone()), tab_id: None, cwd: None, command: None, title: None };
+        let first: PaneResult = serde_json::from_value(daemon.handle_inner(0, Call::PaneCreate(spec)).await.unwrap()).unwrap();
+
+        let split = Call::PaneSplit { pane_id: first.pane.id.clone(), direction: SplitDirection::Horizontal, command: None };
+        let second: PaneResult = serde_json::from_value(daemon.handle_inner(0, split).await.unwrap()).unwrap();
+
+        assert_ne!(second.tab.id, first.tab.id, "the split opened a tab of its own");
+        let inner = daemon.lock();
+        assert!(inner.tabs.values().filter(|t| t.worktree_id == worktree_id).all(|t| layout::pane_ids(&t.layout).len() == 1));
+        drop(inner);
         daemon.shutdown();
         let _ = std::fs::remove_dir_all(&dir);
     }
