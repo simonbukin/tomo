@@ -152,8 +152,8 @@ app/src/styles/ui.css        the shared primitives
 app/src/<feature>.css        one feature, beside its component
 ```
 
-Plain CSS with a feature namespace: `.wt-*`, `.browser-*`, `.activity-*`,
-`.rail-*`. No CSS Modules, no Tailwind, no CSS-in-JS, no token
+Plain CSS with a feature namespace: `.wt-*`, `.towns-*`, `.browser-*`,
+`.activity-*`, `.rail-*`. No CSS Modules, no Tailwind, no CSS-in-JS, no token
 compiler. A class name greps, and the inspector names the file.
 
 ## Local freedom
@@ -186,16 +186,15 @@ Change the rest when you have a reason.
 `styles/ui.css`). Neutral, dense, restrained. Shared tokens and standard
 primitives only.
 
-**Expressive addons** — an addon may break the density rules. The Towns addon
-on the [`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main)
-branch is the example. An addon may use a custom layout, stronger local
-color, SVG, custom motion, and an unusual type size where it earns it. It must keep accessibility, focus
+**Expressive addons** — Towns (`addons/towns/`, `towns.css`) is the example.
+An addon may use a custom layout, stronger local color, SVG, custom motion,
+and an unusual type size where it earns it. It must keep accessibility, focus
 behavior, the base typefaces unless it overrides them on purpose, and the
 semantic state meanings.
 
-**Ceremonial moments** — for example, the rare town unlock of the Towns addon
-on the `simon-main` branch, with its own local `--dur-reveal`. A ceremony may
-break the normal density and motion rules. Keep them rare, or they stop being a ceremony.
+**Ceremonial moments** — a rare Town unlock (`.town-reveal` in `towns.css`,
+with its own local `--dur-reveal`). A ceremony may break the normal density
+and motion rules. Keep them rare, or they stop being a ceremony.
 
 ## Exemplars
 
@@ -206,6 +205,7 @@ dense navigation   app/src/Sidebar.tsx + app/src/WorktreeRow.css
 floating UI        app/src/components/ui/menu.tsx, popover.tsx + styles/ui.css
 shell chrome       app/src/shell/BottomStrip.tsx + styles/bottom.css, styles/layout.css
 dense feed         app/src/Activity.tsx + styles/activity.css
+playful exception  app/src/addons/towns/Towns.tsx + towns.css
 ```
 
 ## Agent workflow

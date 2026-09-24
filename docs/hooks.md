@@ -59,15 +59,22 @@ not run a `tag = "merged"` hook.
 | `agent.idle`              | Agent state became `idle`                                        | `worktree`, `pane`, `agent`       |
 | `agent.exited`            | Agent state became `exited`                                      | `worktree`, `pane`, `agent`       |
 | `attention.created`       | An attention item was added (`tomo notify` or a waiting agent)   | `worktree`, `attention`, `pane`?  |
+| `action.started`          | `tomo action run`, restart, or a GUI button started an action    | `worktree`, `action`, `pane`?     |
+| `action.exited`           | A pane-mode action exited or was stopped                         | `worktree`, `action`, `pane`      |
+| `action.crashed`          | A pane-mode action exited non-zero and Tomo did not stop it; after `action.exited` | `worktree`, `action`, `pane`, `attention` |
+| `runtime.endpoint_discovered` | An owned process started to listen on a TCP port             | `worktree`, `pane`, `action`?     |
+| `runtime.endpoint_removed`| A listening port went away and did not return within 5 s        | `worktree`, `pane`, `action`?     |
 | `checkpoint.created`      | `tomo checkpoint` asked for a review or a decision               | `worktree`, `attention`, `pane`?, `agent`? |
 | `checkpoint.resolved`     | `tomo checkpoint resolve` closed a checkpoint or crash item      | `worktree`, `attention`, `pane`?  |
 
-`HOOK_EVENTS` in `tomo-proto` also names `action.started`, `action.exited`,
-`action.crashed`, `runtime.endpoint_discovered`, `runtime.endpoint_removed`,
-and `annotation.sent`. Core does not fire them. They are for addons; see
-[addons.md](addons.md). The `attention` field on `checkpoint.*` is the full
-`AttentionItem` with its `kind` (`waiting`, `checkpoint`, `crash`), `url`,
-`agent_kind`, and `resolved_at_ms`. See [activity.md](activity.md).
+`action.started` carries `pane` only for a pane-mode action. An external
+action is not tracked, so it never fires `action.exited`. See
+[actions.md](actions.md). The `attention` field on `action.crashed` and
+`checkpoint.*` is the full `AttentionItem` with its `kind` (`waiting`,
+`checkpoint`, `crash`), `url`, `agent_kind`, and `resolved_at_ms`. The
+runtime events carry `action` when an Action started the pane; a restart
+that brings the same port back within 5 seconds fires nothing. See
+[runtime.md](runtime.md) and [activity.md](activity.md).
 
 Process start and exit are not events. They would fire on every poll and
 make Tomo slower. Read `tomo ps` from a hook when you need process state.
@@ -97,8 +104,8 @@ Every hook receives one JSON document on stdin. The same document is in
 }
 ```
 
-`action` (`{ "id", "label" }`) is `null` unless an addon event fills it.
-`previous_tags` is an array of the tags before the
+`action` is `{ "id": "storybook", "label": "Storybook" }` on the two
+`action.*` events. `previous_tags` is an array of the tags before the
 change. The envelope does not have it when that array is empty.
 
 The Rust type is `HookEvent` in `crates/tomo-proto`; the TypeScript type is
@@ -223,9 +230,8 @@ osascript -e "display notification \"$name is waiting for review\" with title \"
 
 When the worktree gets the tag `merged`, the hook checks that the branch is
 merged into the default branch and archives the worktree. The branch stays in
-Git. You or an addon can add the tag; for example, the GitHub addon on the
-[`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main) branch adds
-`merged` when it sees a merged pull request.
+Git. The GitHub addon adds `merged` when it sees a merged pull request; see
+[features/github.md](features/github.md).
 
 ```toml
 [[hooks]]

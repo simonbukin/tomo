@@ -88,13 +88,13 @@ describe("Activity view", () => {
       ["agent_started", "working", "Claude · kobe", ["Go to Claude"]],
       ["agent_waiting", "needs", "Claude · kobe", ["Go to Claude", "Resolve"]],
       ["agent_exited", "idle", "Claude · kobe", ["Go to Claude"]],
-      ["checkpoint_created", "needs", "Claude · kobe", ["Go to Claude", "Resolve"]],
+      ["checkpoint_created", "needs", "Claude · kobe", ["Open App", "Go to Claude", "Resolve"]],
       ["checkpoint_resolved", "complete", "Claude · kobe", []],
-      ["action_started", null, "kobe", []],
-      ["action_stopped", null, "kobe", []],
-      ["action_completed", null, "kobe", []],
-      ["action_crashed", null, "kobe", ["Resolve"]],
-      ["endpoint_discovered", null, "kobe", []],
+      ["action_started", "working", "Serve · kobe", []],
+      ["action_stopped", "idle", "Serve · kobe", ["Restart"]],
+      ["action_completed", "complete", "Serve · kobe", []],
+      ["action_crashed", "failed", "Serve · kobe", ["Logs", "Restart", "Resolve"]],
+      ["endpoint_discovered", null, "Serve · kobe", ["Open App"]],
       ["annotations_sent", null, "Claude · kobe", ["Open App"]],
       ["state_changed", null, "You · kobe", []],
       ["tags_changed", null, "kobe", []],
@@ -136,12 +136,16 @@ describe("Activity view", () => {
     const user = userEvent.setup();
     await show();
     const click = (title: string, label: string) => user.click(rowOf(title).querySelector(`.activity-actions button:nth-child(${[...rowOf(title).querySelectorAll(".activity-actions button")].findIndex((b) => b.textContent === label) + 1})`)!);
+    await click("action_crashed", "Restart");
     await click("checkpoint_created", "Resolve");
     await click("archived", "Restore");
+    await click("action_crashed", "Logs");
     const calls = vi.mocked(rpc).mock.calls.filter(([method]) => method !== "activity_list");
-    expect(calls.slice(0, 2)).toEqual([
+    expect(calls.slice(0, 4)).toEqual([
+      ["action_restart", { worktree_id: "w1", action_id: "serve" }],
       ["checkpoint_resolve", { id: "att-chk" }],
       ["worktree_restore", { worktree_id: "w1" }],
+      ["worktree_open", { worktree_id: "w1" }],
     ]);
   });
 });

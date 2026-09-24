@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-browser-set-annotate"
+description = "Enables the browser_set_annotate command without any pre-configured scope."
+commands.allow = ["browser_set_annotate"]
+
+[[permission]]
+identifier = "deny-browser-set-annotate"
+description = "Denies the browser_set_annotate command without any pre-configured scope."
+commands.deny = ["browser_set_annotate"]

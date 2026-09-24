@@ -122,7 +122,6 @@ pub struct Inner {
     /// The current problem per `source:subject`, so a repeated poll records a diagnostic only on a change.
     pub problems: HashMap<String, String>,
     /// The in-memory state of the addons of this daemon, under the same lock as Core state. Core never looks inside; the composition root fills it.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub addons: Box<dyn std::any::Any + Send>,
 }
 
@@ -148,7 +147,6 @@ pub struct WorktreeFile {
     pub reload: fn(&Arc<Daemon>),
 }
 
-#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub struct PaneExit {
     pub pane_id: Id,
     pub worktree_id: Id,
@@ -158,7 +156,6 @@ pub struct PaneExit {
     pub stop_intent: bool,
 }
 
-#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub struct CreatedWorktree {
     pub id: Id,
     pub repo_id: Id,
@@ -659,7 +656,6 @@ impl Daemon {
     }
 
     /// Types `text` into the live agent of a pane as one bracketed paste, then submits it. Returns the agent and the pane for a hook.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub fn paste_to_agent(inner: &Inner, pane_id: &str, text: &str) -> Result<(AgentPresence, HookPane), RpcError> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
         let agent =
@@ -679,7 +675,6 @@ impl Daemon {
         }
     }
 
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub(crate) fn focus_pane(inner: &mut Inner, pane_id: &str) {
         let Some((tab_id, worktree_id)) = inner.panes.get(pane_id).map(|p| (p.row.tab_id.clone(), p.row.worktree_id.clone())) else { return };
         let changed: Vec<TabRow> = inner
@@ -707,7 +702,6 @@ impl Daemon {
     }
 
     /// Ends a pane as a stop, not a crash: kills its process tree, keeps its scrollback, and removes it. The caller emits the tabs.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub(crate) fn stop_pane(&self, inner: &mut Inner, pane_id: &str) {
         Self::set_stop_intent(inner, pane_id);
         if let Some(pid) = inner.panes.get(pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
@@ -2408,6 +2402,8 @@ impl Daemon {
                 self.lock().store.kv_set("ui_state", &state.to_string()).map_err(internal)?;
                 Ok(Value::Null)
             }
+            // The composition root answers every addon call before Core sees it.
+            _ => Err(err(ErrorCode::Unsupported, "no handler for this call")),
         }
     }
 }

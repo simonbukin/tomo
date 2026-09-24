@@ -16,6 +16,20 @@ use ts_rs::TS;
 pub mod activity;
 pub use activity::*;
 
+pub mod addons {
+    pub mod actions;
+    pub mod agentation;
+    pub mod github;
+    pub mod runtime;
+    pub mod towns;
+    pub mod usage;
+}
+pub use addons::actions::*;
+pub use addons::agentation::*;
+pub use addons::github::*;
+pub use addons::runtime::*;
+pub use addons::towns::*;
+pub use addons::usage::*;
 
 pub const PROTOCOL_VERSION: u32 = 3;
 
@@ -275,6 +289,9 @@ pub enum Call {
         #[serde(default)]
         limit: Option<usize>,
     },
+    PrStatus {
+        worktree_id: Id,
+    },
     FsList {
         worktree_id: Id,
         rel_path: String,
@@ -304,15 +321,29 @@ pub enum Call {
         state: Value,
     },
 
+    TownList,
+    TownPick,
+    /// Facts about one unlocked town: its worktree, branch, status, final commit, PR, and archive date.
+    TownHistory {
+        slug: String,
+    },
     SessionList {
         worktree_id: Id,
         #[serde(default)]
         limit: Option<usize>,
     },
+    RuntimeList {
+        #[serde(default)]
+        worktree_id: Option<Id>,
+    },
     ActivityList(ActivityQuery),
     CheckpointCreate(CheckpointSpec),
     CheckpointResolve {
         id: Id,
+    },
+    UsageGet {
+        #[serde(default)]
+        refresh: bool,
     },
     /// Recent diagnostics, newest first: what Tomo itself did or noticed.
     DiagnosticsList {
@@ -331,6 +362,26 @@ pub enum Call {
     BrowserNavigate {
         pane_id: Id,
         url: String,
+    },
+    AnnotationsSend {
+        pane_id: Id,
+        bundle: EvidenceBundle,
+    },
+
+    ActionList {
+        worktree_id: Id,
+    },
+    ActionRun {
+        worktree_id: Id,
+        action_id: String,
+    },
+    ActionStop {
+        worktree_id: Id,
+        action_id: String,
+    },
+    ActionRestart {
+        worktree_id: Id,
+        action_id: String,
     },
 }
 
@@ -416,11 +467,18 @@ pub enum ExternalTarget {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "event", content = "data", rename_all = "snake_case")]
 pub enum Event {
+    EndpointsChanged {
+        worktree_id: Id,
+        endpoints: Vec<RuntimeEndpoint>,
+    },
     ActivityAdded {
         event: ActivityEvent,
     },
     AttentionResolved {
         id: Id,
+    },
+    UsageChanged {
+        snapshots: Vec<UsageSnapshot>,
     },
     ReposChanged {
         repos: Vec<Repo>,
@@ -479,8 +537,18 @@ pub enum Event {
         level: NoticeLevel,
         message: String,
     },
+    TownUnlocked {
+        unlock: TownUnlock,
+    },
+    PrChanged {
+        worktree_id: Id,
+        pr: Option<PullRequest>,
+    },
     HookRan {
         run: HookRun,
+    },
+    ActionsChanged {
+        set: ActionSet,
     },
     ConfigChanged {
         config: Config,
@@ -1210,6 +1278,12 @@ pub struct CoreSnapshot {
 pub struct Snapshot {
     #[serde(flatten)]
     pub core: CoreSnapshot,
+    #[serde(default)]
+    pub usage: Vec<UsageSnapshot>,
+    #[serde(default)]
+    pub actions: Vec<ActionSet>,
+    #[serde(default)]
+    pub endpoints: Vec<RuntimeEndpoint>,
 }
 
 pub fn now_ms() -> u64 {
@@ -1271,6 +1345,9 @@ mod bindings {
         HookEvent::export_all(&cfg).unwrap();
         IntegrationStatus::export_all(&cfg).unwrap();
         ConfigIssue::export_all(&cfg).unwrap();
+        PrStatusResult::export_all(&cfg).unwrap();
+        Town::export_all(&cfg).unwrap();
+        TownHistory::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
         ProcessInfo::export_all(&cfg).unwrap();
         PaneResult::export_all(&cfg).unwrap();
@@ -1291,7 +1368,15 @@ mod bindings {
         ActivityEvent::export_all(&cfg).unwrap();
         ActivityQuery::export_all(&cfg).unwrap();
         CoreActivity::export_all(&cfg).unwrap();
+        ActionActivity::export_all(&cfg).unwrap();
+        RuntimeActivity::export_all(&cfg).unwrap();
+        GitHubActivity::export_all(&cfg).unwrap();
+        AgentationActivity::export_all(&cfg).unwrap();
         CheckpointSpec::export_all(&cfg).unwrap();
+        EvidenceBundle::export_all(&cfg).unwrap();
+        UsageSnapshot::export_all(&cfg).unwrap();
+        RuntimeEndpoint::export_all(&cfg).unwrap();
+        ActionRunResult::export_all(&cfg).unwrap();
         CheckpointMode::export_all(&cfg).unwrap();
         Diagnostic::export_all(&cfg).unwrap();
         DiagnosticLevel::export_all(&cfg).unwrap();
@@ -1344,3 +1429,24 @@ mod bindings {
     }
 }
 
+#[cfg(test)]
+mod addon_activity_kinds {
+    use super::*;
+
+    #[test]
+    fn addon_kinds_keep_their_stored_strings() {
+        let kinds: Vec<ActivityKind> = vec![
+            ActionActivity::Started.into(),
+            ActionActivity::Stopped.into(),
+            ActionActivity::Completed.into(),
+            ActionActivity::Crashed.into(),
+            RuntimeActivity::EndpointDiscovered.into(),
+            GitHubActivity::PrMerged.into(),
+            AgentationActivity::AnnotationsSent.into(),
+        ];
+        assert_eq!(
+            kinds.iter().map(ActivityKind::as_str).collect::<Vec<_>>(),
+            ["action_started", "action_stopped", "action_completed", "action_crashed", "endpoint_discovered", "pr_merged", "annotations_sent"]
+        );
+    }
+}

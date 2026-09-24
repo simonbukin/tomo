@@ -38,12 +38,13 @@ keeps at most three, in this order:
    agent moves on
 2. crash: an unresolved `crash` attention item (`× Sampler crashed`)
 3. active agents (`● Claude`, with the process icon)
-4. addon signals with `beforeWarn` from the `worktreeSignals` slot
+4. the primary HTTP runtime (`App ↗ :3000`)
 5. memory over `resource_warning_bytes` (`⚠ 4.8 GB`)
-6. the other addon signals from the `worktreeSignals` slot, in `builtins`
-   order
+6. addon signals from the `worktreeSignals` slot, in `builtins` order. The
+   GitHub addon adds a merged pull request (`merged`) or failed checks
+   (`checks failed`) that the session already knows
 
-A healthy quiet worktree shows at most `Claude ●`. The dots
+A healthy quiet worktree shows at most `Claude ●` and `App ↗`. The dots
 and colors are the shared status vocabulary from `base.css` and
 `app/src/signals.css`. No new colors,
 no cards inside cards. The list row keeps its grid and puts the signals in
@@ -52,14 +53,15 @@ signals, then `+12 −4` when the diff is not empty.
 
 ## Activity view
 
-`app/src/Activity.tsx` is one of the views (`home`, `worktree`,
-`activity`, `agents`). The sidebar `History` button and the palette command
+`app/src/Activity.tsx` is the fourth view (`home`, `worktree`, `towns`,
+`activity`). The sidebar `History` button and the palette command
 `Activity` open it. The header holds `activity`, the filter
-(`All | Needs me | This worktree`). The list groups events by day (`today`, `yesterday`, `Mon 14 Sep`) with
+(`All | Needs me | This worktree`). Usage lives in the bottom strip, not
+here. The list groups events by day (`today`, `yesterday`, `Mon 14 Sep`) with
 `.section-label` headings and 30 px rows: time, who (agent with process
-icon, `You`, or the worktree), title, detail, and text-button
-actions derived from the event kind (`Open App`, `Go to Claude`,
-`Resolve`, `Restore`). An addon kind view can add more.
+icon, action label, `You`, or the worktree), title, detail, and text-button
+actions derived from the event kind (`Open App`, `Go to Claude`, `Logs`,
+`Restart`, `Resolve`, `Restore`).
 
 The store loads 200 events with `activity_list` when the view opens,
 prepends `activity_added` events, and keeps at most 500 in memory. `load
@@ -193,6 +195,8 @@ data that the client already has:
 
 - agent signal: kind, state, short session id, time since the last state
   change
+- runtime signal and the endpoint arrow on an Action button: label,
+  host:port, process and pid, time since discovery
 - worktree header branch: ahead/behind, changed and untracked files,
   `+ins −del`, head, path
 
@@ -293,8 +297,8 @@ stay as names for the same values, so older CSS still reads.
 | `--press-scale` | 1 | nothing scales |
 | `--hit-min` | 28 px | the smallest clickable area |
 
-The focus ring is 2 px and lives in `base.css`. An addon that needs its own
-duration keeps it in its own CSS.
+The focus ring is 2 px and lives in `base.css`. The town reveal keeps its own
+`--dur-reveal` in `addons/towns/towns.css`, because one addon uses it.
 
 Under `prefers-reduced-motion: reduce` every duration is 0. The guard in `base.css` also stops every animation. No springs,
 no bounce. `styles/interaction.css` applies the tokens.
@@ -308,9 +312,10 @@ no bounce. `styles/interaction.css` applies the tokens.
 - **Empty.** Use `EmptyState` from `app/src/states.tsx`: one short sentence,
   an optional detail, at most one action. Home shows `No repositories yet.`,
   `No active worktrees.`, or `No worktrees match.`; Activity shows
-  `No activity yet.` or `Nothing needs you.` The copy lives in `emptyStates.ts`.
+  `No activity yet.` or `Nothing needs you.`; Towns shows
+  `0 / 1681 municipalities unlocked.` The copy lives in `emptyStates.ts`.
 - **Error.** Show the error on the object that failed. A dialog shows
-  `InlineError` above its buttons. A failed archive or restore
+  `InlineError` above its buttons. A failed archive, restore, or Action run
   puts `× archive failed` on the worktree row in the sidebar, on Home, and in
   the worktree header (`RowError`, `setRowError` in the store). Hover shows
   the message, a click dismisses it, and the next success clears it. A toast
@@ -349,12 +354,12 @@ bottom strip (three sections on the same columns)
   a rail or 0, the traffic lights do not move and no workspace UI goes
   under them.
 - Top-middle: for a worktree, `WorktreeHeader` (name, branch, state on the
-  left; the `topbar` buttons of each addon, the editor button (`Zed` from
-  `editor_command`), the Finder button (`reveal_finder`), the `topbar`
-  marks of each addon, and the overflow menu on the right). The `+` menu
-  sits after the last tab. For Home, Activity, and the other views, a short
-  view title. Nothing else: metrics, daemon health, and Settings live in
-  the bottom strip. The checkpoint banner stays at the top of the middle column.
+  left; `topbar` Actions, the editor button (`Zed` from `editor_command`),
+  the Finder button (`reveal_finder`), runtime, and the overflow menu on
+  the right). The `+` menu sits after the
+  last tab. For Home, Activity, and Towns, a short view title. Nothing
+  else: usage, metrics, daemon health, and Settings live in the bottom
+  strip. The checkpoint banner stays at the top of the middle column.
 - Top-right: only the inspector control.
 - Zoom (Cmd `+`, `-`, `0`) shows `Zoom 110%` in the bottom status slot.
 
@@ -366,7 +371,7 @@ is never narrower than its content. The middle section starts with
 `.bottom-items`: the `bottomItem` of each addon, in `builtins` order.
 
 ```text
-? ⚙ |      ✓ Copied branch      CPU 12%  MEM 8.4G  GPU 3% | ● 0.1.3
+? ⚙ | Claude ━━━━━━━── 83%  Codex —      ✓ Copied branch      CPU 12%  MEM 8.4G  GPU 3% | ● 0.1.3
 ```
 
 - Bottom-left: `?` runs `keyboard_shortcuts`, the gear opens Settings. Both
@@ -374,8 +379,17 @@ is never narrower than its content. The middle section starts with
   two buttons fit in 48 px. When the left sidebar is closed on screen, the
   section is gone. The strip reads the mode on screen from `shellLayout`,
   not the saved mode.
-- Status slot: `StatusSlot` sits in the center, between the addon items
-  and the metrics.
+- Usage (the usage addon, `app/src/addons/usage/`, see
+  [usage.md](usage.md)): one item for each plan and one for each model
+  scope that the adapter reports (`Claude`, `Fable`, `Codex`, `Sol`). A bucket's `scope`
+  field names the model; a bucket without a scope counts for the whole
+  plan. Pi runs on the Claude allowance and has no item. Each item shows its
+  bucket with the highest use as a mono micro-bar and a percent.
+  Hover shows every bucket with its reset time. A click opens a larger
+  popover with a `refresh` link. A provider without data shows `—`; the
+  reason is in the preview. Tomo never guesses a value. At 80 % the percent
+  and the bar use `--waiting`, at 95 % `--hot`.
+- Status slot: `StatusSlot` sits in the center between usage and metrics.
 - System metrics: `CPU 12%  MEM 8.4G  GPU 3%` from the daemon call
   `system_stats` and the `system_stats` event (every 5 s while a client is
   subscribed). GPU shows only when the machine reports it. Whole percents
@@ -390,7 +404,7 @@ is never narrower than its content. The middle section starts with
 
 `HoverPopover` (`app/src/shell/HoverPopover.tsx`) joins a `PreviewCard` and
 a `Popover` on one trigger. The preview closes while the popover is open.
-The pure rules (thresholds, metric formatting, health
+The pure rules (headline bucket, thresholds, metric formatting, health
 labels, diagnostics merge) are in `app/src/shell/bottomModel.ts` with unit
 tests.
 
@@ -407,7 +421,7 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
 | Mode | Left | Right |
 |------|------|-------|
 | open | full tree, 180 to 480 px | inspector sections |
-| minimal | 48 px rail: Home, Activity with the attention count, Agents, Apps when an addon supplies apps, the addon views, one mark per worktree | one icon per inspector section |
+| minimal | 48 px rail: Home, Activity with the attention count, Towns, one mark per worktree | one icon per inspector section |
 | closed | column width 0 | column width 0 |
 
 - The sidebar control, the shortcut, the View menu, and the palette run
@@ -421,8 +435,9 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
   accessible name says the state in words. The tooltip opens with no delay
   and shows the name, the branch, and the worktree signals, so a sweep over
   the rail reads at once.
-- The right rail shows `*` on git when the tree is dirty, or the
-  `gitMarker` of an addon, and `●` on processes when processes run. Each mark is a badge in the corner of the button
+- The right rail shows `*` on git when the tree is dirty, `×` on the pull
+  request when checks failed, `✓` when it merged, and `●` on processes
+  when processes run. Each mark is a badge in the corner of the button
   (`.rail-marker`), over the icon, so the rail stays one straight column
   of icons. A click opens the inspector at that section (`rightSection` in
   UI state).
@@ -487,6 +502,7 @@ styles/
   ../WorktreeRow.css      the sidebar worktree row, beside Sidebar.tsx
   ../browser/browser.css  browser pane toolbar and host box
   palette.css   command palette
+  towns.css     Japan map
   activity.css  activity feed
   bottom.css    bottom strip, its previews and popovers, diagnostics
   interaction.css  motion, focus, hit targets, scroll, skeleton, empty and error states
@@ -500,7 +516,7 @@ styles/
   uses.
 - **Feature** (a plain `.css` file beside the component): the layout and the
   local states that one surface owns. Class names carry a feature namespace:
-  `.wt-*`, `.browser-*`, `.activity-*`, `.rail-*`.
+  `.wt-*`, `.towns-*`, `.browser-*`, `.activity-*`, `.rail-*`.
 - **The rule:** if a change must reach the whole app, it is a token or a
   shared class. If a change reaches one surface, it is local CSS.
 

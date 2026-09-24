@@ -1,10 +1,14 @@
 # Diagnostics
 
 Diagnostics show what Tomo itself does: daemon reconnects, config reloads,
-hook runtime issues, and integration health changes. A pane that keeps
+usage adapter failures, hook runtime issues, integration health changes,
+and runtime scanner errors. The scanner records `port scan: lsof failed:
+<error>` when the call does not start, and `port scan: lsof did not answer
+in 2 s` when Tomo kills a call that passes its deadline. A pane that keeps
 its queued command line because the terminal stays busy records a `daemon`
-warning; see the table in [notifications.md](notifications.md). Work events
-(an agent waits, a worktree is archived) go to Activity, never to Diagnostics.
+warning; see [runtime.md](runtime.md) and the table in
+[notifications.md](notifications.md). Work events (an agent waits, an Action crashes,
+a worktree is archived) go to Activity, never to Diagnostics.
 
 ## Where to find them
 
@@ -16,7 +20,7 @@ warning; see the table in [notifications.md](notifications.md). Work events
   - the six newest system events
   - config issues (`config_check`), when there are some
   - failed hook runs (`hook_log`), when there are some
-  - the `diagnosticsSection` of each addon
+  - usage providers that have no data, with the reason
 - Click `Open diagnostics` in the popover, or run `Diagnostics…` in the
   palette, for the dialog. It shows the same sections with up to 200 events.
 
@@ -39,8 +43,8 @@ accessible name of the control.
 - A failed call shows `unavailable` for its section. It never shows an empty
   section as if there were no issues.
 
-A `source` is one word: `daemon`, `config`, `hooks`, `browser`, or
-`integrations`. An addon can add its own source.
+A `source` is one word: `daemon`, `config`, `usage`, `hooks`, `runtime`,
+`browser`, or `integrations`.
 
 Known limit: there is no separate browser host health section. Browser host
 events show in the system events when that subsystem records them.
