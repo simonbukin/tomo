@@ -24,7 +24,7 @@ const { Dialogs, defaultRepoId } = await import("./Dialogs");
 const { rpc } = await import("./api");
 const { getState, setState } = await import("./store");
 
-const repo = { id: "r1", name: "tomo", path: "/src/tomo", exists: true, worktree_parent: "/wt", branch_prefix: "simon/" } as unknown as Repo;
+const repo = { id: "r1", name: "tomo", path: "/src/tomo", exists: true, worktree_parent: "/wt", branch_prefix: "you/" } as unknown as Repo;
 const initial = getState();
 
 const branchBox = () => screen.getByLabelText("Branch");
@@ -46,16 +46,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("default repository", () => {
-  const repos = [{ id: "tomo" }, { id: "holly" }] as Repo[];
+  const repos = [{ id: "tomo" }, { id: "acme" }] as Repo[];
   const wt = (id: string, repo_id: string, archived_at_ms: number | null = null) => ({ id, repo_id, archived_at_ms }) as unknown as Worktree;
-  const worktrees = [wt("a", "holly"), wt("b", "holly"), wt("c", "tomo"), wt("d", "tomo", 1), wt("e", "tomo", 2)];
+  const worktrees = [wt("a", "acme"), wt("b", "acme"), wt("c", "tomo"), wt("d", "tomo", 1), wt("e", "tomo", 2)];
 
   it("uses the open worktree's repository", () => {
     expect(defaultRepoId(repos, worktrees, "c")).toBe("tomo");
   });
 
   it("otherwise uses the repository with the most live worktrees, not the first one added", () => {
-    expect(defaultRepoId(repos, worktrees, null)).toBe("holly");
+    expect(defaultRepoId(repos, worktrees, null)).toBe("acme");
     expect(defaultRepoId(repos, [], null)).toBe("tomo");
     expect(defaultRepoId([], worktrees, null)).toBe("");
   });
@@ -94,7 +94,7 @@ describe("new worktree dialog", () => {
   it("with a name field, an empty branch box shows the default name and still creates", async () => {
     nameField.current = () => null;
     const user = await openDialog();
-    expect(branchBox()).toHaveAttribute("placeholder", "simon/<name>");
+    expect(branchBox()).toHaveAttribute("placeholder", "you/<name>");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(created()).toMatchObject({ branch: "", new_branch: true }));
     expect(created()?.metadata).toBeUndefined();

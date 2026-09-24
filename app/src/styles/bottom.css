@@ -36,11 +36,6 @@
 .bottom-item:hover, .bottom-item[data-popup-open] { background: var(--bg-2); color: var(--fg-1); }
 .bottom-item .num, .bottom-pop .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
-.usage-name { color: var(--fg-1); }
-.usage-reset { color: var(--fg-3); }
-.micro-bar { font-family: var(--mono); letter-spacing: -1px; white-space: pre; }
-.micro-bar .on { color: var(--fg-2); }
-.micro-bar .off { color: var(--line-strong); }
 
 .metrics { gap: var(--sp-3); }
 .metric { display: inline-flex; gap: 4px; }
@@ -49,9 +44,8 @@
 
 .health .mono { color: var(--fg-2); }
 
-.tone-warning .num, .tone-warning .micro-bar .on { color: var(--waiting); }
-.tone-danger .num, .tone-danger .micro-bar .on { color: var(--danger); }
-.usage-meter.tone-danger .usage-name { color: var(--danger); }
+.tone-warning .num { color: var(--waiting); }
+.tone-danger .num { color: var(--danger); }
 
 /* Previews and popovers opened from the strip. */
 .bottom-pop { min-width: 190px; max-width: 360px; font-size: var(--fs-1); line-height: 1.35; }
@@ -62,9 +56,6 @@
 .kv-line { display: grid; grid-template-columns: minmax(64px, 1fr) auto; column-gap: var(--sp-3); align-items: baseline; }
 .kv-line .num { text-align: right; }
 .kv-key { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.usage-buckets { display: grid; gap: 2px; }
-.usage-bucket { display: grid; grid-template-columns: minmax(56px, auto) auto 34px auto; column-gap: var(--sp-2); align-items: baseline; }
-.usage-bucket .num { text-align: right; }
 .bottom-pop .link { margin-top: var(--sp-1); justify-self: start; }
 
 .diagnostics { display: grid; gap: 2px; }

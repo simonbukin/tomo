@@ -125,8 +125,8 @@ describe("every lens", () => {
   });
 
   it("starts a tag's new worktree in the repository its worktrees share, and in none when they differ", () => {
-    const one = [wt({ id: "a", repo_id: "holly" }), wt({ id: "b", repo_id: "holly" })];
-    expect(tagPrefill("labor", one)).toEqual({ repoId: "holly", tags: ["labor"] });
+    const one = [wt({ id: "a", repo_id: "acme" }), wt({ id: "b", repo_id: "acme" })];
+    expect(tagPrefill("labor", one)).toEqual({ repoId: "acme", tags: ["labor"] });
     expect(tagPrefill("labor", [...one, wt({ id: "c", repo_id: "tomo" })])).toEqual({ tags: ["labor"] });
   });
 

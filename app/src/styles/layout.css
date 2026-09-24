@@ -42,13 +42,6 @@
 .actionbar .btn-icon { width: var(--u); padding: 0; color: var(--fg-2); }
 .action-btn { position: relative; }
 .action-btn .state { margin-right: 2px; }
-.action-warn { color: var(--waiting); }
-.action-live { display: inline-flex; color: var(--fg-2); margin-left: 1px; }
-.action-live .icon { width: 11px; height: 11px; }
-.runtime-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); min-height: var(--u); }
-.runtime-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.runtime-label { color: var(--fg); }
-.runtime-row .mono { font-size: var(--fs-1); }
 .checkpoint-banner { display: flex; align-items: center; gap: var(--inset); height: var(--u); padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); background: var(--bg-1); font-size: var(--fs-2); color: var(--fg); }
 .checkpoint-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -127,10 +120,6 @@
 .file-row:hover { background: var(--bg-1); }
 .file-selected, .file-selected:hover { background: var(--fg); color: var(--bg); }
 .file-selected .icon, .file-selected .file-age { color: inherit; }
-.pr-title { display: inline-flex; gap: 6px; min-width: 0; color: var(--fg); cursor: default; }
-.pr-title > span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.pr-number { flex: none; color: var(--fg-3); font-family: var(--mono); }
-.pr-title:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---- resize handles: body row only, a 10 px hit area over a 2 px line */
 .resize-handle { position: absolute; top: 0; bottom: var(--u); width: 10px; cursor: col-resize; z-index: 5; touch-action: none; }

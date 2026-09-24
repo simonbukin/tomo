@@ -68,26 +68,14 @@ wait_for "[ \"\$(agent_field $NA state)\" = idle ]" 20
 [ "$(agent_field "$NA" kind)" = claude ] && [ "$(agent_field "$NA" session_ref)" = "$SID" ] && check 0 "agent tab resumes session $SID" || check 1 "agent resume" "$(agent_field "$NA" kind) $(agent_field "$NA" session_ref)"
 case "$($RPC attach "$NA" 2)" in *"fake-agent session $SID"*) check 0 "the resume command line reached the agent";; *) check 1 "resume line";; esac
 
-# 5. an Action tab comes back as a shell with the Action label; the command does not run
-printf '[[actions]]\nid = "serve"\nlabel = "Serve"\ncommand = "touch marker-serve; sleep 30"\n' > "$R/.tomo.toml"
-wait_for "$T action list $WT --json | grep -q serve" 10
-AT=$(tab_new actions)
-SP=$($T action run serve "$WT" --json | jq_ "print(d['pane']['id'])")
-wait_for "[ -f $R/marker-serve ]" 10; rm -f "$R/marker-serve"
-[ "$(pane_field "$SP" tab_id)" = "$AT" ] || known "action pane landed outside the actions tab"
-tab_close "$(pane_field "$SP" tab_id)"; sleep 0.3
-NT=$(reopen | jq_ "print(d['id'])"); sleep 2
-$T pane list --worktree "$WT" --json | jq_ "import sys; p=[x for x in d if x['tab_id']=='$NT']; sys.exit(0 if any(x['user_title']=='Serve' and x['action_id'] is None and x['live'] for x in p) else 1)" && check 0 "Action pane reopens as a shell titled Serve without action_id" || check 1 "action reopen" "$($T pane list --worktree "$WT" --json)"
-[ ! -f "$R/marker-serve" ] && check 0 "reopen does not rerun the Action command" || check 1 "action reran on reopen"
-
-# 6. the stack keeps the newest ten and walks back per worktree
+# 5. the stack keeps the newest ten and walks back per worktree
 for i in $(seq 1 12); do tab_close "$(tab_new "b$i")"; done
 FIRST=$(reopen | jq_ "print(d['title'])")
 n=1; while reopen | grep -q '"id"'; do n=$((n+1)); [ $n -gt 20 ] && break; done
 [ "$FIRST" = b12 ] && [ $n = 10 ] && check 0 "stack holds ten tabs, newest first" || check 1 "stack bound" "first=$FIRST count=$n"
 reopen | grep -q not_found && check 0 "an empty stack answers not_found" || check 1 "empty stack"
 
-# 7. open_location starts the configured editor at path:line:col
+# 6. open_location starts the configured editor at path:line:col
 mkdir -p "$R/lib"; echo "fn main() {}" > "$R/lib/a.rs"
 $RPC call open_location "{\"path\":\"$R/lib/a.rs\",\"line\":12,\"col\":3}" >/dev/null
 wait_for "[ -f $OUT ]" 10
@@ -95,12 +83,8 @@ wait_for "[ -f $OUT ]" 10
 $RPC call open_location '{"path":"lib/a.rs","line":1}' 2>&1 | grep -q bad_request && check 0 "a relative path is a bad request" || check 1 "relative guard"
 $RPC call open_location "{\"path\":\"$R/missing.rs\",\"line\":1}" 2>&1 | grep -q not_found && check 0 "a missing file is not_found" || check 1 "missing guard"
 
-# 8. a daemon restart restores an Action pane as a shell and does not rerun the Action
-SP2=$($T action run serve "$WT" --json | jq_ "print(d['pane']['id'])")
-wait_for "[ -f $R/marker-serve ]" 10; rm -f "$R/marker-serve"
+# 7. a daemon restart empties the closed-tab stack
 daemon_restart; sleep 2
-[ "$(pane_field "$SP2" origin)" = restored ] && [ "$(pane_field "$SP2" action_id)" = None ] && check 0 "restart restores the Action pane without action_id" || check 1 "restore action" "$(pane_field "$SP2" origin) $(pane_field "$SP2" action_id)"
-[ ! -f "$R/marker-serve" ] && check 0 "restart does not rerun the Action command" || check 1 "action reran on restart"
 reopen | grep -q not_found && check 0 "the closed-tab stack does not survive a daemon restart" || check 1 "stack after restart"
 
 daemon_stop

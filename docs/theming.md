@@ -45,7 +45,7 @@ danger = "#ff7a66"
 success = "#7fd28a"
 
 [terminal]
-font_family = "CommitMono, Menlo, monospace"
+font_family = "ui-monospace, Menlo, monospace"
 font_size = 13           # 6 to 72
 ```
 

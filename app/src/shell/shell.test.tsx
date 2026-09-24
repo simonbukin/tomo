@@ -11,7 +11,7 @@ const { LeftRail } = await import("./LeftRail");
 const { RightRail } = await import("./RightRail");
 const { CenterHead, SidebarHead } = await import("./TopStrip");
 
-const repo = { id: "r1", name: "holly", path: "/src/holly", exists: true, remote_url: null } as Repo;
+const repo = { id: "r1", name: "acme", path: "/src/acme", exists: true, remote_url: null } as Repo;
 const wt = (id: string, name: string): Worktree => ({ id, name, repo_id: "r1", path: `/src/${name}`, branch: `feat/${name}`, head: "abc1234", detached: false, exists: true, archived_at_ms: null, archiving: false, is_main: false, git: null, metadata: { state: null, tags: [], project: null, display_name: null } }) as unknown as Worktree;
 const waiting = { id: "a1", kind: "claude", state: "waiting", worktree_id: "w1", pane_id: "p1", updated_at_ms: 1 } as unknown as AgentPresence;
 const crash = { id: "c1", kind: "crash", worktree_id: "w2", message: "Sampler crashed", created_at_ms: 1, resolved_at_ms: null, viewed_at_ms: null } as unknown as AttentionItem;

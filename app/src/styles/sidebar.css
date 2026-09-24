@@ -31,7 +31,6 @@
 .repo-name { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); }
 .repo-head:hover .repo-name { color: var(--fg); }
 .repo-head .faint { font-family: var(--mono); font-size: var(--fs-1); }
-.repo-avatar { flex: none; }
 
 /* The layout of a worktree row lives in app/src/WorktreeRow.css. What stays
    here is what another component also uses, or what the row shares with the rails. */

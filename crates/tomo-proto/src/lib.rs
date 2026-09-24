@@ -507,7 +507,7 @@ pub enum NoticeLevel {
 pub struct Diagnostic {
     pub at_ms: u64,
     pub level: DiagnosticLevel,
-    /// Subsystem: `daemon`, `config`, `usage`, `hooks`, `runtime`, `browser`, or `integrations`.
+    /// Subsystem: `daemon`, `config`, `hooks`, `browser`, or `integrations`. An addon can add its own.
     pub source: String,
     pub message: String,
 }
@@ -731,7 +731,7 @@ pub struct Config {
 pub struct NotificationSettings {
     /// Desktop notifications while Tomo is not focused.
     pub desktop: bool,
-    /// Sounds for rare moments only: a human checkpoint and a rare town unlock.
+    /// Sounds for rare moments only, such as a human checkpoint.
     pub sounds: bool,
 }
 

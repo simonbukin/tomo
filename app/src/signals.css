@@ -16,4 +16,3 @@
 .signal-attention { color: var(--waiting); }
 .signal-crash, .signal-warn { color: var(--danger); }
 .signal-glyph { font-weight: 600; }
-.signal-runtime { color: var(--fg-2); font-variant-numeric: tabular-nums; }

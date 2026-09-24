@@ -4,8 +4,8 @@
 /* ---- hover, press, open, close */
 button, .btn { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur-hover) var(--ease-out); }
 button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disabled):not(.btn-link):active { transform: scale(var(--press-scale)); }
-.wt-row, .wt-list-row, .card, .town-row, .activity-row, .file-row, .session-row { transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
-.wt-row:active, .wt-list-row:active, .town-row:active, .file-row:active { background: var(--bg-2); }
+.wt-row, .wt-list-row, .card, .activity-row, .file-row, .session-row { transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
+.wt-row:active, .wt-list-row:active, .file-row:active { background: var(--bg-2); }
 .tab { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .seg { transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .menu-item, .select-item { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
@@ -16,7 +16,7 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .signal-attention { animation: rise var(--dur-open) var(--ease-out) both; }
 
 /* ---- focus: the ring itself is in base.css; here is what each surface does with it */
-.wt-row:focus-visible, .wt-list-row:focus-visible, .town-row:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
+.wt-row:focus-visible, .wt-list-row:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
 
 /* ---- hit targets: compact visuals, at least --hit-min of clickable area */
 .btn-icon, button.link, .btn-link, .repo-toggle { position: relative; }
@@ -27,8 +27,8 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .splitter-vertical::before { inset: -2px 0; }
 
 /* ---- scroll: lists scroll inside their panel and do not chain to the page */
-.home, .activity, .towns-list, .sidebar-scroll, .rightbar, .file-tree, .dialog-list, .menu-popup, .select-list, .hook-out { overscroll-behavior: contain; }
-.towns-list, .activity, .home { scroll-padding-bottom: var(--sp-5); }
+.home, .activity, .sidebar-scroll, .rightbar, .file-tree, .dialog-list, .menu-popup, .select-list, .hook-out { overscroll-behavior: contain; }
+.activity, .home { scroll-padding-bottom: var(--sp-5); }
 
 /* ---- skeletons */
 @keyframes skeleton-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
@@ -37,8 +37,6 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .skeleton-row { display: flex; align-items: center; height: 30px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line); }
 .skeleton-rows.compact .skeleton-row { height: 22px; border-bottom: none; padding: 0; }
 .shell-loading { flex: 1; padding: var(--sp-3) var(--sp-4); }
-.map-loading .towns-map { align-items: stretch; }
-.map-skeleton { flex: 1; height: auto; border-radius: var(--radius-md); background: var(--bg-1); }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
 /* ---- empty and error states */
