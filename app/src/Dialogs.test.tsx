@@ -17,6 +17,8 @@ vi.mock("./api", async (importOriginal) => {
   return (await import("./test-api")).mockApi(await importOriginal<typeof import("./api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null)));
 });
 vi.mock("./actions", async (importOriginal) => ({ ...(await importOriginal<typeof import("./actions")>()), openWorktree: vi.fn() }));
+const nameField = vi.hoisted(() => ({ current: null as null | (() => null) }));
+vi.mock("./addons", async (importOriginal) => ({ ...(await importOriginal<typeof import("./addons")>()), worktreeNameField: () => nameField.current }));
 
 const { Dialogs, defaultRepoId } = await import("./Dialogs");
 const { rpc } = await import("./api");
@@ -89,18 +91,29 @@ describe("new worktree dialog", () => {
     await waitFor(() => expect(created()).toMatchObject({ branch: "feat/remote-only", new_branch: true, start_ref: "origin/feat/remote-only" }));
   });
 
-  it("an empty branch box shows the default name and still creates", async () => {
+  it("with a name field, an empty branch box shows the default name and still creates", async () => {
+    nameField.current = () => null;
     const user = await openDialog();
     expect(branchBox()).toHaveAttribute("placeholder", "simon/<name>");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(created()).toMatchObject({ branch: "", new_branch: true }));
     expect(created()?.metadata).toBeUndefined();
+    nameField.current = null;
+  });
+
+  it("without a name field, Create waits for a branch or a path", async () => {
+    const user = await openDialog();
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+    await user.type(branchBox(), "feat/x");
+    expect(screen.getByRole("button", { name: "Create", hidden: true })).toBeEnabled();
   });
 
   it("a plus on a tag group starts with that tag and sends it", async () => {
     const user = await openDialog({ tags: ["labor-relations"] });
     expect(screen.getByLabelText("Repository")).toHaveValue("r1");
     expect(screen.getByLabelText("Tags (comma-separated)")).toHaveValue("labor-relations");
+    await user.type(branchBox(), "feat/loc");
+    await user.click(await screen.findByText("feat/local"));
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(created()).toMatchObject({ repo_id: "r1", metadata: { tags: ["labor-relations"] } }));
   });
@@ -108,6 +121,8 @@ describe("new worktree dialog", () => {
   it("sends clean tags", async () => {
     const user = await openDialog();
     await user.type(screen.getByLabelText("Tags (comma-separated)"), "#a, b,, a");
+    await user.type(branchBox(), "feat/loc");
+    await user.click(await screen.findByText("feat/local"));
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(created()?.metadata).toEqual({ tags: ["a", "b"] }));
   });
