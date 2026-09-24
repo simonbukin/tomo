@@ -61,3 +61,32 @@ pub enum ActionActivity {
 }
 
 impl ActivityKinds for ActionActivity {}
+
+/// The `PaneSource.kind` of a pane that an Action started.
+pub const ACTION_SOURCE_KIND: &str = "action";
+
+impl crate::PaneSource {
+    /// The Action id of a pane source, when an Action started the pane.
+    pub fn action_id(source: Option<&crate::PaneSource>) -> Option<String> {
+        source.filter(|s| s.kind == ACTION_SOURCE_KIND).map(|s| s.id.clone())
+    }
+}
+
+/// The `action` field that the Actions and Runtime addons put on a hook event.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct HookAction {
+    pub id: String,
+    pub label: String,
+}
+
+impl HookAction {
+    /// The event fields for `HookEvent.addons`: this Action under the `action` key.
+    pub fn fields(&self) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::Map::from_iter([("action".to_string(), serde_json::json!(self))])
+    }
+
+    /// The Action on a hook event, when an Action or Runtime event put one there.
+    pub fn of(event: &crate::HookEvent) -> Option<HookAction> {
+        event.addons.get("action").and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
+}

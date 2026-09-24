@@ -170,8 +170,11 @@ act when a tag is added.
 Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
 worktree discovered, created, before_archive, archived, restored,
 tags_changed; pane created and closed; agent started, working, waiting,
-idle, exited; attention created; action started, exited, and crashed;
-runtime endpoint discovered and removed; checkpoint created and resolved.
+idle, exited; attention created; checkpoint created and resolved.
+An addon registers the events it fires through the `hook_events` seam, and
+adds its own fields to an event under its own key. Here the Actions,
+Runtime, and Agentation addons register theirs: action started, exited, and
+crashed; runtime endpoint discovered and removed; annotation sent.
 Each event runs the matching `[[hooks]]`
 entries from `config.toml` as ordinary processes with the event JSON on
 stdin. A hook that wants to change Tomo calls the `tomo` CLI, so the GUI,
@@ -200,11 +203,10 @@ Repo-defined Actions are an addon (see "Addons" below). The addon reads
 each discovery, and the watcher calls it when that file changes at a
 worktree root, which is not a Git change. A pane that an Action starts
 carries a `PaneSource` (`kind`, `id`, `label`). Core keeps the source in
-memory, shows it as `Pane.source` and as the older `Pane.action_id`, and
-gives it to the `pane_exited` seam, where the addon records the outcome. A
+memory, shows it as `Pane.source`, and gives it to the `pane_exited` seam, where the addon records the outcome. A
 second run finds the live pane by its source. See [actions.md](actions.md).
 
-Why a source and not `action_id` in Core: the source is provenance that any
+Why a source and not an Action id in Core: the source is provenance that any
 spawner can set, and Core never reads its `kind`. Runtime labels an
 endpoint from the source, so Runtime does not depend on Actions.
 
@@ -348,6 +350,9 @@ Protocol version 3 adds:
 - the `actions_changed` event with one `ActionSet` per worktree;
 - `Pane.action_id`, `Snapshot.actions`, and `GitSummary.conflicts`;
 - the `action` field on `HookEvent`.
+
+`Pane.action_id` and the typed `action` field are gone again: an addon adds
+hook fields under its own key, and a client reads `Pane.source`.
 
 Phase 3 adds, at the same protocol version:
 

@@ -97,8 +97,7 @@ and only a known agent kind with a session reference gets a resume line.
 
 The pane source (`Pane.source`, for example the Action that started the
 pane) is in memory only. A restored pane has no source, so the restored
-shell is never taken for the running Action. `Pane.action_id` on the wire
-comes from the source.
+shell is never taken for the running Action.
 
 ## attention
 

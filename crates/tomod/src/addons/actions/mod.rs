@@ -16,6 +16,9 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tomo_proto::*;
 
+/// The hook events this addon fires. The composition root registers them through `Seams::hook_events`.
+pub const HOOK_EVENTS: &[&str] = &["action.started", "action.exited", "action.crashed"];
+
 pub const FILE: WorktreeFile = WorktreeFile { name: model::FILE_NAME, reload };
 
 /// The parsed `.tomo.toml` set of each worktree, in `addons::State`.
@@ -63,7 +66,7 @@ fn running_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id>
 
 fn hook(inner: &Inner, event: &str, worktree_id: &str, action: &ActionDef, pane_id: Option<&str>) -> HookEvent {
     HookEvent {
-        action: Some(HookAction { id: action.id.clone(), label: action.label.clone() }),
+        addons: HookAction { id: action.id.clone(), label: action.label.clone() }.fields(),
         pane: pane_id.and_then(|p| Daemon::hook_pane(inner, p)),
         ..events::envelope(inner, event, Some(worktree_id))
     }

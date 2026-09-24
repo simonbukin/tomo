@@ -219,7 +219,7 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | What `.tomo.toml` accepts             | `addons::actions::model::parse`         |
 | How an action runs, reuses, or stops  | `addons::actions::{run, stop, restart}` |
 | What an Action pane exit records      | `addons::actions::exited`, joined through `Seams::pane_exited` |
-| What started a pane                   | `PaneState.source`, set by the spawner; `PaneSource::action_id` for the older wire fields |
+| What started a pane                   | `PaneState.source`, set by the spawner |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
 
 ## Verification without model tokens

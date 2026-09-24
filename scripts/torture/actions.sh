@@ -20,7 +20,7 @@ list_text() { $T action list "$WT" 2>&1; }
 write_toml() { printf '%s\n' "$1" > "$P/.tomo.toml"; wait_for "[ \"\$(ids)\" = \"$2\" ]" 4; }
 run() { $T action run "$1" "$WT" --json 2>&1; }
 pane_field() { echo "$1" | jq_ "print(d['pane']['$2'] if d['pane'] else 'null')"; }
-action_panes() { $T pane list --worktree "$WT" --json | jq_ "print(' '.join(p['id'] for p in d if p['action_id']))"; }
+action_panes() { $T pane list --worktree "$WT" --json | jq_ "print(' '.join(p['id'] for p in d if (p.get('source') or {}).get('kind') == 'action'))"; }
 pane_exit() { $T pane list --worktree "$WT" --json | jq_ "m=[p for p in d if p['id']=='$1']; print(m[0]['exit_code'] if m else 'gone')"; }
 
 # parsing
@@ -98,7 +98,7 @@ command = "touch marker-ext"
 mode = "external"' "quick serve fail mark"
 
 o=$(run serve); S1=$(pane_field "$o" id)
-[ "$(pane_field "$o" action_id)" = serve ] && [ "$(echo "$o" | jq_ "print(d['reused'])")" = False ] && check 0 "pane action starts with action_id provenance" || check 1 "run pane" "$o"
+[ "$(echo "$o" | jq_ "print(d['pane']['source']['id'])")" = serve ] && [ "$(echo "$o" | jq_ "print(d['reused'])")" = False ] && check 0 "pane action starts with its Action as the source" || check 1 "run pane" "$o"
 echo "$o" | jq_ "import sys; sys.exit(0 if d['pane']['source']=={'kind':'action','id':'serve','label':'serve'} else 1)" && check 0 "the pane source names the action kind, id, and label" || check 1 "pane source" "$o"
 o=$(run serve); S2=$(pane_field "$o" id)
 [ "$S1" = "$S2" ] && [ "$(echo "$o" | jq_ "print(d['reused'])")" = True ] && check 0 "second run reuses the live pane" || check 1 "reuse" "$S1 vs $S2 $o"

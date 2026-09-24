@@ -9,6 +9,9 @@ use serde_json::Value;
 use std::sync::Arc;
 use tomo_proto::*;
 
+/// The hook events this addon fires. The composition root registers them through `Seams::hook_events`.
+pub const HOOK_EVENTS: &[&str] = &["annotation.sent"];
+
 pub fn send(daemon: &Arc<Daemon>, pane_id: &str, bundle: &EvidenceBundle) -> Result<Value, RpcError> {
     let event = {
         let mut inner = daemon.lock();

@@ -278,7 +278,7 @@ function NotificationsSection({ config }: { config: Config }) {
         <input type="checkbox" checked={n.desktop} onChange={(e) => setConfig("notifications.desktop", e.target.checked)} /> desktop notifications while tomo is in the background
       </label>
       <label className="check">
-        <input type="checkbox" checked={n.sounds} onChange={(e) => setConfig("notifications.sounds", e.target.checked)} /> sounds for human checkpoints and rare town unlocks
+        <input type="checkbox" checked={n.sounds} onChange={(e) => setConfig("notifications.sounds", e.target.checked)} /> sounds for human checkpoints
       </label>
     </div>
   );
@@ -298,7 +298,11 @@ function AddonsSection() {
           </div>
         ))}
       </div>
-      <p className="settings-note">{addons.length} addons loaded.</p>
+      {addons.length === 0 ? (
+        <p className="settings-note">No addons yet. docs/addons.md shows how to write one.</p>
+      ) : (
+        <p className="settings-note">{addons.length} addons loaded.</p>
+      )}
     </div>
   );
 }
