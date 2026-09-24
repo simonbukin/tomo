@@ -3,7 +3,8 @@
 set -u
 . "$(dirname "$0")/lib.sh"
 
-daemon_fresh
+# Five panes in one tab needs a limit above the default 4.
+daemon_fresh "max_panes_per_tab = 8"
 R=$(new_repo); $T repo add "$R" >/dev/null
 WT=$(wt_id "$R")
 P1=$($T pane create --worktree "$WT"); sleep 0.5

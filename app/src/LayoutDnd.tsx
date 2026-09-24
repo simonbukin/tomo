@@ -123,8 +123,8 @@ export function useTabSortable(tabId: Id, disabled = false) {
 }
 
 /** Spread on the pane chrome that starts a pane drag. Never on the terminal body: text selection must keep working. */
-export function usePaneDrag(paneId: Id, tabId: Id, title: string) {
-  const d = useDraggable({ id: `pane-drag:${paneId}`, data: { kind: "pane", paneId, tabId, title } satisfies DragData });
+export function usePaneDrag(paneId: Id, tabId: Id, title: string, enabled = true) {
+  const d = useDraggable({ id: `pane-drag:${paneId}`, disabled: !enabled, data: { kind: "pane", paneId, tabId, title } satisfies DragData });
   return { ref: d.setNodeRef, props: { ...d.attributes, ...d.listeners } };
 }
 

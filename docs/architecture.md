@@ -243,7 +243,8 @@ out of the last pane of a tab deletes that empty tab. A move never crosses
 worktrees, and a cross-tab move into a tab that holds `max_panes_per_tab`
 panes is a conflict. Zoom is transient GUI state: the daemon only forwards a
 `ZoomRequest` event and never changes the persisted tree. Agent-driven
-spawns go to a new tab once a tab holds `max_panes_per_tab` panes.
+spawns and splits go to a new tab once a tab holds `max_panes_per_tab` panes;
+with `1`, the window hides every split control and pane drag.
 
 ## Integration health
 

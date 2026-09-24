@@ -8,7 +8,7 @@ import { applyZoom, closePane, focusPane, runAction, splitPaneById } from "./act
 import { keyOverride, zoomKey } from "./appearance";
 import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
-import {failQuietly, getState, keyBindings, useStore} from "./store";
+import {failQuietly, getState, keyBindings, splitsAllowed, useStore} from "./store";
 import { registerTerminal } from "./terminals";
 import { listenFileDrop, registerTerminalLinks } from "./terminalHooks";
 import { Columns2, Rows2, X } from "lucide-react";
@@ -151,12 +151,13 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   const lastPane = useStore(() => isLastPane(paneId));
   const shortcut = useShortcuts();
-  const drag = usePaneDrag(paneId, pane?.tab_id ?? "", title);
+  const splits = useStore(splitsAllowed);
+  const drag = usePaneDrag(paneId, pane?.tab_id ?? "", title, splits);
   return (
     <div className="pane-wrap">
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
       <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
-        <span className="chip pane-grip" ref={drag.ref} {...drag.props}>
+        <span className={splits ? "chip pane-grip" : "chip"} ref={drag.ref} {...drag.props}>
           <span className={`state ${stateClass}`} />
           <ProcessIcon agent={agent?.kind} cmd={pane?.process_cmd} />
           <strong>{title}</strong>
@@ -167,13 +168,13 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         </span>
         <span className="chip right" title={pane?.cwd}>
           <span>{shortPath(pane?.cwd ?? "")}</span>
-          <IconButton label="Split right" shortcut={active ? shortcut("new_terminal") : undefined} onClick={() => splitPaneById(paneId, "horizontal")}><Columns2 className="icon" /></IconButton>
-          <IconButton label="Split down" shortcut={active ? shortcut("split_vertical") : undefined} onClick={() => splitPaneById(paneId, "vertical")}><Rows2 className="icon" /></IconButton>
+          {splits && <IconButton label="Split right" shortcut={active ? shortcut("new_terminal") : undefined} onClick={() => splitPaneById(paneId, "horizontal")}><Columns2 className="icon" /></IconButton>}
+          {splits && <IconButton label="Split down" shortcut={active ? shortcut("split_vertical") : undefined} onClick={() => splitPaneById(paneId, "vertical")}><Rows2 className="icon" /></IconButton>}
           {!lastPane && <IconButton label="Close pane" shortcut={active ? shortcut("close_pane") : undefined} onClick={() => closePane(paneId)}><X className="icon" /></IconButton>}
         </span>
       </div>
       <div className="pane-body" ref={hostRef} />
-      <PaneDropZone paneId={paneId} />
+      {splits && <PaneDropZone paneId={paneId} />}
     </div>
     </div>
   );

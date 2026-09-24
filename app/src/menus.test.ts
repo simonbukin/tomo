@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { MenuEntry, MenuItem } from "./components/ui";
-import { editorName, paneMenu, tabMenu, toggledTag, worktreeMenu } from "./menus";
-import { getState, type State } from "./store";
+import { tidySeparators } from "./components/ui/menu";
+import { allActions } from "./actions";
+import { editorName, paneMenu, spawnMenu, tabMenu, toggledTag, worktreeMenu } from "./menus";
+import { getState, setState, type State } from "./store";
 import type { Pane, Tab, Worktree } from "./types";
 
 const labels = (items: MenuItem[]) => items.map((it) => ("separator" in it ? "—" : it.label));
@@ -62,6 +64,23 @@ describe("pane menu", () => {
     expect(labels(menu)).toEqual(["split right", "split down", "zoom", "equalize", "rotate", "swap with", "—", "send to", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
     expect(labels(entry(menu, "send to").submenu!)).toEqual(["two"]);
     expect(labels(entry(menu, "copy").submenu!)).toEqual(["cwd", "session id"]);
+  });
+
+  it("offers no split, no send to, and no split command when a tab holds one pane", () => {
+    const tabsOnly = { ...state, config: { ...state.config, max_panes_per_tab: 1 } } as unknown as State;
+    expect(labels(paneMenu("p1", tabsOnly))).toEqual(["zoom", "equalize", "rotate", "swap with", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
+    expect(labels(tidySeparators(paneMenu("p3", tabsOnly)))).toEqual(["rename pane...", "copy", "—", "kill process tree", "close"]);
+    expect(labels(spawnMenu("w1", tabsOnly))).toEqual(["terminal", "browser", "claude", "codex", "pi"]);
+    expect(labels(worktreeMenu(worktree, tabsOnly))).not.toContain("split right");
+    const setOf = (s: State) => {
+      setState(s);
+      return allActions().map((a) => a.id);
+    };
+    expect(setOf(tabsOnly)).not.toContain("new_terminal");
+    expect(setOf(tabsOnly)).not.toContain("split_vertical");
+    expect(setOf(state)).toContain("split_vertical");
+    expect(allActions({ withUnoffered: true }).map((a) => a.id)).toContain("new_terminal");
+    setState(base);
   });
 
   it("shows shortcuts only on the focused pane", () => {
