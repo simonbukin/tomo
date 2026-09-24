@@ -55,8 +55,8 @@ missing pane are pruned to the panes that exist.
 
 Tomo does not relaunch arbitrary commands. Only the shell and, for the three
 supported agents, the native resume command run without user action. A pane
-that an addon started comes back as a plain shell in its cwd with its label.
-The command does not run again.
+that ran an Action comes back as a plain shell in its cwd with the Action
+label. The Action command does not run again; start it from the Action bar.
 
 ### Workspace in the GUI
 
@@ -160,7 +160,7 @@ The result carries `checkpoint_commit`: the new commit id, or `null` when
 nothing was committed.
 
 The worktree still shows in Home under the archived filter with its
-metadata. `tomo worktree restore` first checks that the
+metadata and town identity. `tomo worktree restore` first checks that the
 branch still exists, then runs `git worktree add` at the old path (or under
 the configured parent when the old parent is gone), clears the archived
 mark, and fires `worktree.restored`. The branch comes back with the
@@ -190,7 +190,7 @@ its ratios, the active pane, and for each pane:
 | Agent          | A shell that runs the native resume command for the same session |
 | Agent without a session reference | A plain shell                                |
 | Browser        | A browser pane at the same URL                                  |
-| Started by an addon | A plain shell in its cwd with its label; the command does not run |
+| Action         | A plain shell in its cwd with the Action label; the command does not run |
 
 The stack does not survive a daemon restart. Archive closes panes without a
 record. `scripts/torture/continuity.sh` covers these cases.

@@ -4,7 +4,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { addonApps, addonViews, appsAvailable, repoAvatar } from "./addons";
+import { addonApps, addonViews, repoAvatar } from "./addons";
 import { LENSES, LENS_LABEL, lensGroups, type LensGroup } from "./lenses";
 import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -96,7 +96,7 @@ export function Sidebar() {
         <Destination id="home" label="home" icon={House} current={ui.view === "home"} shortcut={shortcut("home")} />
         <Destination id="activity" label="activity" icon={History} count={needCount} current={ui.view === "activity"} shortcut={shortcut("activity")} />
         <Destination id="agents" label="agents" icon={Bot} count={agentCount} current={ui.view === "agents"} shortcut={shortcut("agents")} />
-        {appsAvailable() && <Destination id="apps" label="apps" icon={AppWindow} count={appCount} current={ui.view === "apps"} shortcut={shortcut("apps")} />}
+        <Destination id="apps" label="apps" icon={AppWindow} count={appCount} current={ui.view === "apps"} shortcut={shortcut("apps")} />
         {addonViews().map((v) => (
           <Destination key={v.id} id={v.id} label={v.label.toLowerCase()} icon={v.icon} current={ui.view === v.id} shortcut={shortcut(v.id)} />
         ))}

@@ -14,6 +14,12 @@ crates/tomod/              daemon
   src/daemon.rs            state, the Core Call handler, Seams, tabs/panes, restore
   src/server.rs            socket accept loop, per-connection framing
   src/addons/mod.rs        the static addon list, State (per-daemon addon state), seams(), migrate(), start(), the dependency tests (composition root)
+  src/addons/towns/        Japan Towns: calls, towns table, seams, dataset and pick
+  src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
+  src/addons/usage/        provider usage: Claude and Codex adapters, last result, poll, usage_get, notices
+  src/addons/actions/      repo Actions: .tomo.toml parser, calls, reload and pane exit seams
+  src/addons/runtime/      runtime endpoints: the lsof scan, endpoint rules, runtime_list, endpoint activity
+  src/addons/agentation/   annotations: annotations_send, evidence text, annotation activity
   src/store.rs             SQLite schema and queries
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
@@ -32,6 +38,7 @@ crates/tomo-cli/           `tomo` binary
 app/                       Tauri client
   src-tauri/src/lib.rs     socket bridge, `rpc` command, daemon autostart, host composition root (addon modules, browser hooks)
   src-tauri/src/browser.rs child webviews of browser panes
+  src-tauri/src/agentation.rs Agentation overlay bundle, annotate flags, feedback commands
   src/generated/           TypeScript types generated from tomo-proto; do not edit
   src/types.ts             re-exports src/generated plus view-only types
   src/api.ts               invoke wrapper, event pump, pane output fan-out
@@ -42,6 +49,12 @@ app/                       Tauri client
   src/browser/             browser pane view, open-url calls, host call helpers, CSS
   src/addons/index.ts      the builtins list (composition root)
   src/addons/types.ts      the Addon type: the slots that addons fill
+  src/addons/towns/        Japan Towns view, ceremony, create field, state, CSS, data
+  src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
+  src/addons/usage/        usage meters, bucket popover, diagnostics section, state
+  src/addons/actions/      Action topbar buttons, menu items, palette entries, shortcuts, state
+  src/addons/runtime/      endpoint state, the header popover, source marks and menu items, NOW signal
+  src/addons/agentation/   browser toolbar items, page overlay source (page/), CSS
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation
 scripts/install.sh         release build and install
@@ -172,9 +185,16 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Which hooks run for an event          | `events::matching_hooks`, `Daemon::dispatch` |
 | The only synchronous hook             | `Daemon::gate` (`worktree.before_archive`) |
 | How tags are cleaned                  | `normalized_metadata`, called in `MetadataSet` |
+| Which GitHub tag a pull request gets  | `addons::github::model::pr_tag` |
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
+| Town naming and unlocks               | `addons::towns::{name_worktree, unlock, rebind}`, joined through `Seams` |
 | Which addons exist and where they join Core | `addons::seams`, `addons::start`, `dispatch::handle`, `app/src/addons/index.ts` |
+| When `gh` runs, and when `pr_changed` and `pr_merged` fire | `addons::github::model::{fresh, update}` |
+| When usage fetches and what it warns about | `addons::usage::{get, run, crossings}` |
+| What `.tomo.toml` accepts             | `addons::actions::model::parse`         |
+| How an action runs, reuses, or stops  | `addons::actions::{run, stop, restart}` |
+| What an Action pane exit records      | `addons::actions::exited`, joined through `Seams::pane_exited` |
 | What started a pane                   | `PaneState.source`, set by the spawner; `PaneSource::action_id` for the older wire fields |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
 

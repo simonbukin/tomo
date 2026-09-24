@@ -44,7 +44,7 @@ reference.
 Press `?` when the focus is not in a terminal and not in a text field.
 Or run `Keyboard shortcuts` from the palette or the Help menu. The
 dialog lists every command that has a key, in groups. It also lists the
-`shortcuts` of each addon. Type to filter by
+keys of the repo Actions of the worktree on screen. Type to filter by
 label, command id, group, or key text (for example `mod+h`).
 
 ## Command palette
@@ -53,7 +53,9 @@ Cmd+K opens the palette. It lists:
 
 - the tabs and panes of the worktree on screen
 - live agents in all worktrees (`focus Claude · aogashima`)
-- the `paletteEntries` of each addon
+- the repo Actions of the worktree on screen (`start App`,
+  `focus App logs`, `restart App`, `stop App`)
+- runtime endpoints (`open App :3000`)
 - every registry command, with its group and key
 - worktrees and repos
 
@@ -74,7 +76,7 @@ match the query does not show.
 A worktree or a repo entry shows `›`. Enter opens a sub-list of its
 actions, and the name shows as a breadcrumb in the input. The sub-list
 comes from the same builder as the context menu (`worktreeMenu`,
-`repoMenu`), plus the `paletteEntries` of each addon. A submenu, for
+`repoMenu`), plus the worktree's Actions and endpoints. A submenu, for
 example `copy`, opens one more level. Backspace in an empty input goes
 back one level. Cmd+Enter on a nested entry runs its first action at
 once (for a worktree, `open`).
@@ -90,6 +92,8 @@ store state as a parameter, so tests call them with a fixture state.
 | Tab | rename · move left, move right · close, close others |
 | Pane | split right, split down, zoom, equalize, rotate, swap with › · send to › · rename pane, copy › (cwd, session id) · kill process tree, close |
 | Browser pane | back, forward, reload · open in external browser, copy › (url) · send to › · close |
+| Running Action | open, focus logs, restart, stop · copy › (url, port) |
+| Runtime endpoint row | open, focus logs, restart, stop · copy › (url, port) |
 
 `move left` and `move right` call `tab_move` with the new 0-based
 position. `send to` lists the other tabs of the worktree and calls

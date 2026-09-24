@@ -16,6 +16,8 @@
     "allow-browser-forward",
     "allow-browser-reload",
     "allow-browser-close",
+    "allow-browser-set-annotate",
+    "allow-browser-clear-annotations",
     "core:default",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",

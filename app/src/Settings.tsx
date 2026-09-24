@@ -293,11 +293,7 @@ function AddonsSection() {
           </div>
         ))}
       </div>
-      {addons.length === 0 ? (
-        <p className="settings-note">No addons. docs/addons.md shows how to write one, and the simon-main branch has six examples.</p>
-      ) : (
-        <p className="settings-note">{addons.length} addons loaded.</p>
-      )}
+      <p className="settings-note">{addons.length} addons loaded.</p>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { Menu } from "@tauri-apps/api/menu";
 import { useEffect } from "react";
 import { allActions, runAction, type Action } from "./actions";
-import { addonViews, appsAvailable } from "./addons";
+import { addonViews } from "./addons";
 import { parseBinding } from "./keys";
 import { effectiveBindings } from "./shortcuts";
 import { recordDiagnostic, useStore } from "./store";
@@ -25,7 +25,7 @@ export const MENU_BAR_LAYOUT: { text: string; items: LayoutItem[] }[] = [
   { text: "Tomo", items: [p("About"), SEP, "settings", SEP, p("Services"), SEP, p("Hide"), p("HideOthers"), p("ShowAll"), SEP, p("Quit")] },
   { text: "File", items: ["new_tab", "new_browser", SEP, "create_worktree", "add_repo", SEP, "close_tab", "close_other_tabs"] },
   { text: "Edit", items: [p("Undo"), p("Redo"), SEP, p("Cut"), p("Copy"), p("Paste"), p("SelectAll")] },
-  { text: "View", items: ["palette", SEP, "home", "activity", "agents", ...(appsAvailable() ? ["apps"] : []), ...addonViews().map((v) => v.id), "toggle_board", SEP, "toggle_left_sidebar", "toggle_right_sidebar", SEP, "zoom_in", "zoom_out", "zoom_reset", SEP, p("Minimize"), p("Fullscreen")] },
+  { text: "View", items: ["palette", SEP, "home", "activity", "agents", "apps", ...addonViews().map((v) => v.id), "toggle_board", SEP, "toggle_left_sidebar", "toggle_right_sidebar", SEP, "zoom_in", "zoom_out", "zoom_reset", SEP, p("Minimize"), p("Fullscreen")] },
   { text: "Workspace", items: ["next_worktree", "prev_worktree", SEP, "next_tab", "prev_tab", "move_tab_left", "move_tab_right", "rename_tab", SEP, "open_editor", "reveal_finder", "copy_path", SEP, "refresh", "archive_worktree"] },
   { text: "Pane", items: ["new_terminal", "split_vertical", SEP, "zoom_pane", "equalize_panes", "rotate_split", SEP, "focus_left", "focus_right", "focus_up", "focus_down", SEP, "kill_pane_tree", "close_pane"] },
   { text: "Agent", items: ["spawn_claude", "spawn_codex", "spawn_pi", SEP, "next_attention", "clear_attention", SEP, "integrations", "hook_log"] },

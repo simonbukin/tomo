@@ -1,3 +1,4 @@
+mod agentation;
 mod browser;
 
 use serde_json::{json, Value};
@@ -183,8 +184,8 @@ async fn rpc(link: State<'_, Arc<Link>>, method: String, params: Option<Value>) 
 }
 
 /// What Browser runs for each addon when a page finishes loading (webview, pane id) and when a pane closes (app, pane id).
-pub(crate) const BROWSER_PAGE_LOADED: &[fn(&Webview, &str)] = &[];
-pub(crate) const BROWSER_CLOSED: &[fn(&AppHandle, &str)] = &[];
+pub(crate) const BROWSER_PAGE_LOADED: &[fn(&Webview, &str)] = &[agentation::page_loaded];
+pub(crate) const BROWSER_CLOSED: &[fn(&AppHandle, &str)] = &[agentation::closed];
 
 #[tauri::command]
 fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
@@ -241,6 +242,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(link)
+        .manage(agentation::AnnotatePanes::default())
         .invoke_handler(tauri::generate_handler![
             rpc,
             daemon_connected,
@@ -252,7 +254,10 @@ pub fn run() {
             browser::browser_back,
             browser::browser_forward,
             browser::browser_reload,
-            browser::browser_close
+            browser::browser_close,
+            agentation::browser_set_annotate,
+            agentation::browser_clear_annotations,
+            agentation::browser_feedback
         ])
         .setup(|app| {
             mark("tauri setup");

@@ -12,7 +12,6 @@ pub struct ProcRow {
     pub name: String,
     /// Refreshed on every poll for pane shells only; `name` is fixed at first sight,
     /// so a shell that exec'd its command keeps the shell's name.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub exe: Option<PathBuf>,
     pub cmd: String,
     pub cwd: Option<PathBuf>,
@@ -102,7 +101,6 @@ impl ProcMonitor {
 }
 
 /// The program a process runs now: the exe basename when refreshed, else the first-seen name.
-#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub fn program_name(row: &ProcRow) -> String {
     row.exe.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| row.name.clone())
 }

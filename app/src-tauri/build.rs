@@ -9,6 +9,9 @@ const COMMANDS: &[&str] = &[
     "browser_forward",
     "browser_reload",
     "browser_close",
+    "browser_set_annotate",
+    "browser_clear_annotations",
+    "browser_feedback",
 ];
 
 fn main() {
