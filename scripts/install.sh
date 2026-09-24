@@ -4,6 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="${TOMO_BIN_DIR:-$HOME/.local/bin}"
 APP_DIR="${TOMO_APP_DIR:-/Applications}"
+WITH_CONFIG=0
+for arg in "$@"; do
+  case "$arg" in
+    --with-config) WITH_CONFIG=1 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
 
 cd "$ROOT"
 echo "== building release binaries"
@@ -50,5 +57,17 @@ case ":$PATH:" in
   *) echo "add $BIN_DIR to your PATH so agents and hooks can find tomo" ;;
 esac
 echo "next: run 'tomo integrations install' to add hooks for Claude, Codex, and Pi"
+
+if [ "$WITH_CONFIG" = 1 ]; then
+  DATA_DIR="${TOMO_DATA_DIR:-$HOME/Library/Application Support/tomo}"
+  mkdir -p "$DATA_DIR"
+  if [ -f "$DATA_DIR/config.toml" ] && ! cmp -s "$DATA_DIR/config.toml" personal/config.toml; then
+    BACKUP="$DATA_DIR/config.toml.bak-$(date +%Y%m%d-%H%M%S)"
+    cp "$DATA_DIR/config.toml" "$BACKUP"
+    echo "== saved the old config as $BACKUP"
+  fi
+  cp personal/config.toml "$DATA_DIR/config.toml"
+  echo "== installed personal/config.toml"
+fi
 
 "$HOME/.local/bin/tomo" daemon stop >/dev/null 2>&1 && echo "== stopped the running daemon; the app or the next tomo call starts the new one" || true
