@@ -1,30 +1,21 @@
 # tomo
 
-**somewhere to put your agents.** small, local, and yours.
+**by agents, for agents, shaped by you.**
 
-Tomo keeps your worktrees, your terminals, and the agents working in them in
-one window. It tells you which agent is working, which one is waiting for you,
-and which one is eating the machine.
+Tomo keeps everything (worktrees, terminals, agents and so on) organized. The rest is up to you!
 
-It does not replace Git, your editor, your shell, or your agents. It keeps the
-room organized.
-
-## Two branches
+## This repo
 
 - **`main`** is the base: a clean, flat copy for you to install, use, and take
   apart. It has the core, the window, and the addon seams, with no addons and
-  no opinions of mine in it.
+  no opinions of mine in it. All yours to mess with!
 - **[`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main)** is my
-  own Tomo: my config and my six addons. There is a map of Japanese towns that
-  names each worktree, GitHub pull request status, Claude and Codex allowances,
-  repo buttons, port discovery, and browser annotations for agents. Read it as
-  a worked example. `git diff main...simon-main` shows everything that I added.
-
-The base is for you to mess with.
+  own Tomo config. I regularly update this with my own opinions, themes, and addons.
+  You can use it as reference or for inspiration!
 
 ## Install
 
-macOS only, for now.
+macOS only, for now (but feel free to add support if you want)
 
 ```bash
 git clone https://github.com/simonbukin/tomo && tomo/scripts/install.sh
@@ -79,31 +70,16 @@ Everything below is a file you can edit.
 
 ## Things to build
 
-Ideas, small to large. Each one fits the seams that are already there.
+Ideas, small to large. Build what you want! Perhaps...
 
-**Make it look like yours**
-- A theme: 14 colors, or a new `tokens.css` with a different grid unit and faces.
+- A new theme?
 - A sidebar that works like you think: by owner, by age, by ticket, or as a tree.
-- A calmer mode that hides every worktree whose agent is not waiting for you.
+- An integration you'll use... Linear perhaps? Or Hira? 
+- A new agent provider?
+- A streak counter for merged branches?
+- A small pet in the corner that sleeps when your agents are idle perhaps?
 
-**Plug in your tools**
-- Linear, Jira, GitHub Issues, or Things: tags as tickets, and a view of your queue.
-- Pull request or merge request status, and CI runs for each branch.
-- Sentry or log errors for the branch in the inspector.
-- Slack, ntfy, or a phone push when an agent waits for too long.
-
-**Work with agents**
-- A new agent provider next to Claude, Codex, and Pi.
-- A cost or allowance meter in the bottom strip.
-- A "hand this to another agent" button that moves a task and its context.
-- Repo buttons for your dev server, tests, and storybook.
-
-**Just for fun**
-- A collection game: towns, birds, stars, or trains that you unlock with each worktree.
-- A streak counter for merged branches.
-- A small pet in the corner that sleeps when your agents are idle.
-
-`simon-main` has working versions of several of these.
+`simon-main` has working versions of several of these if you want to look!
 
 ## Docs
 
@@ -129,5 +105,4 @@ no build step.
 
 ## Don't like something?
 
-All good. Fork it and do whatever you want with it. It is public domain, there
-is no licence to argue with, and nobody is going to ask what you did to it.
+All good. Fork it and do whatever you want with it. It is public domain for a reason.
