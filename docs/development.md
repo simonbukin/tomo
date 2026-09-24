@@ -47,6 +47,17 @@ docs/                      this documentation
 scripts/install.sh         release build and install
 ```
 
+## Branches
+
+- `main` is the base. It has Core, the client, and the addon seams, but no addons.
+- `simon-main` is the author's own Tomo: the base, six addons, and a personal
+  config. It is a worked example.
+
+Make a Core change on `main` first, then merge `main` into `simon-main`. Do not
+merge `simon-main` into `main`. `simon-main` reverts the commit that removed the
+addons, so a merge from `main` never removes them. A change to a composition
+root can conflict; keep both sides of the conflict.
+
 ## Build, run, test
 
 ```bash
