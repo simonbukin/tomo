@@ -4,6 +4,11 @@
 
 Tomo keeps everything (worktrees, terminals, agents and so on) organized. The rest is up to you!
 
+> **You are on `simon-main`: my own Tomo.** It is the base plus my six addons
+> (Towns, GitHub, Usage, Actions, Runtime, Agentation) and my config in
+> `personal/config.toml`. `scripts/install.sh --with-config` installs that
+> config and keeps a backup of yours. Want a clean start? Use `main`.
+
 ## This repo
 
 - **`main`** is the base: a clean, flat copy for you to install, use, and take

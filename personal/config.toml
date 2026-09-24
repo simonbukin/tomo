@@ -1,0 +1,26 @@
+# Simon's Tomo config. `scripts/install.sh --with-config` copies it into place.
+
+[theme]
+name = "slab-dark"
+
+[terminal]
+font_size = 14
+
+[agents.claude]
+command = "claude"
+args = ["--dangerously-skip-permissions"]
+
+[[hooks]]
+event = "worktree.created"
+mode = "pane"
+timeout_s = 900
+command = '''
+[ "$TOMO_REPO_PATH" = "$HOME/Projects/holly" ] || exit 0
+for f in .env .env.development .tomo.toml; do
+  [ -e "$f" ] || [ ! -e "$TOMO_REPO_PATH/$f" ] || cp "$TOMO_REPO_PATH/$f" "$f"
+done
+pnpm install
+'''
+
+[notifications]
+sounds = true
