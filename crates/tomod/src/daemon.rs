@@ -673,6 +673,12 @@ impl Daemon {
         inner.panes.get(pane_id).map(|p| HookPane { id: p.row.id.clone(), tab_id: p.row.tab_id.clone(), cwd: p.row.cwd.clone() })
     }
 
+    /// Reads a new process table first, because the monitor snapshot can be 15 seconds old and not show the newest children.
+    fn kill_descendants(inner: &mut Inner, pid: u32) {
+        let rows = inner.procs.refresh(&[], false);
+        procs::kill_descendants(&rows, pid);
+    }
+
     fn set_stop_intent(inner: &mut Inner, pane_id: &str) {
         if let Some(p) = inner.panes.get_mut(pane_id) {
             p.stop_intent = true;
@@ -711,9 +717,7 @@ impl Daemon {
     pub(crate) fn stop_pane(&self, inner: &mut Inner, pane_id: &str) {
         Self::set_stop_intent(inner, pane_id);
         if let Some(pid) = inner.panes.get(pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
-            for child in procs::descendants(&inner.proc_rows, pid) {
-                procs::kill_tree(&inner.proc_rows, child);
-            }
+            Self::kill_descendants(inner, pid);
         }
         self.persist_scrollback(inner, pane_id);
         Self::remove_pane(inner, pane_id);
@@ -1394,9 +1398,7 @@ impl Daemon {
             for pane_id in panes {
                 Self::set_stop_intent(inner, &pane_id);
                 if let Some(pid) = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
-                    for child in procs::descendants(&inner.proc_rows, pid) {
-                        procs::kill_tree(&inner.proc_rows, child);
-                    }
+                    Self::kill_descendants(inner, pid);
                 }
                 Self::remove_pane(inner, &pane_id);
             }
@@ -1795,9 +1797,7 @@ impl Daemon {
         let mut inner = self.lock();
         let pid = inner.panes.get(&pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid).ok_or_else(|| err(ErrorCode::NotFound, "pane not live"))?;
         Self::set_stop_intent(&mut inner, &pane_id);
-        for child in procs::descendants(&inner.proc_rows, pid) {
-            procs::kill_tree(&inner.proc_rows, child);
-        }
+        Self::kill_descendants(&mut inner, pid);
         Ok(Value::Null)
     }
 
@@ -2722,6 +2722,35 @@ mod tests {
         assert!(matches!(refused.code, ErrorCode::BadRequest), "{refused:?}");
         assert_eq!(daemon.lock().worktrees.len(), 1, "nothing was created");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn kill_tree_kills_a_child_that_the_monitor_has_not_seen() {
+        let (dir, repo) = repo_fixture("kill-new-child");
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let worktree_id = daemon.lock().worktrees.keys().next().unwrap().clone();
+        let script = "trap '' HUP; sleep 300 & echo $! > tree.pid; wait";
+        let spec = PaneCreate { worktree_id: Some(worktree_id), tab_id: None, cwd: None, command: Some(vec!["/bin/sh".into(), "-c".into(), script.into()]), title: None };
+        let created: PaneResult = serde_json::from_value(daemon.handle_inner(0, Call::PaneCreate(spec)).await.unwrap()).unwrap();
+        let pid_file = repo.join("tree.pid");
+        let child = wait_for(|| std::fs::read_to_string(&pid_file).ok().filter(|s| s.ends_with('\n')).and_then(|s| s.trim().parse::<i32>().ok())).await;
+
+        daemon.handle_inner(0, Call::PaneKillTree { pane_id: created.pane.id }).await.unwrap();
+
+        wait_for(|| (unsafe { libc::kill(child, 0) } != 0).then_some(())).await;
+        daemon.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    async fn wait_for<T>(mut probe: impl FnMut() -> Option<T>) -> T {
+        for _ in 0..100 {
+            if let Some(v) = probe() {
+                return v;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        panic!("gave up after 5 s");
     }
 
     fn git_in(dir: &Path, args: &[&str]) {
