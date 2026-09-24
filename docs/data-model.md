@@ -38,7 +38,7 @@ No table stores a branch name.
 | `first_seen_ms`  | C        | When discovery first saw the worktree                   |
 | `archived_at_ms` | C        | Set by `worktree archive`; NULL once the path exists again |
 | `archived_branch`| C        | Branch at archive time; used by `worktree restore`      |
-| `town_slug`      | —        | Unused since Phase 2. Old databases keep the column; a new database does not get it. The `towns` table owns the mapping |
+| `town_slug`      | —        | Unused since Phase 2. Old databases keep the column; a new database does not get it |
 
 Tags are the only way to group worktrees. An old database can have a
 `project` or `state` value from before tags replaced them. When Tomo reads
@@ -49,19 +49,6 @@ old columns to NULL. There is no separate migration step.
 Discovery inserts a row for every worktree it sees, so metadata can attach
 to it later. Deleting a row loses organization only; the worktree stays
 usable.
-
-## towns
-
-| Column           | Category | Meaning                                  |
-|------------------|----------|------------------------------------------|
-| `slug`           | A        | Town slug from `app/src/addons/towns/data/japan-towns.json` |
-| `worktree_id`    | A        | Worktree that unlocked the town          |
-| `repo_id`        | A        | Repository of that worktree              |
-| `unlocked_at_ms` | A        | When the worktree was created            |
-
-The Towns addon (`crates/tomod/src/addons/towns`) creates this table and is the only code that queries it. The table is the only owner of the worktree→town mapping; clients read it through `town_list`. A town unlocks once. Archiving or deleting the worktree keeps the unlock. A move or a restore at a new path moves the row to the new worktree id.
-The dataset itself (1681 municipalities with coordinates, population,
-Wikipedia link, and a rarity tier from population) ships in the binary.
 
 ## tabs
 
@@ -90,14 +77,14 @@ A row whose `layout` fails to parse is skipped on load.
 | `agent_kind`    | R        | `claude`, `codex`, `pi`, or NULL                         |
 | `session_ref`   | R        | Native session reference for resume                      |
 | `created_at_ms` | R        | Creation time                                            |
-| `action_id`     | none     | Not read or written since the Actions addon. An old database keeps the column; a new database does not get it |
+| `action_id`     | none     | Not read or written. An old database keeps the column; a new database does not get it |
 
 Nothing here records the running command. On restart a pane gets a shell,
 and only a known agent kind with a session reference gets a resume line.
 
-The pane source (`Pane.source`, for example the Action that started the
+The pane source (`Pane.source`, for example the addon that started the
 pane) is in memory only. A restored pane has no source, so the restored
-shell is never taken for the running Action. `Pane.action_id` on the wire
+shell is never taken for the process that the addon started. `Pane.action_id` on the wire
 comes from the source.
 
 ## attention
@@ -123,14 +110,14 @@ The daemon keeps the newest 200 viewed items.
 | Column           | Category | Meaning                                              |
 |------------------|----------|------------------------------------------------------|
 | `id`             | R        | Random id                                            |
-| `kind`           | R        | Kind string, e.g. `action_crashed`; see [activity.md](activity.md). An unknown string reads back unchanged |
+| `kind`           | R        | Kind string, e.g. `agent_waiting`; see [activity.md](activity.md). An unknown string reads back unchanged |
 | `occurred_at_ms` | R        | Event time; indexed, orders the list newest first    |
 | `worktree_id`    | R        | Worktree, or NULL for a hook with no worktree        |
 | `pane_id`        | R        | Pane, or NULL                                        |
 | `agent_kind`     | R        | `claude`, `codex`, `pi`, or NULL                     |
 | `title`          | R        | One line for a person                                |
 | `detail`         | R        | Optional second line                                 |
-| `payload`        | R        | JSON text; `action_crashed` holds `action_id`, `exit_code`, `pane_id` |
+| `payload`        | R        | JSON text; `checkpoint_created` holds `url` |
 | `attention_id`   | R        | The attention item the event opened or resolved      |
 
 The daemon keeps the newest 10 000 rows. It is a log for people, not a
@@ -213,7 +200,7 @@ commented copy when the file is missing.
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
 | `[[hooks]]`           | none                                      | `event`, `command`, optional `tag`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
 | `[notifications] desktop` | `true`                                | A desktop notification for a new attention item while the Tomo window is not focused. See [ui.md](ui.md) |
-| `[notifications] sounds`  | `false`                               | A short chime for a human checkpoint and a rare town unlock |
+| `[notifications] sounds`  | `false`                               | A short chime for a human checkpoint, and for a rare moment that an addon marks |
 
 Default keybindings (`mod` is ⌘):
 
@@ -242,13 +229,6 @@ If the file still has it, Tomo ignores it and the check gives a warning with
 the key `states`. Malformed config never stops the daemon; it logs a warning and uses
 defaults. The daemon reloads the file when it changes and sends
 `config_changed`. `config_set` edits one key in place and keeps comments.
-
-## .tomo.toml
-
-`.tomo.toml` is not Tomo state. It belongs to the repository and holds
-`[[actions]]`. A worktree reads its own file, and the file at the repository
-root when it has none. The daemon reads it on discovery and on change and
-keeps the result only in memory. See [actions.md](actions.md).
 
 ## hooks.log
 

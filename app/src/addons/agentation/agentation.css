@@ -1,4 +1,0 @@
-/* ---- Agentation: the annotate button and the note count in the browser toolbar */
-.browser-annotate-on { color: var(--accent); background: var(--accent-soft); }
-.browser-count { min-width: 16px; padding: 0 4px; margin: 0 2px; background: var(--fg); color: var(--bg); font-family: var(--mono); font-size: var(--fs-0); line-height: 16px; text-align: center; }
-@container (max-width: 359px) { .browser-count { display: none; } }

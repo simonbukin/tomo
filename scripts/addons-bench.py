@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Headless tomod baseline for the Core / Client / Addon refactor. See docs/addons-baseline.md.
+"""Headless tomod baseline for the Core / Client / Addon refactor.
 
   addons-bench.py setup                  new data dir: 5 repos, 25 linked worktrees, 12 panes with 1 MB scrollback
   addons-bench.py ops [trials]           reattach, worktree_open, worktree_refresh, ps round trips

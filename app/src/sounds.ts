@@ -1,18 +1,16 @@
 import { getState } from "./store";
 
-export type Chime = "checkpoint" | "rare" | "legendary";
+export type Chime = "checkpoint";
 
 const NOTES: Record<Chime, number[]> = {
   checkpoint: [660, 880],
-  rare: [784, 988, 1175],
-  legendary: [659, 784, 988, 1319],
 };
 
 let ctx: AudioContext | null = null;
 
 /**
  * A short synthesized chime. Plays only when `[notifications] sounds` is on, and only for the
- * rare moments that earn one: a human checkpoint and a rare or better town unlock.
+ * rare moments that earn one: a human checkpoint. An addon can add its own chime here.
  */
 export function playChime(kind: Chime): void {
   if (!getState().config?.notifications?.sounds) return;

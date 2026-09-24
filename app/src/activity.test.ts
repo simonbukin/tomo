@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, nowSignals, resetsIn, sparkCells, truncate, type SignalInput } from "./activityModel";
+import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, nowSignals, truncate, type SignalInput } from "./activityModel";
 import type { ActivityEvent, AgentPresence, AttentionItem } from "./types";
 
 const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", worktree_id: "w", pane_id: null, level: "attention", message: "m", created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null, ...extra });
@@ -108,16 +108,5 @@ describe("text helpers", () => {
     expect(truncate("x".repeat(80))).toHaveLength(80);
     expect(truncate("x".repeat(81))).toHaveLength(80);
     expect(truncate("x".repeat(81)).endsWith("...")).toBe(true);
-  });
-  it("draws usage sparks", () => {
-    expect(sparkCells(0.48)).toEqual({ filled: 5, empty: 5 });
-    expect(sparkCells(1.2)).toEqual({ filled: 10, empty: 0 });
-    expect(sparkCells(null)).toEqual({ filled: 0, empty: 10 });
-    expect(sparkCells(0.04)).toEqual({ filled: 0, empty: 10 });
-  });
-  it("formats reset times", () => {
-    expect(resetsIn(2 * 3_600_000, 0)).toBe("resets in 2h");
-    expect(resetsIn(5 * 60_000, 0)).toBe("resets in 5m");
-    expect(resetsIn(null, 0)).toBeNull();
   });
 });

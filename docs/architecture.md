@@ -20,8 +20,7 @@ display logic that stays in the GUI.
 
 Tomo has three crates: `tomo-proto`, `tomod`, and `tomo-cli`. Milestone 10
 examined a fourth crate, a `tomo-core` domain library, and kept the three.
-The dependency law stays in the tests of `addons/mod.rs`. See "Milestone 10
-result: crate structure" in [addons.md](addons.md).
+The dependency law stays in the tests of `addons/mod.rs`.
 
 The Tauri process does not talk to the daemon in JavaScript. A small Rust
 bridge (`app/src-tauri/src/lib.rs`) holds one socket connection, forwards
@@ -62,7 +61,7 @@ overwrite it.
 
 | Category                    | Examples                                                       | Rule                                                          |
 |-----------------------------|----------------------------------------------------------------|---------------------------------------------------------------|
-| Authoritative Tomo metadata | known repository roots; display name, tags, town unlocks | Only the user (through GUI, CLI, or a hook script) changes it. The GitHub addon also sets its reserved tags. |
+| Authoritative Tomo metadata | known repository roots; display name, tags | Only the user (through GUI, CLI, or a hook script) or an addon changes it. |
 | Cached external observation | worktree path, gitdir name, branch, dirty state, diff counts   | Rediscovered from Git on every refresh. Never trusted forever. |
 | Recoverable runtime state   | tabs, layout tree, panes, cwd, agent kind, session reference, attention, UI state | Written so a restart can rebuild the shape of the work. |
 
@@ -156,10 +155,9 @@ A worktree has any number of **tags**. Tags are free text with no leading
 sidebar tag lens, the Home groups, and the board columns. A tag can say what
 the work is about (`labor`) or where it is in your workflow (`ready`).
 
-The GitHub addon owns six reserved tags (`draft`, `review`,
-`changes-requested`, `approved`, `merged`, `closed`). It keeps exactly one
-of them on a worktree that has a pull request. See
-[features/github.md](features/github.md).
+An addon can also set tags, for example the pull request tags of the GitHub
+addon on the [`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main)
+branch.
 
 Why one dimension: a separate state field needed its own config, its own
 CLI flags, and its own hook filter. A tag does the same work, and a hook can
@@ -170,8 +168,9 @@ act when a tag is added.
 Meaningful transitions become typed events (`HookEvent` in `tomo-proto`):
 worktree discovered, created, before_archive, archived, restored,
 tags_changed; pane created and closed; agent started, working, waiting,
-idle, exited; attention created; action started, exited, and crashed;
-runtime endpoint discovered and removed; checkpoint created and resolved.
+idle, exited; attention created; checkpoint created and resolved.
+`HOOK_EVENTS` also keeps the names of the `action.*`, `runtime.*`, and
+`annotation.sent` events for addons; Core does not fire them.
 Each event runs the matching `[[hooks]]`
 entries from `config.toml` as ordinary processes with the event JSON on
 stdin. A hook that wants to change Tomo calls the `tomo` CLI, so the GUI,
@@ -189,24 +188,22 @@ a destructive operation, where a script may still say no. See
 
 A PTY exit callback runs on the PTY reader thread, outside tokio. The
 callback enters the daemon's runtime handle before it calls
-`Daemon::on_exit`, so the hooks that this path fires (`pane.closed`,
-`action.exited`) can spawn their processes. Before this fix those hooks
+`Daemon::on_exit`, so the hooks that this path fires (`pane.closed`)
+can spawn their processes. Before this fix those hooks
 never ran.
 
-## Feature boundary: Actions
+## Feature boundary: pane sources
 
-Repo-defined Actions are an addon (see "Addons" below). The addon reads
-`.tomo.toml` through the `worktree_files` seam: Core calls its reload after
-each discovery, and the watcher calls it when that file changes at a
-worktree root, which is not a Git change. A pane that an Action starts
-carries a `PaneSource` (`kind`, `id`, `label`). Core keeps the source in
-memory, shows it as `Pane.source` and as the older `Pane.action_id`, and
-gives it to the `pane_exited` seam, where the addon records the outcome. A
-second run finds the live pane by its source. See [actions.md](actions.md).
+A pane that an addon starts carries a `PaneSource` (`kind`, `id`, `label`).
+Core keeps the source in memory, shows it as `Pane.source` and as the older
+`Pane.action_id`, and gives it to the `pane_exited` seam. An addon can read
+a file at each worktree root, such as `.tomo.toml`, through the
+`worktree_files` seam: Core calls its reload after each discovery, and the
+watcher calls it when that file changes. For an example, see the Actions
+addon on the `simon-main` branch.
 
 Why a source and not `action_id` in Core: the source is provenance that any
-spawner can set, and Core never reads its `kind`. Runtime labels an
-endpoint from the source, so Runtime does not depend on Actions.
+spawner can set, and Core never reads its `kind`.
 
 ## Feature boundary: Browser panes
 
@@ -219,18 +216,13 @@ The browser code has three homes: `crates/tomod/src/features/browser.rs`
 (`browser_open`, `browser_navigate`, `create_browser_pane`),
 `app/src/browser/` (the pane view, the open-url calls, the CSS), and
 `app/src-tauri/src/browser.rs` (the child webviews). Browser stays a
-built-in pane kind and not an addon; see "Milestone 6 result: Browser" in
-[addons.md](addons.md).
+built-in pane kind and not an addon.
 
-Agentation is an addon on top of Browser. `annotations_send`
-(`crates/tomod/src/addons/agentation/`) turns an `EvidenceBundle` into plain
-text, types it into an agent pane with the Core `Daemon::paste_to_agent`
-(one bracketed paste), records an `annotations_sent` activity event, and runs
-the `annotation.sent` hooks. Browser reaches Agentation only through the
-`browserToolbar` slot and the page-load and close hook lists in
-`app/src-tauri/src/lib.rs`. The overlay bundle loads into a page only while
-Annotate is on. See "Milestone 7 result: Agentation" in
-[addons.md](addons.md).
+An addon reaches Browser only through the `browserToolbar` slot and the
+`BROWSER_PAGE_LOADED` and `BROWSER_CLOSED` hook lists in
+`app/src-tauri/src/lib.rs`. `Daemon::paste_to_agent` is the Core function
+that types text into an agent pane (one bracketed paste). For an example,
+see the Agentation addon on the `simon-main` branch.
 
 Why the daemon owns the pane but not the page: the layout, the restore
 path, and the CLI must see one kind of thing. The page itself is display
@@ -281,37 +273,14 @@ login `PATH` between two markers. The shell gets two seconds, then the
 daemon kills its process group. The new `PATH` is the login entries first,
 then the old entries, without empty or duplicate entries. A daemon that
 starts from a terminal with a full `PATH` does not run the shell. Panes,
-Actions, hooks, and adapters inherit the new `PATH`.
+hooks, and adapters inherit the new `PATH`.
 
 ## Addons
 
 An addon is an optional opinion in its own source folder. Core never
-imports it. Six addons exist:
-
-- Towns
-  - `crates/tomo-proto/src/addons/towns.rs`: wire types
-  - `crates/tomod/src/addons/towns/`: calls, the `towns` table, the seams
-  - `app/src/addons/towns/`: the map view, the ceremony, the create field
-- GitHub
-  - `crates/tomo-proto/src/addons/github.rs`: wire types
-  - `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` call, the pull request cache
-  - `app/src/addons/github/`: the pull request inspector section, the NOW signal, the repo avatar
-- Usage
-  - `crates/tomo-proto/src/addons/usage.rs`: wire types
-  - `crates/tomod/src/addons/usage/`: provider adapters, the last result, the poll, `usage_get`
-  - `app/src/addons/usage/`: the bottom-strip meters and the diagnostics section
-- Actions
-  - `crates/tomo-proto/src/addons/actions.rs`: wire types
-  - `crates/tomod/src/addons/actions/`: the `.tomo.toml` parser, the calls, the reload and exit seams
-  - `app/src/addons/actions/`: the topbar buttons, menu items, palette entries, shortcuts, and crash restart
-- Runtime
-  - `crates/tomo-proto/src/addons/runtime.rs`: wire types
-  - `crates/tomod/src/addons/runtime/`: the `lsof` scan, the protocol probe, `runtime_list`, the monitor tick seam
-  - `app/src/addons/runtime/`: the runtime button, the endpoint menu, the NOW signal, the "Open App" link
-- Agentation
-  - `crates/tomo-proto/src/addons/agentation.rs`: wire types
-  - `crates/tomod/src/addons/agentation/`: the `annotations_send` handler
-  - `app/src/addons/agentation/`: the browser toolbar item, and `app/src-tauri/src/agentation.rs` for the host hooks
+imports it. This base ships no addons. The
+[`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main) branch
+has six examples; see [addons.md](addons.md).
 
 Composition roots name the addons: `crates/tomod/src/main.rs`,
 `crates/tomod/src/addons/mod.rs`, `crates/tomod/src/dispatch.rs`, `lib.rs`
@@ -326,10 +295,9 @@ the addon fields. Each daemon owns the in-memory state of its addons:
 `addons::State`, and `addons::state` and `addons::state_mut` read it while
 the caller holds the Core lock. Core never looks inside the slot, and no
 addon keeps a mutable `static`. The GUI renders addon parts only through the slots of the
-`Addon` type in `app/src/addons/types.ts`. Core keeps the Git facts that
-GitHub reads: `Repo.remote_url` and `Worktree.branch`. See
-[addons.md](addons.md), [features/towns.md](features/towns.md),
-[features/github.md](features/github.md), and [usage.md](usage.md).
+`Addon` type in `app/src/addons/types.ts`. Core keeps the Git facts that an
+addon can read, such as `Repo.remote_url` and `Worktree.branch`. See
+[addons.md](addons.md).
 
 ## Generated bindings
 
@@ -341,41 +309,31 @@ test -p tomo-proto` rewrites them. The frontend re-exports them from
 
 Protocol version 3 adds:
 
-- calls `action_list`, `action_run`, `action_stop`, `action_restart`, and
-  a `checkpoint` field (`checkpoint`, `require_clean`, `discard`) on
+- a `checkpoint` field (`checkpoint`, `require_clean`, `discard`) on
   `worktree_archive`, which now returns an `ArchiveResult`;
-- the `actions_changed` event with one `ActionSet` per worktree;
-- `Pane.action_id`, `Snapshot.actions`, and `GitSummary.conflicts`;
+- `Pane.action_id` and `GitSummary.conflicts`;
 - the `action` field on `HookEvent`.
 
 Phase 3 adds, at the same protocol version:
 
-- calls `runtime_list`, `activity_list`, `checkpoint_create`, and
-  `checkpoint_resolve`;
-- events `endpoints_changed`, `activity_added`, and `attention_resolved`;
-- `Snapshot.endpoints`, and `kind`, `url`, `agent_kind`, `resolved_at_ms`
-  on `AttentionItem`;
-- hook events `action.crashed`, `runtime.endpoint_discovered`,
-  `runtime.endpoint_removed`, `checkpoint.created`, `checkpoint.resolved`.
+- calls `activity_list`, `checkpoint_create`, and `checkpoint_resolve`;
+- events `activity_added` and `attention_resolved`;
+- `kind`, `url`, `agent_kind`, `resolved_at_ms` on `AttentionItem`;
+- hook events `checkpoint.created` and `checkpoint.resolved`.
 
-## Feature boundary: runtime endpoints and activity
+## Feature boundary: activity
 
-`crates/tomod/src/addons/runtime/` finds listening TCP ports with one
-`lsof` call per monitor tick, attributes each pid to the pane whose PTY
-root is its ancestor, and debounces a restart. Core calls it through the
-`process_polled` seam, with the state lock released. `crates/tomod/src/activity.rs`
-holds `Daemon::record`, the one way an event enters the `activity` table.
-A kind is a plain string on the wire. Core owns the kinds in
+`crates/tomod/src/activity.rs` holds `Daemon::record`, the one way an event
+enters the `activity` table. A kind is a plain string on the wire. Core owns the kinds in
 `CoreActivity`, and each addon owns an enum of its kinds in
 `crates/tomo-proto/src/addons/<name>.rs`. The GUI renders rows from
 `app/src/activityKinds.ts` and `app/src/addons/activity.ts`. "Needs me" has
 one rule, in `Store::activity_list` and `needsMeItem`.
 `PaneState.stop_intent` is how `Daemon::on_exit` tells a crash from a
-stop. See [runtime.md](runtime.md) and [activity.md](activity.md).
+stop. See [activity.md](activity.md).
 
-Phase 3 adds `Pane.kind` and `Pane.url`, the calls `browser_open`,
-`browser_navigate`, and `annotations_send`, the `activity_added` event, and
-the `annotation.sent` hook event.
+Phase 3 adds `Pane.kind` and `Pane.url`, the calls `browser_open` and
+`browser_navigate`, and the `activity_added` event.
 
 ## IPC
 
@@ -437,7 +395,7 @@ Measured with `scripts/perf.sh` on an Apple Silicon Mac, release build,
 | daemon resident memory                 | ~13 MB   |
 | app: window created (Tauri setup)      | ~240 ms after process start |
 | app: first request to the daemon       | ~430 ms after process start (warm) |
-| app main bundle                        | ~720 kB JS (`vite build`, 2026-09-15); terminal and map chunks load on demand |
+| app main bundle                        | ~720 kB JS (`vite build`, 2026-09-15); the terminal chunk loads on demand |
 
 Run the app binary with `TOMO_TIMING=1` to print these marks on stderr.
 
@@ -454,5 +412,4 @@ Design choices behind these numbers:
 - The process poll fetches command lines and working directories once per
   process. Only pane shells get their cwd re-read on every poll, which
   keeps the 2-second poll near 10 ms.
-- The GUI loads the town dataset and the map view lazily, so the main
-  bundle stays under 800 KB.
+- The GUI loads the terminal lazily, so the main bundle stays under 800 KB.

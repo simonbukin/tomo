@@ -3,28 +3,6 @@
 import { z } from "zod";
 import { type LayoutNode } from "./generated";
 
-export const actionActivitySchema = z.union([z.literal("action_started"), z.literal("action_stopped"), z.literal("action_completed"), z.literal("action_crashed")]);
-
-export const actionModeSchema = z.union([z.literal("pane"), z.literal("external")]);
-
-export const actionShowSchema = z.union([z.literal("topbar"), z.literal("menu")]);
-
-export const actionDefSchema = z.object({
-    id: z.string(),
-    label: z.string(),
-    command: z.string(),
-    mode: actionModeSchema,
-    show: actionShowSchema,
-    shortcut: z.string().nullable()
-});
-
-export const actionSetSchema = z.object({
-    worktree_id: z.string(),
-    actions: z.array(actionDefSchema),
-    error: z.string().nullable(),
-    from_repo: z.boolean()
-});
-
 export const activityKindSchema = z.string();
 
 export const agentKindSchema = z.union([z.literal("claude"), z.literal("codex"), z.literal("pi")]);
@@ -73,16 +51,6 @@ export const agentSpawnSchema = z.object({
     resume: z.string().nullable(),
     new_tab: z.boolean(),
     extra_args: z.array(z.string())
-});
-
-export const agentationActivitySchema = z.literal("annotations_sent");
-
-export const annotationSchema = z.object({
-    text: z.string(),
-    url: z.string(),
-    selector: z.string().nullable(),
-    element_text: z.string().nullable(),
-    rect: z.tuple([z.number(), z.number(), z.number(), z.number()]).nullable()
 });
 
 export const archiveResultSchema = z.object({
@@ -196,27 +164,6 @@ export const worktreeResourcesSchema = z.object({
 
 export const noticeLevelSchema = z.union([z.literal("info"), z.literal("warning"), z.literal("error")]);
 
-export const townUnlockSchema = z.object({
-    slug: z.string(),
-    worktree_id: z.string(),
-    repo_id: z.string(),
-    unlocked_at_ms: z.number()
-});
-
-export const pullRequestSchema = z.object({
-    number: z.number(),
-    title: z.string(),
-    url: z.string(),
-    state: z.string(),
-    draft: z.boolean(),
-    review_decision: z.string().nullable(),
-    mergeable: z.string().nullable(),
-    checks_passed: z.number(),
-    checks_failed: z.number(),
-    checks_pending: z.number(),
-    fetched_at_ms: z.number()
-});
-
 export const hookRunSchema = z.object({
     event: z.string(),
     command: z.string(),
@@ -247,17 +194,6 @@ export const systemStatsSchema = z.object({
     top_worktree: worktreeResourcesSchema.nullable()
 });
 
-export const evidenceBundleSchema = z.object({
-    source: z.string(),
-    worktree_id: z.string(),
-    url: z.string().nullable(),
-    action_id: z.string().nullable(),
-    annotations: z.array(annotationSchema),
-    instruction: z.string(),
-    markdown: z.string().optional(),
-    note_count: z.number().optional()
-});
-
 export const fsEntrySchema = z.object({
     name: z.string(),
     rel_path: z.string(),
@@ -265,8 +201,6 @@ export const fsEntrySchema = z.object({
     size: z.number(),
     modified_ms: z.number()
 });
-
-export const gitHubActivitySchema = z.literal("pr_merged");
 
 export const gitSummarySchema = z.object({
     branch: z.string().nullable(),
@@ -407,12 +341,6 @@ export const tabSchema = z.object({
     is_active: z.boolean()
 });
 
-export const prStatusResultSchema = z.object({
-    available: z.boolean(),
-    reason: z.string().nullable(),
-    pr: pullRequestSchema.nullable()
-});
-
 export const processInfoSchema = z.object({
     pid: z.number(),
     ppid: z.number().nullable(),
@@ -431,25 +359,6 @@ export const processInfoSchema = z.object({
 export const rpcErrorSchema = z.object({
     code: errorCodeSchema,
     message: z.string()
-});
-
-export const runtimeActivitySchema = z.literal("endpoint_discovered");
-
-export const runtimeProtocolSchema = z.union([z.literal("http"), z.literal("https"), z.literal("tcp")]);
-
-export const runtimeEndpointSchema = z.object({
-    id: z.string(),
-    worktree_id: z.string(),
-    pane_id: z.string().nullable(),
-    action_id: z.string().nullable(),
-    pid: z.number(),
-    process: z.string(),
-    protocol: runtimeProtocolSchema,
-    host: z.string(),
-    port: z.number(),
-    label: z.string().nullable(),
-    discovered_at_ms: z.number(),
-    source: paneSourceSchema.nullable()
 });
 
 export const statusSchema = z.object({
@@ -495,43 +404,6 @@ export const spawnResultSchema = z.object({
     agent: agentPresenceSchema.nullable()
 });
 
-export const townSchema = z.object({
-    slug: z.string(),
-    name: z.string(),
-    ja: z.string(),
-    pref: z.string(),
-    kind: z.string(),
-    population: z.number().nullable(),
-    lat: z.number(),
-    lon: z.number(),
-    wiki: z.string(),
-    rarity: z.string()
-});
-
-export const townWorktreeStatusSchema = z.union([z.literal("active"), z.literal("archived"), z.literal("missing"), z.literal("gone")]);
-
-export const townPrSchema = z.object({
-    number: z.number(),
-    url: z.string(),
-    state: z.string()
-});
-
-export const usageBucketSchema = z.object({
-    label: z.string(),
-    fraction_used: z.number().nullable(),
-    resets_at_ms: z.number().nullable(),
-    detail: z.string().nullable(),
-    scope: z.string().optional()
-});
-
-export const usageSnapshotSchema = z.object({
-    provider: agentKindSchema,
-    available: z.boolean(),
-    reason: z.string().nullable(),
-    buckets: z.array(usageBucketSchema),
-    fetched_at_ms: z.number()
-});
-
 export const worktreeCreateSchema = z.object({
     repo_id: z.string(),
     branch: z.string(),
@@ -545,12 +417,6 @@ export const worktreeCreateSchema = z.object({
 export const worktreeOpenedSchema = z.object({
     worktree: worktreeSchema,
     tabs: z.array(tabSchema)
-});
-
-export const actionRunResultSchema = z.object({
-    action: actionDefSchema,
-    pane: paneSchema.nullable(),
-    reused: z.boolean()
 });
 
 export const hookDefSchema = z.object({
@@ -602,9 +468,6 @@ export const paneResultSchema = z.object({
 });
 
 export const snapshotSchema = z.object({
-    usage: z.array(usageSnapshotSchema),
-    actions: z.array(actionSetSchema),
-    endpoints: z.array(runtimeEndpointSchema),
     status: statusSchema,
     config: configSchema,
     repos: z.array(repoSchema),
@@ -617,24 +480,7 @@ export const snapshotSchema = z.object({
     ui_state: z.unknown()
 });
 
-export const townHistorySchema = z.object({
-    unlock: townUnlockSchema,
-    repo_name: z.string().nullable(),
-    worktree_name: z.string().nullable(),
-    branch: z.string().nullable(),
-    status: townWorktreeStatusSchema,
-    final_commit: z.string().nullable(),
-    archived_at_ms: z.number().nullable(),
-    pr: townPrSchema.nullable()
-});
-
 export const eventSchema = z.union([z.object({
-        "event": z.literal("endpoints_changed"),
-        "data": z.object({
-            worktree_id: z.string(),
-            endpoints: z.array(runtimeEndpointSchema)
-        })
-    }), z.object({
         "event": z.literal("activity_added"),
         "data": z.object({
             event: activityEventSchema
@@ -643,11 +489,6 @@ export const eventSchema = z.union([z.object({
         "event": z.literal("attention_resolved"),
         "data": z.object({
             id: z.string()
-        })
-    }), z.object({
-        "event": z.literal("usage_changed"),
-        "data": z.object({
-            snapshots: z.array(usageSnapshotSchema)
         })
     }), z.object({
         "event": z.literal("repos_changed"),
@@ -740,25 +581,9 @@ export const eventSchema = z.union([z.object({
             message: z.string()
         })
     }), z.object({
-        "event": z.literal("town_unlocked"),
-        "data": z.object({
-            unlock: townUnlockSchema
-        })
-    }), z.object({
-        "event": z.literal("pr_changed"),
-        "data": z.object({
-            worktree_id: z.string(),
-            pr: pullRequestSchema.nullable()
-        })
-    }), z.object({
         "event": z.literal("hook_ran"),
         "data": z.object({
             run: hookRunSchema
-        })
-    }), z.object({
-        "event": z.literal("actions_changed"),
-        "data": z.object({
-            set: actionSetSchema
         })
     }), z.object({
         "event": z.literal("config_changed"),

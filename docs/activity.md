@@ -3,10 +3,9 @@
 Activity is history. Attention is urgency.
 
 The activity stream is one chronological list of the events that matter to
-a person: an agent started or asked for you, an Action started, stopped,
-finished, or crashed, a port appeared, a worktree changed state, an archive,
-a restore, a failed hook, a merged pull request, notes sent to an agent, a
-checkpoint. Attention is the short list of items that still need a person
+a person: an agent started or asked for you, a worktree changed state, an
+archive, a restore, a failed hook, a checkpoint. An addon can add its own
+kinds. Attention is the short list of items that still need a person
 now. An activity event may point at the attention item it opened or closed;
 that link is what `--needs-me` uses.
 
@@ -24,19 +23,10 @@ that link is what `--needs-me` uses.
 | `archived`            | core       | A worktree was archived                                     |                     |
 | `restored`            | core       | A worktree was restored                                     |                     |
 | `hook_failed`         | core       | A hook exited non-zero, timed out, or did not start         |                     |
-| `action_started`      | actions    | `tomo action run`, restart, or a GUI button                 |                     |
-| `action_stopped`      | actions    | `tomo action stop`, restart, or `pane kill-tree`            |                     |
-| `action_completed`    | actions    | A pane-mode Action exited with code 0                       |                     |
-| `action_crashed`      | actions    | A pane-mode Action exited with another code, unrequested    | the crash item      |
-| `endpoint_discovered` | runtime    | An owned process listens on a port; once per worktree and port per 60 s | |
-| `pr_merged`           | github     | `pr_status` (the inspector or `tomo pr`) saw the pull request become merged | |
-| `annotations_sent`    | agentation | `annotations_send` pasted browser notes into a live agent pane |                  |
 
 Every event has `id`, `kind`, `occurred_at_ms`, `worktree_id`, `pane_id`,
 `agent_kind`, `title`, `detail`, `payload`, and `attention_id`. `payload`
-is JSON. `action_crashed` carries `action_id`, `exit_code`, and `pane_id`,
-so a client can offer Logs and Restart. `annotations_sent` carries the
-`EvidenceBundle`, and its `detail` is the page URL.
+is JSON.
 
 ## Kinds and owners
 
@@ -45,14 +35,13 @@ A kind is a string on the wire and in the `activity.kind` column
 
 - **Core kinds** are the enum `CoreActivity` in the same file.
 - **Addon kinds** are one enum for each addon in
-  `crates/tomo-proto/src/addons/<name>.rs`: `ActionActivity`,
-  `RuntimeActivity`, `GitHubActivity`, `AgentationActivity`. Each enum
-  implements `ActivityKinds`, so the daemon writes
-  `activity::event(ActionActivity::Crashed, ...)` and the kind string comes
-  from the serde name.
-- A new addon kind uses the string `<addon>.<name>`. The seven addon kinds in
-  the table above keep their older snake_case strings, because stored rows
-  and installed CLIs decode them.
+  `crates/tomo-proto/src/addons/<name>.rs`. This base ships no addon kinds;
+  see [addons.md](addons.md). Each enum implements `ActivityKinds`, so the
+  daemon writes `activity::event(<Enum>::<Variant>, ...)` and the kind string
+  comes from the serde name.
+- A new addon kind uses the string `<addon>.<name>`. The seven addon kinds of
+  the `simon-main` addons keep their older snake_case strings, because stored
+  rows and installed CLIs decode them.
 - The daemon keeps a kind string that it does not know. It reads back
   unchanged, for example a row of an addon that a build omits.
 
@@ -72,22 +61,14 @@ The GUI renders each row from a registry of kind views:
 
 Pane output, pane resize, pane focus, resource ticks, Git watcher ticks,
 discovery, and process start or exit. These fire many times a minute and
-would bury the events that matter. Read `tomo ps` and `tomo runtime` for
-live state.
+would bury the events that matter. Read `tomo ps` for live state.
 
 ## Crash or stop
 
-An Action pane that exits with a non-zero code is a crash unless Tomo
-itself ended it. `tomo action stop`, `restart`, and `pane kill-tree` mark
-the pane with a stop intent first. The pane stays open, so its exit records
-`action_stopped` and raises nothing. A crash keeps the pane open with its
-output, records `action_crashed`, fires the `action.crashed` hook, and adds
-an attention item of kind `crash` with the message
-`<label> exited with code <n>`.
-
-`pane close`, `tab close`, and archive also mark the stop intent, but they
-remove the pane before its process exits. That exit records no activity and
-runs no `action.exited` hook.
+A pane exit is a stop, not a crash, when Tomo itself ended the process.
+`pane kill-tree`, `pane close`, `tab close`, and archive mark the pane with a
+stop intent first. An addon reads this intent in its `pane_exited` seam. The
+attention kind `crash` stays in Core for an addon that raises one.
 
 ## Needs me
 

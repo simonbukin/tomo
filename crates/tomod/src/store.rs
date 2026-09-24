@@ -251,6 +251,7 @@ impl Store {
         Ok(Store { conn })
     }
 
+    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub fn conn(&self) -> &Connection {
         &self.conn
     }

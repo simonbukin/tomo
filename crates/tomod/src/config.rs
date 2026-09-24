@@ -101,7 +101,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # editor_command = ["zed", "{path}"]   # Cmd-click path:line opens "{path}" as path:line:col
 # editor_command = ["code", "-g", "{path}:{line}:{col}"]
 # worktree_parent_dir = "~/worktrees"   # default: ~/tomo/worktrees/<repo>/<worktree>
-# branch_prefix = "simon/"   # a create with no branch gets <branch_prefix><worktree name>
+# branch_prefix = "you/"   # a create with no branch gets <branch_prefix><worktree name>
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
 # max_panes_per_tab = 4
@@ -153,7 +153,7 @@ command = "rm -rf node_modules target dist .next .turbo .venv build"
 # dark = "slab-dark"
 
 # [terminal]
-# font_family = "CommitMono, Menlo, monospace"
+# font_family = "ui-monospace, Menlo, monospace"
 # font_size = 13
 
 # [notifications]
@@ -161,7 +161,7 @@ command = "rm -rf node_modules target dist .next .turbo .venv build"
 # sounds = false
 "#;
 
-pub const DEFAULT_FONT_FAMILY: &str = "CommitMono, Menlo, monospace";
+pub const DEFAULT_FONT_FAMILY: &str = "ui-monospace, Menlo, monospace";
 pub const THEME_TOKENS: [&str; 14] = [
     "bg",
     "surface",
@@ -266,7 +266,7 @@ pub fn worktree_parent(parent_dir: Option<&Path>, repo_path: &Path) -> PathBuf {
 }
 
 /// The branch of a create that names no branch: `branch_prefix` before the worktree name,
-/// so `simon/` and `aogashima` give `simon/aogashima`. An empty prefix gives the bare name.
+/// so `you/` and `fix-login` give `you/fix-login`. An empty prefix gives the bare name.
 pub fn default_branch(prefix: &str, worktree_name: &str) -> String {
     format!("{}{}", prefix.trim(), worktree_name.trim())
 }
@@ -646,10 +646,10 @@ mod tests {
 
     #[test]
     fn a_create_with_no_branch_gets_the_prefix_and_the_worktree_name() {
-        assert_eq!(default_branch("simon/", "aogashima"), "simon/aogashima");
+        assert_eq!(default_branch("you/", "fix-login"), "you/fix-login");
         assert_eq!(default_branch("", "aogashima"), "aogashima", "no prefix gives the bare name");
         assert_eq!(parse("").0.branch_prefix, "", "the prefix is empty until the config sets it");
-        assert_eq!(parse("branch_prefix = \"simon/\"\n").0.branch_prefix, "simon/");
+        assert_eq!(parse("branch_prefix = \"you/\"\n").0.branch_prefix, "you/");
     }
 
     #[test]
