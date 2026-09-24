@@ -24,7 +24,7 @@ const { Dialogs, defaultRepoId } = await import("./Dialogs");
 const { rpc } = await import("./api");
 const { getState, setState } = await import("./store");
 
-const repo = { id: "r1", name: "tomo", path: "/src/tomo", exists: true, worktree_parent: "/wt", branch_prefix: "simon/" } as unknown as Repo;
+const repo = { id: "r1", name: "tomo", path: "/src/tomo", exists: true, worktree_parent: "/wt", branch_prefix: "you/" } as unknown as Repo;
 const initial = getState();
 
 const branchBox = () => screen.getByLabelText("Branch");
@@ -94,7 +94,7 @@ describe("new worktree dialog", () => {
   it("with a name field, an empty branch box shows the default name and still creates", async () => {
     nameField.current = () => null;
     const user = await openDialog();
-    expect(branchBox()).toHaveAttribute("placeholder", "simon/<name>");
+    expect(branchBox()).toHaveAttribute("placeholder", "you/<name>");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(created()).toMatchObject({ branch: "", new_branch: true }));
     expect(created()?.metadata).toBeUndefined();
