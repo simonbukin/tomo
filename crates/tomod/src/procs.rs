@@ -195,9 +195,14 @@ pub fn worktrees_by_weight(infos: &[ProcessInfo]) -> Vec<WorktreeResources> {
 }
 
 pub fn kill_tree(rows: &[ProcRow], root: u32) {
-    let mut pids = descendants(rows, root);
-    pids.push(root);
-    for pid in pids {
+    kill_descendants(rows, root);
+    unsafe {
+        libc::kill(root as i32, libc::SIGKILL);
+    }
+}
+
+pub fn kill_descendants(rows: &[ProcRow], root: u32) {
+    for pid in descendants(rows, root) {
         unsafe {
             libc::kill(pid as i32, libc::SIGKILL);
         }
