@@ -1,5 +1,7 @@
 # Simon's Tomo config. `scripts/install.sh --with-config` copies it into place.
 
+max_panes_per_tab = 1   # tabs only: no splits
+
 [theme]
 name = "slab-dark"
 
