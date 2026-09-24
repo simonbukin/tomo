@@ -2009,6 +2009,9 @@ impl Daemon {
             };
             (repo.path.clone(), inner.config.worktree_parent_dir.clone(), inner.config.branch_prefix.clone(), name)
         };
+        if spec.path.is_none() && name.is_none() && spec.branch.trim().is_empty() {
+            return Err(err(ErrorCode::BadRequest, "give a branch or a path; no addon names worktrees"));
+        }
         let parent = config::worktree_parent(parent_dir.as_deref(), &repo_path);
         let path = match (&spec.path, &name) {
             (Some(p), _) => config::expand_tilde(p),
@@ -2705,6 +2708,19 @@ mod tests {
         let hook = inner.hook_queue.iter().find(|e| e.event == "worktree.created").and_then(|e| e.worktree.clone()).unwrap();
         assert_eq!(hook.tags, vec!["labor-relations".to_string()]);
         drop(inner);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn without_a_namer_a_create_needs_a_branch_or_a_path() {
+        let (dir, repo) = repo_fixture("create-unnamed");
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let repo_id = daemon.lock().repos[0].id.clone();
+        let spec = WorktreeCreate { repo_id, branch: "  ".into(), new_branch: true, start_ref: None, path: None, name_hint: None, metadata: None };
+        let refused = daemon.handle_inner(0, Call::WorktreeCreate(spec)).await.unwrap_err();
+        assert!(matches!(refused.code, ErrorCode::BadRequest), "{refused:?}");
+        assert_eq!(daemon.lock().worktrees.len(), 1, "nothing was created");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

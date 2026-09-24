@@ -225,7 +225,7 @@ function CreateWorktree({ close, prefill }: { close: () => void; prefill: Worktr
       {error && <InlineError>{error}</InlineError>}
       <DialogActions>
         <Button onClick={close}>Cancel</Button>
-        <Button variant="default" disabled={busy || !repo} onClick={() => create()}>
+        <Button variant="default" disabled={busy || !repo || (!NameField && !branch.trim() && !path.trim())} onClick={() => create()}>
           {busy ? "Creating..." : "Create"}
         </Button>
       </DialogActions>
