@@ -68,8 +68,7 @@ problems with state replay. A `libghostty` spike is not justified now.
 Partial smoke through the CLI against a scratch daemon under
 `/tmp/tomo-harness-gui`. The installed app runs against the default data
 dir, so it was not used. `scripts/torture/run-all.sh` now also runs
-`archive.sh` (17 checks) and `actions.sh` (24 checks, hook timeout and
-UTF-8 tail included).
+`archive.sh` (17 checks).
 
 Verified by machine (`tomo worktree open`, `tomo pane split`,
 `tomo pane send`, RPC `attach` and `raw`):

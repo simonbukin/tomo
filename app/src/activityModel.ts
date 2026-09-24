@@ -95,23 +95,6 @@ export function nowSignals(input: SignalInput): Signal[] {
   return [...checkpoint, ...waiting, ...crash, ...agents, ...early, ...warn, ...late].slice(0, 3);
 }
 
-export const SPARK_WIDTH = 10;
-
-/** Filled and empty cells of a `[█████     ]` spark for a used fraction; null means no data. */
-export function sparkCells(fraction: number | null, width = SPARK_WIDTH): { filled: number; empty: number } {
-  if (fraction == null) return { filled: 0, empty: width };
-  const filled = Math.min(width, Math.max(0, Math.round(fraction * width)));
-  return { filled, empty: width - filled };
-}
-
-export function resetsIn(resetsAtMs: number | null, now = Date.now()): string | null {
-  if (resetsAtMs == null) return null;
-  const min = Math.max(0, Math.round((resetsAtMs - now) / 60_000));
-  if (min < 60) return `resets in ${min}m`;
-  if (min < 48 * 60) return `resets in ${Math.round(min / 60)}h`;
-  return `resets in ${Math.round(min / (24 * 60))}d`;
-}
-
 export function payloadOf(e: ActivityEvent): Record<string, unknown> {
   return e.payload && typeof e.payload === "object" ? (e.payload as Record<string, unknown>) : {};
 }

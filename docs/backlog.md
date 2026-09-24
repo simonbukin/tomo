@@ -12,11 +12,7 @@ Settled with the user on 2026-09-16:
 - **Browser panes stay alive and sleep.** Do not cap the count. Tomo does not
   try to be a full browser, but a pane must feel stable and real. A sleeping
   pane keeps its page and its session, like a sleeping tab in Chromium. Open
-  question: show the live browser panes of a worktree the way runtime ports are
-  shown.
-- **`.tomo.toml` belongs to the repository.** A worktree file may still
-  override it. There is no reason for the file to be worktree-specific by
-  default.
+  question: show the live browser panes of a worktree in one list.
 - **No artifact shelf.** Instead, sort the Files inspector by recency and give
   it the same context menu (open, reveal in Finder, open in the editor).
 - **Mascots are their own addon** and can wait.
@@ -105,42 +101,13 @@ when the lead pane kind is `browser`, as the pane legend already does. Keep
 **Done.** `Tabs.tsx` draws the globe for a browser lead pane; `ProcessIcon`
 did not change.
 
-### 1.5 Runtime endpoints are unreliable — S to M, addon (+client)
-Several weaknesses, in order of value:
-
-- `lsof` runs with no deadline. A hung call blocks the monitor tick, so process
-  polling, agent state, and resources stop. Give it about 2 s and a diagnostic.
-- An endpoint id is `pid:port`, so a dev server that restarts slower than the
-  5 s grace produces a remove and an add, with duplicate hooks and activity.
-  Key it by worktree and port, and keep the pid as a field.
-- The removal grace of 5 s is short for a restart; about 15 s is calmer.
-- After a daemon restart, servers started from the old panes are reparented and
-  become `observed`, so they never appear again. There is no honest fix through
-  the process tree; a marked, dimmed entry is a policy choice, not a fix.
-- The GUI hides an endpoint until its probe answers. Add a `probed` flag rather
-  than widening the filter, which would surface databases.
-
-**Partly done.** `lsof` now has a 2 s deadline with its own diagnostic, and the
-removal grace is 15 s. Still open: the endpoint identity (worktree and port
-instead of pid and port), the orphaned servers after a daemon restart, and the
-`probed` flag in the GUI.
-
 ### 1.6 Small gaps found while fixing the above — S each, client and docs
 
-The first two are **done**: `previews.css` has `.glyph-dirty` (the `--waiting`
-token, because a dirty tree is a notice), and `docs/addons-map.md` now says the
-grace is 15 s.
+The first one is **done**: `previews.css` has `.glyph-dirty` (the `--waiting`
+token, because a dirty tree is a notice).
 
 - `previews.css` has no `.glyph-dirty` rule, so the git marker in the right rail
   takes the button color instead of a tone from the glyph table.
-- `docs/addons-map.md` still says an endpoint goes "after the 5 s grace". That
-  table records the layout before the addon split, so correct it or mark it as
-  history.
-- **Done.** `tomo action list --json` now prints the whole `ActionSet`
-  (`worktree_id`, `actions`, `error`, `from_repo`), and the text output says
-  whether a set came from the repository file or the worktree file. The shape
-  changed, so a reader must take `.actions`; every in-repo consumer moved in
-  the same commit.
 - **Done.** `headless_client.py` has a `files_check`, run by
   `scripts/torture/client.sh`: `modified_ms` is sane, the daemon keeps its name
   order on the wire, and a recency sort gives the newest first.
@@ -148,19 +115,6 @@ grace is 15 s.
   which has no `app/node_modules`.
 
 ## 2. Behavior and ergonomics
-
-### 2.1 Repo-level `.tomo.toml` — M, addon
-Actions read `<worktree>/.tomo.toml` only, so every worktree needs a copy. Add a
-fallback to the repository file when the worktree has none (the worktree wins;
-no merge, which would need a conflict rule per id). Also watch the repo root
-file, put the source path in the error, and show in the GUI when a set came from
-the repository. An Action is arbitrary shell, so a repo-level file gives that to
-every worktree at once.
-
-**Done.** `model::load(worktree, repo)` reads the worktree file, and the
-repository file only when the worktree has none, so a worktree file wins whole.
-The watcher covers the repository root, a problem names its own file, and
-`ActionSet.from_repo` puts "from the repository" in the topbar tooltip.
 
 ### 2.2 Icons in the open inspector — S, client
 The inspector renders plain text headings while the icons live only in the
@@ -238,18 +192,15 @@ carries the daemon's answer to the create dialog, so the client no longer
 recomputes the path.
 
 **Hazard this created:** a harness script that inherits the real `HOME` now
-writes into the user's own `~/tomo/worktrees`. `towns.sh` and `archive.sh` got
-a scratch `HOME`; the fix belongs in `scripts/torture/lib.sh` so every script
+writes into the user's own `~/tomo/worktrees`. `archive.sh` got a scratch
+`HOME`; the fix belongs in `scripts/torture/lib.sh` so every script
 is covered.
 
-### 2.5 Generic actions — S each, addon
-"Open in Finder" as a built-in action next to the editor button, and a Drizzle
-Studio action. The Drizzle one is a `.tomo.toml` entry, so it is easier after
-2.1.
+### 2.5 Open in Finder — S, client
+"Open in Finder" as a built-in action next to the editor button.
 
-**Done (Finder).** `WorktreeHeader.tsx` has a Finder button next to the editor
-button, with the `reveal_finder` shortcut in its tooltip. The Drizzle action
-still waits for 2.1.
+**Done.** `WorktreeHeader.tsx` has a Finder button next to the editor button,
+with the `reveal_finder` shortcut in its tooltip.
 
 ### 2.6 Infisical login — deferred
 **Deferred**, the user's call on 2026-09-16. The CLI opens the system browser
@@ -272,7 +223,7 @@ local branch that tracks it (`start_ref = origin/<name>`). Build it from the
 existing primitives; `docs/ui.md` forbids a hand-rolled combobox.
 
 **Optional branch.** A new config key `branch_prefix` (empty by default). With
-the box empty, the branch becomes `<branch_prefix><town>`, so a worktree is one
+the box empty, the branch becomes `<branch_prefix><name>`, so a worktree is one
 click and still gets a real branch name. Orca on this machine names every
 worktree `simon/<slug>`, which is the shape this copies; Conductor uses bare
 names, which is why the prefix is a setting and not a rule. Show the computed
@@ -282,7 +233,7 @@ change as small as an empty string meaning "use the default".
 **Done.** `branch_list { repo_id, limit? }` returns `Branch { name, remote,
 upstream, committed_at_ms }` from `for-each-ref`, folded, newest first, capped
 at 200, and run off the state lock. `config::default_branch(prefix, name)`
-gives `<branch_prefix><town>`, with `branch_prefix` empty by default, and
+gives `<branch_prefix><directory name>`, with `branch_prefix` empty by default, and
 `Repo.branch_prefix` carries it to the placeholder. An empty `branch` on the
 wire means "use the default". A name that already exists still fails with git's
 own message, shown inline. The field is the new `combobox.tsx` primitive (Base
@@ -295,7 +246,7 @@ differ, so measure them apart: the usual start, where the daemon already runs
 and only the client mounts, and the cold start, where the daemon boots and
 discovers first.
 
-Known from `docs/addons-baseline.md`: the socket answers in 8 ms, worktrees
+Known from an earlier baseline: the socket answers in 8 ms, worktrees
 become visible at 225 ms, and the summaries finish at 438 ms. The client mount
 and the first paint have never been measured, because that needs a window.
 
@@ -358,26 +309,23 @@ row-height token was ruled out on purpose.
 |---|---|---|
 | Drag arrangement like Rectangle | **Done.** A drag shows the rectangle the pane will occupy, computed by running the real move and laying out the result, so the picture cannot disagree with the drop. `stickyRegion` holds a region for 10 px to stop boundary flicker. Four numbers set the feel and none could be tuned without a window: the 140 ms glide, the 10 px slack, the 0.25 edge fraction, and the fill strength. Try 80 to 100 ms first if the glide lags a fast drag. Over a browser pane the preview may be clipped, because the native webview draws above the page. | M |
 | Files by recency | **Done.** `FsEntry.modified_ms` feeds the Files inspector, which sorts newest first, shows a short age per row, and has a heading toggle back to name order. The row menu already gave open, reveal, and copy. | S |
-| Sound hooks | Sounds for hook events (`worktree.*`, `agent.*`, `action.*`). `sounds.ts` and the `[notifications] sounds` switch exist; this generalizes them. Keep it off by default. | S |
+| Sound hooks | Sounds for hook events (`worktree.*`, `agent.*`). `sounds.ts` and the `[notifications] sounds` switch exist; this generalizes them. Keep it off by default. | S |
 | Agent lineage | Which agent spawned which, per worktree. Needs a parent link at spawn time and a small view. | M |
-| Archive postcards | A card for each archived worktree: dates, commits, agent sessions, and running time. `town_history` has part of it; commits and session counts need an aggregate from activity and git. | M |
-| Worktree mascots | A small generated avatar for each worktree, from its id. Its own addon, separate from Towns (decision 0). Deferred. | S |
+| Archive postcards | A card for each archived worktree: dates, commits, agent sessions, and running time. Commits and session counts need an aggregate from activity and git. | M |
+| Worktree mascots | A small generated avatar for each worktree, from its id. Its own addon (decision 0). Deferred. | S |
 | Linear | Issues beside a worktree. External API, tokens, and polling, so it is the largest. | L |
 
 ## 4. Order
 
 1. **1.1, 1.3, 1.4** — small, independent, and each removes a daily irritation.
-2. **1.5 (the `lsof` deadline first)** — it protects the whole monitor tick.
-3. **1.2** — the browser keep-alive, then the popup path.
-4. **2.1, 2.2, 2.5** — repo-level actions unlock the Drizzle action.
-5. **2.3, 2.4** — sidebar contract, then the worktree home.
-6. **3** — one addon at a time, cheapest first: sounds, mascots, artifact shelf,
+2. **1.2** — the browser keep-alive, then the popup path.
+3. **2.2, 2.5** — inspector icons and the Finder button.
+4. **2.3, 2.4** — sidebar contract, then the worktree home.
+5. **3** — one addon at a time, cheapest first: sounds, mascots, artifact shelf,
    lineage, postcards, drag overlay, Linear.
 
 ## 5. Open questions
 
-- `.tomo.toml`: fallback only, or a merge with the worktree winning per id?
 - Browser keep-alive: how many panes stay alive on a memory-tight machine?
 - Artifact shelf: only recent files, or detect what an agent wrote?
-- Mascots and towns both name a worktree. One identity or two?
 - CSS: keep one global sheet with tokens, or move cards to CSS modules?

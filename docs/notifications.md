@@ -21,7 +21,7 @@ The store in `app/src/store.ts` has one function for each channel:
 
 | Function | Use it for | Examples |
 |----------|-----------|----------|
-| `showStatus(text)` | a small, explicit operation that succeeded | `Copied path`, `Theme changed`, `Archived aogashima`, `Sent 3 notes to Claude`, `Hooks installed` |
+| `showStatus(text)` | a small, explicit operation that succeeded | `Copied path`, `Theme changed`, `Archived aogashima`, `Hooks installed` |
 | `toast({ level, title, detail?, actions?, key?, sticky? })` | a failure or an exceptional event | `Split failed`, `Sampler crashed`, `Config problem` |
 | `failToast(title)` | a `catch` handler for a failed explicit operation | `rpc(...).catch(failToast("Kill failed"))` |
 | `recordDiagnostic(level, source, message)` | Tomo internals on the client | a menu bar install failure, a browser host call failure, a reconnect |
@@ -47,8 +47,8 @@ focused on its pane, or on its worktree when the event has no pane.
 | Event | Tomo focused, looks at it | Tomo focused, elsewhere | Tomo not focused |
 |-------|---------------------------|-------------------------|------------------|
 | small success (copy, theme, reopen, send) | status | status | status |
-| Action started, Action completed normally | nothing | nothing | nothing |
-| Action crashed | nothing | toast | toast + desktop |
+| an addon pane started or completed normally | nothing | nothing | nothing |
+| crash item (an addon pane crashed) | nothing | toast | toast + desktop |
 | agent waiting | nothing (marked seen) | nothing | desktop |
 | human checkpoint | chime | chime + toast | chime + toast + desktop |
 | config warning, failure | toast | toast | toast |
@@ -64,7 +64,8 @@ plays only when `[notifications] sounds` is on.
 builds the toast:
 
 - A crash toast is an error: `Sampler crashed`, `exit code 1 · aogashima`,
-  with `Logs` (focus the pane) and `Restart` (restart the Action).
+  with `Logs` (focus the pane). It also has `Restart` when an addon owns
+  the pane source and can start it again.
 - A checkpoint toast is a warning: `Review requested`, the message and the
   worktree, with `Open` and `Resolve`.
 - The toast key is `attention:<id>`. When the item is resolved or all
@@ -129,11 +130,7 @@ same records once.
 |--------|-------|-------|--------------|
 | `config` | `config reloaded` when config.toml changes | info | no |
 | `config` | `config: <first issue> (+N more)` when the issues change | warning | a `notice` when the new issues include an error |
-| `config` | `<path>/.tomo.toml: <error>` | warning | a `notice` |
-| `usage` | `<provider> usage: <reason>` when a provider becomes unavailable | warning | no |
 | `hooks` | `<event> hook failed: <command>` | warning | no; Activity keeps `hook failed` |
-| `runtime` | `port scan: lsof failed: <error>` | warning | no |
-| `runtime` | `port scan: lsof did not answer in 2 s`, when the call passes its deadline | warning | no |
 | `integrations` | `<agent>: <reason>` for a partial integration | warning | no |
 | `daemon` | `pane <id>: the terminal did not go quiet, so Tomo did not type <line>` | warning | no |
 | `daemon` | reconnect and disconnect, from the client | info, error | see Daemon health |
@@ -141,8 +138,7 @@ same records once.
 | `app` | a menu bar install failure, from the client | error | no |
 
 The daemon keeps the `notice` event for events that deserve a toast: a new
-config error, a malformed `.tomo.toml`, an editor fallback, and a usage
-threshold crossing. Archive success is not a notice: the client shows
+config error and an editor fallback. Archive success is not a notice: the client shows
 `Archived <name>` as a status message, and Activity records it.
 
 ## Tests

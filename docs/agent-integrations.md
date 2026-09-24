@@ -11,7 +11,7 @@ talks to `tomod` through the public path: the `tomo hook` command or the
 daemon socket.
 
 Provider allowance windows (the 5-hour and weekly limits) are a separate
-concern. See [usage.md](usage.md).
+concern. This base does not show them; see [addons.md](addons.md).
 
 ## Where the provider code lives
 
@@ -29,7 +29,7 @@ its own starts, the install, the health gap, and the session reader. Core
 keeps `AgentKind`, presence, state, session identity, attention, and
 `agents::merge`. To add a provider, write one module, add one arm to
 `provider`, and add the variant to `AgentKind`. A missing capability does not
-compile. See "Milestone 9 result: agent providers" in [addons.md](addons.md).
+compile.
 
 ## How a pane identifies itself
 

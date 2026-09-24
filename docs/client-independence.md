@@ -6,8 +6,7 @@ what a second client must write again. Read it before you start a second
 client, or before you move client logic into the daemon.
 
 Tomo does not have a second GUI client, and this refactor does not make one.
-The proof is a headless script and an import check. See PRD section 25 and
-[addons.md](addons.md).
+The proof is a headless script and an import check. See PRD section 25.
 
 ## The proof
 
@@ -75,7 +74,7 @@ client replaces this one file with a socket or another transport.
 | `types.ts` | The wire types again, and the view types (`UiState`, `Filter`, `HomeOptions`). |
 | `appearance.ts` | The defaults and the check of per-window view settings. |
 | `order.ts` | Manual order and main worktrees first. |
-| `activityModel.ts` | The "needs me" rule (`needsMeItem`, `needsMeItems`), `nowSignals`, activity merge, endpoint URLs. |
+| `activityModel.ts` | The "needs me" rule (`needsMeItem`, `needsMeItems`), `nowSignals`, activity merge. |
 | `homeQuery.ts` | Worktree filter, search, sort, and group. |
 | `layoutModel.ts` | Leaf ids, tab reorder, pane move preview, drop regions. |
 | `uiState.ts` | `sanitizeUi`: the check of the saved UI state blob. |
@@ -105,7 +104,7 @@ live without them.
 | Event fold | `applySnapshot` and `applyFrame` in `store.ts` | Start from `subscribe`, then apply each event. `tabs_changed` replaces the tabs of one worktree and drops the panes and agents that left its layouts. `headless_client.py` `fold` is a copy in about 40 lines. |
 | "Needs me" | `needsMeItem` in `activityModel.ts` | Copy the rule. An unresolved item that is not `waiting` needs a person. A `waiting` item needs a person while it is not viewed and its agent still waits. `Store::activity_list` in the daemon has the same rule for `needs_me`. |
 | Sort, filter, group | `homeQuery.ts`, `order.ts` | Copy them, or use the pure modules. The manual order lives in the UI state blob. |
-| Signals | `nowSignals` (pure), `signalsFor` in `Signals.tsx` (store and addon slots) | Copy the priority order and the cap of three. Addon signals, such as a pull request, come from GUI addon slots. |
+| Signals | `nowSignals` (pure), `signalsFor` in `Signals.tsx` (store and addon slots) | Copy the priority order and the cap of three. Addon signals come from GUI addon slots. |
 | Zoom | `State.zoomed` in `store.ts` | `pane_zoom` only sends a `zoom_request` event. The daemon does not keep zoom. |
 | Focus | `focus_request` event, `State.focusRequest` | Each client decides what focus means. |
 | UI state | `ui_state_get`, `ui_state_set`: one JSON value in the `kv` table | The daemon does not check it. `sanitizeUi` checks it on load. There is one blob for all clients. A second client must not write it, or it replaces the GUI view state. |
@@ -113,7 +112,7 @@ live without them.
 | Notifications | `attention.ts`, `notifyRoute.ts`, `sounds.ts` | Each client decides how to announce an `attention_added` event. |
 | Terminal rendering | `TerminalPane.tsx`, `terminals.ts` (xterm) | Decode `pane_output` (base64) into a terminal emulator. The daemon keeps one size for each PTY, so the last `pane_resize` sets it for all clients. |
 | Browser panes | `app/src/browser/`, `app/src-tauri/src/browser.rs` | The daemon keeps the pane, its `kind`, and its `url`. The page is a Tauri child webview. Another client can show the url or open it outside Tomo. |
-| Addon UI | `app/src/addons/` (React slots) | Addon data is on the wire: `Snapshot.usage`, `Snapshot.actions`, `town_unlocked`, `pr_changed`, `actions_changed`, and the addon calls. The views are not. |
+| Addon UI | `app/src/addons/` (React slots) | Addon data is on the wire: the addon fields of `Snapshot`, the addon events, and the addon calls. The views are not. This base ships no addons; see [addons.md](addons.md). |
 
 ## Why this coupling is acceptable
 

@@ -1,61 +1,41 @@
 //! Composition root for daemon addons: the static list, the seams each addon joins, the tables it owns, and its background tasks.
 //! Core never imports this module. Only `main.rs` and `dispatch.rs` do.
 
-pub mod actions;
-pub mod agentation;
-pub mod github;
-pub mod runtime;
-pub mod towns;
-pub mod usage;
-
 use crate::daemon::{Daemon, Inner, Seams};
 use crate::store::Store;
 use std::sync::Arc;
 
 /// The in-memory state of the addons of one daemon. Each addon owns one field. It lives in `Inner`, so the Core lock guards it.
 #[derive(Default)]
-pub struct State {
-    pub actions: actions::Sets,
-    pub github: github::Cache,
-    pub runtime: runtime::Endpoints,
-    pub usage: usage::Last,
-}
+pub struct State {}
 
+#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 const NOT_FILLED: &str = "the composition root fills Inner.addons with addons::State";
 
+#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub fn state(inner: &Inner) -> &State {
     inner.addons.downcast_ref().expect(NOT_FILLED)
 }
 
+#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub fn state_mut(inner: &mut Inner) -> &mut State {
     inner.addons.downcast_mut().expect(NOT_FILLED)
 }
 
 pub fn seams() -> Seams {
-    Seams {
-        worktree_namer: Some(towns::name_worktree),
-        worktree_created: vec![towns::unlock],
-        worktree_rebound: vec![towns::rebind],
-        worktree_files: vec![actions::FILE],
-        pane_exited: vec![actions::exited],
-        process_polled: vec![runtime::scan],
-    }
+    Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![] }
 }
 
-pub fn migrate(store: &Store) -> anyhow::Result<()> {
-    towns::migrate(store)
+pub fn migrate(_store: &Store) -> anyhow::Result<()> {
+    Ok(())
 }
 
 /// Starts the background task of each addon that has one. The addon doc gives the reason for each task.
-pub fn start(daemon: &Arc<Daemon>) {
-    tokio::spawn(usage::run(daemon.clone()));
-}
+pub fn start(_daemon: &Arc<Daemon>) {}
 
 #[cfg(test)]
 mod tests {
-    use crate::daemon::Daemon;
     use std::path::{Path, PathBuf};
-    use std::sync::Arc;
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
@@ -169,85 +149,6 @@ mod tests {
             })
             .collect();
         assert!(hits.is_empty(), "core activity code names an addon kind:\n{}", hits.join("\n"));
-    }
-
-    async fn subscribe(daemon: &Arc<Daemon>) -> tomo_proto::Snapshot {
-        serde_json::from_value(crate::dispatch::handle(daemon, 0, tomo_proto::Call::Subscribe).await.unwrap()).unwrap()
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn two_daemons_in_one_process_keep_their_own_addon_state() {
-        use tomo_proto::*;
-        let dir = PathBuf::from(format!("/tmp/tomo-addons-state-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let repo = dir.join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        let git = |args: &[&str]| {
-            assert!(std::process::Command::new("git")
-                .args(["-c", "user.email=t@t", "-c", "user.name=t"])
-                .args(args)
-                .current_dir(&repo)
-                .output()
-                .unwrap()
-                .status
-                .success())
-        };
-        git(&["init", "-q"]);
-        git(&["commit", "-q", "--allow-empty", "-m", "init"]);
-        std::fs::write(repo.join(".tomo.toml"), "[[actions]]\nid = \"serve\"\ncommand = \"true\"\n").unwrap();
-        let [a, b] = ["a", "b"].map(|name| {
-            let daemon = Daemon::new(crate::config::Paths::new(dir.join(name)), super::seams(), Box::new(super::State::default())).unwrap();
-            super::migrate(&daemon.lock().store).unwrap();
-            daemon
-        });
-
-        crate::dispatch::handle(&a, 0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
-        let worktree_id = a.lock().worktrees.keys().next().unwrap().clone();
-        let usage = UsageSnapshot { provider: AgentKind::Claude, available: true, reason: None, buckets: vec![], fetched_at_ms: now_ms() };
-        super::usage::remember(&mut a.lock(), vec![usage]);
-        let pr = PullRequest {
-            number: 7,
-            title: "t".into(),
-            url: "u".into(),
-            state: "open".into(),
-            draft: false,
-            review_decision: None,
-            mergeable: None,
-            checks_passed: 0,
-            checks_failed: 0,
-            checks_pending: 0,
-            fetched_at_ms: now_ms(),
-        };
-        super::github::remember(&mut a.lock(), worktree_id.clone(), PrStatusResult { available: true, reason: None, pr: Some(pr) });
-        let endpoint = RuntimeEndpoint {
-            id: "1:3000".into(),
-            worktree_id: worktree_id.clone(),
-            pane_id: None,
-            action_id: None,
-            pid: 1,
-            process: "node".into(),
-            protocol: RuntimeProtocol::Tcp,
-            host: "localhost".into(),
-            port: 3000,
-            label: None,
-            discovered_at_ms: now_ms(),
-            source: None,
-        };
-        super::runtime::remember(&mut a.lock(), vec![endpoint], now_ms());
-
-        let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);
-        assert_eq!(seen_by_b.usage.len(), 0, "usage leaked into the second daemon");
-        assert_eq!(seen_by_b.actions.len(), 0, "action sets leaked into the second daemon");
-        assert_eq!(seen_by_b.endpoints.len(), 0, "endpoints leaked into the second daemon");
-        assert!(super::github::known_pr(&b.lock(), &worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
-        assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len(), seen_by_a.endpoints.len()), (1, 1, 1));
-        assert!(super::github::known_pr(&a.lock(), &worktree_id, &[]).is_some());
-        assert_eq!(a.lock().worktrees[&worktree_id].metadata.tags, vec!["review"], "an open pull request sets its GitHub tag");
-        assert!(a.lock().hook_queue.iter().any(|e| e.event == "worktree.tags_changed"));
-        assert!(b.lock().worktrees.values().all(|w| w.metadata.tags.is_empty()));
-        a.shutdown();
-        b.shutdown();
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

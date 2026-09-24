@@ -9,9 +9,7 @@
 @import "./home.css";
 @import "./terminal.css";
 @import "../browser/browser.css";
-@import "../addons/agentation/agentation.css";
 @import "./palette.css";
-@import "../addons/towns/towns.css";
 @import "./activity.css";
 @import "./agents.css";
 @import "./apps.css";

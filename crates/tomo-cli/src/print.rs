@@ -165,19 +165,6 @@ fn truncate(s: &str, n: usize) -> String {
     }
 }
 
-pub fn towns(towns: &[Town], unlocks: &[TownUnlock], only_unlocked: bool, json: bool) {
-    let rows: Vec<(&Town, Option<&TownUnlock>)> =
-        towns.iter().map(|t| (t, unlocks.iter().find(|u| u.slug == t.slug))).filter(|(_, u)| !only_unlocked || u.is_some()).collect();
-    if json {
-        let v: Vec<Value> = rows.iter().map(|(t, u)| serde_json::json!({ "town": t, "unlock": u })).collect();
-        return emit_json(&v);
-    }
-    for (t, u) in rows {
-        let when = u.map(|u| format!("  unlocked {}", u.unlocked_at_ms)).unwrap_or_default();
-        println!("{:<28} {:<16} {:<8} {:<12} {:<9}{}", t.slug, t.name, t.ja, t.pref, t.rarity, when);
-    }
-}
-
 pub fn attention(items: &[AttentionItem], json: bool) {
     if json {
         return emit_json(&items);
@@ -201,27 +188,6 @@ pub fn attention_item(item: &AttentionItem, json: bool) {
         return emit_json(item);
     }
     attention(std::slice::from_ref(item), false);
-}
-
-pub fn runtime(list: &[RuntimeEndpoint], json: bool) {
-    if json {
-        return emit_json(&list);
-    }
-    if list.is_empty() {
-        println!("no listening ports in Tomo panes");
-    }
-    for e in list {
-        let protocol = format!("{:?}", e.protocol).to_lowercase();
-        println!(
-            "{:<6} {:<5} {:<7} {:<16} {:<14} {}",
-            e.port,
-            protocol,
-            e.pid,
-            truncate(&e.process, 16),
-            e.action_id.as_deref().unwrap_or("-"),
-            e.pane_id.as_deref().unwrap_or("-")
-        );
-    }
 }
 
 pub fn activity(list: &[ActivityEvent], json: bool) {
@@ -255,22 +221,6 @@ fn clock(at_ms: u64, offset_s: i64) -> String {
     let local = (at_ms / 1000) as i64 + offset_s;
     let of_day = local.rem_euclid(86_400);
     format!("{:02}:{:02}", of_day / 3600, (of_day % 3600) / 60)
-}
-
-pub fn pr(r: &PrStatusResult, json: bool) {
-    if json {
-        return emit_json(r);
-    }
-    match (&r.pr, &r.reason) {
-        (Some(pr), _) => {
-            let review = pr.review_decision.as_deref().unwrap_or("no review");
-            println!("#{} {}  {}{}  {}", pr.number, pr.title, pr.state, if pr.draft { " (draft)" } else { "" }, review);
-            println!("checks  {} passed  {} failed  {} pending", pr.checks_passed, pr.checks_failed, pr.checks_pending);
-            println!("{}", pr.url);
-        }
-        (None, Some(reason)) => println!("unavailable: {reason}"),
-        (None, None) => println!("no pull request for this branch"),
-    }
 }
 
 pub fn integration_status(list: &[IntegrationStatus], json: bool) {
@@ -345,55 +295,6 @@ pub fn archive_result(r: &ArchiveResult, json: bool) {
     }
 }
 
-pub fn actions(set: &ActionSet, json: bool) {
-    if json {
-        return emit_json(set);
-    }
-    for line in action_lines(set) {
-        println!("{line}");
-    }
-}
-
-fn action_lines(set: &ActionSet) -> Vec<String> {
-    let mut lines: Vec<String> = set
-        .actions
-        .iter()
-        .map(|a| {
-            let mode = match a.mode {
-                ActionMode::Pane => "pane",
-                ActionMode::External => "external",
-            };
-            let show = match a.show {
-                ActionShow::Topbar => "topbar",
-                ActionShow::Menu => "menu",
-            };
-            format!("{:<14} {:<18} {:<9} {:<7} {}", a.id, a.label, mode, show, a.command)
-        })
-        .collect();
-    if !set.actions.is_empty() {
-        let source = if set.from_repo { "repository" } else { "worktree" };
-        lines.push(format!("from the {source} .tomo.toml"));
-    }
-    if let Some(e) = &set.error {
-        lines.push(format!("warning: {e}"));
-    }
-    if set.actions.is_empty() && set.error.is_none() {
-        lines.push("no actions; add [[actions]] to .tomo.toml in the worktree".into());
-    }
-    lines
-}
-
-pub fn action_run(r: &ActionRunResult, json: bool) {
-    if json {
-        return emit_json(r);
-    }
-    match (&r.pane, r.reused) {
-        (Some(p), true) => println!("{} already running in pane {}", r.action.label, p.id),
-        (Some(p), false) => println!("{} started in pane {}", r.action.label, p.id),
-        (None, _) => println!("{} launched", r.action.label),
-    }
-}
-
 pub fn sessions(list: &[AgentSession], json: bool) {
     if json {
         return emit_json(&list.to_vec());
@@ -418,85 +319,3 @@ fn age(at_ms: u64) -> String {
     }
 }
 
-fn resets_in(at_ms: u64) -> String {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
-    let secs = at_ms.saturating_sub(now) / 1000;
-    let (d, h, m) = (secs / 86_400, secs % 86_400 / 3600, secs % 3600 / 60);
-    match (d, h, m) {
-        (0, 0, 0) => "resets now".to_string(),
-        (0, 0, m) => format!("resets in {m}m"),
-        (0, h, 0) => format!("resets in {h}h"),
-        (0, h, m) => format!("resets in {h}h {m}m"),
-        (d, 0, _) => format!("resets in {d}d"),
-        (d, h, _) => format!("resets in {d}d {h}h"),
-    }
-}
-
-pub fn usage(list: &[UsageSnapshot], json: bool) {
-    if json {
-        return emit_json(&list);
-    }
-    if list.is_empty() {
-        println!("no usage data yet");
-    }
-    for s in list {
-        let provider = s.provider.label().to_lowercase();
-        if !s.available {
-            println!("{provider:<8} unavailable · {}", s.reason.as_deref().unwrap_or("no reason given"));
-            continue;
-        }
-        let width = s.buckets.iter().map(|b| b.label.len()).max().unwrap_or(0);
-        for (i, b) in s.buckets.iter().enumerate() {
-            let name = if i == 0 { provider.as_str() } else { "" };
-            let percent = b.fraction_used.map(|f| format!("{:>3}%", (f * 100.0).round() as u64)).unwrap_or_else(|| "  ? ".to_string());
-            let reset = b.resets_at_ms.map(resets_in).unwrap_or_default();
-            let detail = b.detail.as_deref().map(|d| format!("  {d}")).unwrap_or_default();
-            println!("{name:<8} {:<width$}   {percent}   {reset}{detail}", b.label);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn set(from_repo: bool, actions: Vec<&str>, error: Option<&str>) -> ActionSet {
-        ActionSet {
-            worktree_id: "w1".into(),
-            actions: actions
-                .iter()
-                .map(|id| ActionDef {
-                    id: (*id).into(),
-                    label: (*id).into(),
-                    command: "true".into(),
-                    mode: ActionMode::Pane,
-                    show: ActionShow::Menu,
-                    shortcut: None,
-                })
-                .collect(),
-            error: error.map(String::from),
-            from_repo,
-        }
-    }
-
-    #[test]
-    fn the_list_names_the_file_that_the_set_came_from() {
-        assert_eq!(action_lines(&set(true, vec!["serve"], None)).last().unwrap(), "from the repository .tomo.toml");
-        assert_eq!(action_lines(&set(false, vec!["serve"], None)).last().unwrap(), "from the worktree .tomo.toml");
-    }
-
-    #[test]
-    fn an_empty_set_names_no_file_and_a_bad_set_keeps_its_warning() {
-        assert_eq!(action_lines(&set(true, vec![], None)), vec!["no actions; add [[actions]] to .tomo.toml in the worktree"]);
-        assert_eq!(action_lines(&set(true, vec![], Some("/r/.tomo.toml: bad"))), vec!["warning: /r/.tomo.toml: bad"]);
-    }
-
-    #[test]
-    fn the_json_result_is_the_whole_set() {
-        let v = serde_json::to_value(set(true, vec!["serve"], Some("/r/.tomo.toml: bad"))).unwrap();
-        assert_eq!(v["from_repo"], true);
-        assert_eq!(v["error"], "/r/.tomo.toml: bad");
-        assert_eq!(v["worktree_id"], "w1");
-        assert_eq!(v["actions"][0]["id"], "serve");
-    }
-}
