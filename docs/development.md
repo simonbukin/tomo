@@ -66,10 +66,34 @@ scripts/install.sh         release build and install
 - `simon-main` is the author's own Tomo: the base, six addons, and a personal
   config. It is a worked example.
 
-Make a Core change on `main` first, then merge `main` into `simon-main`. Do not
-merge `simon-main` into `main`. `simon-main` reverts the commit that removed the
-addons, so a merge from `main` never removes them. A change to a composition
-root can conflict; keep both sides of the conflict.
+Changes flow one way: from `main` into `simon-main`, never back. `simon-main`
+reverts the commit that removed the addons, so a merge from `main` never
+removes them. A change to a composition root can conflict; keep both sides.
+
+Put each change where its code lives:
+
+| The change touches | Branch from | Lands on |
+|---|---|---|
+| Core, the client, or the seams | `main` | `main`, then merge `main` into `simon-main` |
+| An addon or the personal config only | `simon-main` | `simon-main` |
+| Both | `main` for the core part | `main`, then the addon part on `simon-main` after the merge |
+
+A core fix gets a core test on `main`, even when an addon found the bug. A test
+that needs an addon goes with the addon on `simon-main`.
+
+The steps for a core fix:
+
+```bash
+git switch -c fix/<name> main        # fix, add a core test
+cargo test --workspace && pnpm --dir app test
+git switch main && git merge --ff-only fix/<name>
+git switch simon-main && git merge main
+cargo test --workspace && pnpm --dir app test
+scripts/install.sh                   # the installed app is always simon-main
+```
+
+For an addon fix, start at `git switch -c fix/<name> simon-main` and merge back
+into `simon-main`. Every commit is signed; do not skip signing.
 
 ## Build, run, test
 
