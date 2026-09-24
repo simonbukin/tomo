@@ -7,34 +7,37 @@
     <meta name="description" content="somewhere to put your agents. small, local, and yours." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23a684ff' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%23a684ff'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400..700&family=Red+Hat+Mono:wght@400..500&display=swap" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%239d9c97' stroke-width='12' stroke-linecap='round'%3E%3Cpath d='M14 65 Q59 89 86 58'/%3E%3C/g%3E%3Cg fill='%239d9c97'%3E%3Ccircle cx='23.6' cy='34' r='9.2'/%3E%3Ccircle cx='76.4' cy='34' r='9.2'/%3E%3C/g%3E%3C/svg%3E" />
     <style>
       :root {
-        --bg: #ffffff;
-        --fg: #17171c;
-        --fg-2: #5f5f6c;
-        --fg-3: #9a9aa6;
-        --line: #e4e4ea;
-        --dot: #c9c9d4;
-        --dot-soft: #f0f0f4;
-        --accent: #7d4dff;
-        --success: #2a9d5c;
-        --waiting: #d98a1a;
-        --sans: "Work Sans", system-ui, -apple-system, sans-serif;
-        --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+        --bg: #efeee9;
+        --fg: #121212;
+        --fg-2: #5b5954;
+        --fg-3: #85827b;
+        --line: #cfccc4;
+        --dot: #b4b1a8;
+        --dot-soft: #e7e5df;
+        --accent: #121212;
+        --success: #2f8a44;
+        --waiting: #a66f0c;
+        --u: 28px;
+        --inset: 14px;
+        --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+        --sans: "Sofia Sans", system-ui, -apple-system, sans-serif;
+        --mono: "Red Hat Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) {
-          --bg: #0f0f12; --fg: #e8e8ee; --fg-2: #9a9aa7; --fg-3: #63636f;
-          --line: #232329; --dot: #36363f; --dot-soft: #1a1a20;
-          --accent: #a684ff; --success: #45b877; --waiting: #e0a445;
+          --bg: #0e0e0e; --fg: #ecebe8; --fg-2: #9d9c97; --fg-3: #6d6c68;
+          --line: #2a2a2a; --dot: #3a3a3a; --dot-soft: #151515;
+          --accent: #ecebe8; --success: #7fd28a; --waiting: #e8b14c;
         }
       }
       :root[data-theme="dark"] {
-        --bg: #0f0f12; --fg: #e8e8ee; --fg-2: #9a9aa7; --fg-3: #63636f;
-        --line: #232329; --dot: #36363f; --dot-soft: #1a1a20;
-        --accent: #a684ff; --success: #45b877; --waiting: #e0a445;
+        --bg: #0e0e0e; --fg: #ecebe8; --fg-2: #9d9c97; --fg-3: #6d6c68;
+        --line: #2a2a2a; --dot: #3a3a3a; --dot-soft: #151515;
+        --accent: #ecebe8; --success: #7fd28a; --waiting: #e8b14c;
       }
 
       * { box-sizing: border-box; }
@@ -53,12 +56,12 @@
       h1 {
         margin: 0;
         font-size: clamp(20px, 2.7vw, 27px);
-        font-weight: 500;
-        letter-spacing: -0.012em;
+        font-weight: 700;
+        letter-spacing: 0;
         line-height: 1.35;
         color: var(--fg);
       }
-      .face { display: inline-block; width: 0.95em; height: 0.95em; vertical-align: -0.11em; margin-right: 0.42em; color: var(--accent); }
+      .face { display: inline-block; width: 0.95em; height: 0.95em; vertical-align: -0.11em; margin-right: 0.42em; color: var(--fg); }
       .face svg { width: 100%; height: 100%; display: block; }
       /* Both spellings share one grid cell, so the hover swaps in place and the line never moves. */
       .mark-wrap { display: inline-grid; vertical-align: baseline; cursor: default; }
@@ -98,28 +101,28 @@
       @media (max-width: 760px) { .poke { width: 72px; height: 72px; margin: -36px 0 0 -36px; } }
       .screen-btn {
         position: relative;
-        width: 100%; padding: 0; border: 0; background: none; display: block; border-radius: 11px;
+        width: 100%; padding: 0; border: 0; background: none; display: block; border-radius: 0;
         cursor: pointer;
       }
 
-      .screen-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+      .screen-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 5px; }
       .app {
         width: 100%; aspect-ratio: 16 / 9.4;
-        border: 1px solid var(--line); border-radius: 11px; overflow: hidden;
+        border: 0; border-radius: 0; overflow: hidden;
         background: var(--bg); color: var(--fg);
-        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.12);
-        display: grid; grid-template-rows: 32px 1fr 26px; text-align: left;
+        box-shadow: 0 0 0 1px var(--line), 0 24px 48px rgba(0, 0, 0, 0.22);
+        display: grid; grid-template-rows: var(--u) 1fr var(--u); text-align: left;
         position: relative; --mock-label: 10px; --floor: 36px;
         transition: background 420ms cubic-bezier(0.2, 0, 0, 1), color 420ms cubic-bezier(0.2, 0, 0, 1),
           transform 460ms cubic-bezier(0.2, 0, 0, 1), filter 420ms ease-out;
       }
-      .app-bar { display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+      .app-bar { display: flex; align-items: center; gap: 7px; padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); }
       .app-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
-      .app-bar span { margin-left: 8px; font-size: 11.5px; color: var(--fg-3); }
+      .app-bar span { margin-left: 8px; font-size: 12px; font-weight: 700; color: var(--fg); }
       .app-body { display: grid; grid-template-columns: 234px 1fr; min-height: 0; transition: grid-template-columns 420ms cubic-bezier(0.2, 0, 0, 1); }
-      .app-side { border-right: 1px solid var(--line); min-width: 0; overflow: hidden; position: relative; }
+      .app-side { box-shadow: inset -1px 0 0 var(--line); min-width: 0; overflow: hidden; position: relative; }
       .app-main { min-width: 0; position: relative; overflow: hidden; display: flex; flex-direction: column; }
-      .app-foot { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--fg-3); font-family: var(--mono); }
+      .app-foot { display: flex; align-items: center; gap: 14px; padding: 0 var(--inset); box-shadow: inset 0 1px 0 var(--line); font-size: 11px; color: var(--fg-3); font-family: var(--mono); }
       .app-foot .spacer { margin-left: auto; }
       .app-foot .ok { color: var(--success); }
 
@@ -218,38 +221,39 @@
       /* ---------- tomo's own row CSS, scoped, so the mock carries the app's real metrics ---------- */
       .tomo-ui {
         --bg-1: var(--dot-soft);
-        --font-ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, system-ui, sans-serif;
-        --fs-0: 11px; --fs-1: 12px; --sp-1: 4px; --sp-2: 8px; --sp-3: 12px;
-        font-family: var(--font-ui); font-size: var(--fs-1); padding: var(--sp-1) 0;
+        --font-ui: var(--sans);
+        --fs-0: 11px; --fs-1: 12px; --sp-1: 4px; --sp-2: 8px; --sp-3: var(--inset);
+        font-family: var(--font-ui); font-size: var(--fs-1); padding: 0;
       }
       .tomo-ui .side-lens {
-        display: flex; align-items: center; gap: var(--sp-2);
-        padding: var(--sp-2) var(--sp-3) var(--sp-1);
-        font-size: var(--fs-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3);
+        display: flex; align-items: center; gap: var(--sp-2); height: var(--u);
+        padding: 0 var(--sp-3); box-shadow: inset 0 -1px 0 var(--line);
+        font-size: 13px; font-weight: 700; color: var(--fg);
       }
-      .tomo-ui .state { width: 7px; height: 7px; border-radius: 50%; background: var(--line); justify-self: center; }
-      .tomo-ui .state.work { background: var(--success); }
-      .tomo-ui .state.wait { background: var(--waiting); }
+      .tomo-ui .state { width: 8px; height: 8px; box-shadow: inset 0 0 0 1px var(--fg-3); justify-self: center; position: relative; z-index: 1; }
+      .tomo-ui .wt-active .state:not(.work):not(.wait) { box-shadow: inset 0 0 0 1px currentColor; }
+      .tomo-ui .state.work { background: var(--success); box-shadow: none; }
+      .tomo-ui .state.wait { background: var(--waiting); box-shadow: none; }
       .tomo-ui .wt-meta { color: var(--fg-3); font-size: var(--fs-0); font-family: var(--mono); }
       .tomo-ui .wt-row {
         transition: height 420ms cubic-bezier(0.2, 0, 0, 1);
         display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; grid-template-rows: 18px 15px 16px;
-        align-items: center; column-gap: var(--sp-2); height: 58px;
-        padding: 4px var(--sp-1) 4px var(--sp-3); border-left: 2px solid transparent;
+        align-items: center; column-gap: var(--sp-2); height: calc(var(--u) * 2);
+        padding: 4px var(--sp-1) 4px var(--sp-3); box-shadow: inset 0 -1px 0 var(--line);
       }
-      .tomo-ui .wt-active { background: var(--bg-1); border-left-color: var(--accent); }
+      .tomo-ui .wt-active { background: var(--fg); color: var(--bg); box-shadow: none; }
+      .tomo-ui .wt-active .wt-name, .tomo-ui .wt-active .wt-branch, .tomo-ui .wt-active .wt-meta, .tomo-ui .wt-active .wt-agents { color: inherit; }
       .tomo-ui .wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
-      .tomo-ui .wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 500; }
-      .tomo-ui .wt-active .wt-name { color: var(--accent); }
-      .tomo-ui .wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
+      .tomo-ui .wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 600; }
+            .tomo-ui .wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
       .tomo-ui .wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-2); }
       .tomo-ui .wt-foot { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 16px; }
       .tomo-ui .wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; color: var(--fg-2); font-size: var(--fs-0); }
 
       /* ---------- the main area ---------- */
-      .tabs { display: flex; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); flex: none; }
-      .tab { background: var(--bg); padding: 6px 13px; font-size: 11px; color: var(--fg-3); font-family: var(--mono); }
-      .tab.on { color: var(--fg); }
+      .tabs { display: flex; height: var(--u); box-shadow: inset 0 -1px 0 var(--line); flex: none; }
+      .tab { display: flex; align-items: center; flex: 0 1 140px; min-width: 0; padding: 0 var(--inset); box-shadow: inset -1px 0 0 var(--line), inset 0 -1px 0 var(--line); font-size: 12px; color: var(--fg-2); font-family: var(--sans); }
+      .tab.on { background: var(--fg); color: var(--bg); box-shadow: none; }
       .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); min-height: 0; transition: grid-template-columns 420ms cubic-bezier(0.2, 0, 0, 1), grid-template-rows 420ms cubic-bezier(0.2, 0, 0, 1); }
       .panes.nine { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
       .pane { background: var(--bg); padding: 9px 11px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -257,7 +261,7 @@
       .panes.nine .pane pre { font-size: 9px; line-height: 1.6; }
       .pane pre::after {
         content: ""; display: inline-block; width: 5px; height: 9px; margin-left: 2px;
-        vertical-align: -1px; background: var(--accent); animation: blink 1.05s steps(1, end) infinite;
+        vertical-align: -1px; background: var(--fg); animation: blink 1.05s steps(1, end) infinite;
       }
       @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
 
@@ -291,8 +295,8 @@
       .overlay { position: absolute; right: 13px; top: 44px; z-index: 7; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; pointer-events: none; }
       .jab {
         margin: 0; font-size: 12px; line-height: 1.4; color: var(--fg);
-        background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
-        padding: 7px 11px; max-width: 250px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+        background: var(--bg); border: 0; border-radius: 0;
+        padding: 6px 12px; max-width: 250px; box-shadow: 0 0 0 1px var(--line), 0 12px 24px rgba(0, 0, 0, 0.18);
         opacity: 0; transform: translateY(7px);
         transition: opacity 320ms ease-out, transform 320ms cubic-bezier(0.2, 0, 0, 1);
       }
@@ -307,7 +311,7 @@
         border-bottom: 1px solid var(--fg-3);
       }
       .get a:hover, .linkish:hover { color: var(--accent); border-bottom-color: currentColor; }
-      .get a:focus-visible, .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+      .get a:focus-visible, .linkish:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
       /* Both sentences share one grid cell, so the line never jumps and nothing is rebuilt. */
       .get { display: grid; }
       .get > span { grid-area: 1 / 1; transition: opacity 200ms ease-out; }
@@ -328,19 +332,22 @@
       .tip {
         position: absolute; bottom: calc(100% + 9px); left: 50%;
         font-family: var(--mono); font-size: 12px; line-height: 1.5;
-        color: var(--fg-2); background: var(--bg); border: 1px solid var(--line);
-        border-radius: 5px; padding: 7px 10px; white-space: nowrap;
+        color: var(--fg-2); background: var(--bg); border: 0; box-shadow: 0 0 0 1px var(--line);
+        border-radius: 0; padding: 6px 10px; white-space: nowrap;
         pointer-events: none; opacity: 0; transform: translate(-50%, 3px);
         transition: opacity 140ms ease-out, transform 140ms ease-out;
       }
       .tip::before { content: "$ "; color: var(--fg-3); }
       .copy-wrap:hover .tip, .linkish:focus-visible + .tip { opacity: 1; transform: translate(-50%, 0); }
 
+      .branches { margin: 0; max-width: 62ch; color: var(--fg-2); font-size: 15px; line-height: 1.5; }
+      .branches a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--fg-3); }
+      .branches a:hover { border-bottom-color: currentColor; }
       .foot { margin: 0; color: var(--fg-3); font-size: 13.5px; }
       .foot a { color: var(--fg-2); text-decoration: none; border-bottom: 1px solid var(--line); }
       .foot a:hover { color: var(--fg); border-bottom-color: currentColor; }
       a { color: inherit; }
-      a:focus-visible, .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      a:focus-visible, .copy:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
 
       @media (prefers-reduced-motion: reduce) {
         .mark-wrap > span, .tip, .caption, .jab, .pane pre::after, .app { transition: none; animation: none; }
@@ -348,7 +355,7 @@
       @media (max-width: 760px) {
         .app-body { grid-template-columns: 162px 1fr; }
         .app { aspect-ratio: 4 / 3.4; }
-        .tomo-ui .wt-row { height: 52px; }
+        .tomo-ui .wt-row { height: calc(var(--u) * 2); }
         h1 { font-size: 18px; }
         .tip { white-space: normal; max-width: calc(100vw - 48px); }
       }
@@ -401,6 +408,8 @@
           <span class="offer">get it <a href="https://github.com/simonbukin/tomo">on github</a>, or <span class="copy-wrap"><button type="button" class="linkish" id="copy" aria-describedby="copyTip">right here</button><span class="tip" role="tooltip" id="copyTip">git clone https://github.com/simonbukin/tomo &amp;&amp; tomo/scripts/install.sh</span></span>. <span class="nudge" id="nudge">you seem to like it.</span></span>
           <span class="taken" aria-live="polite"></span>
         </p>
+
+        <p class="branches">this is the base: clean, flat, and yours to mess with. mine lives on <a href="https://github.com/simonbukin/tomo/tree/simon-main">simon-main</a>, with a map of japan that names every worktree and five more addons.</p>
 
         <p class="foot">made with 💜 by <a href="https://simonbukin.com">simon</a></p>
       </div>

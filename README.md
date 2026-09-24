@@ -9,6 +9,19 @@ and which one is eating the machine.
 It does not replace Git, your editor, your shell, or your agents. It keeps the
 room organized.
 
+## Two branches
+
+- **`main`** is the base: a clean, flat copy for you to install, use, and take
+  apart. It has the core, the window, and the addon seams, with no addons and
+  no opinions of mine in it.
+- **[`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main)** is my
+  own Tomo: my config and my six addons. There is a map of Japanese towns that
+  names each worktree, GitHub pull request status, Claude and Codex allowances,
+  repo buttons, port discovery, and browser annotations for agents. Read it as
+  a worked example. `git diff main...simon-main` shows everything that I added.
+
+The base is for you to mess with.
+
 ## Install
 
 macOS only, for now.
@@ -34,8 +47,8 @@ palette; `⌘⇧A` jumps to the next agent that wants you.
 | `tomo` | the command line client. Agents and scripts talk to Tomo through it. |
 | Tomo.app | a window. Close it and nothing dies; open it again and everything reconnects. |
 
-The worktree is the unit. Terminals, agents, processes, ports, and attention
-all roll up to one.
+The worktree is the unit. Terminals, agents, processes, and attention all roll
+up to one. Tags group worktrees and need no config.
 
 ## A few commands
 
@@ -54,29 +67,49 @@ Add `--json` to any of them.
 Everything below is a file you can edit.
 
 - **Config** lives in `~/Library/Application Support/tomo/config.toml`. Tomo
-  writes a commented default on first run. Themes, fonts, and keybindings.
-  Tags group your worktrees and need no config.
-- **Actions** are commands a repository declares in `.tomo.toml`. They become
-  buttons and palette entries in every worktree of it.
+  writes a commented default on first run: themes, fonts, keybindings, agents.
+- **Themes** are 14 colors in `[theme]`. The look itself is one token file,
+  `app/src/styles/tokens.css`; [DESIGN.md](DESIGN.md) says how it fits
+  together.
 - **Hooks** run your commands on events like `agent.waiting` or
   `worktree.created`, with the event JSON on stdin.
 - **Addons** add their own state, their own commands, and their own place in
-  the window. The core stays small on purpose.
+  the window. [docs/addons.md](docs/addons.md) lists every seam and the few
+  files that an addon touches.
 
-```toml
-[[actions]]
-id = "storybook"
-label = "Storybook"
-command = "pnpm storybook"
-show = "topbar"
-```
+## Things to build
+
+Ideas, small to large. Each one fits the seams that are already there.
+
+**Make it look like yours**
+- A theme: 14 colors, or a new `tokens.css` with a different grid unit and faces.
+- A sidebar that works like you think: by owner, by age, by ticket, or as a tree.
+- A calmer mode that hides every worktree whose agent is not waiting for you.
+
+**Plug in your tools**
+- Linear, Jira, GitHub Issues, or Things: tags as tickets, and a view of your queue.
+- Pull request or merge request status, and CI runs for each branch.
+- Sentry or log errors for the branch in the inspector.
+- Slack, ntfy, or a phone push when an agent waits for too long.
+
+**Work with agents**
+- A new agent provider next to Claude, Codex, and Pi.
+- A cost or allowance meter in the bottom strip.
+- A "hand this to another agent" button that moves a task and its context.
+- Repo buttons for your dev server, tests, and storybook.
+
+**Just for fun**
+- A collection game: towns, birds, stars, or trains that you unlock with each worktree.
+- A streak counter for merged branches.
+- A small pet in the corner that sleeps when your agents are idle.
+
+`simon-main` has working versions of several of these.
 
 ## Docs
 
 [architecture](docs/architecture.md) ·
 [cli](docs/cli.md) ·
 [hooks](docs/hooks.md) ·
-[actions](docs/actions.md) ·
 [theming](docs/theming.md) ·
 [addons](docs/addons.md) ·
 [agent integrations](docs/agent-integrations.md) ·
