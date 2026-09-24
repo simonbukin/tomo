@@ -9,11 +9,11 @@
  */
 export type PaneSource = { 
 /**
- * The owner, for example `action`.
+ * The owner: the addon that started the pane.
  */
 kind: string, 
 /**
- * The owner's id for the thing that runs, for example the Action id.
+ * The owner's id for the thing that runs.
  */
 id: string, 
 /**

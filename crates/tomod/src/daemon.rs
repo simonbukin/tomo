@@ -140,6 +140,8 @@ pub struct Seams {
     pub pane_exited: Vec<fn(&mut Inner, &PaneExit)>,
     /// Runs with no lock held after each process poll of the monitor, before the queued hooks go out.
     pub process_polled: Vec<fn(&Arc<Daemon>)>,
+    /// Hook events that addons fire, beside Core's `HOOK_EVENTS`. A hook in config.toml may name any of them.
+    pub hook_events: Vec<&'static str>,
 }
 
 #[derive(Clone, Copy)]
@@ -458,7 +460,6 @@ impl Daemon {
             exit_code: p.exit_code,
             agent,
             created_at_ms: p.row.created_at_ms,
-            action_id: PaneSource::action_id(p.source.as_ref()),
             source: p.source.clone(),
             process_cmd: p.process_cmd.clone(),
             kind: p.row.kind,
@@ -2150,7 +2151,7 @@ impl Daemon {
             }
             Call::ConfigCheck => {
                 let (cfg, parse_issues) = config::load_checked(&self.paths.config).map_err(internal)?;
-                ok([parse_issues, config::check(&cfg)].concat())
+                ok([parse_issues, config::check(&cfg, &self.seams.hook_events)].concat())
             }
             Call::ConfigSet { key, value } => ok(crate::settings::set(self, &key, &value)?),
             Call::ConfigOpen => crate::settings::open(self).map(|_| Value::Null),
@@ -2645,7 +2646,7 @@ mod tests {
     }
 
     fn no_seams() -> Seams {
-        Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![] }
+        Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![], hook_events: vec![] }
     }
 
     fn repo_fixture(name: &str) -> (PathBuf, PathBuf) {

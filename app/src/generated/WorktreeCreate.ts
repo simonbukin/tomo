@@ -6,7 +6,7 @@ import type { MetadataPatch } from "./MetadataPatch";
 
 export type WorktreeCreate = { repo_id: string, branch: string, new_branch: boolean, start_ref: string | null, path: string | null, 
 /**
- * A hint for the worktree namer when `path` is empty. Clients before the addon split send it as `town_slug`.
+ * A hint for the worktree namer when `path` is empty.
  */
 name_hint: string | null, 
 /**

@@ -62,9 +62,8 @@ not run a `tag = "merged"` hook.
 | `checkpoint.created`      | `tomo checkpoint` asked for a review or a decision               | `worktree`, `attention`, `pane`?, `agent`? |
 | `checkpoint.resolved`     | `tomo checkpoint resolve` closed a checkpoint or crash item      | `worktree`, `attention`, `pane`?  |
 
-`HOOK_EVENTS` in `tomo-proto` also names `action.started`, `action.exited`,
-`action.crashed`, `runtime.endpoint_discovered`, `runtime.endpoint_removed`,
-and `annotation.sent`. Core does not fire them. They are for addons; see
+An addon can fire events of its own. It registers their names through the
+`hook_events` seam, and a hook in `config.toml` can then name them; see
 [addons.md](addons.md). The `attention` field on `checkpoint.*` is the full
 `AttentionItem` with its `kind` (`waiting`, `checkpoint`, `crash`), `url`,
 `agent_kind`, and `resolved_at_ms`. See [activity.md](activity.md).
@@ -92,12 +91,12 @@ Every hook receives one JSON document on stdin. The same document is in
   },
   "pane": { "id": "5cac1495a647", "tab_id": "ab30d81bed9a", "cwd": "/Users/me/work/aogashima" },
   "agent": { "kind": "claude", "state": "waiting", "session_ref": "4c424b05-..." },
-  "attention": null,
-  "action": null
+  "attention": null
 }
 ```
 
-`action` (`{ "id", "label" }`) is `null` unless an addon event fills it.
+An addon event can add fields of its own, each under the addon's own key,
+beside the fields above.
 `previous_tags` is an array of the tags before the
 change. The envelope does not have it when that array is empty.
 

@@ -151,7 +151,8 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
 6. **Hook event.** If the change is a workflow transition, build a
    `HookEvent` with `events::envelope` and push it to `inner.hook_queue`
    while you hold the lock; `Daemon::handle` flushes the queue after the
-   request. Add the name to `HOOK_EVENTS` in `tomo-proto` and to
+   request. Add a Core event to `HOOK_EVENTS` in `tomo-proto`, or an addon event to
+   the addon's `hook_events` seam, and add it to
    `docs/hooks.md`.
 5. **Docs.** Add the command to `docs/cli.md`.
 
@@ -199,7 +200,7 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Which addons exist and where they join Core | `addons::seams`, `addons::start`, `dispatch::handle`, `app/src/addons/index.ts` |
-| What started a pane                   | `PaneState.source`, set by the spawner; `PaneSource::action_id` for the older wire fields |
+| What started a pane                   | `PaneState.source`, set by the spawner |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
 
 ## Verification without model tokens

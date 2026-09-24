@@ -50,6 +50,9 @@ addon:
 - `worktree_files`: a file in each worktree root that the addon reads, such as `.tomo.toml`.
 - `pane_exited`: runs when a pane process exits.
 - `process_polled`: runs after each process poll.
+- `hook_events`: the names of the hook events that the addon fires, so that a
+  hook in `config.toml` can name them. The addon puts its own data on the
+  event under its own key in `HookEvent.addons`, for example `"action": { "id", "label" }`.
 
 Addon state lives in `addons::State`, under the same lock as Core state. Use
 `addons::state(inner)` and `addons::state_mut(inner)` to reach it.
