@@ -408,8 +408,8 @@ pub struct WorktreeCreate {
     pub new_branch: bool,
     pub start_ref: Option<String>,
     pub path: Option<PathBuf>,
-    /// A hint for the worktree namer when `path` is empty. Clients before the addon split send it as `town_slug`.
-    #[serde(default, alias = "town_slug")]
+    /// A hint for the worktree namer when `path` is empty.
+    #[serde(default)]
     pub name_hint: Option<String>,
     /// Metadata that the worktree has before `worktree.created` goes out.
     #[serde(default)]
@@ -697,14 +697,10 @@ pub struct HookEvent {
     pub pane: Option<HookPane>,
     pub agent: Option<HookAgent>,
     pub attention: Option<AttentionItem>,
-    pub action: Option<HookAction>,
-}
-
-/// The `action` field of a hook event: the Action that started the pane. The Action and runtime events fill it.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct HookAction {
-    pub id: String,
-    pub label: String,
+    /// Fields that addons add, each under the addon's own top-level key. They sit beside the Core fields on the wire.
+    #[serde(flatten, default)]
+    #[ts(skip)]
+    pub addons: serde_json::Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -732,6 +728,7 @@ pub struct HookAgent {
     pub session_ref: Option<String>,
 }
 
+/// The events that Core fires. An addon adds its own through `Seams::hook_events` in `tomod`.
 pub const HOOK_EVENTS: &[&str] = &[
     "worktree.discovered",
     "worktree.created",
@@ -747,14 +744,8 @@ pub const HOOK_EVENTS: &[&str] = &[
     "agent.idle",
     "agent.exited",
     "attention.created",
-    "action.started",
-    "action.exited",
-    "action.crashed",
-    "runtime.endpoint_discovered",
-    "runtime.endpoint_removed",
     "checkpoint.created",
     "checkpoint.resolved",
-    "annotation.sent",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -997,9 +988,6 @@ pub struct Pane {
     pub exit_code: Option<i32>,
     pub agent: Option<AgentPresence>,
     pub created_at_ms: u64,
-    /// `source.id` when `source.kind` is `action`. Clients from before the Actions addon read it; see [`PaneSource::action_id`].
-    #[serde(default)]
-    pub action_id: Option<String>,
     #[serde(default)]
     pub source: Option<PaneSource>,
     /// Command line of the newest child of the pane's shell, for icons and titles.
@@ -1024,22 +1012,12 @@ pub enum PaneKind {
 /// so a restored or reopened pane has no source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PaneSource {
-    /// The owner, for example `action`.
+    /// The owner: the addon that started the pane.
     pub kind: String,
-    /// The owner's id for the thing that runs, for example the Action id.
+    /// The owner's id for the thing that runs.
     pub id: String,
     /// A name for people: titles, endpoint labels, toasts.
     pub label: String,
-}
-
-/// The `PaneSource.kind` of a pane that an Action started.
-pub const ACTION_SOURCE_KIND: &str = "action";
-
-impl PaneSource {
-    /// The value of the older `action_id` wire fields, which installed clients still read.
-    pub fn action_id(source: Option<&PaneSource>) -> Option<String> {
-        source.filter(|s| s.kind == ACTION_SOURCE_KIND).map(|s| s.id.clone())
-    }
 }
 
 /// One agent conversation stored by the agent itself, rooted at a worktree.
@@ -1310,15 +1288,6 @@ mod tests {
         assert_eq!(cleared.apply(&base), WorktreeMetadata { display_name: None, tags: vec!["x".into()] });
         let tagged: MetadataPatch = serde_json::from_str(r#"{"tags": ["merged"]}"#).unwrap();
         assert_eq!(tagged.apply(&base), WorktreeMetadata { display_name: Some("a".into()), tags: vec!["merged".into()] });
-    }
-
-    #[test]
-    fn worktree_create_accepts_the_old_town_slug_field() {
-        let old: WorktreeCreate =
-            serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"town_slug":"aogashima"}"#).unwrap();
-        let new: WorktreeCreate =
-            serde_json::from_str(r#"{"repo_id":"r","branch":"b","new_branch":true,"start_ref":null,"path":null,"name_hint":"aogashima"}"#).unwrap();
-        assert_eq!((old.name_hint.as_deref(), new.name_hint.as_deref()), (Some("aogashima"), Some("aogashima")));
     }
 
     #[test]

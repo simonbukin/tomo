@@ -39,6 +39,7 @@ pub fn seams() -> Seams {
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
         process_polled: vec![runtime::scan],
+        hook_events: [actions::HOOK_EVENTS, runtime::HOOK_EVENTS, agentation::HOOK_EVENTS].concat(),
     }
 }
 

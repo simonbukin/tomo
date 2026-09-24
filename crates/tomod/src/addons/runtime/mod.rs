@@ -21,6 +21,9 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use tomo_proto::*;
 
+/// The hook events this addon fires. The composition root registers them through `Seams::hook_events`.
+pub const HOOK_EVENTS: &[&str] = &["runtime.endpoint_discovered", "runtime.endpoint_removed"];
+
 /// One `endpoint_discovered` activity per worktree and port in this window.
 pub const ENDPOINT_REPEAT_MS: u64 = 60_000;
 /// `runtime_list` polls first when the last scan is older than this, the same rule as `ps`.
@@ -104,7 +107,7 @@ fn emit(inner: &mut Inner, worktree_id: &str) {
 fn hook(inner: &Inner, event: &str, e: &RuntimeEndpoint) -> HookEvent {
     HookEvent {
         pane: e.pane_id.as_deref().and_then(|p| Daemon::hook_pane(inner, p)),
-        action: e.action_id.as_ref().map(|id| HookAction { id: id.clone(), label: e.label.clone().unwrap_or_else(|| id.clone()) }),
+        addons: e.action_id.as_ref().map(|id| HookAction { id: id.clone(), label: e.label.clone().unwrap_or_else(|| id.clone()) }.fields()).unwrap_or_default(),
         ..events::envelope(inner, event, Some(&e.worktree_id))
     }
 }

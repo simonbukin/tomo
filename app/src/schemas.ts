@@ -290,11 +290,6 @@ export const helloSchema = z.object({
     session_id: z.string()
 });
 
-export const hookActionSchema = z.object({
-    id: z.string(),
-    label: z.string()
-});
-
 export const hookAgentSchema = z.object({
     kind: agentKindSchema,
     state: agentStateSchema,
@@ -390,7 +385,6 @@ export const paneSchema = z.object({
     exit_code: z.number().nullable(),
     agent: agentPresenceSchema.nullable(),
     created_at_ms: z.number(),
-    action_id: z.string().nullable(),
     source: paneSourceSchema.nullable(),
     process_cmd: z.string().nullable(),
     kind: paneKindSchema,
@@ -592,8 +586,7 @@ export const hookEventSchema = z.object({
     previous_tags: z.array(z.string()).optional(),
     pane: hookPaneSchema.nullable(),
     agent: hookAgentSchema.nullable(),
-    attention: attentionItemSchema.nullable(),
-    action: hookActionSchema.nullable()
+    attention: attentionItemSchema.nullable()
 });
 
 export const paneResultSchema = z.object({

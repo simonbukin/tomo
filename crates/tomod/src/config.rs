@@ -113,7 +113,8 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # Events: worktree.discovered, worktree.created, worktree.before_archive,
 #   worktree.archived, worktree.restored, worktree.tags_changed, pane.created,
 #   pane.closed, agent.started, agent.working, agent.waiting, agent.idle,
-#   agent.exited, attention.created
+#   agent.exited, attention.created, checkpoint.created, checkpoint.resolved.
+#   An addon can add events of its own.
 #
 # [[hooks]]
 # event = "worktree.created"
@@ -547,7 +548,8 @@ fn unicode_dash(arg: &str) -> Option<char> {
 }
 
 /// Reports problems without changing behavior; the daemon already applied defaults.
-pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
+/// `addon_events` are the hook events that addons fire, beside Core's `HOOK_EVENTS`.
+pub fn check(cfg: &Config, addon_events: &[&str]) -> Vec<ConfigIssue> {
     let mut out = Vec::new();
     if resolve_program(&cfg.shell).is_none() {
         out.push(issue(IssueLevel::Error, "shell", format!("{} is not an executable file", cfg.shell)));
@@ -566,8 +568,9 @@ pub fn check(cfg: &Config) -> Vec<ConfigIssue> {
     }
     for (i, h) in cfg.hooks.iter().enumerate() {
         let key = format!("hooks[{i}]");
-        if !HOOK_EVENTS.contains(&h.event.as_str()) {
-            out.push(issue(IssueLevel::Error, &key, format!("unknown event {:?}; known: {}", h.event, HOOK_EVENTS.join(", "))));
+        if !HOOK_EVENTS.contains(&h.event.as_str()) && !addon_events.contains(&h.event.as_str()) {
+            let known = [HOOK_EVENTS, addon_events].concat().join(", ");
+            out.push(issue(IssueLevel::Error, &key, format!("unknown event {:?}; known: {known}", h.event)));
         }
         let program = h.command.split_whitespace().next().unwrap_or("");
         if program.is_empty() {
@@ -663,17 +666,37 @@ mod tests {
     #[test]
     fn check_reports_unknown_events_and_a_misplaced_tag_filter() {
         let (cfg, _) = parse("[[hooks]]\nevent = \"nope.event\"\ncommand = \"sh\"\n[[hooks]]\nevent = \"agent.waiting\"\ntag = \"x\"\ncommand = \"sh\"\n");
-        let issues = check(&cfg);
+        let issues = check(&cfg, &[]);
         let messages: Vec<String> = issues.iter().map(|i| i.message.clone()).collect();
         assert!(messages.iter().any(|m| m.contains("tag filter only applies")), "{messages:?}");
         assert!(messages.iter().any(|m| m.contains("unknown event")), "{messages:?}");
     }
 
     #[test]
+    fn a_hook_may_name_an_event_that_an_addon_fires() {
+        let (cfg, _) = parse("[[hooks]]\nevent = \"deploy.finished\"\ncommand = \"sh\"\n");
+        let unknown = |events: &[&str]| check(&cfg, events).iter().any(|i| i.message.contains("unknown event"));
+        assert!(unknown(&[]), "Core alone does not know the event");
+        assert!(!unknown(&["deploy.finished"]), "an addon that fires it makes it known");
+    }
+
+    #[test]
+    fn the_template_lists_every_core_hook_event() {
+        let text: String = DEFAULT_CONFIG_TOML
+            .lines()
+            .skip_while(|l| !l.starts_with("# Events:"))
+            .take_while(|l| !l.contains("An addon can add"))
+            .map(|l| l.trim_start_matches("# Events:").trim_start_matches('#'))
+            .collect();
+        let listed: Vec<&str> = text.split(',').map(|e| e.trim().trim_end_matches('.')).collect();
+        assert_eq!(listed, HOOK_EVENTS, "the # Events: list in the template must name exactly HOOK_EVENTS, in order");
+    }
+
+    #[test]
     fn check_warns_when_an_agent_argument_starts_with_a_unicode_dash() {
         let (cfg, _) =
             parse("[agents.claude]\ncommand = \"sh\"\nargs = [\"\u{2014}dangerously-skip-permissions\", \"--ok\", \"-p\", \"\u{2212}x\", \"plain\"]\n");
-        let issues = check(&cfg);
+        let issues = check(&cfg, &[]);
         let keys: Vec<&str> = issue_keys(&issues).into_iter().filter(|k| k.starts_with("agents.claude.args")).collect();
         assert_eq!(keys, vec!["agents.claude.args[0]", "agents.claude.args[3]"], "{issues:?}");
         let first = issues.iter().find(|i| i.key == "agents.claude.args[0]").unwrap();

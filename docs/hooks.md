@@ -74,7 +74,8 @@ action is not tracked, so it never fires `action.exited`. See
 `checkpoint`, `crash`), `url`, `agent_kind`, and `resolved_at_ms`. The
 runtime events carry `action` when an Action started the pane; a restart
 that brings the same port back within 5 seconds fires nothing. See
-[runtime.md](runtime.md) and [activity.md](activity.md).
+[runtime.md](runtime.md) and [activity.md](activity.md). The addons register these
+event names through the `hook_events` seam; see [addons.md](addons.md).
 
 Process start and exit are not events. They would fire on every poll and
 make Tomo slower. Read `tomo ps` from a hook when you need process state.

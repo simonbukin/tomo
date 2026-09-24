@@ -136,7 +136,7 @@ async fn a_pane_listener_is_labelled_from_its_source_recorded_once_and_removed_a
     assert_eq!(recorded[0].payload, serde_json::json!({ "port": port, "host": "localhost", "pid": e.pid, "action_id": "serve", "endpoint_id": e.id }));
     let hook = wait_for_hooks(&log, "runtime.endpoint_discovered", 1).await.remove(0);
     assert_eq!(
-        (hook.action.map(|a| (a.id, a.label)), hook.pane.map(|p| p.id), hook.worktree.map(|w| w.id)),
+        (HookAction::of(&hook).map(|a| (a.id, a.label)), hook.pane.map(|p| p.id), hook.worktree.map(|w| w.id)),
         (Some(("serve".into(), "Serve".into())), Some(first.clone()), Some(worktree_id.clone()))
     );
 
@@ -147,7 +147,7 @@ async fn a_pane_listener_is_labelled_from_its_source_recorded_once_and_removed_a
     tokio::time::sleep(Duration::from_millis(super::model::REMOVAL_GRACE_MS + 200)).await;
     wait_for_list("the removal", &daemon, &worktree_id, |l| !l.iter().any(|x| x.port == port)).await;
     let removed = wait_for_hooks(&log, "runtime.endpoint_removed", 1).await;
-    assert_eq!(removed[0].action.as_ref().map(|a| a.id.as_str()), Some("serve"));
+    assert_eq!(HookAction::of(&removed[0]).map(|a| a.id), Some("serve".to_string()));
 
     let second = serve(&daemon, &worktree_id, port).await;
     wait_for_list("the second endpoint", &daemon, &worktree_id, |l| l.iter().any(|x| x.pane_id.as_deref() == Some(second.as_str()))).await;

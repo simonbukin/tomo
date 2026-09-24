@@ -129,7 +129,7 @@ impl Fixture {
             .unwrap_or_default()
             .lines()
             .filter_map(|l| serde_json::from_str::<HookEvent>(l).ok())
-            .map(|e| (e.event, e.action.map(|a| format!("{}:{}", a.id, a.label)).unwrap_or_default(), e.pane.is_some()))
+            .map(|e| (e.event.clone(), HookAction::of(&e).map(|a| format!("{}:{}", a.id, a.label)).unwrap_or_default(), e.pane.is_some()))
             .collect()
     }
 
@@ -170,7 +170,7 @@ async fn list_run_reuse_stop_restart_and_exit_outcomes() {
 
     let first = f.run("serve").await.unwrap();
     let pane = first.pane.clone().unwrap();
-    assert_eq!((pane.action_id.as_deref(), pane.user_title.as_deref(), first.reused), (Some("serve"), Some("Serve"), false));
+    assert_eq!((PaneSource::action_id(pane.source.as_ref()).as_deref(), pane.user_title.as_deref(), first.reused), (Some("serve"), Some("Serve"), false));
     assert_eq!(pane.source, Some(PaneSource { kind: "action".into(), id: "serve".into(), label: "Serve".into() }));
     let again = f.run("serve").await.unwrap();
     assert_eq!((again.pane.unwrap().id, again.reused), (pane.id.clone(), true), "a second run reuses the live pane");
@@ -307,7 +307,7 @@ async fn a_restored_action_pane_is_a_shell_that_does_not_rerun() {
     call(&daemon, Call::WorktreeRefresh).await.unwrap();
     let restored = Daemon::pane_view(&daemon.lock(), &pane.id).expect("restored pane");
     assert_eq!(
-        (restored.origin, restored.action_id.as_deref(), restored.source, restored.user_title.as_deref()),
+        (restored.origin, PaneSource::action_id(restored.source.as_ref()), restored.source, restored.user_title.as_deref()),
         (PaneOrigin::Restored, None, None, Some("Serve"))
     );
     let rerun: ActionRunResult =

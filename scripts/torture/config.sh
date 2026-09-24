@@ -1,6 +1,6 @@
 #!/bin/bash
 # Config: config_set edits config.toml in place and keeps comments, disk edits reload live,
-# and bad theme values fall back to Murasaki and show up in config_check.
+# and bad theme values fall back to slab and show up in config_check.
 set -u
 . "$(dirname "$0")/lib.sh"
 
@@ -16,9 +16,9 @@ issue_keys() { $RPC call config_check | jq_ "print(' '.join(i['key'] for i in d)
 watch_config() { $RPC watch "$1" config_changed > "$2" & }
 
 # 1. writes keep comments and the other keys
-set_ theme.name '"paper"' >/dev/null
+set_ theme.name '"slab-light"' >/dev/null
 grep -q '^# my settings' "$CFG" && grep -q 'shell = "/bin/sh" # keep me' "$CFG" && grep -q 'home = "mod+j" # muscle memory' "$CFG" && check 0 "config_set keeps comments and other keys" || check 1 "comments kept" "$(cat "$CFG")"
-[ "$(get "print(d['theme']['name'])")" = paper ] && check 0 "config_get reads the theme that config_set wrote" || check 1 "theme name" "$(get "print(d['theme'])")"
+[ "$(get "print(d['theme']['name'])")" = slab-light ] && check 0 "config_get reads the theme that config_set wrote" || check 1 "theme name" "$(get "print(d['theme'])")"
 set_ keybindings.home '"mod+shift+h"' >/dev/null
 grep -q 'home = "mod+shift+h" # muscle memory' "$CFG" && check 0 "a replaced value keeps its trailing comment" || check 1 "trailing comment" "$(cat "$CFG")"
 set_ terminal.font_size 15 | jq_ "import sys; sys.exit(0 if d['font_size'] == 15 else 1)" && check 0 "config_set returns the reloaded config" || check 1 "font size result"
@@ -47,12 +47,12 @@ sleep 0.8
 python3 - "$CFG" <<'PY'
 import sys
 p = sys.argv[1]
-text = open(p).read().replace('name = "paper"', 'name = "ink"\nbg = "blue"\nsparkle = "#fff"\naccent = "sora"')
+text = open(p).read().replace('name = "slab-light"', 'name = "slab-dark"\nbg = "blue"\nsparkle = "#fff"\naccent = "#2f7df6"')
 open(p, "w").write(text)
 PY
 wait $W
-grep -q '"name": "ink"' "$EV" && check 0 "an edit on disk reloads and pushes config_changed" || check 1 "disk edit event" "$(cat "$EV"; cat "$CFG")"
-[ "$(get "print(sorted(d['theme']['colors'].items()))")" = "[('accent', 'sora')]" ] && check 0 "a malformed color is dropped and valid overrides stay" || check 1 "colors" "$(get "print(d['theme'])")"
+grep -q '"name": "slab-dark"' "$EV" && check 0 "an edit on disk reloads and pushes config_changed" || check 1 "disk edit event" "$(cat "$EV"; cat "$CFG")"
+[ "$(get "print(sorted(d['theme']['colors'].items()))")" = "[('accent', '#2f7df6')]" ] && check 0 "a malformed color is dropped and valid overrides stay" || check 1 "colors" "$(get "print(d['theme'])")"
 KEYS="$(issue_keys)"
 case "$KEYS" in *theme.bg*theme.sparkle*|*theme.sparkle*theme.bg*) check 0 "config_check reports the bad color and the unknown key" ;; *) check 1 "config_check theme issues" "$KEYS" ;; esac
 
@@ -60,8 +60,8 @@ case "$KEYS" in *theme.bg*theme.sparkle*|*theme.sparkle*theme.bg*) check 0 "conf
 printf 'this is [not toml\n' > "$CFG"
 sleep 1.5
 case "$(issue_keys)" in *config.toml*) check 0 "a broken file shows one config.toml issue" ;; *) check 1 "broken file issue" "$(issue_keys)" ;; esac
-[ "$(get "print(d['theme']['name'])")" = system ] && check 0 "a broken file falls back to the system Murasaki theme" || check 1 "broken file theme" "$(get "print(d['theme'])")"
-set_ theme.name '"ink"' >/dev/null 2>&1 && check 1 "config_set refuses to edit a file that does not parse" || check 0 "config_set refuses to edit a file that does not parse"
+[ "$(get "print(d['theme']['name'])")" = system ] && check 0 "a broken file falls back to the system slab theme" || check 1 "broken file theme" "$(get "print(d['theme'])")"
+set_ theme.name '"slab-dark"' >/dev/null 2>&1 && check 1 "config_set refuses to edit a file that does not parse" || check 0 "config_set refuses to edit a file that does not parse"
 
 daemon_stop
 summary

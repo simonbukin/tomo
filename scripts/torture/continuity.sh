@@ -77,7 +77,7 @@ wait_for "[ -f $R/marker-serve ]" 10; rm -f "$R/marker-serve"
 [ "$(pane_field "$SP" tab_id)" = "$AT" ] || known "action pane landed outside the actions tab"
 tab_close "$(pane_field "$SP" tab_id)"; sleep 0.3
 NT=$(reopen | jq_ "print(d['id'])"); sleep 2
-$T pane list --worktree "$WT" --json | jq_ "import sys; p=[x for x in d if x['tab_id']=='$NT']; sys.exit(0 if any(x['user_title']=='Serve' and x['action_id'] is None and x['live'] for x in p) else 1)" && check 0 "Action pane reopens as a shell titled Serve without action_id" || check 1 "action reopen" "$($T pane list --worktree "$WT" --json)"
+$T pane list --worktree "$WT" --json | jq_ "import sys; p=[x for x in d if x['tab_id']=='$NT']; sys.exit(0 if any(x['user_title']=='Serve' and x['source'] is None and x['live'] for x in p) else 1)" && check 0 "Action pane reopens as a shell titled Serve without a source" || check 1 "action reopen" "$($T pane list --worktree "$WT" --json)"
 [ ! -f "$R/marker-serve" ] && check 0 "reopen does not rerun the Action command" || check 1 "action reran on reopen"
 
 # 6. the stack keeps the newest ten and walks back per worktree
@@ -99,7 +99,7 @@ $RPC call open_location "{\"path\":\"$R/missing.rs\",\"line\":1}" 2>&1 | grep -q
 SP2=$($T action run serve "$WT" --json | jq_ "print(d['pane']['id'])")
 wait_for "[ -f $R/marker-serve ]" 10; rm -f "$R/marker-serve"
 daemon_restart; sleep 2
-[ "$(pane_field "$SP2" origin)" = restored ] && [ "$(pane_field "$SP2" action_id)" = None ] && check 0 "restart restores the Action pane without action_id" || check 1 "restore action" "$(pane_field "$SP2" origin) $(pane_field "$SP2" action_id)"
+[ "$(pane_field "$SP2" origin)" = restored ] && [ "$(pane_field "$SP2" source)" = None ] && check 0 "restart restores the Action pane without a source" || check 1 "restore action" "$(pane_field "$SP2" origin) $(pane_field "$SP2" source)"
 [ ! -f "$R/marker-serve" ] && check 0 "restart does not rerun the Action command" || check 1 "action reran on restart"
 reopen | grep -q not_found && check 0 "the closed-tab stack does not survive a daemon restart" || check 1 "stack after restart"
 

@@ -40,7 +40,6 @@ export * from "./FsEntry";
 export * from "./GitHubActivity";
 export * from "./GitSummary";
 export * from "./Hello";
-export * from "./HookAction";
 export * from "./HookAgent";
 export * from "./HookDef";
 export * from "./HookEvent";
