@@ -22,6 +22,10 @@ id = "fail"
 command = "exit 3"
 
 [[actions]]
+id = "tree"
+command = "trap '' HUP; sleep 300 & echo $! > tree.pid; wait"
+
+[[actions]]
 id = "mark"
 command = "touch marker-ext"
 mode = "external"
@@ -136,6 +140,18 @@ impl Fixture {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn stop_kills_a_child_that_ignores_hangup() {
+    let f = fixture("tree").await;
+    f.run("tree").await.unwrap();
+    let pid_file = f.repo.join("tree.pid");
+    eventually("the child pid", || std::fs::read_to_string(&pid_file).is_ok_and(|s| s.ends_with('\n'))).await;
+    let child: i32 = std::fs::read_to_string(&pid_file).unwrap().trim().parse().unwrap();
+    f.stop("tree").await;
+    eventually("the child to die", || unsafe { libc::kill(child, 0) } != 0).await;
+    f.finish();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn list_run_reuse_stop_restart_and_exit_outcomes() {
     let f = fixture("run").await;
     let set: ActionSet = serde_json::from_value(call(&f.daemon, Call::ActionList { worktree_id: f.worktree_id.clone() }).await.unwrap()).unwrap();
@@ -145,11 +161,12 @@ async fn list_run_reuse_stop_restart_and_exit_outcomes() {
             ("serve", "Serve", ActionMode::Pane, ActionShow::Topbar),
             ("quick", "quick", ActionMode::Pane, ActionShow::Menu),
             ("fail", "fail", ActionMode::Pane, ActionShow::Menu),
+            ("tree", "tree", ActionMode::Pane, ActionShow::Menu),
             ("mark", "mark", ActionMode::External, ActionShow::Menu),
         ]
     );
     let snapshot: Snapshot = serde_json::from_value(call(&f.daemon, Call::Subscribe).await.unwrap()).unwrap();
-    assert_eq!(snapshot.actions.iter().map(|s| (s.worktree_id.as_str(), s.actions.len())).collect::<Vec<_>>(), [(f.worktree_id.as_str(), 4)]);
+    assert_eq!(snapshot.actions.iter().map(|s| (s.worktree_id.as_str(), s.actions.len())).collect::<Vec<_>>(), [(f.worktree_id.as_str(), 5)]);
 
     let first = f.run("serve").await.unwrap();
     let pane = first.pane.clone().unwrap();
@@ -243,7 +260,7 @@ async fn a_sibling_worktree_reads_the_repo_file_until_it_has_one_of_its_own() {
     let sibling = worktrees.iter().find(|w| !w.is_main).expect("the second worktree").id.clone();
 
     let set = set_of(&f.daemon, &sibling).await;
-    assert_eq!((set.actions.len(), set.from_repo, set.error), (4, true, None), "a worktree with no file of its own reads the repository file");
+    assert_eq!((set.actions.len(), set.from_repo, set.error), (5, true, None), "a worktree with no file of its own reads the repository file");
     assert!(!set_of(&f.daemon, &f.worktree_id).await.from_repo, "the repository root reads its own file");
 
     std::fs::write(path.join(".tomo.toml"), "[[actions]]\nid = \"local\"\ncommand = \"true\"\n").unwrap();
