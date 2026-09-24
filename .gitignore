@@ -4,5 +4,4 @@ dist/
 app/src-tauri/gen/
 *.log
 .DS_Store
-tomo-repomix.md
 .claude/worktrees/

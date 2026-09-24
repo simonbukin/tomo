@@ -39,11 +39,6 @@ describe("route: the PRD table", () => {
     expect(route("success", away)).toEqual(["status"]);
   });
 
-  it("an Action that starts or completes normally shows only UI state", () => {
-    expect(route("action_started", elsewhere, target)).toEqual([]);
-    expect(route("action_completed", away, target)).toEqual([]);
-  });
-
   it("a crash toasts unless the user already looks at it, and also notifies the desktop while away", () => {
     expect(route("crash", elsewhere, target)).toEqual(["toast"]);
     expect(route("crash", onPane, target)).toEqual([]);

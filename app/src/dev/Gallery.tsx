@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { applyFrame, getState, setState } from "../store";
+import { getState, setState } from "../store";
 import { defaultUi } from "../uiState";
 import { WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
-import type { AgentPresence, AgentState, Frame, GitSummary, Repo, Worktree } from "../types";
+import type { AgentPresence, AgentState, GitSummary, Repo, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -60,8 +60,6 @@ interface Scene {
   name: string;
   worktree: Worktree;
   agents?: AgentPresence[];
-  /** A `pr_changed` payload, so an addon state can be shown without naming the addon here. */
-  frame?: Frame;
 }
 
 const SCENES: Scene[] = [
@@ -75,10 +73,6 @@ const SCENES: Scene[] = [
   { name: "archiving", worktree: wt("busy", { archiving: true }) },
   { name: "directory missing", worktree: wt("gone", { exists: false }) },
   { name: "main worktree", worktree: wt("tomo", { is_main: true }) },
-  { name: "pull request open", worktree: wt("pr-open"), frame: { seq: 1, event: "pr_changed", data: { worktree_id: "pr-open", pr: { number: 12, title: "Add the thing", url: "", state: "open", draft: false, review_decision: null, mergeable: "mergeable", checks_passed: 3, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 } } } },
-  { name: "checks failed", worktree: wt("pr-fail"), frame: { seq: 2, event: "pr_changed", data: { worktree_id: "pr-fail", pr: { number: 13, title: "Break the thing", url: "", state: "open", draft: false, review_decision: null, mergeable: "mergeable", checks_passed: 1, checks_failed: 2, checks_pending: 0, fetched_at_ms: 1 } } } },
-  { name: "checks running", worktree: wt("pr-run"), frame: { seq: 3, event: "pr_changed", data: { worktree_id: "pr-run", pr: { number: 14, title: "Try the thing", url: "", state: "open", draft: true, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 4, fetched_at_ms: 1 } } } },
-  { name: "merged", worktree: wt("pr-merged"), frame: { seq: 4, event: "pr_changed", data: { worktree_id: "pr-merged", pr: { number: 15, title: "Shipped the thing", url: "", state: "merged", draft: false, review_decision: "approved", mergeable: null, checks_passed: 5, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 } } } },
 ];
 
 /**
@@ -97,7 +91,6 @@ function seed(): void {
     agents: Object.fromEntries(agents.map((a) => [a.pane_id, a])),
     ui: { ...defaultUi, view: "home", activeWorktreeId: worktrees[0].id },
   });
-  SCENES.forEach((s) => s.frame && applyFrame(s.frame));
 }
 
 export function Gallery() {

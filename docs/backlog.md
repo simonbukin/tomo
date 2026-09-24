@@ -224,9 +224,9 @@ existing primitives; `docs/ui.md` forbids a hand-rolled combobox.
 
 **Optional branch.** A new config key `branch_prefix` (empty by default). With
 the box empty, the branch becomes `<branch_prefix><name>`, so a worktree is one
-click and still gets a real branch name. Orca on this machine names every
-worktree `simon/<slug>`, which is the shape this copies; Conductor uses bare
-names, which is why the prefix is a setting and not a rule. Show the computed
+click and still gets a real branch name. Some tools name every worktree
+`<user>/<slug>` and others use bare names, which is why the prefix is a
+setting and not a rule. Show the computed
 name as the placeholder so the user sees what they will get, and keep the wire
 change as small as an empty string meaning "use the default".
 
@@ -237,7 +237,7 @@ gives `<branch_prefix><directory name>`, with `branch_prefix` empty by default, 
 `Repo.branch_prefix` carries it to the placeholder. An empty `branch` on the
 wire means "use the default". A name that already exists still fails with git's
 own message, shown inline. The field is the new `combobox.tsx` primitive (Base
-UI Autocomplete). Set the prefix with `tomo config set branch_prefix "simon/"`;
+UI Autocomplete). Set the prefix with `branch_prefix = "you/"` in config.toml;
 there is no Settings field yet, and no `tomo branch list` subcommand.
 
 ### 2.8 Startup that feels instant — M, measure first
