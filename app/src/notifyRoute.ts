@@ -6,8 +6,6 @@ export type Channel = "status" | "toast" | "desktop" | "chime";
 
 export type NotifyKind =
   | "success"
-  | "action_started"
-  | "action_completed"
   | "failure"
   | "config_warning"
   | "daemon_reconnected"
@@ -40,8 +38,6 @@ export function route(kind: NotifyKind, ctx: RouteContext, target?: Target): Cha
   switch (kind) {
     case "success":
       return ["status"];
-    case "action_started":
-    case "action_completed":
     case "daemon_reconnected":
       return [];
     case "failure":
