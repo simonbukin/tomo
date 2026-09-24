@@ -1,6 +1,6 @@
 import { closeOtherTabs, currentWorktree, equalizeTab, focusedPaneId, rotateSplit, type Action } from "../actions";
 import { browserCommand, openBrowser } from "../browser/browser";
-import { activeTab, getState, setState } from "../store";
+import { activeTab, getState, setState, splitsAllowed } from "../store";
 import type { Id } from "../types";
 import { movePane, moveTab as moveTabTo } from "./panes";
 
@@ -34,8 +34,8 @@ const browser = (command: "browser_back" | "browser_forward" | "browser_reload")
 
 export const commands: Action[] = [
   { id: "keyboard_shortcuts", label: "Keyboard shortcuts", group: "General", run: () => setState({ shortcutsOpen: true, paletteOpen: false }) },
-  { id: "equalize_panes", label: "Equalize panes", group: "Panes", whenWorktree: true, run: withTab((id) => equalizeTab(id)) },
-  { id: "rotate_split", label: "Rotate split", group: "Panes", whenWorktree: true, run: withTab((id) => rotateSplit(id)) },
+  { id: "equalize_panes", label: "Equalize panes", group: "Panes", whenWorktree: true, offered: () => splitsAllowed(getState()), run: withTab((id) => equalizeTab(id)) },
+  { id: "rotate_split", label: "Rotate split", group: "Panes", whenWorktree: true, offered: () => splitsAllowed(getState()), run: withTab((id) => rotateSplit(id)) },
   { id: "move_tab_left", label: "Move tab left", group: "Tabs", whenWorktree: true, run: withTab((id) => moveTab(id, -1)) },
   { id: "move_tab_right", label: "Move tab right", group: "Tabs", whenWorktree: true, run: withTab((id) => moveTab(id, 1)) },
   { id: "close_other_tabs", label: "Close other tabs", group: "Tabs", whenWorktree: true, run: withTab((id) => closeOtherTabs(id)) },

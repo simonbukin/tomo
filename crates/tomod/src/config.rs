@@ -104,7 +104,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # branch_prefix = "simon/"   # a create with no branch gets <branch_prefix><worktree name>
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
-# max_panes_per_tab = 4
+# max_panes_per_tab = 4   # a split into a full tab opens a new tab; 1 means tabs only, no splits
 
 # Hooks run ordinary commands when something happens. The event JSON arrives
 # on stdin and in TOMO_EVENT_JSON. mode = "pane" runs the command in a visible
