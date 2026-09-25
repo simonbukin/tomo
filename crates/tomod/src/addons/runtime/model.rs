@@ -17,7 +17,14 @@ pub const REMOVAL_GRACE_MS: u64 = 15_000;
 /// waits for the answer, so a hung call would stop the process poll, the agent
 /// state, and the resources of every worktree.
 pub const LSOF_DEADLINE: Duration = Duration::from_secs(2);
-const PROBE_TIMEOUT: Duration = Duration::from_millis(400);
+const PROBE_CONNECT: Duration = Duration::from_millis(400);
+/// A dev server can answer its first request slowly while it builds; a later probe catches it anyway.
+const PROBE_REPLY: Duration = Duration::from_millis(1_000);
+/// The waits between the probes of a port that does not answer HTTP yet.
+pub const PROBE_RETRIES: [Duration; 7] = [secs(1), secs(2), secs(3), secs(5), secs(10), secs(20), secs(30)];
+const fn secs(s: u64) -> Duration {
+    Duration::from_secs(s)
+}
 const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,24 +113,58 @@ pub fn reconcile(current: &[RuntimeEndpoint], gone_ms: &HashMap<Id, u64>, observ
     r
 }
 
-/// 400 ms connect, `HEAD /`, and a look at the first bytes. Anything that is
-/// not an HTTP status line is plain TCP. `lsof` writes an IPv6 host in brackets,
-/// and the resolver refuses the brackets.
-pub fn probe(host: &str, port: u16) -> RuntimeProtocol {
+
+/// What one probe of a socket found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Probe {
+    pub protocol: RuntimeProtocol,
+    /// The status of `HEAD /` when the socket speaks HTTP.
+    pub status: Option<u16>,
+}
+
+impl Probe {
+    pub const TCP: Probe = Probe { protocol: RuntimeProtocol::Tcp, status: None };
+}
+
+/// The status code of an HTTP status line, such as `HTTP/1.1 307 Temporary Redirect`.
+pub fn parse_status(first: &[u8]) -> Option<u16> {
+    let line = std::str::from_utf8(first).ok()?;
+    let rest = line.strip_prefix("HTTP/")?;
+    rest.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// Connect, `HEAD /`, and read the status line. Anything that is not an HTTP
+/// status line is plain TCP. `lsof` writes an IPv6 host in brackets, and the
+/// resolver refuses the brackets.
+pub fn probe(host: &str, port: u16) -> Probe {
     let host = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(host);
     let addrs = (host, port).to_socket_addrs().map(|a| a.collect::<Vec<_>>()).unwrap_or_default();
     for addr in addrs {
-        let Ok(mut s) = TcpStream::connect_timeout(&addr, PROBE_TIMEOUT) else { continue };
-        let _ = s.set_read_timeout(Some(PROBE_TIMEOUT));
-        let _ = s.set_write_timeout(Some(PROBE_TIMEOUT));
+        let Ok(mut s) = TcpStream::connect_timeout(&addr, PROBE_CONNECT) else { continue };
+        let _ = s.set_read_timeout(Some(PROBE_REPLY));
+        let _ = s.set_write_timeout(Some(PROBE_CONNECT));
         if s.write_all(b"HEAD / HTTP/1.0\r\n\r\n").is_err() {
-            return RuntimeProtocol::Tcp;
+            return Probe::TCP;
         }
-        let mut buf = [0u8; 8];
+        let mut buf = [0u8; 32];
         let n = s.read(&mut buf).unwrap_or(0);
-        return if buf[..n].starts_with(b"HTTP/") { RuntimeProtocol::Http } else { RuntimeProtocol::Tcp };
+        return match parse_status(&buf[..n]) {
+            Some(status) => Probe { protocol: RuntimeProtocol::Http, status: Some(status) },
+            None if buf[..n].starts_with(b"HTTP/") => Probe { protocol: RuntimeProtocol::Http, status: None },
+            None => Probe::TCP,
+        };
     }
-    RuntimeProtocol::Tcp
+    Probe::TCP
+}
+
+/// The wait before the next probe of an endpoint, after `done` probes that found no HTTP. `None`
+/// means stop. A dev server listens before its first page compiles, and a cold compile can take
+/// several seconds, so a port that is not HTTP yet gets more chances.
+pub fn next_probe(done: usize, found: &Probe) -> Option<Duration> {
+    if found.protocol != RuntimeProtocol::Tcp {
+        return None;
+    }
+    PROBE_RETRIES.get(done.checked_sub(1)?).copied()
 }
 
 /// Runs the command and gives it a deadline. `Ok(None)` means that the command
@@ -156,6 +197,8 @@ mod tests {
             pid,
             process: "node".into(),
             protocol: RuntimeProtocol::Tcp,
+            status: None,
+            probing: false,
             host: "localhost".into(),
             port,
             label: None,
@@ -212,22 +255,52 @@ mod tests {
         assert!(output_within(Command::new("tomo-no-such-program"), Duration::from_secs(1)).is_err());
     }
 
+    /// A server that answers each connection with `reply` after `delay`.
+    fn serve(reply: &'static [u8], delay: Duration) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for mut s in listener.incoming().flatten() {
+                std::thread::sleep(delay);
+                let _ = s.write_all(reply);
+            }
+        });
+        port
+    }
+
     #[test]
-    fn probe_tells_http_from_tcp() {
-        let http = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let tcp = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let (hp, tp) = (http.local_addr().unwrap().port(), tcp.local_addr().unwrap().port());
-        std::thread::spawn(move || {
-            let (mut s, _) = http.accept().unwrap();
-            let _ = s.write_all(b"HTTP/1.0 200 OK\r\n\r\n");
-        });
-        std::thread::spawn(move || {
-            let (mut s, _) = tcp.accept().unwrap();
-            let _ = s.write_all(b"hello\n");
-        });
-        assert_eq!(probe("127.0.0.1", hp), RuntimeProtocol::Http);
-        assert_eq!(probe("127.0.0.1", tp), RuntimeProtocol::Tcp);
-        assert_eq!(probe("127.0.0.1", 1), RuntimeProtocol::Tcp);
+    fn probe_reads_the_status_and_tells_http_from_tcp() {
+        let ok = serve(b"HTTP/1.0 200 OK\r\n\r\n", Duration::ZERO);
+        let missing = serve(b"HTTP/1.1 404 Not Found\r\n\r\n", Duration::ZERO);
+        let tcp = serve(b"hello\n", Duration::ZERO);
+        assert_eq!(probe("127.0.0.1", ok), Probe { protocol: RuntimeProtocol::Http, status: Some(200) });
+        assert_eq!(probe("127.0.0.1", missing), Probe { protocol: RuntimeProtocol::Http, status: Some(404) });
+        assert_eq!(probe("127.0.0.1", tcp), Probe::TCP);
+        assert_eq!(probe("127.0.0.1", 1), Probe::TCP);
+    }
+
+    #[test]
+    fn probe_waits_for_a_slow_first_reply() {
+        let slow = serve(b"HTTP/1.1 307 Temporary Redirect\r\n\r\n", Duration::from_millis(600));
+        assert_eq!(probe("127.0.0.1", slow).status, Some(307), "a dev server that takes 600 ms to answer is still HTTP");
+    }
+
+    #[test]
+    fn parse_status_reads_the_code_of_a_status_line() {
+        assert_eq!(parse_status(b"HTTP/1.1 307 Temporary Redirect\r\n"), Some(307));
+        assert_eq!(parse_status(b"HTTP/1.0 200 OK"), Some(200));
+        assert_eq!(parse_status(b"HTTP/2 404"), Some(404));
+        assert_eq!(parse_status(b"SSH-2.0-OpenSSH"), None);
+        assert_eq!(parse_status(b"HTTP/"), None);
+    }
+
+    #[test]
+    fn next_probe_backs_off_until_http_or_the_last_retry() {
+        let http = Probe { protocol: RuntimeProtocol::Http, status: Some(200) };
+        let waits: Vec<Option<Duration>> = (1..=PROBE_RETRIES.len() + 1).map(|done| next_probe(done, &Probe::TCP)).collect();
+        assert_eq!(waits, [PROBE_RETRIES.map(Some).as_slice(), &[None]].concat(), "every retry in order, then stop");
+        assert_eq!(next_probe(1, &http), None, "the first HTTP answer stops the probe");
+        assert_eq!(next_probe(0, &Probe::TCP), None);
     }
 
     #[test]
@@ -238,6 +311,6 @@ mod tests {
             let (mut s, _) = http.accept().unwrap();
             let _ = s.write_all(b"HTTP/1.1 200 OK\r\n\r\n");
         });
-        assert_eq!(probe("[::1]", port), RuntimeProtocol::Http);
+        assert_eq!(probe("[::1]", port).protocol, RuntimeProtocol::Http);
     }
 }

@@ -76,8 +76,8 @@ describe("Actions and Runtime through pane sources", () => {
 
   it("offers restart and stop in the menu of an Action endpoint", async () => {
     render(<WorktreeHeader worktree={worktree} />);
-    await userEvent.setup().click(screen.getByRole("button", { name: "Runtime endpoints" }));
-    await screen.findByText("runtime");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ports" }));
+    await screen.findByText("ports");
     fireEvent.contextMenu(document.querySelector(".runtime-row")!);
     const menu = store.getState().menu!.items;
     expect(labels(menu)).toEqual(["open", "focus logs", "restart", "stop", "—", "copy"]);

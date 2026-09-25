@@ -63,8 +63,12 @@ fn serve_source() -> PaneSource {
 }
 
 async fn serve(daemon: &Arc<Daemon>, worktree_id: &str, port: u16) -> Id {
+    serve_with(daemon, worktree_id, port, &[]).await
+}
+
+async fn serve_with(daemon: &Arc<Daemon>, worktree_id: &str, port: u16, extra: &[&str]) -> Id {
     let server = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/fixtures/fake-server");
-    let command = vec!["python3".to_string(), server.display().to_string(), "--port".into(), port.to_string()];
+    let command = [vec!["python3".to_string(), server.display().to_string(), "--port".into(), port.to_string()], extra.iter().map(|s| s.to_string()).collect()].concat();
     let created = call(daemon, Call::PaneCreate(PaneCreate { worktree_id: Some(worktree_id.into()), command: Some(command), ..Default::default() })).await;
     let pane_id = created["pane"]["id"].as_str().unwrap().to_string();
     daemon.lock().panes.get_mut(&pane_id).unwrap().source = Some(serve_source());
@@ -153,6 +157,34 @@ async fn a_pane_listener_is_labelled_from_its_source_recorded_once_and_removed_a
     wait_for_list("the second endpoint", &daemon, &worktree_id, |l| l.iter().any(|x| x.pane_id.as_deref() == Some(second.as_str()))).await;
     wait_for_hooks(&log, "runtime.endpoint_discovered", 2).await;
     assert_eq!(discovered(&daemon).len(), 1, "a second discovery on the same port inside a minute records no activity");
+    daemon.shutdown();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_port_that_answers_http_late_turns_http_on_a_later_probe() {
+    let dir = PathBuf::from(format!("/tmp/tomo-addons-runtime-late-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let repo = dir.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(dir.join("data")).unwrap();
+    git(&repo, &["init", "-q"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    let daemon = Daemon::new(Paths::new(dir.join("data")), addons::seams(), Box::new(addons::State::default())).unwrap();
+    addons::migrate(&daemon.lock().store).unwrap();
+    daemon.lock().config.shell = "/bin/sh".into();
+    call(&daemon, Call::RepoAdd { path: repo.clone() }).await;
+    let worktrees: Vec<Worktree> = serde_json::from_value(call(&daemon, Call::WorktreeList).await).unwrap();
+    let worktree_id = worktrees[0].id.clone();
+
+    let port = free_port();
+    serve_with(&daemon, &worktree_id, port, &["--http-after", "2"]).await;
+    let early = wait_for_list("the endpoint", &daemon, &worktree_id, |l| l.iter().any(|e| e.port == port)).await;
+    let e = early.iter().find(|e| e.port == port).unwrap();
+    assert_eq!((e.protocol, e.probing), (RuntimeProtocol::Tcp, true), "a port that is not HTTP yet stays in the probe");
+    let late = wait_for_list("the later probe", &daemon, &worktree_id, |l| l.iter().any(|e| e.port == port && e.protocol == RuntimeProtocol::Http)).await;
+    let e = late.iter().find(|e| e.port == port).unwrap();
+    assert_eq!((e.status, e.probing), (Some(200), false), "the first HTTP answer ends the probe");
     daemon.shutdown();
     let _ = std::fs::remove_dir_all(&dir);
 }

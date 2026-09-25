@@ -4,6 +4,7 @@
   --port N          bind this port instead of a free one
   --crash-after S   exit 1 after S seconds
   --tcp             answer with plain text instead of an HTTP reply
+  --http-after S    answer with plain text for S seconds, then with HTTP, like a dev server that compiles
 """
 import select
 import socket
@@ -20,6 +21,8 @@ def opt(name, default):
 port = int(opt("--port", 0))
 crash_after = float(opt("--crash-after", 0))
 plain = "--tcp" in args
+http_after = float(opt("--http-after", 0))
+started = time.time()
 
 s = socket.socket()
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -37,7 +40,8 @@ while True:
     try:
         conn.settimeout(1)
         conn.recv(1024)
-        conn.sendall(b"hello\n" if plain else b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        late = time.time() - started < http_after
+        conn.sendall(b"hello\n" if plain or late else b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok")
     except OSError:
         pass
     conn.close()

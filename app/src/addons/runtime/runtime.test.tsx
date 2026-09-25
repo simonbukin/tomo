@@ -15,13 +15,14 @@ const { Signals, signalsFor } = await import("../../Signals");
 const { signalText } = await import("../../shell/LeftRail");
 const { activityView } = await import("../../activityKinds");
 const store = await import("../../store");
+const { byRank, endpointSummary, primaryEndpoint, servesPage } = await import("./model");
 
 const worktree = { id: "w1", name: "aogashima", repo_id: "r1", path: "/src/aogashima", branch: "feat/x", head: "abc1234", detached: false, exists: true, archived_at_ms: null, archiving: false, is_main: false, git: null, metadata: { state: null, tags: [], project: null, display_name: null } } as unknown as Worktree;
 const tab = { id: "t1", worktree_id: "w1", title: "one", position: 0, is_active: true, active_pane_id: "p1", layout: { type: "leaf", pane_id: "p1" } } as unknown as Tab;
 const shell = { id: "p1", tab_id: "t1", worktree_id: "w1", title: "shell", user_title: null, live: true, exit_code: null, agent: null, kind: "terminal", url: null, action_id: null, source: null } as unknown as Pane;
-const endpoint = (extra: Partial<RuntimeEndpoint>) => ({ id: "10:3000", worktree_id: "w1", pane_id: "p1", action_id: null, source: null, pid: 10, process: "node", protocol: "http", host: "localhost", port: 3000, label: null, discovered_at_ms: 0, ...extra }) as RuntimeEndpoint;
+const endpoint = (extra: Partial<RuntimeEndpoint>) => ({ id: "10:3000", worktree_id: "w1", pane_id: "p1", action_id: null, source: null, pid: 10, process: "node", protocol: "http", status: 200, probing: false, host: "localhost", port: 3000, label: null, discovered_at_ms: 0, ...extra }) as RuntimeEndpoint;
 const app = endpoint({});
-const db = endpoint({ id: "11:5432", pid: 11, process: "postgres", protocol: "tcp", port: 5432 });
+const db = endpoint({ id: "11:5432", pid: 11, process: "postgres", protocol: "tcp", status: null, port: 5432 });
 const checkpoint = (url: string | null): AttentionItem => ({ id: "cp", worktree_id: "w1", pane_id: null, level: "attention", message: "look", created_at_ms: 1, viewed_at_ms: null, kind: "checkpoint", url, agent_kind: "claude", resolved_at_ms: null });
 
 const labels = (items: MenuItem[]) => items.map((it) => ("separator" in it ? "—" : it.label));
@@ -52,13 +53,13 @@ describe("runtime header popover", () => {
   it("appears from the snapshot after the editor button, lists each endpoint, and goes away when the list empties", async () => {
     act(() => store.applySnapshot(snapshot([app, db])));
     render(<WorktreeHeader worktree={worktree} />);
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["Zed", "Reveal in Finder", "Runtime endpoints", "More actions"]);
-    await userEvent.setup().click(screen.getByRole("button", { name: "Runtime endpoints" }));
-    await screen.findByText("runtime");
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["Zed", "Reveal in Finder", "Ports", "More actions"]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ports" }));
+    await screen.findByText("ports");
     const rows = [...document.querySelectorAll(".runtime-row")];
     expect(rows.map((r) => [...r.children].map((c) => c.textContent))).toEqual([
-      ["node", "localhost:3000", "shell · 10", "open"],
-      ["postgres", "localhost:5432", "shell · 11", "open"],
+      ["node", ":3000", "page 200", "open"],
+      ["postgres", ":5432", "tcp", ""],
     ]);
     fireEvent.contextMenu(rows[0]);
     expect(labels(store.getState().menu!.items)).toEqual(["open", "focus logs", "—", "copy"]);
@@ -68,7 +69,7 @@ describe("runtime header popover", () => {
     expect(entry(tcp, "open").disabled).toBe(true);
     expect(labels(entry(tcp, "copy").submenu!)).toEqual(["port"]);
     changed([]);
-    expect(screen.queryByRole("button", { name: "Runtime endpoints" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ports" })).toBeNull();
   });
 });
 
@@ -125,5 +126,25 @@ describe("runtime app link", () => {
     changed([db, app]);
     expect(activityView("checkpoint_created").url!(row("checkpoint_created"), store.getState())).toBe("http://localhost:3000");
     expect(activityView("endpoint_discovered").url!(row("endpoint_discovered"), store.getState())).toBe("http://localhost:3000");
+  });
+});
+
+describe("port ranking", () => {
+  const devtools = endpoint({ id: "12:4206", pid: 12, port: 4206, status: 404 });
+  const next = endpoint({ id: "13:3379", pid: 13, port: 3379, status: 307 });
+  const compiling = endpoint({ id: "14:3001", pid: 14, port: 3001, protocol: "tcp", status: null, probing: true });
+
+  it("puts pages first, then other HTTP, then TCP, each by port", () => {
+    expect(byRank([db, devtools, compiling, next]).map((e) => e.port)).toEqual([3379, 4206, 3001, 5432]);
+    expect([next, devtools, compiling].map(servesPage)).toEqual([true, false, false]);
+  });
+
+  it("links the worktree to the page, not to a devtools port that answers 404", () => {
+    changed([devtools, next]);
+    expect(primaryEndpoint(store.getState(), "w1")?.port).toBe(3379);
+  });
+
+  it("says what each port serves, and that a port is still being checked", () => {
+    expect([next, devtools, compiling, db].map(endpointSummary)).toEqual(["page 307", "http 404", "checking", "tcp"]);
   });
 });

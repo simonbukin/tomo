@@ -1,7 +1,7 @@
 import type { RuntimeEndpoint } from "../../generated";
 import type { AppRow } from "../../appsModel";
 import type { State } from "../../store";
-import { endpointLabel, endpointUrl, httpEndpoints } from "./model";
+import { endpointLabel, endpointSummary, endpointUrl, httpEndpoints } from "./model";
 
 /**
  * The daemon already labels a discovered port with the source of its pane, so a
@@ -14,7 +14,7 @@ const row = (e: RuntimeEndpoint): AppRow => ({
   label: endpointLabel(e),
   url: endpointUrl(e),
   port: e.port,
-  detail: e.process === endpointLabel(e) ? null : e.process,
+  detail: [endpointSummary(e), e.process === endpointLabel(e) ? null : e.process].filter(Boolean).join(" · "),
   source: e.source ? { kind: e.source.kind, id: e.source.id } : null,
 });
 

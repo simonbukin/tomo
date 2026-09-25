@@ -60,7 +60,7 @@ wait_for "[ \"\$(ep $WT serve pane_id)\" = $S ]" 6 && check 0 "owned server appe
 [ "$(ep "$WT" serve label)" = Serve ] && [ "$(ep "$WT" serve host)" = localhost ] && [ "$(ep "$WT" serve worktree_id)" = "$WT" ] && check 0 "endpoint carries the action label, localhost, and the worktree" || check 1 "endpoint fields" "$($T runtime "$WT" --json)"
 wait_for "[ \"\$(ep $WT serve protocol)\" = http ]" 6 && check 0 "HEAD probe classifies the fake server as http" || check 1 "http probe" "$(ep "$WT" serve protocol)"
 SPORT=$(ep "$WT" serve port)
-$T runtime "$WT" | grep -Eq "^$SPORT +http +[0-9]+ +[Pp]ython[^ ]* +serve +$S" && check 0 "text output prints port protocol pid process action pane" || check 1 "text output" "$($T runtime "$WT")"
+$T runtime "$WT" | grep -Eq "^$SPORT +page 200 +[0-9]+ +[Pp]ython[^ ]* +serve +$S" && check 0 "text output prints port, what it serves, pid, process, action, and pane" || check 1 "text output" "$($T runtime "$WT")"
 wait_for "[ \"\$(events runtime.endpoint_discovered \"e['action']['id']=='serve' and e['pane']['id']=='$S'\")\" = 1 ]" 6 && check 0 "runtime.endpoint_discovered fired once with pane and action" || check 1 "discovered hook" "$(cut -c1-200 "$EVLOG" 2>/dev/null)"
 [ "$(activity_of "$WT" endpoint_discovered serve title)" != none ] && check 0 "activity records EndpointDiscovered" || check 1 "activity endpoint" "$($T activity --worktree "$WT")"
 

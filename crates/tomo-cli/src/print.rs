@@ -211,11 +211,10 @@ pub fn runtime(list: &[RuntimeEndpoint], json: bool) {
         println!("no listening ports in Tomo panes");
     }
     for e in list {
-        let protocol = format!("{:?}", e.protocol).to_lowercase();
         println!(
-            "{:<6} {:<5} {:<7} {:<16} {:<14} {}",
+            "{:<6} {:<9} {:<7} {:<16} {:<14} {}",
             e.port,
-            protocol,
+            e.summary(),
             e.pid,
             truncate(&e.process, 16),
             e.action_id.as_deref().unwrap_or("-"),

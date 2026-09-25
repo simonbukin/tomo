@@ -53,6 +53,8 @@ source, not the Actions addon. The endpoint carries:
 | `pid`, `process` | The listening process and its name                      |
 | `host`, `port`   | From `lsof`; `*`, `0.0.0.0`, `::`, `[::]` become `localhost` |
 | `protocol`       | `http` or `tcp`; see below                              |
+| `status`         | The status of `HEAD /` when the port speaks HTTP        |
+| `probing`        | True while the port is not HTTP yet and the probe tries again |
 
 A port number is never evidence. A process outside every pane tree is
 never reported, even when it listens on a port that an Action usually
@@ -61,10 +63,19 @@ pane shell.
 
 ## Protocol probe
 
-Each new endpoint gets one probe, off the lock: a 400 ms TCP connect and
-`HEAD / HTTP/1.0`. A reply that starts with `HTTP/` makes the endpoint
-`http`; any other reply, or no reply, keeps it `tcp`. Until the probe
-answers, the endpoint reports `tcp`. `https` is reserved and not produced.
+Each new endpoint is probed off the lock: a 400 ms TCP connect,
+`HEAD / HTTP/1.0`, and up to 1 s for the status line. A reply that starts with
+`HTTP/` makes the endpoint `http` and keeps its status; any other reply, or
+no reply, keeps it `tcp`. `https` is reserved and not produced.
+
+A dev server listens before its first page compiles, so a cold Next or Vite
+server answers too late for the first probe. A `tcp` endpoint is probed again
+after 1, 2, 3, 5, 10, 20, and 30 seconds, and `probing` stays true until then.
+The first HTTP answer stops the probe, and so does the end of the endpoint.
+The rule is `model::next_probe`.
+
+A status below 400 means the port serves a page. The GUI puts pages first, so
+a worktree links to its app and not to a devtools server that answers 404.
 
 ## Lifecycle
 
@@ -88,7 +99,8 @@ first poll.
 tomo runtime [worktree] [--json]
 ```
 
-Prints one line per endpoint: `port protocol pid process action pane`.
+Prints one line per endpoint: `port`, what it serves (`page 200`, `http 404`,
+`checking`, or `tcp`), `pid`, `process`, `action`, and `pane`.
 Without an argument it uses `TOMO_WORKTREE_ID`, else every worktree.
 `--json` prints the `RuntimeEndpoint` list. The snapshot that `subscribe`
 returns carries the same list in `endpoints`.

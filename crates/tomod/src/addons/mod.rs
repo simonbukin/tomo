@@ -228,6 +228,8 @@ mod tests {
             pid: 1,
             process: "node".into(),
             protocol: RuntimeProtocol::Tcp,
+            status: None,
+            probing: false,
             host: "localhost".into(),
             port: 3000,
             label: None,
