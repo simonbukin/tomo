@@ -15,7 +15,7 @@ use crate::daemon::{ok, Daemon, Inner};
 use crate::events;
 use crate::monitor;
 use crate::procs;
-use model::{is_shell, normalise_host, probe, reconcile, Listener, Reconciled};
+use model::{is_shell, next_probe, normalise_host, probe, reconcile, Listener, Probe, Reconciled};
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -89,6 +89,8 @@ fn observe(inner: &Inner, listeners: &[Listener], now: u64) -> Vec<RuntimeEndpoi
                 pid: l.pid,
                 process: program_of(inner, l.pid).unwrap_or_else(|| p.name.clone()),
                 protocol: RuntimeProtocol::Tcp,
+                status: None,
+                probing: true,
                 host: normalise_host(&l.host),
                 port: l.port,
                 label: source.as_ref().map(|s| s.label.clone()),
@@ -167,19 +169,40 @@ pub fn scan(daemon: &Arc<Daemon>) {
     }
 }
 
+/// Probes a new endpoint until it answers HTTP, it goes away, or `next_probe` stops.
 fn probe_endpoint(daemon: &Arc<Daemon>, id: Id, host: String, port: u16) {
     let d = daemon.clone();
     daemon.rt.spawn(async move {
-        let protocol = tokio::task::spawn_blocking(move || probe(&host, port)).await.unwrap_or(RuntimeProtocol::Tcp);
-        let mut inner = d.lock();
-        let Some(e) = addons::state_mut(&mut inner).runtime.list.iter_mut().find(|e| e.id == id) else { return };
-        if e.protocol == protocol {
-            return;
+        let mut done = 0;
+        let mut wait = std::time::Duration::ZERO;
+        loop {
+            tokio::time::sleep(wait).await;
+            let h = host.clone();
+            let found = tokio::task::spawn_blocking(move || probe(&h, port)).await.unwrap_or(Probe::TCP);
+            done += 1;
+            let next = next_probe(done, &found);
+            if !settle(&d, &id, found, next.is_some()) {
+                return;
+            }
+            match next {
+                Some(w) => wait = w,
+                None => return,
+            }
         }
-        e.protocol = protocol;
-        let worktree_id = e.worktree_id.clone();
-        emit(&mut inner, &worktree_id);
     });
+}
+
+/// Writes one probe result on the endpoint and tells the clients when it changed. False when the endpoint is gone.
+fn settle(daemon: &Daemon, id: &str, found: Probe, probing: bool) -> bool {
+    let mut inner = daemon.lock();
+    let Some(e) = addons::state_mut(&mut inner).runtime.list.iter_mut().find(|e| e.id == id) else { return false };
+    let changed = (e.protocol, e.status, e.probing) != (found.protocol, found.status, probing);
+    (e.protocol, e.status, e.probing) = (found.protocol, found.status, probing);
+    let worktree_id = e.worktree_id.clone();
+    if changed {
+        emit(&mut inner, &worktree_id);
+    }
+    true
 }
 
 /// `runtime_list`: the endpoints of one worktree, or of all, by worktree, port, and pid.

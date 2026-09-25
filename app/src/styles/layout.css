@@ -45,7 +45,8 @@
 .action-warn { color: var(--waiting); }
 .action-live { display: inline-flex; color: var(--fg-2); margin-left: 1px; }
 .action-live .icon { width: 11px; height: 11px; }
-.runtime-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); min-height: var(--u); }
+.runtime-row { display: grid; grid-template-columns: minmax(96px, 1fr) 7ch 9ch 56px; align-items: center; column-gap: var(--sp-3); min-height: var(--u); }
+.runtime-row > :last-child { justify-self: end; }
 .runtime-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .runtime-label { color: var(--fg); }
 .runtime-row .mono { font-size: var(--fs-1); }

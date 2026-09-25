@@ -439,6 +439,8 @@ export const runtimeEndpointSchema = z.object({
     pid: z.number(),
     process: z.string(),
     protocol: runtimeProtocolSchema,
+    status: z.number().nullable(),
+    probing: z.boolean(),
     host: z.string(),
     port: z.number(),
     label: z.string().nullable(),

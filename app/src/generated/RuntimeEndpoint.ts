@@ -9,7 +9,15 @@ export type RuntimeEndpoint = { id: string, worktree_id: string, pane_id: string
 /**
  * `PaneSource::action_id` of the pane source, for installed clients that read it.
  */
-action_id: string | null, pid: number, process: string, protocol: RuntimeProtocol, host: string, port: number, label: string | null, discovered_at_ms: number, 
+action_id: string | null, pid: number, process: string, protocol: RuntimeProtocol, 
+/**
+ * The status of `HEAD /` when the port speaks HTTP. Below 400 means the port serves a page.
+ */
+status: number | null, 
+/**
+ * True while the port is not HTTP yet and the probe will try again, for example while a dev server compiles.
+ */
+probing: boolean, host: string, port: number, label: string | null, discovered_at_ms: number, 
 /**
  * The source of the pane when the endpoint was found. A client finds the endpoints of one source by it.
  */

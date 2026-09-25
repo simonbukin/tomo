@@ -7,7 +7,7 @@ import { useStore } from "../../store";
 import type { Id } from "../../types";
 import type { SourceMarkProps, TopbarProps } from "../types";
 import { endpointMenu, openIn } from "./commands";
-import { endpointLabel, endpointUrl, httpEndpoints, ofSource, primaryEndpoint } from "./model";
+import { byRank, endpointLabel, endpointSummary, endpointUrl, httpEndpoints, ofSource, primaryEndpoint, servesPage } from "./model";
 import { endpointsOf } from "./state";
 
 export function RuntimePreview({ endpoint: e, label }: { endpoint: RuntimeEndpoint; label: string }) {
@@ -18,32 +18,30 @@ export function RuntimePreview({ endpoint: e, label }: { endpoint: RuntimeEndpoi
         {e.host}:{e.port}
       </div>
       <div className="muted">
-        {e.process} · pid {e.pid}
+        {endpointSummary(e)} · {e.process} · pid {e.pid}
       </div>
       <div className="muted">up {durationLabel(e.discovered_at_ms)}</div>
     </div>
   );
 }
 
-/** The runtime button of the worktree top bar. It renders nothing while the worktree has no endpoint. */
+/** The port map of a worktree in its top bar: every listening port, pages first. It renders nothing while the worktree has no endpoint. */
 export function RuntimePopover({ worktree: w }: TopbarProps) {
   const endpoints = useStore((s) => endpointsOf(s, w.id));
-  const panes = useStore((s) => s.panes);
   if (endpoints.length === 0) return null;
-  const owner = (e: RuntimeEndpoint) => e.label ?? (e.pane_id ? panes[e.pane_id]?.title : null) ?? e.process;
   return (
     <Popover>
-      <PopoverTrigger render={<IconButton label="Runtime endpoints" />}>
+      <PopoverTrigger render={<IconButton label="Ports" />}>
         <Radio className="icon" />
       </PopoverTrigger>
       <PopoverContent align="end">
-        <PopoverTitle>runtime</PopoverTitle>
-        {endpoints.map((e) => (
+        <PopoverTitle>ports</PopoverTitle>
+        {byRank(endpoints).map((e) => (
           <div key={e.id} className="runtime-row" onContextMenu={(ev) => openMenu(ev, endpointMenu(w.id, e))}>
             <span className="runtime-label">{endpointLabel(e)}</span>
-            <span className="mono">{e.host}:{e.port}</span>
-            <span className="muted">{owner(e)} · {e.pid}</span>
-            <Button size="sm" onClick={openIn(w.id, endpointUrl(e))}>open</Button>
+            <span className="mono">:{e.port}</span>
+            <span className={servesPage(e) ? "mono" : "mono muted"}>{endpointSummary(e)}</span>
+            {e.protocol === "tcp" ? <span /> : <Button size="sm" onClick={openIn(w.id, endpointUrl(e))}>open</Button>}
           </div>
         ))}
       </PopoverContent>
@@ -53,7 +51,7 @@ export function RuntimePopover({ worktree: w }: TopbarProps) {
 
 /** The arrow in the control of a pane source that serves HTTP. */
 export function EndpointMark({ worktreeId, source }: SourceMarkProps) {
-  const endpoint = useStore((s) => httpEndpoints(ofSource(endpointsOf(s, worktreeId), source))[0] ?? null);
+  const endpoint = useStore((s) => httpEndpoints(byRank(ofSource(endpointsOf(s, worktreeId), source)))[0] ?? null);
   if (!endpoint) return null;
   return (
     <HoverCard content={<RuntimePreview endpoint={endpoint} label={endpointLabel(endpoint)} />}>
