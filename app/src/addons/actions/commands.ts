@@ -1,4 +1,5 @@
 import { actionRunResultSchema } from "../../schemas";
+import { crashText, needsMeItem } from "../../activityModel";
 import { rpc, rpcParsed } from "../../api";
 import type { MenuItem } from "../../components/ui";
 import type { ActionDef } from "../../generated";
@@ -52,6 +53,17 @@ export function runningActionItems(worktreeId: Id, actionId: string, s: State = 
     { label: "stop", danger: true, run: () => stopWorktreeAction(worktreeId, actionId) },
     ...(last.length ? [sep, ...last] : []),
   ];
+}
+
+/** The open crash of each Action in a worktree, as the short row text, by action id. */
+export function crashedActions(s: State, worktreeId: Id): Record<string, string> {
+  const agents = Object.values(s.agents);
+  return Object.fromEntries(
+    s.attention.flatMap((a) => {
+      const source = a.pane_id ? s.panes[a.pane_id]?.source : null;
+      return a.worktree_id === worktreeId && a.kind === "crash" && source?.kind === SOURCE_KIND && needsMeItem(a, agents) ? [[source.id, crashText(a.message)]] : [];
+    }),
+  );
 }
 
 /** Menu actions, and every running action, for the top of the overflow menu. */
