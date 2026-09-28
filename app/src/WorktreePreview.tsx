@@ -1,5 +1,6 @@
 import type { Signal } from "./activityModel";
-import { agentStatus, dotClass, GLYPH, statusDot } from "./glyphs";
+import { agentStatus, effectiveState, GLYPH, STATUS_LABEL, subagentStatus } from "./glyphs";
+import { AgentMark, StateMark } from "./StateMark";
 import { durationLabel, gitLines } from "./previewModel";
 import { ProcessIcon } from "./ProcessIcon";
 import { signalDetail } from "./addons";
@@ -15,7 +16,7 @@ export function signalText(signal: Signal): string {
     case "crash":
       return `${GLYPH.failed} ${signal.text}`;
     case "agent":
-      return signal.state === "waiting" ? `${GLYPH.needs} ${KIND_LABEL[signal.agent]} needs input` : `${signal.state === "working" ? GLYPH.working : GLYPH.idle} ${KIND_LABEL[signal.agent]}`;
+      return signal.state === "waiting" ? `${GLYPH.needs} ${KIND_LABEL[signal.agent]} needs input` : `${GLYPH[agentStatus(signal.state) ?? "unknown"]} ${KIND_LABEL[signal.agent]}`;
     case "warn":
       return `⚠ ${formatBytes(signal.bytes)}`;
     case "addon":
@@ -46,7 +47,7 @@ export function SubagentList({ worktreeId, limit = Infinity, flip }: { worktreeI
     <ul className="subagents" aria-label="subagents">
       {shown.map((sub, i) => (
         <li key={sub.id ?? `launch-${i}`} data-flip={flip && `${flip}:${sub.id ?? `launch-${i}`}`} className={`subagent is-${sub.state}`}>
-          <span {...statusDot(agentStatus(sub.state))} />
+          <StateMark mark={subagentStatus(sub.state)} small />
           <span className="subagent-label">{sub.label}</span>
           <span className="subagent-desc">{sub.description}</span>
           <span className="subagent-age">{durationLabel(sub.started_at_ms)}</span>
@@ -76,10 +77,10 @@ export function WorktreePreview({ w }: { w: Worktree }) {
         <div className="wt-preview-block">
           {agents.map((a) => (
             <div key={a.pane_id} className="wt-preview-agent">
-              <span className={dotClass(agentStatus(a.state))} />
+              <AgentMark agent={a} />
               <ProcessIcon agent={a.kind} size={11} />
               <span>{KIND_LABEL[a.kind]}</span>
-              <span className="muted">{a.state}</span>
+              <span className="muted">{STATUS_LABEL[agentStatus(effectiveState(a)) ?? "unknown"]}</span>
               <span className="faint">{durationLabel(a.updated_at_ms)}</span>
             </div>
           ))}

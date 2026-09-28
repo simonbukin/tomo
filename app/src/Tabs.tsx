@@ -11,10 +11,11 @@ import { spawnMenu, tabMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { useGlide } from "./glide";
 import { useShortcuts } from "./shortcuts";
-import { dotClass } from "./glyphs";
+import { mostUrgent } from "./homeQuery";
+import { AgentMark } from "./StateMark";
 import { useAnyDirty } from "./editor/sessions";
 import {failQuietly, paneIds, useStore} from "./store";
-import type { Id, Pane, Tab } from "./types";
+import type { AgentPresence, Id, Pane, Tab } from "./types";
 
 const TAIL_LINES = 8;
 
@@ -22,6 +23,11 @@ function leadPane(tab: Tab, panes: Record<Id, Pane>): Pane | undefined {
   const ids = paneIds(tab.layout);
   const agent = ids.map((id) => panes[id]).find((p) => p?.agent && p.agent.state !== "exited");
   return agent ?? panes[tab.active_pane_id ?? ids[0] ?? ""];
+}
+
+/** The most urgent live agent of a tab, whose mark the tab shows. */
+function tabAgent(tab: Tab, agents: Record<Id, AgentPresence>): AgentPresence | null {
+  return mostUrgent(paneIds(tab.layout).flatMap((id) => (agents[id] && agents[id].state !== "exited" ? [agents[id]] : [])));
 }
 
 type Editing = { id: Id; value: string } | null;
@@ -60,7 +66,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
 
 function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; closable: boolean; editing: Editing; setEditing: (e: Editing) => void; commit: () => void }) {
   const lead = useStore((s) => leadPane(t, s.panes));
-  const waiting = useStore((s) => paneIds(t.layout).some((id) => s.panes[id]?.agent?.state === "waiting"));
+  const agent = useStore((s) => tabAgent(t, s.agents));
   const dirty = useAnyDirty(paneIds(t.layout));
   const isEditing = editing?.id === t.id;
   const drag = useTabSortable(t.id, isEditing);
@@ -84,9 +90,8 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
       onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
     >
-      {waiting ? (
-        <span className={dotClass("needs")} />
-      ) : lead?.kind === "browser" ? (
+      {agent && <AgentMark agent={agent} />}
+      {lead?.kind === "browser" ? (
         <Globe className="icon proc-icon" size={11} aria-label="Browser" />
       ) : lead?.kind === "editor" ? (
         <FileText className="icon proc-icon" size={11} aria-label="Editor" />

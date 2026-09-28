@@ -1,6 +1,7 @@
 import { agentRoster, type AgentRow } from "./agentRoster";
 import { openWorktree, focusPane } from "./actions";
-import { agentStatus, dotClass } from "./glyphs";
+import { agentStatus } from "./glyphs";
+import { StateMark } from "./StateMark";
 import { durationLabel } from "./previewModel";
 import { ProcessIcon } from "./ProcessIcon";
 import { EmptyState } from "./states";
@@ -31,7 +32,7 @@ export function Agents() {
           <div className="agents-head"><span /><span>agent</span><span>state</span><span>location</span><span>elapsed</span></div>
           {rows.map((row) => (
             <div key={row.paneId} className="agents-row" onClick={() => jumpTo(row)} title={`${row.repo} / ${row.worktree}`}>
-              <span className={dotClass(agentStatus(row.state))} />
+              <StateMark mark={agentStatus(row.state)} />
               <span className="agents-kind"><ProcessIcon agent={row.kind} size={11} />{KIND_LABEL[row.kind]}</span>
               <span className="agents-state">{row.state === "waiting" ? "needs input" : row.state}</span>
               <span className="agents-where">{row.repo} / {row.worktree}</span>

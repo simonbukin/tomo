@@ -137,7 +137,7 @@ describe("worktree hover preview", () => {
     expect(screen.getByText("feat/kobe")).toBeInTheDocument();
     expect(screen.getByText("2 files changed")).toBeInTheDocument();
     const agents = [...container.querySelectorAll(".wt-preview-agent")].map((row) => row.textContent);
-    expect(agents).toEqual([expect.stringContaining("Claudeworking"), expect.stringContaining("Codexwaiting")]);
+    expect(agents).toEqual([expect.stringContaining("Claudeworking"), expect.stringContaining("Codexneeds you")]);
     expect(screen.getByText(/^active/)).toBeInTheDocument();
   });
 });

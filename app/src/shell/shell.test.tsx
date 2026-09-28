@@ -31,12 +31,12 @@ beforeEach(() =>
 afterEach(cleanup);
 
 describe("minimal left rail", () => {
-  it("marks attention and crashes with glyphs and text labels, not color alone", () => {
+  it("marks agents with squares and text labels, not color alone, and leaves an Action crash off the worktree mark", () => {
     render(<LeftRail />);
     const needs = screen.getByRole("button", { name: "aogashima, needs you" });
     expect(needs.querySelector(".state-waiting")).not.toBeNull();
-    const crashed = screen.getByRole("button", { name: "setagaya, failed" });
-    expect(crashed.querySelector(".state-fail")).not.toBeNull();
+    const crashed = screen.getByRole("button", { name: "setagaya" });
+    expect(crashed.querySelector(".state-none")).not.toBeNull();
     expect(screen.getByRole("button", { name: "kamakura" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Activity, 1 need you" })).toBeInTheDocument();
   });

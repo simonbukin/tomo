@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_TAG, filterWorktrees, groupWorktrees, movedTags, sortWorktrees, worktreeStatus, type QueryContext } from "./homeQuery";
+import { NO_TAG, filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees, worktreeStatus, type QueryContext } from "./homeQuery";
 import type { AgentPresence, Worktree } from "./types";
 
 function wt(id: string, extra: Partial<Worktree> = {}): Worktree {
@@ -51,23 +51,41 @@ describe("home query", () => {
 });
 
 describe("worktree status", () => {
-  const item = (kind: "crash" | "agent_waiting", worktree_id = "w") => ({ id: kind, worktree_id, pane_id: null, kind, level: "attention", message: "", created_at_ms: 0, viewed_at_ms: null, resolved_at_ms: null }) as unknown as QueryContext["attention"][number];
-  const status = (agents: AgentPresence["state"][], attention: QueryContext["attention"] = [], w = wt("w")) =>
-    worktreeStatus(w, { agents: agents.map((state, i) => ({ ...agent("w", state), pane_id: `p${i}` })), attention });
+  const crash = { id: "c", worktree_id: "w", pane_id: "storybook", kind: "crash", level: "attention", message: "storybook exited with code 1", created_at_ms: 0, viewed_at_ms: null, resolved_at_ms: null } as unknown as QueryContext["attention"][number];
+  const status = (agents: Partial<AgentPresence>[], w = wt("w")) =>
+    worktreeStatus(w, { agents: agents.map((patch, i) => ({ ...agent("w", "idle"), pane_id: `p${i}`, ...patch })) });
+  const s = (...states: AgentPresence["state"][]) => status(states.map((state) => ({ state })));
+  const running = [{ id: "s", label: "Explore", description: null, state: "working" as const, started_at_ms: 0, updated_at_ms: 0 }];
 
-  it("puts the most urgent state first: needs you, then failed, then working, then idle", () => {
-    expect(status(["working", "waiting"])).toBe("needs");
-    expect(status(["working"], [item("crash")])).toBe("failed");
-    expect(status(["working"], [item("crash"), item("agent_waiting")])).toBe("needs");
-    expect(status(["idle", "working"])).toBe("working");
-    expect(status(["idle"])).toBe("idle");
-    expect(status(["unknown"])).toBe("unknown");
+  it("ranks needs you, dead not seen, working, done, dead seen, idle, no signal", () => {
+    expect(s("working", "waiting")).toBe("needs");
+    expect(s("working", "dead")).toBe("failed");
+    expect(status([{ state: "working" }, { state: "dead", seen: true }])).toBe("working");
+    expect(status([{ state: "done" }, { state: "dead", seen: true }])).toBe("done");
+    expect(status([{ state: "idle" }, { state: "dead", seen: true }])).toBe("failed");
+    expect(s("done", "working")).toBe("working");
+    expect(s("idle", "done")).toBe("done");
+    expect(s("unknown", "idle")).toBe("idle");
+    expect(s("unknown")).toBe("unknown");
+  });
+
+  it("counts an agent with a running subagent as working", () => {
+    expect(status([{ state: "done", subagents: running }])).toBe("working");
+    expect(status([{ state: "idle", subagents: running }, { state: "done" }])).toBe("working");
+    expect(status([{ state: "idle", subagents: [{ ...running[0], state: "exited" }] }])).toBe("idle");
+  });
+
+  it("ignores a crash of an Action: it is a row signal, not the worktree mark", () => {
+    const w = wt("w");
+    const withCrash = (agents: AgentPresence[]): QueryContext => ({ ...ctx, agents, attention: [crash] });
+    expect(needsAttention(w, withCrash([]))).toBe(true);
+    expect(worktreeStatus(w, withCrash([agent("w", "working")]))).toBe("working");
+    expect(worktreeStatus(w, withCrash([]))).toBeNull();
   });
 
   it("draws no mark where nothing runs, where the agent exited, or on an archived worktree", () => {
-    expect(status([])).toBeNull();
-    expect(status(["exited"])).toBeNull();
-    expect(status(["working"], [], wt("w", { archived_at_ms: 1 }))).toBeNull();
-    expect(status([], [item("crash", "other")])).toBeNull();
+    expect(s()).toBeNull();
+    expect(s("exited")).toBeNull();
+    expect(status([{ state: "working" }], wt("w", { archived_at_ms: 1 }))).toBeNull();
   });
 });
