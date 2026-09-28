@@ -49,4 +49,11 @@ describe("useFlip", () => {
     const reveal = calls.find((c) => c.target.dataset.flip === "b");
     expect(reveal?.frames[0]).toMatchObject({ clipPath: "inset(0 0 100% 0)" });
   });
+
+  it("swaps an item for a new one in the same place with no overlap", () => {
+    const { rerender, getByTestId } = render(<List ids={["a", "b"]} />);
+    rerender(<List ids={["a", "more"]} />);
+    expect(calls).toHaveLength(0);
+    expect(getByTestId("root").querySelector("[data-flip-ghost]")).toBeNull();
+  });
 });
