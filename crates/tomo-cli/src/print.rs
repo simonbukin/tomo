@@ -272,6 +272,44 @@ pub fn pr(r: &PrStatusResult, json: bool) {
     }
 }
 
+fn linear_line(i: &LinearIssue) -> String {
+    let assignee = i.assignee.as_deref().unwrap_or("unassigned");
+    format!("{}  {}  [{}]  {}  {}\n{}", i.identifier, i.title, i.state.name, i.priority, assignee, i.url)
+}
+
+pub fn linear_issue(status: &LinearStatus, worktree_id: &str, json: bool) {
+    let link = status.links.iter().find(|l| l.worktree_id == worktree_id);
+    if json {
+        return emit_json(&serde_json::json!({ "available": status.available, "reason": status.reason, "issue": link.map(|l| &l.issue) }));
+    }
+    match (link, &status.reason) {
+        (Some(l), _) => println!("{}", linear_line(&l.issue)),
+        (None, Some(reason)) => println!("unavailable: {reason}"),
+        (None, None) => println!("no Linear issue for this branch"),
+    }
+}
+
+pub fn linear_list(status: &LinearStatus, json: bool) {
+    if json {
+        return emit_json(status);
+    }
+    if let Some(reason) = &status.reason {
+        println!("unavailable: {reason}");
+    } else if status.links.is_empty() {
+        println!("no worktree branch names a Linear issue");
+    }
+    for l in &status.links {
+        println!("{}  {}", l.worktree_id, linear_line(&l.issue));
+    }
+}
+
+pub fn linear_viewer(v: &LinearViewer, json: bool) {
+    if json {
+        return emit_json(v);
+    }
+    println!("Linear key saved for {}", v.name);
+}
+
 pub fn integration_status(list: &[IntegrationStatus], json: bool) {
     if json {
         return emit_json(&list);

@@ -6,6 +6,7 @@ import type { ComponentType } from "react";
 import { actions } from "./actions";
 import { agentation } from "./agentation";
 import { github } from "./github";
+import { linear } from "./linear";
 import { runtime } from "./runtime";
 import { towns } from "./towns";
 import type { RailMarker } from "../sections";
@@ -13,7 +14,7 @@ import type { Addon, BrowserToolbarProps, GlobalView, InspectorSection, SourceKe
 import { usage } from "./usage";
 
 /** The composition root of the GUI: every built-in addon, in render order. Core client files reach addons only through this module. */
-export const builtins: readonly Addon[] = [towns, github, usage, actions, runtime, agentation];
+export const builtins: readonly Addon[] = [towns, github, linear, usage, actions, runtime, agentation];
 
 export const addonSummaries = (): { id: string; label: string; description: string; slots: number }[] =>
   builtins.map((a) => ({

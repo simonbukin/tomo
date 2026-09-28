@@ -90,6 +90,7 @@ source code with a clean dependency boundary.
 | actions | **done** (milestone 3) |
 | runtime | **done** (milestone 4) |
 | agentation | **done** (milestone 7) |
+| linear | **done**; see [linear.md](linear.md) |
 | browser | **built-in pane kind** (milestone 6 decision; its code is isolated, not an addon) |
 | activity projections | kind seam **done**; UI cleanup in milestone 8 |
 | agent providers | **provider modules** (milestone 9; they are Core, not addons) |
@@ -417,6 +418,7 @@ Background work that exists today and must keep its current trigger:
 | `lsof` port scan | each monitor tick with candidate pids, through the `process_polled` seam; the call is killed at a 2 s deadline | runtime addon |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
 | usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
+| Linear issue fetch (network) | 20 s tick, only with a subscriber, and only when the answer is older than 60 s or a branch names another issue; `linear_get` fetches on the same rule without a subscriber | linear addon (`addons::start`) |
 | `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
@@ -449,6 +451,7 @@ pub fn new(paths: Paths, seams: Seams, addons: Box<dyn std::any::Any + Send>) ->
 pub struct State {
     pub actions: actions::Sets,      // BTreeMap<Id, ActionSet>: the parsed .tomo.toml of each worktree, from its own file or the repository file
     pub github: github::Cache,       // BTreeMap<Id, PrStatusResult>: the last pr_status answer
+    pub linear: linear::Last,        // the last LinearStatus, and the worktree issues that it asked for
     pub runtime: runtime::Endpoints, // the endpoint list, the removal times, and the time of the last scan
     pub usage: usage::Last,          // Vec<UsageSnapshot>: the last result
 }

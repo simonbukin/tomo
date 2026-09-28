@@ -345,6 +345,30 @@ export const layoutNodeSchema: z.ZodSchema<LayoutNode> = z.lazy(() => z.union([z
         second: layoutNodeSchema
     })]));
 
+export const linearStateSchema = z.object({
+    name: z.string(),
+    kind: z.string(),
+    color: z.string()
+});
+
+export const linearIssueSchema = z.object({
+    identifier: z.string(),
+    title: z.string(),
+    url: z.string(),
+    state: linearStateSchema,
+    assignee: z.string().nullable(),
+    priority: z.string()
+});
+
+export const linearLinkSchema = z.object({
+    worktree_id: z.string(),
+    issue: linearIssueSchema
+});
+
+export const linearViewerSchema = z.object({
+    name: z.string()
+});
+
 export const metadataPatchSchema = z.object({
     display_name: z.string().optional().nullable(),
     tags: z.array(z.string()).optional()
@@ -446,6 +470,13 @@ export const runtimeEndpointSchema = z.object({
     label: z.string().nullable(),
     discovered_at_ms: z.number(),
     source: paneSourceSchema.nullable()
+});
+
+export const linearStatusSchema = z.object({
+    available: z.boolean(),
+    reason: z.string().nullable(),
+    links: z.array(linearLinkSchema),
+    fetched_at_ms: z.number()
 });
 
 export const statusSchema = z.object({
@@ -600,6 +631,7 @@ export const snapshotSchema = z.object({
     usage: z.array(usageSnapshotSchema),
     actions: z.array(actionSetSchema),
     endpoints: z.array(runtimeEndpointSchema),
+    linear: linearStatusSchema,
     status: statusSchema,
     config: configSchema,
     repos: z.array(repoSchema),
@@ -643,6 +675,11 @@ export const eventSchema = z.union([z.object({
         "event": z.literal("usage_changed"),
         "data": z.object({
             snapshots: z.array(usageSnapshotSchema)
+        })
+    }), z.object({
+        "event": z.literal("linear_changed"),
+        "data": z.object({
+            status: linearStatusSchema
         })
     }), z.object({
         "event": z.literal("repos_changed"),

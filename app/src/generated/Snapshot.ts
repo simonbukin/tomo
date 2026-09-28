@@ -6,6 +6,7 @@ import type { ActionSet } from "./ActionSet";
 import type { AgentPresence } from "./AgentPresence";
 import type { AttentionItem } from "./AttentionItem";
 import type { Config } from "./Config";
+import type { LinearStatus } from "./LinearStatus";
 import type { Pane } from "./Pane";
 import type { Repo } from "./Repo";
 import type { RuntimeEndpoint } from "./RuntimeEndpoint";
@@ -18,4 +19,4 @@ import type { WorktreeResources } from "./WorktreeResources";
 /**
  * What `subscribe` returns: everything a client needs to render. Core builds `core`, and `tomod` `dispatch.rs` adds the addon fields. On the wire every field is top level.
  */
-export type Snapshot = { usage: Array<UsageSnapshot>, actions: Array<ActionSet>, endpoints: Array<RuntimeEndpoint>, status: Status, config: Config, repos: Array<Repo>, worktrees: Array<Worktree>, tabs: Array<Tab>, panes: Array<Pane>, agents: Array<AgentPresence>, attention: Array<AttentionItem>, resources: Array<WorktreeResources>, ui_state: unknown, };
+export type Snapshot = { usage: Array<UsageSnapshot>, actions: Array<ActionSet>, endpoints: Array<RuntimeEndpoint>, linear: LinearStatus, status: Status, config: Config, repos: Array<Repo>, worktrees: Array<Worktree>, tabs: Array<Tab>, panes: Array<Pane>, agents: Array<AgentPresence>, attention: Array<AttentionItem>, resources: Array<WorktreeResources>, ui_state: unknown, };

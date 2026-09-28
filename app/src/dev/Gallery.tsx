@@ -60,7 +60,7 @@ interface Scene {
   name: string;
   worktree: Worktree;
   agents?: AgentPresence[];
-  /** A `pr_changed` payload, so an addon state can be shown without naming the addon here. */
+  /** An addon event such as `pr_changed`, so an addon state can be shown without naming the addon here. */
   frame?: Frame;
 }
 
@@ -78,6 +78,11 @@ const SCENES: Scene[] = [
   { name: "pull request open", worktree: wt("pr-open"), frame: { seq: 1, event: "pr_changed", data: { worktree_id: "pr-open", pr: { number: 12, title: "Add the thing", url: "", state: "open", draft: false, review_decision: null, mergeable: "mergeable", checks_passed: 3, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 } } } },
   { name: "checks failed", worktree: wt("pr-fail"), frame: { seq: 2, event: "pr_changed", data: { worktree_id: "pr-fail", pr: { number: 13, title: "Break the thing", url: "", state: "open", draft: false, review_decision: null, mergeable: "mergeable", checks_passed: 1, checks_failed: 2, checks_pending: 0, fetched_at_ms: 1 } } } },
   { name: "checks running", worktree: wt("pr-run"), frame: { seq: 3, event: "pr_changed", data: { worktree_id: "pr-run", pr: { number: 14, title: "Try the thing", url: "", state: "open", draft: true, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 4, fetched_at_ms: 1 } } } },
+  { name: "linear in review", worktree: wt("linear-review", { branch: "simon/eng-12-add-a-dark-mode-toggle" }), frame: { seq: 5, event: "linear_changed", data: { status: { available: true, reason: null, fetched_at_ms: 1, links: [
+    { worktree_id: "linear-review", issue: { identifier: "ENG-12", title: "Add a dark mode toggle", url: "", state: { name: "In Review", kind: "started", color: "#0f783c" }, assignee: "Alex", priority: "Medium" } },
+    { worktree_id: "linear-todo", issue: { identifier: "ENG-34", title: "Fix the flaky upload test", url: "", state: { name: "Todo", kind: "unstarted", color: "#e2e2e2" }, assignee: null, priority: "No priority" } },
+  ] } } } },
+  { name: "linear todo (pale colour)", worktree: wt("linear-todo", { branch: "simon/eng-34-fix-the-flaky-upload-test" }) },
   { name: "merged", worktree: wt("pr-merged"), frame: { seq: 4, event: "pr_changed", data: { worktree_id: "pr-merged", pr: { number: 15, title: "Shipped the thing", url: "", state: "merged", draft: false, review_decision: "approved", mergeable: null, checks_passed: 5, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 } } } },
 ];
 

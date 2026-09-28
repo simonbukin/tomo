@@ -4,6 +4,7 @@
 pub mod actions;
 pub mod agentation;
 pub mod github;
+pub mod linear;
 pub mod runtime;
 pub mod towns;
 pub mod usage;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 pub struct State {
     pub actions: actions::Sets,
     pub github: github::Cache,
+    pub linear: linear::Last,
     pub runtime: runtime::Endpoints,
     pub usage: usage::Last,
 }
@@ -50,6 +52,7 @@ pub fn migrate(store: &Store) -> anyhow::Result<()> {
 /// Starts the background task of each addon that has one. The addon doc gives the reason for each task.
 pub fn start(daemon: &Arc<Daemon>) {
     tokio::spawn(usage::run(daemon.clone()));
+    tokio::spawn(linear::run(daemon.clone()));
 }
 
 #[cfg(test)]
@@ -60,7 +63,7 @@ mod tests {
 
     const COMPOSITION_ROOTS: [&str; 3] = ["tomod/src/main.rs", "tomod/src/dispatch.rs", "tomo-proto/src/lib.rs"];
     const MODULE_NOUNS: [&str; 2] = ["addons::", "mod addons"];
-    const OWNED_NOUNS: [(&str, &[&str]); 6] = [
+    const OWNED_NOUNS: [(&str, &[&str]); 7] = [
         (
             "runtime",
             &[
@@ -118,6 +121,7 @@ mod tests {
             ],
         ),
         ("agentation", &["agentation", "evidencebundle", "evidence_text", "evidence_title", "annotationssend", "annotations_send", "annotation.sent"]),
+        ("linear", &["linearissue", "linearstatus", "linearlink", "linearviewer", "linear_get", "linearget", "linear_changed", "linearchanged", "linear_login", "linearlogin", "linear_logout", "linearlogout", "tomo.linear"]),
     ];
 
     fn core_nouns() -> impl Iterator<Item = &'static &'static str> {
@@ -237,11 +241,22 @@ mod tests {
             source: None,
         };
         super::runtime::remember(&mut a.lock(), vec![endpoint], now_ms());
+        let issue = LinearIssue {
+            identifier: "ENG-1".into(),
+            title: "t".into(),
+            url: "https://linear.app/x/issue/ENG-1".into(),
+            state: LinearState { name: "Todo".into(), kind: "unstarted".into(), color: "#e2e2e2".into() },
+            assignee: None,
+            priority: "No priority".into(),
+        };
+        super::linear::remember(&mut a.lock(), 1, vec![], LinearStatus { available: true, reason: None, links: vec![LinearLink { worktree_id: worktree_id.clone(), issue }], fetched_at_ms: now_ms() });
 
         let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);
         assert_eq!(seen_by_b.usage.len(), 0, "usage leaked into the second daemon");
         assert_eq!(seen_by_b.actions.len(), 0, "action sets leaked into the second daemon");
         assert_eq!(seen_by_b.endpoints.len(), 0, "endpoints leaked into the second daemon");
+        assert!(seen_by_b.linear.links.is_empty(), "Linear links leaked into the second daemon");
+        assert_eq!(seen_by_a.linear.links.len(), 1);
         assert!(super::github::known_pr(&b.lock(), &worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
         assert_eq!((seen_by_a.usage.len(), seen_by_a.actions.len(), seen_by_a.endpoints.len()), (1, 1, 1));
         assert!(super::github::known_pr(&a.lock(), &worktree_id, &[]).is_some());

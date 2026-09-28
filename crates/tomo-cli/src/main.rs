@@ -69,6 +69,8 @@ enum Cmd {
     Kill { pid: u32 },
     #[command(about = "Show the GitHub pull request for a worktree's branch (needs gh)")]
     Pr { worktree: Option<String> },
+    #[command(subcommand, about = "The Linear issue that each worktree's branch names (read-only)")]
+    Linear(LinearCmd),
     #[command(about = "Show provider allowance windows for Claude, Codex, and Pi")]
     Usage {
         #[arg(long, help = "Fetch fresh data instead of the daemon's last poll")]
@@ -339,6 +341,25 @@ enum AttentionCmd {
     List,
     Next,
     Clear,
+}
+
+#[derive(Subcommand)]
+enum LinearCmd {
+    #[command(about = "Show the Linear issue of a worktree's branch")]
+    Issue {
+        worktree: Option<String>,
+        #[arg(long, help = "Fetch fresh data instead of the daemon's last poll")]
+        refresh: bool,
+    },
+    #[command(about = "Show every worktree that has a Linear issue")]
+    List {
+        #[arg(long, help = "Fetch fresh data instead of the daemon's last poll")]
+        refresh: bool,
+    },
+    #[command(about = "Read a Linear personal API key on stdin and keep it in the Keychain")]
+    Login,
+    #[command(about = "Delete the Linear key from the Keychain")]
+    Logout,
 }
 
 #[derive(Subcommand)]
@@ -755,6 +776,25 @@ async fn run() -> Result<()> {
             let id = resolve_worktree_id(&c, worktree).await?;
             let r: PrStatusResult = c.call(Call::PrStatus { worktree_id: id }).await?;
             print::pr(&r, json);
+        }
+        Cmd::Linear(LinearCmd::Issue { worktree, refresh }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let status: LinearStatus = c.call(Call::LinearGet { refresh }).await?;
+            print::linear_issue(&status, &id, json);
+        }
+        Cmd::Linear(LinearCmd::List { refresh }) => {
+            let status: LinearStatus = c.call(Call::LinearGet { refresh }).await?;
+            print::linear_list(&status, json);
+        }
+        Cmd::Linear(LinearCmd::Login) => {
+            let mut key = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut key).context("read the key on stdin")?;
+            let viewer: LinearViewer = c.call(Call::LinearLogin { key }).await?;
+            print::linear_viewer(&viewer, json);
+        }
+        Cmd::Linear(LinearCmd::Logout) => {
+            let status: LinearStatus = c.call(Call::LinearLogout).await?;
+            print::linear_list(&status, json);
         }
         Cmd::Usage { refresh } => {
             let list: Vec<UsageSnapshot> = c.call(Call::UsageGet { refresh }).await?;

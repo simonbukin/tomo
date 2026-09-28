@@ -20,6 +20,7 @@ pub mod addons {
     pub mod actions;
     pub mod agentation;
     pub mod github;
+    pub mod linear;
     pub mod runtime;
     pub mod towns;
     pub mod usage;
@@ -27,6 +28,7 @@ pub mod addons {
 pub use addons::actions::*;
 pub use addons::agentation::*;
 pub use addons::github::*;
+pub use addons::linear::*;
 pub use addons::runtime::*;
 pub use addons::towns::*;
 pub use addons::usage::*;
@@ -345,6 +347,15 @@ pub enum Call {
         #[serde(default)]
         refresh: bool,
     },
+    LinearGet {
+        #[serde(default)]
+        refresh: bool,
+    },
+    /// Checks a Linear personal API key, then keeps it in the Keychain.
+    LinearLogin {
+        key: String,
+    },
+    LinearLogout,
     /// Recent diagnostics, newest first: what Tomo itself did or noticed.
     DiagnosticsList {
         #[serde(default)]
@@ -479,6 +490,9 @@ pub enum Event {
     },
     UsageChanged {
         snapshots: Vec<UsageSnapshot>,
+    },
+    LinearChanged {
+        status: LinearStatus,
     },
     ReposChanged {
         repos: Vec<Repo>,
@@ -1262,6 +1276,8 @@ pub struct Snapshot {
     pub actions: Vec<ActionSet>,
     #[serde(default)]
     pub endpoints: Vec<RuntimeEndpoint>,
+    #[serde(default)]
+    pub linear: LinearStatus,
 }
 
 pub fn now_ms() -> u64 {
@@ -1315,6 +1331,7 @@ mod bindings {
         IntegrationStatus::export_all(&cfg).unwrap();
         ConfigIssue::export_all(&cfg).unwrap();
         PrStatusResult::export_all(&cfg).unwrap();
+        LinearViewer::export_all(&cfg).unwrap();
         Town::export_all(&cfg).unwrap();
         TownHistory::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
