@@ -48,7 +48,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     term.loadAddon(new Unicode11Addon());
     term.unicode.activeVersion = "11";
     term.open(host);
-    const links = registerTerminalLinks(term, paneId);
+    const stopLinks = registerTerminalLinks(term, paneId, host);
     const stopFileDrop = listenFileDrop(host, paneId);
     try {
       const webgl = new WebglAddon();
@@ -121,7 +121,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
     return () => {
       host.removeEventListener("mousedown", onFocus);
-      links.dispose();
+      stopLinks();
       stopFileDrop();
       observer.disconnect();
       window.clearTimeout(settle);

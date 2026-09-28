@@ -1,3 +1,4 @@
+import type { Terminal } from "@xterm/xterm";
 import { useEffect, useState } from "react";
 import { BottomStrip } from "../shell/BottomStrip";
 import { getState, setState } from "../store";
@@ -31,13 +32,13 @@ const config = (scheme: "dark" | "light") =>
 
 declare global {
   interface Window {
-    lab?: { write: (text: string) => void; size: (width: number, height: number) => void; theme: (scheme: "dark" | "light") => void };
+    lab?: { term: () => Terminal | undefined; write: (text: string) => void; size: (width: number, height: number) => void; theme: (scheme: "dark" | "light") => void };
   }
 }
 
 /**
  * Dev-only fixture: one real terminal pane in a box of a set size, above the bottom strip.
- * Open the dev server with `#terminal-lab`. `window.lab` writes text and resizes the box.
+ * Open the dev server with `#terminal-lab`. `window.lab` reaches the terminal, writes text, and resizes the box.
  */
 export function TerminalLab() {
   const [ready, setReady] = useState(false);
@@ -52,6 +53,7 @@ export function TerminalLab() {
       system: { at_ms: 0, cpu_percent: 23, memory_used_bytes: 21e9, memory_total_bytes: 64e9, gpu_percent: 7, vram_used_bytes: null, vram_total_bytes: null, daemon_rss_bytes: 0, top_worktree: null },
     });
     window.lab = {
+      term: () => getTerminal(PANE.id)?.term,
       write: (text) => getTerminal(PANE.id)?.term.write(text),
       size: (width, height) => setBox({ width, height }),
       theme: (scheme) => {

@@ -290,6 +290,10 @@ pub enum Call {
         rel_path: String,
         target: ExternalTarget,
     },
+    /// Whether each path exists on disk, in order. A relative path counts as missing.
+    PathsExist {
+        paths: Vec<PathBuf>,
+    },
     /// Opens an absolute `path` at `line` and `col` in the configured editor.
     OpenLocation {
         path: PathBuf,
