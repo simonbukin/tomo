@@ -14,7 +14,7 @@ import { agentStatus, dotClass, tintClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, RevealButton, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { needsAttention } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
@@ -186,7 +186,7 @@ function Group({ group, active, sortable = false }: { group: LensGroup; active: 
         {hidden && <span className="faint">hidden</span>}
         {collapsed && <span className="faint">{items.length}</span>}
         {collapsed && attention && <span className={dotClass("needs")} />}
-        <IconButton label={`New worktree in ${group.label}`} onClick={(e) => { e.stopPropagation(); setState({ dialog: { kind: "create-worktree", ...group.prefill } }); }}><Plus className="icon" /></IconButton>
+        <RevealButton label="new worktree" name={`New worktree in ${group.label}`} className="repo-add" onClick={(e) => { e.stopPropagation(); setState({ dialog: { kind: "create-worktree", ...group.prefill } }); }}><Plus className="icon" /></RevealButton>
       </div>
       {!collapsed &&
         (sortable ? (
