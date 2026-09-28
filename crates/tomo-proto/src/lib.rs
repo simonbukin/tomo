@@ -343,6 +343,36 @@ pub enum Call {
         pane_id: Id,
         url: String,
     },
+    /// Opens a text file of a worktree in an editor pane. `path` is relative to the worktree, or absolute inside it.
+    EditorOpen {
+        worktree_id: Id,
+        path: String,
+        #[serde(default)]
+        line: Option<u32>,
+        #[serde(default)]
+        col: Option<u32>,
+        #[serde(default)]
+        tab_id: Option<Id>,
+    },
+    /// Keeps the cursor of an editor pane, so that a restart opens the file at the same place.
+    EditorCursor {
+        pane_id: Id,
+        line: u32,
+        col: u32,
+    },
+    /// Reads a UTF-8 text file inside a worktree. Replies with a `FileText`.
+    FsRead {
+        worktree_id: Id,
+        path: String,
+    },
+    /// Replaces a text file inside a worktree when its version on disk is still `expected_version`.
+    /// `null` means that the file must not exist. Replies with a `FileWritten`; a changed file is a `conflict`.
+    FsWrite {
+        worktree_id: Id,
+        path: String,
+        content: String,
+        expected_version: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -502,6 +532,11 @@ pub enum Event {
     /// Pushed every few seconds while a client is subscribed.
     SystemStats {
         stats: SystemStats,
+    },
+    /// A file that an editor pane shows changed on disk, or was deleted. `path` is relative to the worktree.
+    FileChanged {
+        worktree_id: Id,
+        path: String,
     },
 }
 
@@ -951,6 +986,33 @@ pub struct Pane {
     /// Current URL of a browser surface.
     #[serde(default)]
     pub url: Option<String>,
+    /// The file and cursor of an editor surface.
+    #[serde(default)]
+    pub editor: Option<EditorTarget>,
+}
+
+/// A file of the worktree and a 1-based cursor position.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct EditorTarget {
+    /// Relative to the worktree root.
+    pub path: String,
+    pub line: u32,
+    pub col: u32,
+}
+
+/// The text of a file and its version. The version changes when the bytes change, and only then.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct FileText {
+    pub path: String,
+    pub content: String,
+    pub version: String,
+    pub mtime_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct FileWritten {
+    pub version: String,
+    pub mtime_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -959,6 +1021,14 @@ pub enum PaneKind {
     #[default]
     Terminal,
     Browser,
+    Editor,
+}
+
+impl PaneKind {
+    /// A browser or an editor is a surface in the GUI: it has no PTY, no shell, and no pid.
+    pub fn has_pty(self) -> bool {
+        self == PaneKind::Terminal
+    }
 }
 
 /// What started a pane, as the spawner names it. Core keeps it in memory only and never reads `kind`,
@@ -1282,6 +1352,8 @@ mod bindings {
         ConfigIssue::export_all(&cfg).unwrap();
         MainSync::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
+        FileText::export_all(&cfg).unwrap();
+        FileWritten::export_all(&cfg).unwrap();
         ProcessInfo::export_all(&cfg).unwrap();
         PaneResult::export_all(&cfg).unwrap();
         WorktreeOpened::export_all(&cfg).unwrap();

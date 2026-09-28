@@ -108,6 +108,12 @@ export const diagnosticLevelSchema = z.union([z.literal("info"), z.literal("warn
 
 export const dropPlaceSchema = z.union([z.literal("center"), z.literal("left"), z.literal("right"), z.literal("top"), z.literal("bottom")]);
 
+export const editorTargetSchema = z.object({
+    path: z.string(),
+    line: z.number(),
+    col: z.number()
+});
+
 export const errorCodeSchema = z.union([z.literal("bad_request"), z.literal("not_found"), z.literal("conflict"), z.literal("git"), z.literal("io"), z.literal("unsupported"), z.literal("internal"), z.literal("aborted")]);
 
 export const activityEventSchema = z.object({
@@ -201,6 +207,18 @@ export const systemStatsSchema = z.object({
     vram_total_bytes: z.number().nullable(),
     daemon_rss_bytes: z.number(),
     top_worktree: worktreeResourcesSchema.nullable()
+});
+
+export const fileTextSchema = z.object({
+    path: z.string(),
+    content: z.string(),
+    version: z.string(),
+    mtime_ms: z.number()
+});
+
+export const fileWrittenSchema = z.object({
+    version: z.string(),
+    mtime_ms: z.number()
 });
 
 export const fsEntrySchema = z.object({
@@ -316,7 +334,7 @@ export const paneSourceSchema = z.object({
     label: z.string()
 });
 
-export const paneKindSchema = z.union([z.literal("terminal"), z.literal("browser")]);
+export const paneKindSchema = z.union([z.literal("terminal"), z.literal("browser"), z.literal("editor")]);
 
 export const paneCreateSchema = z.object({
     worktree_id: z.string().nullable(),
@@ -344,7 +362,8 @@ export const paneSchema = z.object({
     source: paneSourceSchema.nullable(),
     process_cmd: z.string().nullable(),
     kind: paneKindSchema,
-    url: z.string().nullable()
+    url: z.string().nullable(),
+    editor: editorTargetSchema.nullable()
 });
 
 export const tabSchema = z.object({
@@ -614,5 +633,11 @@ export const eventSchema = z.union([z.object({
         "event": z.literal("system_stats"),
         "data": z.object({
             stats: systemStatsSchema
+        })
+    }), z.object({
+        "event": z.literal("file_changed"),
+        "data": z.object({
+            worktree_id: z.string(),
+            path: z.string()
         })
     })]);

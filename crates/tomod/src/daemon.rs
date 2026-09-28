@@ -184,6 +184,8 @@ pub struct Daemon {
     pub kill_panes_on_stop: std::sync::atomic::AtomicBool,
     pub refresh: tokio::sync::Notify,
     pub repos_changed: tokio::sync::Notify,
+    /// Wakes the editor file watcher when an editor pane opens.
+    pub editors_changed: tokio::sync::Notify,
     pub rt: tokio::runtime::Handle,
     pub seams: Seams,
 }
@@ -309,6 +311,7 @@ impl Daemon {
             kill_panes_on_stop: std::sync::atomic::AtomicBool::new(false),
             refresh: tokio::sync::Notify::new(),
             repos_changed: tokio::sync::Notify::new(),
+            editors_changed: tokio::sync::Notify::new(),
             rt: tokio::runtime::Handle::current(),
             seams,
             paths,
@@ -454,6 +457,7 @@ impl Daemon {
             .clone()
             .or_else(|| agent.as_ref().map(|a| a.kind.label().to_string()))
             .or_else(|| p.process_title.clone())
+            .or_else(|| p.row.editor.as_ref().map(|e| e.path.rsplit('/').next().unwrap_or(&e.path).to_string()))
             .unwrap_or_else(|| Path::new(&inner.config.shell).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
         Some(Pane {
             id: p.row.id.clone(),
@@ -465,7 +469,7 @@ impl Daemon {
             cols: p.row.cols,
             rows: p.row.rows,
             pid: p.pty.as_ref().map(|x| x.pid),
-            live: p.row.kind == PaneKind::Browser || (p.pty.is_some() && p.exit_code.is_none()),
+            live: !p.row.kind.has_pty() || (p.pty.is_some() && p.exit_code.is_none()),
             origin: p.origin,
             exit_code: p.exit_code,
             agent,
@@ -474,6 +478,7 @@ impl Daemon {
             process_cmd: p.process_cmd.clone(),
             kind: p.row.kind,
             url: p.row.url.clone(),
+            editor: p.row.editor.clone(),
         })
     }
 
@@ -833,7 +838,7 @@ impl Daemon {
     fn start_pty(self: &Arc<Self>, inner: &mut Inner, pane_id: &str, command: Option<&[String]>) -> Result<()> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
         let row = pane.row.clone();
-        if row.kind == PaneKind::Browser {
+        if !row.kind.has_pty() {
             return Ok(());
         }
         let cwd = if row.cwd.is_dir() { row.cwd.clone() } else { dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")) };
@@ -1082,6 +1087,7 @@ impl Daemon {
             created_at_ms: now_ms(),
             kind: PaneKind::Terminal,
             url: None,
+            editor: None,
         };
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
@@ -1137,7 +1143,7 @@ impl Daemon {
     fn terminal_only(inner: &Inner, pane_id: &str) -> Result<(), RpcError> {
         match inner.panes.get(pane_id) {
             None => Err(err(ErrorCode::NotFound, "pane not found")),
-            Some(p) if p.row.kind == PaneKind::Browser => Err(err(ErrorCode::BadRequest, "browser panes have no terminal")),
+            Some(p) if !p.row.kind.has_pty() => Err(err(ErrorCode::BadRequest, "browser and editor panes have no terminal")),
             Some(_) => Ok(()),
         }
     }
@@ -2533,6 +2539,10 @@ impl Daemon {
             Call::CheckpointResolve { id } => self.checkpoint_resolve(id).await,
             Call::BrowserOpen { worktree_id, url, tab_id } => self.browser_open(worktree_id, url, tab_id),
             Call::BrowserNavigate { pane_id, url } => self.browser_navigate(pane_id, url),
+            Call::EditorOpen { worktree_id, path, line, col, tab_id } => self.editor_open(worktree_id, path, line, col, tab_id),
+            Call::EditorCursor { pane_id, line, col } => self.editor_cursor(pane_id, line, col),
+            Call::FsRead { worktree_id, path } => self.fs_read(worktree_id, path).await,
+            Call::FsWrite { worktree_id, path, content, expected_version } => self.fs_write(worktree_id, path, content, expected_version).await,
             Call::UiStateGet => {
                 let inner = self.lock();
                 let v = inner.store.kv_get("ui_state").map_err(internal)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
