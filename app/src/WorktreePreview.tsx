@@ -1,10 +1,10 @@
 import type { Signal } from "./activityModel";
-import { agentStatus, dotClass, GLYPH } from "./glyphs";
+import { agentStatus, dotClass, GLYPH, statusDot } from "./glyphs";
 import { durationLabel, gitLines } from "./previewModel";
 import { ProcessIcon } from "./ProcessIcon";
 import { signalsFor } from "./Signals";
 import { agentsOf, formatBytes, useStore } from "./store";
-import { KIND_LABEL, type Worktree } from "./types";
+import { KIND_LABEL, type Id, type Subagent, type Worktree } from "./types";
 import "./styles/previews.css";
 
 export function signalText(signal: Signal): string {
@@ -20,6 +20,37 @@ export function signalText(signal: Signal): string {
     case "addon":
       return [signal.glyph, signal.text].filter(Boolean).join(" ");
   }
+}
+
+const ORDER: Record<Subagent["state"], number> = { waiting: 0, working: 1, unknown: 2, idle: 3, exited: 4 };
+
+/** The live subagents of every agent in a worktree, most urgent first, then oldest first. */
+export function subagentsOf(agents: { subagents?: Subagent[] }[]): Subagent[] {
+  return agents.flatMap((a) => a.subagents ?? []).sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.started_at_ms - b.started_at_ms);
+}
+
+/**
+ * The subagents, indented under their worktree. Past `limit` the last line counts the rest,
+ * so the list never grows past `limit` lines.
+ */
+export function SubagentList({ worktreeId, limit = Infinity }: { worktreeId: Id; limit?: number }) {
+  const all = useStore((s) => subagentsOf(agentsOf(s, worktreeId)));
+  if (!all.length) return null;
+  const shown = all.length > limit ? all.slice(0, limit - 1) : all;
+  const rest = all.length - shown.length;
+  return (
+    <ul className="subagents" aria-label="subagents">
+      {shown.map((sub, i) => (
+        <li key={sub.id ?? `launch-${i}`} className={`subagent is-${sub.state}`}>
+          <span {...statusDot(agentStatus(sub.state))} />
+          <span className="subagent-label">{sub.label}</span>
+          <span className="subagent-desc">{sub.description}</span>
+          <span className="subagent-age">{durationLabel(sub.started_at_ms)}</span>
+        </li>
+      ))}
+      {rest > 0 && <li className="subagent subagent-more">+{rest} more</li>}
+    </ul>
+  );
 }
 
 /** Everything the client knows about one worktree, for the hover card on a sidebar row or a rail square. */
@@ -43,6 +74,7 @@ export function WorktreePreview({ w }: { w: Worktree }) {
               <span className="faint">{durationLabel(a.updated_at_ms)}</span>
             </div>
           ))}
+          <SubagentList worktreeId={w.id} />
         </div>
       )}
       {signals.length > 0 && (

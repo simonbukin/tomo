@@ -1,16 +1,14 @@
 import { AppWindow, Bot, History, House } from "lucide-react";
 import { Fragment } from "react";
 import { addonViews, appsAvailable } from "../addons";
-import { needsMeItem } from "../activityModel";
 import { openWorktree } from "../actions";
 import { IconButton, Tooltip } from "../components/ui";
-import { agentStatus, dotClass } from "../glyphs";
-import { sortWorktrees } from "../homeQuery";
+import { STATUS_LABEL, statusDot } from "../glyphs";
+import { sortWorktrees, worktreeStatus } from "../homeQuery";
 import { byManualOrder } from "../order";
 import { useShortcuts } from "../shortcuts";
-import { summarizeState } from "../Sidebar";
 import { WorktreePreview } from "../WorktreePreview";
-import { agentsOf, needsMe, queryContext, setUi, type State, useStore, visibleRepos } from "../store";
+import { needsMe, queryContext, setUi, type State, useStore, visibleRepos } from "../store";
 import type { Worktree } from "../types";
 
 export function railWorktrees(s: State): Worktree[] {
@@ -65,15 +63,12 @@ export function LeftRail() {
 }
 
 function RailWorktree({ w, active }: { w: Worktree; active: boolean }) {
-  const needs = useStore((s) => agentsOf(s, w.id).some((a) => a.state === "waiting") || s.attention.some((a) => a.worktree_id === w.id && a.kind !== "crash" && needsMeItem(a, Object.values(s.agents))));
-  const crashed = useStore((s) => s.attention.some((a) => a.worktree_id === w.id && a.kind === "crash" && needsMeItem(a, Object.values(s.agents))));
-  const agentState = useStore((s) => summarizeState(agentsOf(s, w.id), false));
-  const label = [w.name, needs && "needs input", crashed && "crashed"].filter(Boolean).join(", ");
-  const status = needs ? "needs" : crashed ? "failed" : agentStatus(agentState);
+  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
+  const label = [w.name, status && STATUS_LABEL[status]].filter(Boolean).join(", ");
   return (
     <Tooltip side="right" delay={0} content={<WorktreePreview w={w} />}>
       <button type="button" className="rail-wt" aria-label={label} aria-current={active ? "page" : undefined} onClick={() => openWorktree(w.id)}>
-        <span className={dotClass(status)} aria-hidden />
+        <span {...statusDot(status)} aria-hidden />
       </button>
     </Tooltip>
   );

@@ -23,6 +23,14 @@ export const agentStateSchema = z.union([z.literal("working"), z.literal("waitin
 
 export const authoritySchema = z.union([z.literal("lifecycle"), z.literal("report"), z.literal("screen"), z.literal("heuristic"), z.literal("unknown")]);
 
+export const subagentSchema = z.object({
+    id: z.string().nullable(),
+    label: z.string(),
+    description: z.string().nullable(),
+    state: agentStateSchema,
+    started_at_ms: z.number()
+});
+
 export const agentReportSchema = z.object({
     pane_id: z.string(),
     kind: agentKindSchema,
@@ -138,7 +146,8 @@ export const agentPresenceSchema = z.object({
     session_ref: z.string().nullable(),
     authority: authoritySchema,
     updated_at_ms: z.number(),
-    pid: z.number().nullable()
+    pid: z.number().nullable(),
+    subagents: z.array(subagentSchema).optional()
 });
 
 export const attentionItemSchema = z.object({

@@ -5,5 +5,10 @@
 import type { AgentKind } from "./AgentKind";
 import type { AgentState } from "./AgentState";
 import type { Authority } from "./Authority";
+import type { Subagent } from "./Subagent";
 
-export type AgentPresence = { pane_id: string, worktree_id: string, kind: AgentKind, state: AgentState, session_ref: string | null, authority: Authority, updated_at_ms: number, pid: number | null, };
+export type AgentPresence = { pane_id: string, worktree_id: string, kind: AgentKind, state: AgentState, session_ref: string | null, authority: Authority, updated_at_ms: number, pid: number | null, 
+/**
+ * Helper agents that this agent started and that still matter to the current turn.
+ */
+subagents?: Array<Subagent>, };

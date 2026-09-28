@@ -60,6 +60,7 @@ export * from "./Snapshot";
 export * from "./SpawnResult";
 export * from "./SplitDirection";
 export * from "./Status";
+export * from "./Subagent";
 export * from "./SystemStats";
 export * from "./Tab";
 export * from "./ThemeConfig";

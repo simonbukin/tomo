@@ -178,6 +178,23 @@ its region, so you can see the preview and the region together.
 ● working    ◉ needs user    ○ idle    ✓ complete    × failed    ? unknown
 ```
 
+A live mark (the dot of a sidebar row, a Home card or row, a rail square, an
+agent, or a subagent) means one thing everywhere:
+
+| Mark | Status | Meaning |
+|------|--------|---------|
+| filled green, with a ring that pulses out | working | an agent works now |
+| filled amber | needs | an agent or an attention item waits for you |
+| filled red | failed | a crash that you did not see yet |
+| hollow grey | idle | an agent is open and waits for the next prompt |
+| hollow green | complete | done: a subagent that finished, an agent that exited |
+| no mark | none | nothing runs there |
+
+`worktreeStatus` in `app/src/homeQuery.ts` picks the mark of a worktree,
+most urgent first. `statusDot` in `glyphs.ts` gives the class and the
+tooltip. A row grows one unit for each live subagent, up to three lines,
+indented under the name.
+
 `agentStatus` maps agent states onto it. `activityStatus` in
 `app/src/activityKinds.ts` maps activity kinds onto it through the kind
 registry (see [activity.md](activity.md)). Dense rows (sidebar, Home, tabs, checkpoint banner, signals) draw the

@@ -14,6 +14,7 @@ pub fn merge(current: Option<&AgentPresence>, report: &AgentReport, worktree_id:
             authority: report.authority,
             updated_at_ms: report.at_ms,
             pid,
+            subagents: Vec::new(),
         });
     };
     let session_ref = report.session_ref.clone().or_else(|| cur.session_ref.clone());
@@ -35,6 +36,7 @@ pub fn merge(current: Option<&AgentPresence>, report: &AgentReport, worktree_id:
         authority: if accept_state { report.authority } else { cur.authority },
         updated_at_ms: if accept_state { report.at_ms } else { cur.updated_at_ms },
         pid,
+        subagents: cur.subagents.clone(),
     })
 }
 

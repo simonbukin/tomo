@@ -97,6 +97,24 @@ Hook event to state:
 
 Every event also carries `session_id`, which updates the session reference.
 
+### Subagents
+
+`AgentPresence.subagents` lists the helper agents that an agent started. A
+provider maps its own payloads to a `SubagentEvent` in its `hook_outcome`,
+and `crates/tomod/src/subagents.rs` folds the events into the list. A new
+provider with subagents only fills `HookOutcome.subagent`. Core has no code
+for one provider.
+
+| Claude Code payload                                   | Subagent event |
+|-------------------------------------------------------|----------------|
+| `PreToolUse` of `Agent` or `Task`, with no `agent_id` | launch: `subagent_type` and `description` |
+| `SubagentStart` with `agent_id`, `agent_type`         | start: takes the oldest launch with the same type |
+| `SubagentStop` with `agent_id`                        | stop: the subagent is done |
+| any other event with `agent_id`                       | the subagent is working or waiting, from the same table |
+
+When the parent goes idle, the list keeps only the subagents that still run.
+When the parent exits, the list is empty. The list holds at most 16 items.
+
 `tomo integrations install` adds the same hooks to `~/.claude/settings.json`
 so a `claude` that a user starts by hand inside a Tomo pane also reports.
 

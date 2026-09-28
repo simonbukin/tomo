@@ -18,6 +18,7 @@ mod pty;
 mod server;
 mod settings;
 mod store;
+mod subagents;
 mod sync;
 mod system;
 mod vt;
