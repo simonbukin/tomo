@@ -188,18 +188,22 @@ impl Daemon {
     }
 }
 
-/// The real path of each file that an editor pane shows, with its worktree and stored path.
-fn open_files(inner: &Inner) -> HashMap<PathBuf, (Id, String)> {
+/// The worktree root, worktree id, and stored path of each file that an editor pane shows.
+fn editor_files(inner: &Inner) -> Vec<(PathBuf, Id, String)> {
     inner
         .panes
         .values()
         .filter_map(|p| {
             let target = p.row.editor.as_ref()?;
-            let root = &inner.worktrees.get(&p.row.worktree_id)?.path;
-            let (real, _) = resolve(root, &target.path).ok()?;
-            Some((real, (p.row.worktree_id.clone(), target.path.clone())))
+            let root = inner.worktrees.get(&p.row.worktree_id)?.path.clone();
+            Some((root, p.row.worktree_id.clone(), target.path.clone()))
         })
         .collect()
+}
+
+/// The real path of each open file. It reads the disk, so it runs outside the daemon lock.
+fn open_files(files: Vec<(PathBuf, Id, String)>) -> HashMap<PathBuf, (Id, String)> {
+    files.into_iter().filter_map(|(root, worktree_id, path)| Some((resolve(&root, &path).ok()?.0, (worktree_id, path)))).collect()
 }
 
 /// Watches the folder of each open file and emits `file_changed` for the open files that change.
@@ -219,7 +223,8 @@ pub async fn watch(daemon: Arc<Daemon>) {
     };
     let mut watched: HashSet<PathBuf> = HashSet::new();
     loop {
-        let open = open_files(&daemon.lock());
+        let files = editor_files(&daemon.lock());
+        let open = open_files(files);
         let dirs: HashSet<PathBuf> = open.keys().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
         watched.difference(&dirs).for_each(|d| {
             let _ = watcher.unwatch(d);
