@@ -121,6 +121,29 @@ function seed(): void {
   SCENES.forEach((s) => s.frame && applyFrame(s.frame));
 }
 
+const nowMs = Date.now();
+
+/** Store changes that the daemon would send, so the motion of the sidebar can be seen and filmed. */
+const MOTION: { label: string; run: () => void }[] = [
+  { label: "archive crowd", run: () => setState({ worktrees: getState().worktrees.map((w) => (w.id === "crowd" ? { ...w, archived_at_ms: nowMs } : w)) }) },
+  { label: "add worktree", run: () => setState({ worktrees: [...getState().worktrees, wt("added")] }) },
+  {
+    label: "add subagent",
+    run: () => {
+      const a = getState().agents["fanout-p0"];
+      setState({ agents: { ...getState().agents, [a.pane_id]: { ...a, subagents: [...(a.subagents ?? []), sub(`n${a.subagents?.length ?? 0}`, "Explore", "working", "a new task", 0)] } } });
+    },
+  },
+  {
+    label: "end turn",
+    run: () => {
+      const a = getState().agents["fanout-p0"];
+      setState({ agents: { ...getState().agents, [a.pane_id]: { ...a, state: "idle", subagents: [] } } });
+    },
+  },
+  { label: "reset", run: seed },
+];
+
 export function Gallery() {
   const [ready, setReady] = useState(false);
   const [inspector, setInspector] = useState(SCENES[1].worktree.id);
@@ -142,6 +165,13 @@ export function Gallery() {
         ))}
       </div>
       <h2 className="gallery-head">sidebar</h2>
+      <div className="gallery-picker">
+        {MOTION.map((m) => (
+          <button key={m.label} type="button" className="seg" onClick={m.run}>
+            {m.label}
+          </button>
+        ))}
+      </div>
       <div className="gallery-shells">
         <div className="app gallery-shell" data-shell="open">
           <Sidebar />

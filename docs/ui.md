@@ -317,6 +317,12 @@ stay as names for the same values, so older CSS still reads.
 The focus ring is 2 px and lives in `base.css`. The town reveal keeps its own
 `--dur-reveal` in `addons/towns/towns.css`, because one addon uses it.
 
+Lists never jump. `app/src/useFlip.ts` checks the sidebar after every render. An item that
+moves slides from where it was. A new item opens from its top edge, and a removed
+item (an archived worktree, a finished subagent) stays where it was and shuts,
+in step with the items that slide to make or close its space. It uses `--dur-open`
+and `--ease-out`, and it stops while a drag runs.
+
 Under `prefers-reduced-motion: reduce` every duration is 0. The guard in `base.css` also stops every animation. No springs,
 no bounce. `styles/interaction.css` applies the tokens.
 
