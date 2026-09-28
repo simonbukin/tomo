@@ -75,6 +75,13 @@ const SCENES: Scene[] = [
   { name: "detached head", worktree: wt("detached", { branch: null, detached: true }) },
   { name: "one agent working", worktree: wt("working"), agents: [agent("working", "claude", "working")] },
   { name: "one agent idle", worktree: wt("resting"), agents: [agent("resting", "claude", "idle")] },
+  { name: "turn done", worktree: wt("finished"), agents: [{ ...agent("finished", "claude", "done"), updated_at_ms: Date.now() - 3 * 60_000 }] },
+  { name: "needs you", worktree: wt("asking"), agents: [agent("asking", "claude", "waiting")] },
+  { name: "agent dead", worktree: wt("crashed"), agents: [agent("crashed", "claude", "dead")] },
+  { name: "dead, seen, and one working", worktree: wt("mixed"), agents: [{ ...agent("mixed", "claude", "dead"), seen: true }, agent("mixed", "codex", "working", 1)] },
+  { name: "no signal", worktree: wt("silent"), agents: [agent("silent", "pi", "unknown")] },
+  { name: "estimated from CPU", worktree: wt("guess"), agents: [{ ...agent("guess", "codex", "working"), estimated: true }] },
+  { name: "done, subagent runs", worktree: wt("background"), agents: [{ ...agent("background", "claude", "done"), subagents: [sub("b1", "Explore", "working", "watch the build", 2), sub("b2", "Plan", "exited", "plan the fix", 4)] }] },
   {
     name: "subagents",
     worktree: wt("fanout"),
@@ -130,6 +137,13 @@ const MOTION: { label: string; run: () => void }[] = [
     run: () => {
       const a = getState().agents["fanout-p0"];
       setState({ agents: { ...getState().agents, [a.pane_id]: { ...a, state: "idle", subagents: [] } } });
+    },
+  },
+  {
+    label: "finish turn",
+    run: () => {
+      const a = getState().agents["working-p0"];
+      setState({ agents: { ...getState().agents, [a.pane_id]: { ...a, state: a.state === "working" ? "done" : "working", updated_at_ms: Date.now() } } });
     },
   },
   { label: "reset", run: seed },

@@ -48,7 +48,7 @@ svg.icon { width: 14px; height: 14px; flex: none; }
  * changes to done, `rotate` goes back to 0 with a transition on the same element. */
 .state { display: inline-block; width: 8px; height: 8px; flex: none; background: transparent; box-shadow: inset 0 0 0 1px var(--fg-3); position: relative; z-index: 3; rotate: 0deg; transition: rotate 360ms var(--ease-out), background-color 360ms var(--ease-out); }
 .state-small { width: 6px; height: 6px; }
-.state-working { background: var(--working); box-shadow: none; rotate: 45deg; animation: turn 1.2s var(--ease-out) infinite; }
+.state-working { background: var(--working); box-shadow: none; rotate: 45deg; animation: turn 1.2s ease-in-out infinite; }
 .state-waiting { background: var(--waiting); box-shadow: none; }
 .state-idle { box-shadow: inset 0 0 0 1px var(--fg-2); }
 .state-exited { box-shadow: inset 0 0 0 1px var(--fg-3); }
