@@ -23,7 +23,7 @@ export function signalText(signal: Signal): string {
   }
 }
 
-const ORDER: Record<Subagent["state"], number> = { waiting: 0, working: 1, unknown: 2, idle: 3, exited: 4 };
+const ORDER: Record<Subagent["state"], number> = { waiting: 0, dead: 1, working: 2, done: 3, unknown: 4, idle: 5, exited: 6 };
 
 /** The live subagents of every agent in a worktree, most urgent first, then oldest first. */
 export function subagentsOf(agents: { subagents?: Subagent[] }[]): Subagent[] {

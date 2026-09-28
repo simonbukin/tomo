@@ -1116,6 +1116,8 @@ impl Daemon {
                 authority: Authority::Unknown,
                 updated_at_ms: now_ms(),
                 pid: None,
+                estimated: false,
+                seen: false,
                 subagents: Vec::new(),
             };
             inner.agents.insert(id.clone(), presence.clone());
@@ -1240,6 +1242,8 @@ impl Daemon {
                         authority: Authority::Unknown,
                         updated_at_ms: now_ms(),
                         pid: None,
+                        estimated: false,
+                        seen: false,
                         subagents: Vec::new(),
                     },
                 );
@@ -1412,6 +1416,18 @@ impl Daemon {
     }
 
     /// Folds one subagent event into the presence, then keeps what the parent's state allows.
+    /// Someone looked at the pane: a finished turn becomes idle, and a dead agent counts as seen.
+    fn agent_seen(inner: &mut Inner, pane_id: &str) {
+        let Some(cur) = inner.agents.get(pane_id) else { return };
+        let next = match cur.state {
+            AgentState::Done => AgentPresence { state: AgentState::Idle, seen: true, ..cur.clone() },
+            _ if cur.seen => return,
+            _ => AgentPresence { seen: true, ..cur.clone() },
+        };
+        inner.agents.insert(pane_id.to_string(), next.clone());
+        Self::emit(inner, Event::AgentChanged { agent: next });
+    }
+
     fn apply_subagents(inner: &mut Inner, pane_id: &str, event: Option<&SubagentEvent>, at_ms: u64) {
         let Some(cur) = inner.agents.get(pane_id) else { return };
         let applied = event.map_or_else(|| cur.subagents.clone(), |e| subagents::apply(&cur.subagents, e, at_ms));
@@ -2412,6 +2428,11 @@ impl Daemon {
             }
             Call::PaneClose { pane_id, force } => self.pane_close(pane_id, force).await,
             Call::PaneFocus { pane_id } => self.pane_focus(pane_id).await,
+            Call::AgentSeen { pane_id } => {
+                let mut inner = self.lock();
+                Self::agent_seen(&mut inner, &pane_id);
+                Ok(Value::Null)
+            }
             Call::PaneRename { pane_id, title } => {
                 let mut inner = self.lock();
                 let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;

@@ -2,7 +2,7 @@ import { repoName } from "./homeQuery";
 import type { AgentKind, AgentPresence, AgentState, Id, Repo, Worktree } from "./types";
 
 /** Most urgent first. An agent that wants me comes before one that is busy. */
-const ORDER: Record<AgentState, number> = { waiting: 0, working: 1, idle: 2, unknown: 3, exited: 4 };
+const ORDER: Record<AgentState, number> = { waiting: 0, dead: 1, working: 2, done: 3, idle: 4, unknown: 5, exited: 6 };
 
 export interface AgentRow {
   paneId: Id;

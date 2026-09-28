@@ -33,6 +33,8 @@ const agent = (pane: string, worktree_id: string, state: AgentState, updated_at_
   authority: "lifecycle",
   updated_at_ms,
   pid: null,
+  estimated: false,
+  seen: false,
 });
 
 const repos = [repo("r1", "tomo"), repo("r2", "labor")];

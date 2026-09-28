@@ -24,4 +24,8 @@ description: string | null,
 /**
  * `working`, `waiting`, or `exited` when it is done.
  */
-state: AgentState, started_at_ms: number, };
+state: AgentState, started_at_ms: number, 
+/**
+ * The last event of this subagent. One silent for 30 minutes under an idle parent is dropped.
+ */
+updated_at_ms: number, };
