@@ -303,6 +303,18 @@ pub fn linear_list(status: &LinearStatus, json: bool) {
     }
 }
 
+pub fn main_sync(r: &MainSync, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    match r {
+        MainSync::UpToDate => println!("up to date"),
+        MainSync::Forwarded { commits } => println!("fast-forwarded {commits} commits"),
+        MainSync::Skipped { reason } => println!("not synced: {reason}"),
+        MainSync::Failed { message } => println!("sync failed: {message}"),
+    }
+}
+
 pub fn linear_viewer(v: &LinearViewer, json: bool) {
     if json {
         return emit_json(v);

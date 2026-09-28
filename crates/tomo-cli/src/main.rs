@@ -150,6 +150,8 @@ enum RepoCmd {
     List,
     Add { path: PathBuf },
     Remove { repo: String },
+    #[command(about = "Fetch the main worktree's upstream and fast-forward it when that is safe")]
+    Sync { repo: String },
     Clone { url: String, dest: PathBuf },
 }
 
@@ -488,6 +490,11 @@ async fn run() -> Result<()> {
         Cmd::Repo(RepoCmd::Add { path }) => {
             let r: Repo = c.call(Call::RepoAdd { path: std::fs::canonicalize(&path).unwrap_or(path) }).await?;
             print::repos(&[r], json);
+        }
+        Cmd::Repo(RepoCmd::Sync { repo }) => {
+            let id = resolve_repo_id(&c, &repo).await?;
+            let r: MainSync = c.call(Call::RepoSync { repo_id: id }).await?;
+            print::main_sync(&r, json);
         }
         Cmd::Repo(RepoCmd::Remove { repo }) => {
             let id = resolve_repo_id(&c, &repo).await?;

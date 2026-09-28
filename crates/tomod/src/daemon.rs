@@ -121,6 +121,10 @@ pub struct Inner {
     pub diagnostics: std::collections::VecDeque<Diagnostic>,
     /// The current problem per `source:subject`, so a repeated poll records a diagnostic only on a change.
     pub problems: HashMap<String, String>,
+    /// When `sync` last synced the main worktree of each repository.
+    pub main_synced_ms: HashMap<Id, u64>,
+    /// The repositories that `sync` works on now.
+    pub main_syncing: HashSet<Id>,
     /// The in-memory state of the addons of this daemon, under the same lock as Core state. Core never looks inside; the composition root fills it.
     pub addons: Box<dyn std::any::Any + Send>,
 }
@@ -291,6 +295,8 @@ impl Daemon {
                 closed_tabs: Vec::new(),
                 diagnostics: std::collections::VecDeque::new(),
                 problems: HashMap::new(),
+                main_synced_ms: HashMap::new(),
+                main_syncing: HashSet::new(),
                 addons,
             }),
             stop: tokio::sync::Notify::new(),
@@ -2022,6 +2028,10 @@ impl Daemon {
             true => config::default_branch(&branch_prefix, &dir_name),
             false => wanted.to_string(),
         };
+        let starts_from_main = spec.start_ref.is_none() && (spec.new_branch || wanted.is_empty());
+        if starts_from_main && crate::sync::due(&self.lock(), &spec.repo_id, crate::sync::FRESH_MS, now_ms()) {
+            crate::sync::sync_repo(self, &spec.repo_id).await;
+        }
         git::worktree_add(&repo_path, &path, &branch, spec.new_branch || wanted.is_empty(), spec.start_ref.as_deref())
             .await
             .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
@@ -2172,6 +2182,7 @@ impl Daemon {
                 ok(repo_view(id, top).await)
             }
             Call::RepoRemove { repo_id } => self.repo_remove(repo_id).await,
+            Call::RepoSync { repo_id } => ok(crate::sync::sync_repo(self, &repo_id).await),
             Call::RepoClone { url, dest } => {
                 let dest = config::expand_tilde(&dest);
                 git::clone(&url, &dest).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;

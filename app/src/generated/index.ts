@@ -57,6 +57,7 @@ export * from "./LinearLink";
 export * from "./LinearState";
 export * from "./LinearStatus";
 export * from "./LinearViewer";
+export * from "./MainSync";
 export * from "./MetadataPatch";
 export * from "./NoticeLevel";
 export * from "./NotificationSettings";

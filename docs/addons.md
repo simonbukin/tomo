@@ -417,6 +417,7 @@ Background work that exists today and must keep its current trigger:
 | process poll | every 2 s with a subscriber, 15 s without | core `monitor.rs` |
 | `lsof` port scan | each monitor tick with candidate pids, through the `process_polled` seam; the call is killed at a 2 s deadline | runtime addon |
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
+| main worktree sync (`git fetch`, then `merge --ff-only`) | 30 s tick, only with a subscriber, and a repository synced more than 5 min ago; and before `worktree_create` starts a new branch from the main worktree, unless a sync ran in the last 30 s | core `sync.rs` |
 | usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
 | Linear issue fetch (network) | 20 s tick, only with a subscriber, and only when the answer is older than 60 s or a branch names another issue; `linear_get` fetches on the same rule without a subscriber | linear addon (`addons::start`) |
 | `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |

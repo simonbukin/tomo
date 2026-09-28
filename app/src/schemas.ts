@@ -369,6 +369,19 @@ export const linearViewerSchema = z.object({
     name: z.string()
 });
 
+export const mainSyncSchema = z.union([z.object({
+        "kind": z.literal("up_to_date")
+    }), z.object({
+        "kind": z.literal("forwarded"),
+        commits: z.number()
+    }), z.object({
+        "kind": z.literal("skipped"),
+        reason: z.string()
+    }), z.object({
+        "kind": z.literal("failed"),
+        message: z.string()
+    })]);
+
 export const metadataPatchSchema = z.object({
     display_name: z.string().optional().nullable(),
     tags: z.array(z.string()).optional()

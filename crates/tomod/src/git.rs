@@ -55,6 +55,7 @@ async fn git(cwd: &Path, args: &[&str]) -> Result<String> {
         .arg(cwd)
         .args(args)
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
@@ -300,6 +301,30 @@ pub async fn worktree_add(repo: &Path, path: &Path, branch: &str, new_branch: bo
         args.extend([&path_s, branch]);
     }
     git(repo, &args).await.map(|_| ())
+}
+
+/// Fetches the remote of the checked-out branch. Auto maintenance is off, so a fetch never starts a long `gc`.
+pub async fn fetch(worktree: &Path) -> Result<()> {
+    git(worktree, &["-c", "gc.auto=0", "-c", "maintenance.auto=false", "fetch", "--quiet"]).await.map(|_| ())
+}
+
+/// Commits on HEAD that its upstream lacks, and commits on the upstream that HEAD lacks. An error means no upstream.
+pub async fn upstream_drift(worktree: &Path) -> Result<(u32, u32)> {
+    let out = git(worktree, &["rev-list", "--left-right", "--count", "HEAD...@{u}"]).await?;
+    let mut counts = out.split_whitespace().map(str::parse::<u32>);
+    match (counts.next(), counts.next()) {
+        (Some(Ok(ahead)), Some(Ok(behind))) => Ok((ahead, behind)),
+        _ => Err(anyhow!("git rev-list gave {out:?}")),
+    }
+}
+
+/// True when a tracked file has a change. Untracked files do not block a fast-forward.
+pub async fn tracked_dirty(worktree: &Path) -> Result<bool> {
+    Ok(!git(worktree, &["status", "--porcelain", "--untracked-files=no"]).await?.trim().is_empty())
+}
+
+pub async fn fast_forward(worktree: &Path) -> Result<()> {
+    git(worktree, &["merge", "--ff-only", "--quiet", "@{u}"]).await.map(|_| ())
 }
 
 /// Commits every non-ignored change as one checkpoint. Returns the new commit id,
