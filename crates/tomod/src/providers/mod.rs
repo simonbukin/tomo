@@ -14,6 +14,7 @@ pub mod pi;
 
 use anyhow::{Context, Result};
 use serde_json::{Map, Value};
+use crate::subagents::SubagentEvent;
 use std::path::Path;
 use std::path::PathBuf;
 use tomo_proto::{AgentCommand, AgentKind, AgentSession, AgentState, Config, IntegrationLevel, IntegrationStatus, Integrations};
@@ -94,6 +95,8 @@ pub fn marks_nested_agent(key: &str) -> bool {
 pub struct HookOutcome {
     pub state: Option<AgentState>,
     pub session_ref: Option<String>,
+    /// What the event says about a subagent. A provider without subagents leaves it `None`.
+    pub subagent: Option<SubagentEvent>,
 }
 
 pub struct SpawnPlan {
@@ -549,6 +552,31 @@ mod tests {
         }
     }
 
+    fn subagent_of(kind: AgentKind, payload: Value) -> Option<SubagentEvent> {
+        hook_outcome(kind, &payload).subagent
+    }
+
+    #[test]
+    fn claude_subagent_mapping() {
+        let launch = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Agent", "tool_input": { "description": "find the hook", "subagent_type": "Explore" } });
+        assert_eq!(subagent_of(AgentKind::Claude, launch), Some(SubagentEvent::Launch { label: "Explore".into(), description: Some("find the hook".into()) }));
+        let old_name = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Task", "tool_input": { "prompt": "x" } });
+        assert_eq!(subagent_of(AgentKind::Claude, old_name), Some(SubagentEvent::Launch { label: "general-purpose".into(), description: None }));
+        let start = serde_json::json!({ "hook_event_name": "SubagentStart", "agent_id": "a1", "agent_type": "Explore" });
+        assert_eq!(subagent_of(AgentKind::Claude, start), Some(SubagentEvent::Start { id: "a1".into(), label: "Explore".into() }));
+        let stop = serde_json::json!({ "hook_event_name": "SubagentStop", "agent_id": "a1", "agent_type": "Explore" });
+        assert_eq!(subagent_of(AgentKind::Claude, stop), Some(SubagentEvent::Stop { id: "a1".into() }));
+        let inside = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Read", "agent_id": "a1" });
+        assert_eq!(subagent_of(AgentKind::Claude, inside), Some(SubagentEvent::Activity { id: "a1".into(), state: AgentState::Working }));
+        let asks = serde_json::json!({ "hook_event_name": "PermissionRequest", "agent_id": "a1" });
+        assert_eq!(subagent_of(AgentKind::Claude, asks), Some(SubagentEvent::Activity { id: "a1".into(), state: AgentState::Waiting }));
+        let nested_launch = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Agent", "agent_id": "a1" });
+        assert!(matches!(subagent_of(AgentKind::Claude, nested_launch), Some(SubagentEvent::Activity { .. })), "a subagent's own tool call is its activity");
+        assert_eq!(subagent_of(AgentKind::Claude, serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Read" })), None);
+        assert_eq!(subagent_of(AgentKind::Claude, serde_json::json!({ "hook_event_name": "SubagentStart" })), None, "a start with no id is ignored");
+        assert_eq!(subagent_of(AgentKind::Pi, serde_json::json!({ "event": "agent_start", "agent_id": "a1" })), None, "Pi reports no subagents");
+    }
+
     #[test]
     fn hook_session_ref_ignores_missing_and_empty_ids() {
         assert_eq!(hook_outcome(AgentKind::Codex, &serde_json::json!({ "hook_event_name": "Stop", "session_id": "" })).session_ref, None);
@@ -590,7 +618,10 @@ mod tests {
         };
         let claude_file = claude::hooks_settings(Path::new("/opt/My Tomo/tomo"));
         let claude_events = sorted_keys(&claude_file["hooks"]);
-        assert_eq!(claude_events, ["Notification", "PermissionRequest", "PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "UserPromptSubmit"]);
+        assert_eq!(
+            claude_events,
+            ["Notification", "PermissionRequest", "PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "SubagentStart", "SubagentStop", "UserPromptSubmit"]
+        );
         assert_eq!(claude_file["hooks"]["PreToolUse"][0]["matcher"], "*");
         assert!(claude_file["hooks"]["Stop"][0].get("matcher").is_none());
         assert_eq!(claude_file["hooks"]["Stop"][0]["hooks"][0]["command"], "'/opt/My Tomo/tomo' hook claude");
@@ -603,7 +634,8 @@ mod tests {
         );
         assert_eq!(codex_file["Stop"][0]["hooks"][0]["command"], "/usr/local/bin/tomo hook codex");
         for event in claude_events.iter().filter(|e| *e != "Notification").chain(&codex_events) {
-            assert!(state_of(AgentKind::Claude, serde_json::json!({ "hook_event_name": event })).is_some(), "{event}");
+            let o = hook_outcome(AgentKind::Claude, &serde_json::json!({ "hook_event_name": event, "agent_id": "a1" }));
+            assert!(o.state.is_some() || o.subagent.is_some(), "{event}");
         }
     }
 }

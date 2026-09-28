@@ -53,10 +53,11 @@ describe("bottom strip", () => {
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
   });
 
-  it("puts add repo on the left and settings on the right, beside the version", () => {
+  it("puts new repo last on the left and settings on the right, beside the version", () => {
     const { container } = show("open");
-    expect(container.querySelector(".bottom-left .bottom-add")).not.toBeNull();
-    expect(container.querySelector(".bottom-left")!.textContent).toContain("add repo");
+    const add = screen.getByRole("button", { name: "New repo" });
+    expect(container.querySelector(".bottom-left")!.lastElementChild).toBe(add);
+    expect(add.querySelector(".btn-reveal-label")).toHaveTextContent("new repo");
     const right = container.querySelector(".bottom-right")!;
     expect(right.contains(screen.getByRole("button", { name: "Settings" }))).toBe(true);
   });

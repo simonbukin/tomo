@@ -10,16 +10,15 @@ import { homeEmpty } from "./emptyStates";
 import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
-import { filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees } from "./homeQuery";
+import { filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees, worktreeStatus } from "./homeQuery";
 import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass, tintClass } from "./glyphs";
+import { agentStatus, dotClass, statusDot, tintClass } from "./glyphs";
 import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
-import { summarizeState } from "./Sidebar";
 import { tagPrefill } from "./lenses";
 import type { Filter, FilterKind, HomeOptions, Worktree, WorktreePrefill } from "./types";
 import { useGlide } from "./glide";
@@ -240,14 +239,13 @@ function ScopeActivity({ worktreeIds }: { worktreeIds: readonly string[] }) {
 }
 
 function Row({ w }: { w: Worktree }) {
-  const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  const summary = summarizeState(agents, attention);
+  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   return (
     <div
       className={`wt-list-row${attention ? " row-attention" : ""}${w.exists || archived ? "" : " row-missing"}${archived ? " row-archived" : ""}${busy ? " row-archiving" : ""}`}
@@ -255,7 +253,7 @@ function Row({ w }: { w: Worktree }) {
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
       title={w.path}
     >
-      <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
+      <span {...statusDot(busy ? "archiving" : status)} />
       <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       <span className="muted">{repo}</span>
       <span className="muted">{busy ? "archiving..." : archived ? "archived" : ""}</span>
@@ -293,7 +291,7 @@ export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
   const busy = w.archiving;
   const sub = [repo, busy ? "archiving..." : archived ? "archived" : null].filter(Boolean).join(" · ");
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  const summary = summarizeState(agents, attention);
+  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   const drag = useDraggable({ id: `${column ?? ""}|${w.id}`, data: { worktreeId: w.id, from: column }, disabled: column === undefined || archived || busy });
   return (
     <div
@@ -306,7 +304,7 @@ export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
       title={[w.path, busy ? "archiving..." : null].filter(Boolean).join("\n")}
     >
       <div className="card-title">
-        <span className={busy ? "state state-archiving" : dotClass(archived ? null : agentStatus(summary))} />
+        <span {...statusDot(busy ? "archiving" : status)} />
         <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       </div>
       {branch && (

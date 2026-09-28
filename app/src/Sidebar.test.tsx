@@ -1,6 +1,6 @@
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentPresence, Worktree } from "./types";
 
@@ -8,6 +8,7 @@ vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof im
 
 const { WorktreeRow } = await import("./Sidebar");
 const { getState, setState } = await import("./store");
+const { WorktreePreview, subagentsOf } = await import("./WorktreePreview");
 
 const nodeFsWithoutNodeTypes = "node:fs";
 const { readFileSync } = await import(/* @vite-ignore */ nodeFsWithoutNodeTypes);
@@ -123,5 +124,52 @@ describe("the row CSS reads tokens only", () => {
     const used = [...new Set([...rowCss.matchAll(/var\((--[a-z0-9-]+)\)/g)].map((m) => m[1]))];
     expect(used.length).toBeGreaterThan(0);
     for (const token of used) expect(tokensCss, token).toContain(`${token}:`);
+  });
+});
+
+describe("worktree hover preview", () => {
+  it("lists the branch, the git state, each agent with its state, and the last activity", () => {
+    const w = worktree({ git: { dirty: true, files_changed: 2, untracked: 0, conflicts: 0, insertions: 5, deletions: 1, ahead: 1, behind: 0, upstream: "origin/feat/kobe" } as Worktree["git"], last_active_ms: Date.now() });
+    setState({ worktrees: [w], agents: { p1: agent("p1", "working"), p2: { ...agent("p2", "waiting"), kind: "codex" } } });
+    const { container } = render(<WorktreePreview w={w} />);
+    expect(screen.getByText("feat/kobe")).toBeInTheDocument();
+    expect(screen.getByText("2 files changed")).toBeInTheDocument();
+    const agents = [...container.querySelectorAll(".wt-preview-agent")].map((row) => row.textContent);
+    expect(agents).toEqual([expect.stringContaining("Claudeworking"), expect.stringContaining("Codexwaiting")]);
+    expect(screen.getByText(/^active/)).toBeInTheDocument();
+  });
+});
+
+describe("subagents in the row", () => {
+  const sub = (id: string, state: AgentPresence["state"], started: number) => ({ id, label: "Explore", description: `task ${id}`, state, started_at_ms: started });
+  const withSubs = (subs: ReturnType<typeof sub>[]): AgentPresence => ({ ...agent("p1", "working"), subagents: subs });
+
+  it("draws nothing for an agent without subagents, so a quiet row keeps its two units", () => {
+    expect(renderRow(worktree(), [agent("p1", "working")]).querySelector(".subagents")).toBeNull();
+  });
+
+  it("nests one line per subagent under the row, each with its own state mark", () => {
+    const row = renderRow(worktree(), [withSubs([sub("a", "working", 1), sub("b", "exited", 2)])]);
+    const lines = [...row.querySelectorAll(".wt-row .subagents .subagent")];
+    expect(lines.map((l) => l.querySelector(".subagent-desc")!.textContent)).toEqual(["task a", "task b"]);
+    expect(lines[0].querySelector(".state")).toHaveClass("state-working");
+    expect(lines[1].querySelector(".state")).toHaveClass("state-done");
+    expect(lines[1].querySelector(".state")).toHaveAttribute("title", "done");
+  });
+
+  it("caps the row at three lines and counts the rest", () => {
+    const row = renderRow(worktree(), [withSubs(["a", "b", "c", "d", "e"].map((id, i) => sub(id, "working", i)))]);
+    const lines = [...row.querySelectorAll(".subagent")];
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toHaveTextContent("+3 more");
+  });
+
+  it("hides the subagents of an archived worktree", () => {
+    expect(renderRow(worktree({ archived_at_ms: 1 }), [withSubs([sub("a", "working", 1)])]).querySelector(".subagents")).toBeNull();
+  });
+
+  it("orders the subagents that need you first, then the oldest", () => {
+    const order = subagentsOf([withSubs([sub("done", "exited", 0), sub("late", "working", 9), sub("early", "working", 1)]), withSubs([sub("asks", "waiting", 5)])]).map((s) => s.id);
+    expect(order).toEqual(["asks", "early", "late", "done"]);
   });
 });

@@ -1150,6 +1150,25 @@ pub struct AgentPresence {
     pub authority: Authority,
     pub updated_at_ms: u64,
     pub pid: Option<u32>,
+    /// Helper agents that this agent started and that still matter to the current turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<Subagent>>", optional)]
+    pub subagents: Vec<Subagent>,
+}
+
+/// A helper agent that an agent started, such as a Claude Code subagent. The provider maps its own hook
+/// events onto this shape, so Core keeps one list for every provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Subagent {
+    /// The provider's id for the subagent. It is null from the launch until the provider reports the start.
+    pub id: Option<String>,
+    /// The kind of helper, for example `Explore`.
+    pub label: String,
+    /// The task that the parent gave it.
+    pub description: Option<String>,
+    /// `working`, `waiting`, or `exited` when it is done.
+    pub state: AgentState,
+    pub started_at_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -33,9 +33,9 @@ afterEach(cleanup);
 describe("minimal left rail", () => {
   it("marks attention and crashes with glyphs and text labels, not color alone", () => {
     render(<LeftRail />);
-    const needs = screen.getByRole("button", { name: "aogashima, needs input" });
+    const needs = screen.getByRole("button", { name: "aogashima, needs you" });
     expect(needs.querySelector(".state-waiting")).not.toBeNull();
-    const crashed = screen.getByRole("button", { name: "setagaya, crashed" });
+    const crashed = screen.getByRole("button", { name: "setagaya, failed" });
     expect(crashed.querySelector(".state-fail")).not.toBeNull();
     expect(screen.getByRole("button", { name: "kamakura" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Activity, 1 need you" })).toBeInTheDocument();

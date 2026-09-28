@@ -1,5 +1,6 @@
 import { byManualOrder, mainFirst } from "./order";
 import { needsMeItem } from "./activityModel";
+import type { Status } from "./glyphs";
 import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
 
 export interface QueryContext {
@@ -20,6 +21,22 @@ export function agentsOf(agents: AgentPresence[], worktreeId: string): AgentPres
 
 export function needsAttention(w: Worktree, ctx: QueryContext): boolean {
   return agentsOf(ctx.agents, w.id).some((a) => a.state === "waiting") || ctx.attention.some((a) => a.worktree_id === w.id && needsMeItem(a, ctx.agents));
+}
+
+/**
+ * The one live mark of a worktree on every dense surface: the sidebar row, the Home card and row, and the rail.
+ * Most urgent first. Null means that nothing runs there, and the surface draws no mark.
+ */
+export function worktreeStatus(w: Worktree, ctx: Pick<QueryContext, "agents" | "attention">): Status | null {
+  if (w.archived_at_ms) return null;
+  const agents = agentsOf(ctx.agents, w.id);
+  const open = ctx.attention.filter((a) => a.worktree_id === w.id && needsMeItem(a, ctx.agents));
+  if (agents.some((a) => a.state === "waiting") || open.some((a) => a.kind !== "crash")) return "needs";
+  if (open.length) return "failed";
+  if (agents.some((a) => a.state === "working")) return "working";
+  if (agents.some((a) => a.state === "idle")) return "idle";
+  if (agents.some((a) => a.state === "unknown")) return "unknown";
+  return null;
 }
 
 function agentStateOf(w: Worktree, ctx: QueryContext): string {

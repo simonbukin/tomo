@@ -5,6 +5,7 @@ const PURE_CLIENT_MODELS = [
   "./appearance.ts",
   "./order.ts",
   "./activityModel.ts",
+  "./glyphs.ts",
   "./homeQuery.ts",
   "./lenses.ts",
   "./homeScope.ts",

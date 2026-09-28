@@ -4,7 +4,7 @@
  */
 
 .sidebar { grid-area: left; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--line); overflow: hidden; }
-.sidebar-scroll { overflow-y: auto; flex: 1; }
+.sidebar-scroll { position: relative; overflow-y: auto; flex: 1; }
 .sidebar-empty { padding: var(--sp-3) var(--inset); color: var(--fg-2); line-height: 20px; font-size: var(--fs-2); }
 .selection-bar { display: flex; align-items: center; gap: var(--inset); height: var(--u); padding: 0 var(--inset); font-size: var(--fs-2); color: var(--bg); background: var(--fg); }
 .selection-bar .link { color: inherit; }
@@ -24,8 +24,7 @@
 .repo-group { }
 .repo-head { height: var(--u); gap: 10px; padding: 0 0 0 var(--inset); cursor: default; box-shadow: inset 0 -1px 0 var(--line); font-weight: 400; }
 .repo-head:hover { background: var(--bg-2); }
-.repo-head .btn-icon { visibility: hidden; margin-left: auto; }
-.repo-head:hover .btn-icon, .repo-head:focus-within .btn-icon { visibility: visible; }
+.repo-add { margin-left: auto; }
 .repo-toggle { display: inline-flex; align-items: center; color: var(--fg-3); }
 .repo-toggle .chevron { width: 12px; height: 12px; }
 .repo-name { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); }
@@ -55,4 +54,5 @@
 .rail-wt:hover { background: var(--bg-2); color: var(--fg); }
 .rail-wt[aria-current] { background: var(--fg); color: var(--bg); }
 .rail-wt .state { width: 8px; height: 8px; }
+.rail-wt .state-none { box-shadow: inset 0 0 0 1px var(--line-strong); }
 .rail-wt[aria-current] .state-none, .rail-wt[aria-current] .state-idle { box-shadow: inset 0 0 0 1px var(--bg); }

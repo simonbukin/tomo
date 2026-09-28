@@ -1,18 +1,15 @@
 import { AppWindow, Bot, History, House } from "lucide-react";
 import { Fragment } from "react";
-import type { Signal } from "../activityModel";
 import { addonViews } from "../addons";
-import { needsMeItem } from "../activityModel";
 import { openWorktree } from "../actions";
 import { IconButton, Tooltip } from "../components/ui";
-import { agentStatus, dotClass, GLYPH } from "../glyphs";
-import { sortWorktrees } from "../homeQuery";
+import { STATUS_LABEL, statusDot } from "../glyphs";
+import { sortWorktrees, worktreeStatus } from "../homeQuery";
 import { byManualOrder } from "../order";
 import { useShortcuts } from "../shortcuts";
-import { summarizeState } from "../Sidebar";
-import { signalsFor } from "../Signals";
-import { agentsOf, formatBytes, needsMe, queryContext, setUi, type State, useStore, visibleRepos } from "../store";
-import { KIND_LABEL, type Worktree } from "../types";
+import { WorktreePreview } from "../WorktreePreview";
+import { needsMe, queryContext, setUi, type State, useStore, visibleRepos } from "../store";
+import type { Worktree } from "../types";
 
 export function railWorktrees(s: State): Worktree[] {
   const repos = visibleRepos(s);
@@ -20,21 +17,6 @@ export function railWorktrees(s: State): Worktree[] {
   const ctx = queryContext(s);
   const live = s.worktrees.filter((w) => !w.archived_at_ms);
   return ordered.flatMap((r) => sortWorktrees(live.filter((w) => w.repo_id === r.id), s.ui.sidebarSort, ctx, s.ui.manualOrder[r.id] ?? []));
-}
-
-export function signalText(signal: Signal): string {
-  switch (signal.kind) {
-    case "attention":
-      return `${GLYPH.needs} ${signal.text}`;
-    case "crash":
-      return `${GLYPH.failed} ${signal.text}`;
-    case "agent":
-      return signal.state === "waiting" ? `${GLYPH.needs} ${KIND_LABEL[signal.agent]} needs input` : `${signal.state === "working" ? GLYPH.working : GLYPH.idle} ${KIND_LABEL[signal.agent]}`;
-    case "warn":
-      return `⚠ ${formatBytes(signal.bytes)}`;
-    case "addon":
-      return [signal.glyph, signal.text].filter(Boolean).join(" ");
-  }
 }
 
 /** The minimal left sidebar: views, the attention count, and one mark per worktree. */
@@ -79,30 +61,13 @@ export function LeftRail() {
 }
 
 function RailWorktree({ w, active }: { w: Worktree; active: boolean }) {
-  const needs = useStore((s) => agentsOf(s, w.id).some((a) => a.state === "waiting") || s.attention.some((a) => a.worktree_id === w.id && a.kind !== "crash" && needsMeItem(a, Object.values(s.agents))));
-  const crashed = useStore((s) => s.attention.some((a) => a.worktree_id === w.id && a.kind === "crash" && needsMeItem(a, Object.values(s.agents))));
-  const agentState = useStore((s) => summarizeState(agentsOf(s, w.id), false));
-  const label = [w.name, needs && "needs input", crashed && "crashed"].filter(Boolean).join(", ");
-  const status = needs ? "needs" : crashed ? "failed" : agentStatus(agentState);
+  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
+  const label = [w.name, status && STATUS_LABEL[status]].filter(Boolean).join(", ");
   return (
-    <Tooltip side="right" delay={0} content={<RailPreview w={w} />}>
+    <Tooltip side="right" delay={0} content={<WorktreePreview w={w} />}>
       <button type="button" className="rail-wt" aria-label={label} aria-current={active ? "page" : undefined} onClick={() => openWorktree(w.id)}>
-        <span className={dotClass(status)} aria-hidden />
+        <span {...statusDot(status)} aria-hidden />
       </button>
     </Tooltip>
-  );
-}
-
-function RailPreview({ w }: { w: Worktree }) {
-  const signals = useStore((s) => signalsFor(s, w.id));
-  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  return (
-    <div className="preview">
-      <div className="preview-head">{w.name}</div>
-      {branch && <div className="mono muted">{branch}</div>}
-      {signals.map((signal, i) => (
-        <div key={i}>{signalText(signal)}</div>
-      ))}
-    </div>
   );
 }

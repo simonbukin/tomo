@@ -10,6 +10,7 @@ export type {
   AgentSession,
   AgentSpawn,
   AgentState,
+  Subagent,
   AttentionItem,
   AttentionKind,
   AttentionLevel,

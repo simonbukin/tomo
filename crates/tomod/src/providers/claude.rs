@@ -1,4 +1,5 @@
 use super::{str_field, HookOutcome, Program, Provider};
+use crate::subagents::SubagentEvent;
 use crate::agents::shell_quote;
 use anyhow::Result;
 use serde_json::Value;
@@ -131,7 +132,31 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
         "SessionEnd" => Some(AgentState::Exited),
         _ => None,
     };
-    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string) }
+    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string), subagent: subagent_event(event, payload, state) }
+}
+
+/// The tool that starts a subagent. Claude Code renamed `Task` to `Agent` and accepts both.
+const SUBAGENT_TOOLS: [&str; 2] = ["Agent", "Task"];
+const DEFAULT_SUBAGENT: &str = "general-purpose";
+
+/// A hook that fires inside a subagent carries `agent_id` and `agent_type`. The parent's `PreToolUse` of the
+/// subagent tool carries the task description, which `SubagentStart` does not.
+fn subagent_event(event: &str, payload: &Value, state: Option<AgentState>) -> Option<SubagentEvent> {
+    let id = str_field(payload, "agent_id").map(str::to_string);
+    let label = || str_field(payload, "agent_type").unwrap_or(DEFAULT_SUBAGENT).to_string();
+    match (event, id) {
+        ("SubagentStart", Some(id)) => Some(SubagentEvent::Start { id, label: label() }),
+        ("SubagentStop", Some(id)) => Some(SubagentEvent::Stop { id }),
+        (_, Some(id)) => state.filter(|s| matches!(s, AgentState::Working | AgentState::Waiting)).map(|state| SubagentEvent::Activity { id, state }),
+        ("PreToolUse", None) if str_field(payload, "tool_name").is_some_and(|t| SUBAGENT_TOOLS.contains(&t)) => {
+            let input = payload.get("tool_input").unwrap_or(&Value::Null);
+            Some(SubagentEvent::Launch {
+                label: str_field(input, "subagent_type").unwrap_or(DEFAULT_SUBAGENT).to_string(),
+                description: str_field(input, "description").map(str::to_string),
+            })
+        }
+        _ => None,
+    }
 }
 
 pub fn hooks_settings(tomo_bin: &Path) -> Value {
@@ -153,6 +178,8 @@ pub fn hooks_settings(tomo_bin: &Path) -> Value {
             "PermissionRequest": hook(Some("*")),
             "Notification": hook(None),
             "Stop": hook(None),
+            "SubagentStart": hook(None),
+            "SubagentStop": hook(None),
         }
     })
 }
