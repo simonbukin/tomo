@@ -67,7 +67,7 @@ o=$($RPC attach "$D" 1); case "$o" in *DETACHED-DONE*) check 0 "reattach shows t
 $T pane close "$D" --force >/dev/null
 
 # 9. daemon restart + 20 rapid reconnects
-daemon_restart
+daemon_restart_cold
 ok=0; for i in $(seq 1 20); do $T status >/dev/null 2>&1 & done; wait
 for i in $(seq 1 20); do $T status >/dev/null 2>&1 && ok=$((ok+1)); done
 [ $ok = 20 ] && check 0 "20 rapid clients after restart" || check 1 "rapid reconnects" "$ok/20"

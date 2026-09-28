@@ -1,6 +1,7 @@
+use crate::holder::{self, Frame, HolderSpec};
 use anyhow::{Context, Result};
-use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use std::io::{Read, Write};
+use std::io::Write;
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -184,63 +185,139 @@ pub struct Spawn<'a> {
 pub type OutputSink = Arc<dyn Fn(&[u8]) + Send + Sync>;
 pub type ExitSink = Box<dyn FnOnce(Option<i32>) + Send>;
 
+/// A pane's terminal. The child runs under a holder process (see `holder.rs`), so the session is a
+/// connection to that holder: dropping it leaves the child running, and `hangup` ends it.
 pub struct PtySession {
     pub pid: u32,
-    master: Mutex<Box<dyn MasterPty + Send>>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    conn: Mutex<UnixStream>,
+}
+
+/// Starts a holder for `spec` and waits until it listens. Tests run the same server in a thread,
+/// because a test binary cannot serve as `tomod pty-holder`.
+fn start_holder(spec: &HolderSpec) -> Result<()> {
+    if cfg!(test) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let spec = spec.clone();
+        std::thread::spawn(move || {
+            let failed = holder::run(&spec, |_| {
+                let _ = tx.send(Ok(()));
+            });
+            if let Err(e) = failed {
+                let _ = tx.send(Err(e));
+            }
+        });
+        return rx.recv().context("the holder thread stopped")?;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().context("find tomod")?)
+        .arg("pty-holder")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("start pty-holder")?;
+    child.stdin.take().context("holder stdin")?.write_all(&serde_json::to_vec(spec)?)?;
+    let out = child.wait_with_output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(())
 }
 
 impl PtySession {
-    pub fn spawn(spec: Spawn<'_>, on_output: OutputSink, on_exit: ExitSink) -> Result<Self> {
-        let pty = native_pty_system();
-        let pair = pty.openpty(PtySize { rows: spec.rows, cols: spec.cols, pixel_width: 0, pixel_height: 0 }).context("openpty")?;
-        let mut cmd = CommandBuilder::new(spec.program);
-        cmd.args(spec.args);
-        cmd.cwd(spec.cwd);
-        for k in spec.env_remove {
-            cmd.env_remove(k);
-        }
-        for (k, v) in spec.env {
-            cmd.env(k, v);
-        }
-        let mut child = pair.slave.spawn_command(cmd).context("spawn in pty")?;
-        drop(pair.slave);
-        let pid = child.process_id().context("child pid")?;
-        let mut reader = pair.master.try_clone_reader().context("clone reader")?;
-        let writer = pair.master.take_writer().context("take writer")?;
+    /// Starts `spec` under a new holder at `socket`. The bytes it printed before the attach come back with the session.
+    pub fn spawn(spec: Spawn<'_>, socket: &Path, on_output: OutputSink, on_exit: ExitSink) -> Result<(Self, Vec<u8>)> {
+        let holder_spec = HolderSpec {
+            socket: socket.to_path_buf(),
+            program: spec.program.to_string(),
+            args: spec.args.to_vec(),
+            cwd: spec.cwd.to_path_buf(),
+            env: spec.env.to_vec(),
+            env_remove: spec.env_remove.to_vec(),
+            cols: spec.cols,
+            rows: spec.rows,
+        };
+        start_holder(&holder_spec)?;
+        Self::connect(socket, false, on_output, on_exit)
+    }
 
+    /// Connects to the live holder at `socket`. It returns the holder's output ring for the caller to replay, because
+    /// the caller holds the lock that `on_output` takes. Output after the ring goes to `on_output` in order.
+    /// A holder whose child already exited is an error: that pane is gone, and the caller restores it instead.
+    pub fn attach(socket: &Path, on_output: OutputSink, on_exit: ExitSink) -> Result<(Self, Vec<u8>)> {
+        Self::connect(socket, true, on_output, on_exit)
+    }
+
+    fn connect(socket: &Path, only_alive: bool, on_output: OutputSink, on_exit: ExitSink) -> Result<(Self, Vec<u8>)> {
+        let mut conn = UnixStream::connect(socket).with_context(|| format!("connect {}", socket.display()))?;
+        conn.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
+        holder::write_frame(&mut conn, &Frame::Hello { version: holder::PROTOCOL })?;
+        let (pid, alive) = match holder::read_frame(&mut conn)? {
+            Some(Frame::Welcome { version, pid, alive }) if version == holder::PROTOCOL => (pid, alive),
+            Some(Frame::Welcome { version, .. }) => anyhow::bail!("holder speaks protocol {version}, tomod speaks {}", holder::PROTOCOL),
+            other => anyhow::bail!("expected welcome, got {other:?}"),
+        };
+        if only_alive && !alive {
+            holder::write_frame(&mut conn, &Frame::Attach)?;
+            let _ = holder::read_frame(&mut conn);
+            let _ = holder::read_frame(&mut conn);
+            let _ = holder::write_frame(&mut conn, &Frame::ExitSeen);
+            anyhow::bail!("the pane's process exited while no daemon ran");
+        }
+        holder::write_frame(&mut conn, &Frame::Attach)?;
+        let replay = match holder::read_frame(&mut conn)? {
+            Some(Frame::Replay(bytes)) => bytes,
+            other => anyhow::bail!("expected replay, got {other:?}"),
+        };
+        conn.set_read_timeout(None)?;
+        let mut reader = conn.try_clone()?;
         std::thread::Builder::new().name(format!("pty-read-{pid}")).spawn(move || {
-            let mut buf = vec![0u8; 16 * 1024];
-            loop {
-                match reader.read(&mut buf) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => on_output(&buf[..n]),
+            let code = loop {
+                match holder::read_frame(&mut reader) {
+                    Ok(Some(Frame::Output(bytes))) => on_output(&bytes),
+                    Ok(Some(Frame::Exit(code))) => {
+                        let _ = holder::write_frame(&mut reader, &Frame::ExitSeen);
+                        break code;
+                    }
+                    Ok(Some(_)) => {}
+                    Ok(None) | Err(_) => break None,
                 }
-            }
-        })?;
-        std::thread::Builder::new().name(format!("pty-wait-{pid}")).spawn(move || {
-            let code = child.wait().ok().map(|s| s.exit_code() as i32);
+            };
             on_exit(code);
         })?;
+        Ok((PtySession { pid, conn: Mutex::new(conn) }, replay))
+    }
 
-        Ok(PtySession { pid, master: Mutex::new(pair.master), writer: Mutex::new(writer) })
+    fn send(&self, frame: &Frame) -> Result<()> {
+        holder::write_frame(&mut *self.conn.lock().unwrap_or_else(|p| p.into_inner()), frame).context("write to the pane holder")
     }
 
     pub fn write(&self, data: &[u8]) -> Result<()> {
-        let mut w = self.writer.lock().unwrap();
-        w.write_all(data)?;
-        w.flush()?;
-        Ok(())
+        self.send(&Frame::Input(data.to_vec()))
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
-        self.master.lock().unwrap().resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).context("resize pty")
+        self.send(&Frame::Resize { cols, rows })
     }
 
+    /// Hangs up the terminal, as closing a terminal window does.
     pub fn hangup(&self) {
-        unsafe {
-            libc::kill(self.pid as i32, libc::SIGHUP);
-        }
+        let _ = self.send(&Frame::Close);
+    }
+
+    /// Hangs up the holder at `socket` without attaching, for a holder that no pane owns. It waits for the welcome
+    /// first: a holder whose reply hits a closed socket stops before it reads the close.
+    pub fn end_holder(socket: &Path) -> Result<()> {
+        let mut conn = UnixStream::connect(socket)?;
+        conn.set_read_timeout(Some(std::time::Duration::from_secs(2)))?;
+        holder::write_frame(&mut conn, &Frame::Hello { version: holder::PROTOCOL })?;
+        holder::read_frame(&mut conn)?;
+        holder::write_frame(&mut conn, &Frame::Close)?;
+        Ok(())
+    }
+
+    /// Ends the connection without touching the child: the pane lives on in its holder.
+    pub fn detach(&self) {
+        let _ = self.conn.lock().unwrap_or_else(|p| p.into_inner()).shutdown(std::net::Shutdown::Both);
     }
 }
 
@@ -277,30 +354,108 @@ mod tests {
         assert_eq!(out, b"a\x1b[31mred\x1b[0m\x1b]0;title\x07z");
     }
 
-    #[test]
-    fn spawns_shell_and_reads_output() {
+    fn sinks() -> (OutputSink, ExitSink, std::sync::mpsc::Receiver<Vec<u8>>, std::sync::mpsc::Receiver<Option<i32>>) {
         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
         let (etx, erx) = std::sync::mpsc::channel::<Option<i32>>();
         let sink: OutputSink = Arc::new(move |b: &[u8]| {
             let _ = tx.send(b.to_vec());
         });
+        (sink, Box::new(move |c| {
+            let _ = etx.send(c);
+        }), rx, erx)
+    }
+
+    fn socket(name: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(format!("/private/tmp/tomo-pty-test-{}-{name}.sock", std::process::id()))
+    }
+
+    fn text_until(replay: Vec<u8>, rx: &std::sync::mpsc::Receiver<Vec<u8>>, needle: &str) -> String {
+        let mut all = replay;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !String::from_utf8_lossy(&all).contains(needle) && std::time::Instant::now() < deadline {
+            if let Ok(chunk) = rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                all.extend(chunk);
+            }
+        }
+        String::from_utf8_lossy(&all).into_owned()
+    }
+
+    #[test]
+    fn spawns_shell_and_reads_output() {
+        let (sink, exit, rx, erx) = sinks();
         let args = vec!["-c".to_string(), "printf hello-tomo; exit 3".to_string()];
-        let session = PtySession::spawn(
+        let (session, replay) = PtySession::spawn(
             Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 },
+            &socket("spawn"),
             sink,
-            Box::new(move |c| {
-                let _ = etx.send(c);
-            }),
+            exit,
         )
         .unwrap();
         assert!(session.pid > 0);
-        let code = erx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-        assert_eq!(code, Some(3));
-        let mut all = Vec::new();
-        while let Ok(chunk) = rx.try_recv() {
-            all.extend(chunk);
+        assert_eq!(erx.recv_timeout(std::time::Duration::from_secs(5)).unwrap(), Some(3));
+        assert!(text_until(replay, &rx, "hello-tomo").contains("hello-tomo"));
+    }
+
+    #[test]
+    fn a_pane_outlives_its_session_and_a_new_session_gets_its_output() {
+        let (sink, exit, _rx, _erx) = sinks();
+        let path = socket("reattach");
+        let args = vec!["-c".to_string(), "printf before; read line; printf \"after-$line\"; exit 0".to_string()];
+        let (first, _) = PtySession::spawn(Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 }, &path, sink, exit).unwrap();
+        let pid = first.pid;
+        first.detach();
+        drop(first);
+
+        let (sink, exit, rx, erx) = sinks();
+        let (second, replay) = PtySession::attach(&path, sink, exit).unwrap();
+        assert_eq!(second.pid, pid, "the same process, not a new one");
+        assert!(text_until(replay.clone(), &rx, "before").contains("before"), "the ring replays what the first session saw");
+        second.write(b"x\n").unwrap();
+        assert!(text_until(Vec::new(), &rx, "after-x").contains("after-x"), "input reaches the child after a reattach");
+        assert_eq!(erx.recv_timeout(std::time::Duration::from_secs(5)).unwrap(), Some(0));
+    }
+
+    #[test]
+    fn hangup_ends_the_child() {
+        let (sink, exit, _rx, erx) = sinks();
+        let args = vec!["-c".to_string(), "sleep 30".to_string()];
+        let (session, _) = PtySession::spawn(Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 }, &socket("hangup"), sink, exit).unwrap();
+        session.hangup();
+        assert!(erx.recv_timeout(std::time::Duration::from_secs(5)).is_ok(), "the child exits after a hangup");
+    }
+
+    #[test]
+    fn a_holder_that_was_closed_on_purpose_ends_without_waiting_for_an_exit_collection() {
+        let (sink, exit, _rx, _erx) = sinks();
+        let path = socket("closed");
+        let args = vec!["-c".to_string(), "sleep 30".to_string()];
+        let (session, _) = PtySession::spawn(Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 }, &path, sink, exit).unwrap();
+        session.detach();
+        PtySession::end_holder(&path).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while path.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        assert!(String::from_utf8_lossy(&all).contains("hello-tomo"));
+        assert!(!path.exists(), "the holder ended within seconds, not after the one-minute wait");
+    }
+
+    #[test]
+    fn a_pane_that_exited_while_nobody_was_attached_is_not_reattached_and_its_holder_ends() {
+        let (sink, exit, _rx, _erx) = sinks();
+        let path = socket("late-exit");
+        let args = vec!["-c".to_string(), "sleep 0.3; exit 7".to_string()];
+        let (first, _) = PtySession::spawn(Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 }, &path, sink, exit).unwrap();
+        first.detach();
+        drop(first);
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        assert!(path.exists(), "the holder waits for someone to collect the exit");
+        let (sink, exit, _rx, _erx) = sinks();
+        assert!(PtySession::attach(&path, sink, exit).is_err(), "a restore does not reattach a pane whose process is gone");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while path.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(!path.exists(), "once the exit is collected, the holder ends and removes its socket");
     }
 
     #[test]

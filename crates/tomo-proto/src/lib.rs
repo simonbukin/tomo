@@ -86,7 +86,10 @@ pub enum Call {
     },
     /// Opens config.toml with `editor_command`, else the default text editor.
     ConfigOpen,
+    /// Stops the daemon. Every pane keeps running in its holder, and the next daemon reattaches it.
     DaemonStop,
+    /// Stops the daemon and ends every pane.
+    DaemonStopKillPanes,
     IntegrationsInstall,
     IntegrationsStatus,
     HookLog {

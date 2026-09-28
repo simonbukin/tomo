@@ -119,7 +119,11 @@ enum HooksCmd {
 enum DaemonCmd {
     Status,
     Start,
-    Stop,
+    #[command(about = "Stop the daemon. Panes keep running and the next daemon reattaches them")]
+    Stop {
+        #[arg(long, help = "End every pane as well")]
+        kill_panes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -404,10 +408,10 @@ async fn run() -> Result<()> {
             print::status(&s, json);
             return Ok(());
         }
-        Cmd::Daemon(DaemonCmd::Stop) => {
+        Cmd::Daemon(DaemonCmd::Stop { kill_panes }) => {
             return match client::Client::connect().await {
                 Ok(c) => {
-                    let _: Value = c.call(Call::DaemonStop).await?;
+                    let _: Value = c.call(if kill_panes { Call::DaemonStopKillPanes } else { Call::DaemonStop }).await?;
                     if !json {
                         println!("tomod stopping");
                     }

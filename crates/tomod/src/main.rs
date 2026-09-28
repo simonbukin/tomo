@@ -7,6 +7,7 @@ mod dispatch;
 mod events;
 mod features;
 mod git;
+mod holder;
 mod identity;
 mod layout;
 mod login_env;
@@ -44,6 +45,9 @@ fn try_lock(file: &std::fs::File) -> bool {
 }
 
 fn main() -> Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("pty-holder") {
+        holder::main();
+    }
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with_writer(std::io::stderr)
@@ -102,7 +106,10 @@ async fn run(args: Args) -> Result<()> {
         _ = tokio::signal::ctrl_c() => tracing::info!("interrupted"),
         _ = sigterm.recv() => tracing::info!("terminated"),
     }
-    daemon.shutdown();
+    match daemon.kill_panes_on_stop.load(std::sync::atomic::Ordering::SeqCst) {
+        true => daemon.shutdown(),
+        false => daemon.detach_panes(),
+    }
     let _ = std::fs::remove_file(&daemon.paths.socket);
     drop(lock);
     Ok(())
