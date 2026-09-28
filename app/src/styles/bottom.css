@@ -35,7 +35,10 @@
 
 
 .metrics { gap: var(--sp-3); }
-.metric { display: inline-flex; gap: 4px; }
+.metric { display: inline-flex; align-items: center; gap: 4px; }
+/* The UI face and the mono face put their capitals at different heights inside a line box.
+   Trimmed to cap height and baseline, every label and number centers on the same line. */
+.metric > span, .bottom-add > span, .health > .mono { text-box: trim-both cap alphabetic; }
 .metric-label { color: var(--fg-3); }
 .metric .num { color: var(--fg-1); }
 
