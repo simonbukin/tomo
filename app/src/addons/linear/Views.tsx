@@ -1,5 +1,4 @@
 import { siLinear } from "simple-icons";
-import { HoverCard } from "../../components/ui";
 import { useStore } from "../../store";
 import type { LinearIssue } from "../../generated";
 import type { Id, Worktree } from "../../types";
@@ -16,23 +15,21 @@ export function LinearIcon({ issue, size = 11 }: { issue: LinearIssue; size?: nu
 
 const people = (issue: LinearIssue): string => [issue.priority, issue.assignee ?? "unassigned"].join(" · ");
 
-export function LinearPreview({ issue }: { issue: LinearIssue }) {
-  return (
-    <div className="preview">
-      <div className="preview-head"><LinearIcon issue={issue} size={12} />{issue.identifier}</div>
-      <div>{issue.title}</div>
-      <div className="muted">{issue.state.name} · {people(issue)}</div>
-    </div>
-  );
-}
-
 export function LinearSignal({ worktreeId }: { worktreeId: Id }) {
   const issue = useStore((s) => linearIssueOf(s, worktreeId));
   if (!issue) return null;
+  return <span className="signal signal-linear"><LinearIcon issue={issue} />{issue.identifier} {issue.state.name}</span>;
+}
+
+export function LinearPreviewDetail({ worktreeId }: { worktreeId: Id }) {
+  const issue = useStore((s) => linearIssueOf(s, worktreeId));
+  if (!issue) return null;
   return (
-    <HoverCard content={<LinearPreview issue={issue} />}>
-      <span className="signal signal-linear"><LinearIcon issue={issue} />{issue.identifier} {issue.state.name}</span>
-    </HoverCard>
+    <>
+      <div className="wt-preview-mark"><LinearIcon issue={issue} />{issue.identifier}<span className="muted">{issue.state.name}</span></div>
+      <div title={issue.title}>{issue.title}</div>
+      <div className="muted">{people(issue)}</div>
+    </>
   );
 }
 

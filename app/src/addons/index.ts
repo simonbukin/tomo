@@ -36,6 +36,8 @@ export const addonSignals = (s: State, worktreeId: Id): AddonSignal[] => builtin
 
 export const signalLine = (className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Line ?? null;
 
+export const signalDetail = (className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Detail ?? null;
+
 export const appUrl = (s: State, worktreeId: Id): string | null => builtins.reduce<string | null>((url, a) => url ?? a.appUrl?.(s, worktreeId) ?? null, null);
 
 export const gitDetails = (): { id: string; component: ComponentType<{ worktree: Worktree }> }[] =>

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MenuItem } from "./components/ui";
-import type { FsEntry, Worktree } from "./types";
+import type { AgentPresence, FsEntry, Worktree } from "./types";
 
 vi.mock("./api", async (importOriginal) => (await import("./test-api")).mockApi(await importOriginal<typeof import("./api")>(), vi.fn(() => Promise.resolve(null))));
 
@@ -69,5 +69,44 @@ describe("files by recency", () => {
     fireEvent.click(screen.getByRole("button", { name: "recent" }));
     await screen.findByText("README.md");
     expect([...container.querySelectorAll(".file-tree .file-name")].map((n) => n.textContent)).toEqual(["README.md", "src", "report.html"]);
+  });
+});
+
+describe("agent sessions", () => {
+  afterEach(() => mocked.mockImplementation(() => Promise.resolve(null)));
+
+  const session = (id: string, title: string) => ({ kind: "claude", id, title, branch: null, updated_at_ms: now - 12 * 60_000, turns: 3, path: `/s/${id}.jsonl` });
+  const agent = { pane_id: "p1", worktree_id: "w1", kind: "claude", state: "working", session_ref: "live", authority: "hook", updated_at_ms: now, pid: 1 } as unknown as AgentPresence;
+  const sessionsFrom = (list: unknown[]) => mocked.mockImplementation((method: string) => Promise.resolve(method === "session_list" ? list : null));
+  const section = (container: HTMLElement) => container.querySelector('[data-section="sessions"]')!;
+
+  it("shows the session that runs now as a running row that goes to its pane", async () => {
+    sessionsFrom([session("live", "fix the build")]);
+    setState({ ...getState(), agents: { p1: agent } });
+    const { container } = render(<RightSidebar worktree={wt} />);
+    await screen.findByText("fix the build");
+    expect(section(container).querySelector(".right")?.textContent).toBe("1");
+    expect(screen.getByText("running")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "go to" }));
+    expect(mocked).toHaveBeenCalledWith("pane_focus", { pane_id: "p1" });
+  });
+
+  it("counts the running row and the resumable row", async () => {
+    sessionsFrom([session("live", "fix the build"), session("old", "write the docs")]);
+    setState({ ...getState(), agents: { p1: agent } });
+    const { container } = render(<RightSidebar worktree={wt} />);
+    await screen.findByText("write the docs");
+    expect([...section(container).querySelectorAll(".session-title")].map((n) => n.textContent)).toEqual(["fix the build", "write the docs"]);
+    expect(section(container).querySelector(".right")?.textContent).toBe("2");
+    expect(screen.getAllByRole("button", { name: "resume" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "go to" })).toHaveLength(1);
+  });
+
+  it("says there are no sessions and shows no count", async () => {
+    sessionsFrom([]);
+    const { container } = render(<RightSidebar worktree={wt} />);
+    await screen.findByText("no agent sessions rooted here");
+    expect(section(container).querySelector(".right")).toBeNull();
+    expect(section(container).querySelector(".session-row")).toBeNull();
   });
 });

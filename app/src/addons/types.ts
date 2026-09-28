@@ -104,8 +104,8 @@ export interface Addon {
   inspectorSections?: readonly InspectorSection[];
   /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
   worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
-  /** Draws each NOW signal of this `className` instead of the plain line. It reads the store and starts no work. */
-  signalLine?: { className: string; Line: ComponentType<{ worktreeId: Id }> };
+  /** Draws each NOW signal of this `className` instead of the plain line. `Detail` draws it in the worktree hover card instead of its text. Both read the store and start no work. */
+  signalLine?: { className: string; Line: ComponentType<{ worktreeId: Id }>; Detail?: ComponentType<{ worktreeId: Id }> };
   /** The small image before a repo name in the sidebar and on Home. The first addon that has one wins. */
   repoAvatar?: ComponentType<{ repo: Repo; size: number }>;
   /** A field in the create-worktree dialog. The first addon that has one wins, like the daemon's one worktree namer. */

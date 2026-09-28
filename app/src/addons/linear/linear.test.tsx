@@ -8,6 +8,7 @@ vi.mock("../../api", async (importOriginal) => (await import("../../test-api")).
 const { applyFrame, getState, setState } = await import("../../store");
 const { RightSidebar } = await import("../../RightSidebar");
 const { Signals, signalsFor } = await import("../../Signals");
+const { WorktreePreview } = await import("../../WorktreePreview");
 const { defaultUi } = await import("../../uiState");
 const { linear } = await import("./index");
 
@@ -25,6 +26,20 @@ describe("Linear issue of a branch", () => {
     linear.onSnapshot?.({ linear: status([{ worktree_id: "w1", issue }]) } as Snapshot);
     render(<Signals worktreeId="w1" />);
     expect(screen.getByText(/ENG-2611 In Review/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Linear In Review" }).getAttribute("style")).toContain("color-mix(in srgb, #0f783c 70%, var(--fg))");
+  });
+
+  it("keeps the signal line a plain line, with no hover card of its own", () => {
+    changed(status([{ worktree_id: "w1", issue }]));
+    render(<Signals worktreeId="w1" />);
+    expect([...screen.getByText(/ENG-2611 In Review/).attributes].map((a) => a.name)).toEqual(["class"]);
+  });
+
+  it("puts the identifier, tinted state, title, priority, and assignee in the worktree hover card", () => {
+    changed(status([{ worktree_id: "w1", issue }]));
+    const { container } = render(<WorktreePreview w={wt} />);
+    const lines = [...container.querySelectorAll(".wt-preview-block > div")].map((n) => n.textContent);
+    expect(lines).toEqual(["ENG-2611In Review", "Fix login", "High · Simon"]);
     expect(screen.getByRole("img", { name: "Linear In Review" }).getAttribute("style")).toContain("color-mix(in srgb, #0f783c 70%, var(--fg))");
   });
 
