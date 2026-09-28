@@ -2143,14 +2143,21 @@ impl Daemon {
             false => wanted.to_string(),
         };
         let starts_from_main = spec.start_ref.is_none() && (spec.new_branch || wanted.is_empty());
-        if starts_from_main && crate::sync::due(&self.lock(), &spec.repo_id, crate::sync::FRESH_MS, now_ms()) {
+        if starts_from_main && crate::sync::due(&self.lock(), &spec.repo_id, crate::sync::EVERY_MS, now_ms()) {
             crate::sync::sync_repo(self, &spec.repo_id).await;
         }
         git::worktree_add(&repo_path, &path, &branch, spec.new_branch || wanted.is_empty(), spec.start_ref.as_deref())
             .await
             .map_err(|e| err(ErrorCode::Git, e.to_string()))?;
-        self.discover(Summaries::All).await.map_err(internal)?;
+        // Only the new worktree changed, so the other worktrees keep their git summaries; a status of each one
+        // took seconds. The new worktree's summary follows in the background.
+        self.discover(Summaries::Cached).await.map_err(internal)?;
         let id = path_id(&canonical(&path));
+        let summary_of = self.clone();
+        let summary_id = id.clone();
+        tokio::spawn(async move {
+            summary_of.refresh_git(&summary_id).await;
+        });
         let mut inner = self.lock();
         let created = CreatedWorktree { id: id.clone(), repo_id: spec.repo_id.clone(), name };
         for seam in &self.seams.worktree_created {

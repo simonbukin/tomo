@@ -72,8 +72,8 @@ impl Client {
         }
         std::fs::create_dir_all(data_dir())?;
         start_daemon()?;
-        for _ in 0..50 {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        for _ in 0..250 {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
             if let Ok(c) = Self::connect().await {
                 return Ok(c);
             }
