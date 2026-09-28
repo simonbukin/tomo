@@ -42,6 +42,8 @@ describe("town unlock ceremony", () => {
     setTownState({ unlocks: [unlock], reveal: { unlock, nonce: 1 } });
     render(<TownReveal />);
     const status = await screen.findByRole("status");
+    // findByRole resolves on the DOM commit. The effect that plays the chime and binds Escape can still wait in the scheduler.
+    await act(async () => {});
     window.matchMedia = original;
     return status;
   };

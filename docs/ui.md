@@ -194,8 +194,10 @@ agent, or a subagent) means one thing everywhere:
 
 `worktreeStatus` in `app/src/homeQuery.ts` picks the mark of a worktree,
 most urgent first. `statusDot` in `glyphs.ts` gives the class and the
-tooltip. A row grows one unit for each live subagent, up to three lines,
-indented under the name.
+tooltip. A sidebar row, a Home card, and a Home list row each grow one unit
+for each live subagent, up to three lines, indented under the name. Past
+three, the last line counts the rest (`+2 more`). All three use
+`SubagentList` and `SUBAGENT_LINES` from `app/src/WorktreePreview.tsx`.
 
 `agentStatus` maps agent states onto it. `activityStatus` in
 `app/src/activityKinds.ts` maps activity kinds onto it through the kind
@@ -333,11 +335,17 @@ stay as names for the same values, so older CSS still reads.
 The focus ring is 2 px and lives in `base.css`. The town reveal keeps its own
 `--dur-reveal` in `addons/towns/towns.css`, because one addon uses it.
 
-Lists never jump. `app/src/useFlip.ts` checks the sidebar after every render. An item that
+Lists never jump. `app/src/useFlip.ts` checks the sidebar, the Home cards, and the Home
+list after every render. An item that
 moves slides from where it was. A new item opens from its top edge, and a removed
 item (an archived worktree, a finished subagent) stays where it was and shuts,
-in step with the items that slide to make or close its space. It uses `--dur-open`
-and `--ease-out`, and it stops while a drag runs.
+in step with the items that slide to make or close its space. A new item that takes
+the exact place of a removed item (`+2 more` for the third subagent line) replaces it
+at once, so the two lines never show on top of each other. It uses `--dur-open`
+and `--ease-out`, and it stops while a drag runs. Home does not animate the render
+where the scope, the view, the grouping, or the search mode changes, because that
+render shows a different page and not the same list. The board has no motion, because
+its columns scroll on their own axis.
 
 Under `prefers-reduced-motion: reduce` every duration is 0. The guard in `base.css` also stops every animation. No springs,
 no bounce. `styles/interaction.css` applies the tokens.
@@ -410,14 +418,16 @@ is never narrower than its content. The middle section starts with
 `.bottom-items`: the `bottomItem` of each addon, in `builtins` order.
 
 ```text
-? ⚙ | Claude ━━━━━━━── 83%  Codex —      ✓ Copied branch      CPU 12%  MEM 8.4G  GPU 3% | ● 0.1.3
+?          + | Claude ━━━━━━━── 83%  Codex —   ✓ Copied branch   FPS 60  CPU 12%  MEM 8.4G  GPU 3% | ⚙ ● 0.1.3
 ```
 
-- Bottom-left: `?` runs `keyboard_shortcuts`, the gear opens Settings. Both
-  are `IconButton`s with a tooltip and the shortcut. In the minimal rail the
-  two buttons fit in 48 px. When the left sidebar is closed on screen, the
-  section is gone. The strip reads the mode on screen from `shellLayout`,
-  not the saved mode.
+- Bottom-left: `?` runs `keyboard_shortcuts`. The `+` at the right edge of
+  the section opens the dialog that adds a repo. In the open sidebar, `+` is
+  a `RevealButton`: on hover or focus, the label `new repo` opens to the
+  left over the empty space, and nothing beside it moves. In the minimal
+  rail, `+` is an `IconButton` with the tooltip `New repo`. When the left
+  sidebar is closed on screen, the section is gone. The strip reads the mode
+  on screen from `shellLayout`, not the saved mode.
 - Usage (the usage addon, `app/src/addons/usage/`, see
   [usage.md](usage.md)): one item for each plan and one for each model
   scope that the adapter reports (`Claude`, `Fable`, `Codex`, `Sol`). A bucket's `scope`
@@ -436,8 +446,15 @@ is never narrower than its content. The middle section starts with
   `--waiting`; 95 % uses `--hot`. Hover or click shows CPU, memory used of
   total, GPU and VRAM when present, the worktree with the most memory, and
   the daemon's own memory. Metrics hide while the daemon is disconnected.
-- Bottom-right: the health dot and the app version (`getVersion`, else the
-  daemon version). The dot has a text label (`Daemon healthy`,
+  Each label and its number center on one line. The UI face and the mono
+  face put their capitals at different heights, so `text-box: trim-both cap
+  alphabetic` trims each label and each number to its cap height and
+  baseline. The version and the `new repo` label use the same trim.
+  `FPS` before the metrics counts the frames of the webview. A click stops
+  or starts the count.
+- Bottom-right: the gear opens Settings. It is an `IconButton` with a
+  tooltip and the shortcut. Then come the health dot and the app version
+  (`getVersion`, else the daemon version). The dot has a text label (`Daemon healthy`,
   `Daemon reconnecting`, `Daemon disconnected`). Hover shows the daemon
   summary. A click opens diagnostics. See [diagnostics.md](diagnostics.md).
 

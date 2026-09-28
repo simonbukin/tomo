@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { applyFrame, getState, setState } from "../store";
+import { applyFrame, getState, setState, setUi } from "../store";
 import { defaultUi } from "../uiState";
-import { WorktreeCard } from "../Home";
+import { Home, WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
 import { Sidebar } from "../Sidebar";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
-import type { AgentPresence, AgentState, Frame, GitSummary, Repo, Subagent, Worktree } from "../types";
+import type { AgentPresence, AgentState, Frame, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -127,6 +127,7 @@ const nowMs = Date.now();
 const MOTION: { label: string; run: () => void }[] = [
   { label: "archive crowd", run: () => setState({ worktrees: getState().worktrees.map((w) => (w.id === "crowd" ? { ...w, archived_at_ms: nowMs } : w)) }) },
   { label: "add worktree", run: () => setState({ worktrees: [...getState().worktrees, wt("added")] }) },
+  { label: "touch quiet", run: () => setState({ worktrees: getState().worktrees.map((w) => (w.id === "quiet" ? { ...w, last_active_ms: Date.now() + 60_000 } : w)) }) },
   {
     label: "add subagent",
     run: () => {
@@ -142,6 +143,12 @@ const MOTION: { label: string; run: () => void }[] = [
     },
   },
   { label: "reset", run: seed },
+];
+
+/** The Home layouts. The list shows only for a search or a filter, so the list view filters out archived work. */
+const HOME_VIEWS: { label: string; home: Partial<HomeOptions> }[] = [
+  { label: "cards", home: { scope: { kind: "repo", repoId: REPO.id }, filters: [] } },
+  { label: "list", home: { scope: { kind: "all" }, filters: [{ kind: "archived", value: "no" }], view: "list", group: "none" } },
 ];
 
 export function Gallery() {
@@ -181,6 +188,22 @@ export function Gallery() {
           <LeftRail />
           <BottomStrip left="minimal" />
         </div>
+      </div>
+      <h2 className="gallery-head">home</h2>
+      <div className="gallery-picker">
+        {HOME_VIEWS.map((v) => (
+          <button key={v.label} type="button" className="seg" onClick={() => setUi({ home: { ...getState().ui.home, ...v.home } })}>
+            {v.label}
+          </button>
+        ))}
+        {MOTION.map((m) => (
+          <button key={m.label} type="button" className="seg" onClick={m.run}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div className="app gallery-home">
+        <Home />
       </div>
       <h2 className="gallery-head">right inspector</h2>
       <div className="gallery-picker">

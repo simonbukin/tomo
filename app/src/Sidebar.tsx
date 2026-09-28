@@ -22,7 +22,7 @@ import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { Id, Repo, SidebarSort, Worktree } from "./types";
 import { useGlide } from "./glide";
-import { SubagentList, WorktreePreview } from "./WorktreePreview";
+import { SUBAGENT_LINES, SubagentList, WorktreePreview } from "./WorktreePreview";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
@@ -155,9 +155,6 @@ type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: I
 /** A row draws its agents as tinted provider icons, so the signal list leaves them out. */
 const AGENT_SIGNALS = ["agent"] as const;
 
-/** A row grows one unit for each subagent line, up to this many. */
-const SUBAGENT_LINES = 3;
-
 const repoKey = (id: Id) => `repo:${id}`;
 
 const openRepoHome = (repoId: Id) => setUi({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
@@ -280,7 +277,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
           <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
         </span>
-        {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
+        {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={`sub:${w.id}`} />}
       </div>
     </HoverCard>
   );

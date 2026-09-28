@@ -29,11 +29,14 @@ export function subagentsOf(agents: { subagents?: Subagent[] }[]): Subagent[] {
   return agents.flatMap((a) => a.subagents ?? []).sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.started_at_ms - b.started_at_ms);
 }
 
+/** A dense row or card grows one unit for each subagent line, up to this many. */
+export const SUBAGENT_LINES = 3;
+
 /**
  * The subagents, indented under their worktree. Past `limit` the last line counts the rest,
- * so the list never grows past `limit` lines.
+ * so the list never grows past `limit` lines. With `flip`, each line is a `useFlip` item keyed under it.
  */
-export function SubagentList({ worktreeId, limit = Infinity }: { worktreeId: Id; limit?: number }) {
+export function SubagentList({ worktreeId, limit = Infinity, flip }: { worktreeId: Id; limit?: number; flip?: string }) {
   const all = useStore((s) => subagentsOf(agentsOf(s, worktreeId)));
   if (!all.length) return null;
   const shown = all.length > limit ? all.slice(0, limit - 1) : all;
@@ -41,14 +44,14 @@ export function SubagentList({ worktreeId, limit = Infinity }: { worktreeId: Id;
   return (
     <ul className="subagents" aria-label="subagents">
       {shown.map((sub, i) => (
-        <li key={sub.id ?? `launch-${i}`} data-flip={`sub:${worktreeId}:${sub.id ?? `launch-${i}`}`} className={`subagent is-${sub.state}`}>
+        <li key={sub.id ?? `launch-${i}`} data-flip={flip && `${flip}:${sub.id ?? `launch-${i}`}`} className={`subagent is-${sub.state}`}>
           <span {...statusDot(agentStatus(sub.state))} />
           <span className="subagent-label">{sub.label}</span>
           <span className="subagent-desc">{sub.description}</span>
           <span className="subagent-age">{durationLabel(sub.started_at_ms)}</span>
         </li>
       ))}
-      {rest > 0 && <li data-flip={`sub:${worktreeId}:more`} className="subagent subagent-more">+{rest} more</li>}
+      {rest > 0 && <li data-flip={flip && `${flip}:more`} className="subagent subagent-more">+{rest} more</li>}
     </ul>
   );
 }
