@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnchoredMenu, Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, MenuItems, Popover, PopoverContent, PopoverTrigger, Select, TooltipProvider, type MenuItem } from "./index";
+import { AnchoredMenu, Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, MenuItems, Popover, PopoverContent, PopoverTrigger, RevealButton, Select, TooltipProvider, type MenuItem } from "./index";
 import { tidySeparators } from "./menu";
 
 afterEach(cleanup);
@@ -189,5 +189,16 @@ describe("tooltip", () => {
       </TooltipProvider>,
     );
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+});
+
+describe("reveal button", () => {
+  it("keeps the full name for assistive tech and hides the short label from it", async () => {
+    const onClick = vi.fn();
+    render(<RevealButton label="new worktree" name="New worktree in tomo" onClick={onClick}>+</RevealButton>);
+    const button = screen.getByRole("button", { name: "New worktree in tomo" });
+    expect(button.querySelector(".btn-reveal-label")).toHaveAttribute("aria-hidden");
+    await userEvent.click(button);
+    expect(onClick).toHaveBeenCalledOnce();
   });
 });
