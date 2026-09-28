@@ -48,3 +48,4 @@ body.pane-dragging .xterm { pointer-events: none; }
 /* xterm.css paints the viewport black, and xterm 6 paints the theme background only on the rows it lays out.
    The part of a row that does not fit showed as a black band under the last row. The pane ground is the theme background. */
 .pane-body .xterm .xterm-viewport { background: none; }
+.term-link-hint { position: absolute; z-index: 10; box-sizing: border-box; border-bottom: 1px dotted var(--fg-2); pointer-events: none; }
