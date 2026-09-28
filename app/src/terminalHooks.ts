@@ -65,19 +65,19 @@ const copy = (text: string) => navigator.clipboard.writeText(text).catch(failToa
 function linkMenu(link: TermLink, paneId: Id): MenuItem[] {
   if (link.kind === "url") {
     return [
-      { label: "Open in pane", run: () => openEndpoint(link.url, getState().panes[paneId]?.worktree_id) },
-      { label: "Open in browser", run: () => openEndpoint(link.url) },
+      { label: "open in pane", run: () => openEndpoint(link.url, getState().panes[paneId]?.worktree_id) },
+      { label: "open in external browser", run: () => openEndpoint(link.url) },
       { separator: true },
-      { label: "Copy link", run: () => void copy(link.url) },
+      { label: "copy link", run: () => void copy(link.url) },
     ];
   }
   const worktreeId = editorWorktree(link, paneId);
   return [
-    ...(worktreeId ? [{ label: "Open in pane", run: () => openInPane(link, worktreeId) }] : []),
-    { label: "Open in editor", run: () => void openInExternalEditor(link) },
-    { label: "Reveal in Finder", run: () => void revealItemInDir(link.path).catch(failToast("Could not reveal the file")) },
+    ...(worktreeId ? [{ label: "open in pane", run: () => openInPane(link, worktreeId) }] : []),
+    { label: "open in editor", run: () => void openInExternalEditor(link) },
+    { label: "reveal in finder", run: () => void revealItemInDir(link.path).catch(failToast("Could not reveal the file")) },
     { separator: true },
-    { label: "Copy path", run: () => void copy(link.path) },
+    { label: "copy path", run: () => void copy(link.path) },
   ];
 }
 
