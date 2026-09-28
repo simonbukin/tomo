@@ -6,6 +6,8 @@ import { RightSidebar } from "../RightSidebar";
 import { Sidebar } from "../Sidebar";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
+import { aPane } from "../test-fixtures";
+import { WorktreeHeader } from "../WorktreeHeader";
 import type { AgentPresence, AgentState, Frame, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
@@ -77,6 +79,19 @@ const SCENES: Scene[] = [
   { name: "detached head", worktree: wt("detached", { branch: null, detached: true }) },
   { name: "one agent working", worktree: wt("working"), agents: [agent("working", "claude", "working")] },
   { name: "one agent idle", worktree: wt("resting"), agents: [agent("resting", "claude", "idle")] },
+  { name: "turn done", worktree: wt("finished"), agents: [{ ...agent("finished", "claude", "done"), updated_at_ms: Date.now() - 3 * 60_000 }] },
+  { name: "needs you", worktree: wt("asking"), agents: [agent("asking", "claude", "waiting")] },
+  { name: "agent dead", worktree: wt("crashed"), agents: [agent("crashed", "claude", "dead")] },
+  { name: "dead, seen, and one working", worktree: wt("mixed"), agents: [{ ...agent("mixed", "claude", "dead"), seen: true }, agent("mixed", "codex", "working", 1)] },
+  { name: "no signal", worktree: wt("silent"), agents: [agent("silent", "pi", "unknown")] },
+  { name: "estimated from CPU", worktree: wt("guess"), agents: [{ ...agent("guess", "codex", "working"), estimated: true }] },
+  { name: "done, subagent runs", worktree: wt("background"), agents: [{ ...agent("background", "claude", "done"), subagents: [sub("b1", "Explore", "working", "watch the build", 2), sub("b2", "Plan", "exited", "plan the fix", 4)] }] },
+  {
+    name: "action crashed",
+    worktree: wt("storybook"),
+    agents: [agent("storybook", "claude", "idle")],
+    frame: { seq: 6, event: "actions_changed", data: { set: { worktree_id: "storybook", actions: [{ id: "storybook", label: "storybook", command: "pnpm sample", mode: "pane", show: "topbar", shortcut: null }, { id: "serve", label: "serve", command: "pnpm dev", mode: "pane", show: "topbar", shortcut: null }], error: null, from_repo: false } } },
+  },
   {
     name: "subagents",
     worktree: wt("fanout"),
@@ -108,6 +123,8 @@ const SCENES: Scene[] = [
  * Seeds the store from the scenes once. Every view reads one module-level store, so a
  * fixture is all a part needs to render on its own, with no daemon and no window chrome.
  */
+const CRASH = { id: "crash-storybook", worktree_id: "storybook", pane_id: "storybook-action", level: "attention", message: "storybook exited with code 1", created_at_ms: Date.now(), viewed_at_ms: null, kind: "crash", url: null, agent_kind: null, resolved_at_ms: null } as const;
+
 function seed(): void {
   const worktrees = SCENES.map((s) => s.worktree);
   const agents = SCENES.flatMap((s) => s.agents ?? []);
@@ -118,6 +135,8 @@ function seed(): void {
     repos: [REPO],
     worktrees,
     agents: Object.fromEntries(agents.map((a) => [a.pane_id, a])),
+    attention: [CRASH],
+    panes: { [CRASH.pane_id]: aPane({ id: CRASH.pane_id, worktree_id: "storybook", live: false, exit_code: 1, source: { kind: "action", id: "storybook", label: "storybook" } }) },
     ui: { ...defaultUi, view: "home", activeWorktreeId: worktrees[0].id },
   });
   SCENES.forEach((s) => s.frame && applyFrame(s.frame));
@@ -142,6 +161,13 @@ const MOTION: { label: string; run: () => void }[] = [
     run: () => {
       const a = getState().agents["fanout-p0"];
       setState({ agents: { ...getState().agents, [a.pane_id]: { ...a, state: "idle", subagents: [] } } });
+    },
+  },
+  {
+    label: "finish turn",
+    run: () => {
+      const a = getState().agents["working-p0"];
+      setState({ agents: { ...getState().agents, [a.pane_id]: { ...a, state: a.state === "working" ? "done" : "working", updated_at_ms: Date.now() } } });
     },
   },
   { label: "reset", run: seed },
@@ -172,6 +198,10 @@ export function Gallery() {
             <WorktreeCard w={s.worktree} />
           </figure>
         ))}
+      </div>
+      <h2 className="gallery-head">worktree header</h2>
+      <div className="app gallery-header">
+        <WorktreeHeader worktree={SCENES.find((sc) => sc.worktree.id === "storybook")!.worktree} />
       </div>
       <h2 className="gallery-head">sidebar</h2>
       <div className="gallery-picker">
