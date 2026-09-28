@@ -10,7 +10,7 @@ import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
 import {failQuietly, getState, keyBindings, splitsAllowed, useStore} from "./store";
 import { registerTerminal } from "./terminals";
-import { listenFileDrop, registerTerminalLinks } from "./terminalHooks";
+import { listenFileDrop, pasteClipboard, registerTerminalLinks } from "./terminalHooks";
 import { Columns2, Rows2, X } from "lucide-react";
 import { openMenu } from "./MenuHost";
 import { IconButton } from "./components/ui";
@@ -48,7 +48,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     term.loadAddon(new Unicode11Addon());
     term.unicode.activeVersion = "11";
     term.open(host);
-    const links = registerTerminalLinks(term, paneId);
+    const stopLinks = registerTerminalLinks(term, paneId, host);
     const stopFileDrop = listenFileDrop(host, paneId);
     try {
       const webgl = new WebglAddon();
@@ -83,7 +83,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         return false;
       }
       if (e.metaKey && e.key.toLowerCase() === "v") {
-        navigator.clipboard.readText().then((t) => t && term.paste(t)).catch(() => {});
+        void pasteClipboard(term);
         return false;
       }
       return true;
@@ -99,19 +99,17 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     });
 
     const unsub = onPaneOutput(paneId, (bytes) => term.write(bytes));
-    let raf = 0;
     let settle = 0;
+    // A resize clears the canvas and asks for a render on the next animation frame. Inside a frame
+    // callback that render lands one frame late, and the frame between paints an empty terminal.
     const refit = () => {
-      cancelAnimationFrame(raf);
       window.clearTimeout(settle);
       settle = window.setTimeout(() => {
-        raf = requestAnimationFrame(() => {
-          if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
-          fit.fit();
-          const screen = host.querySelector(".xterm-screen");
-          const limit = host.getBoundingClientRect().bottom - parseFloat(getComputedStyle(host).paddingBottom);
-          if (screen && screen.getBoundingClientRect().bottom > limit + 0.5 && term.rows > 2) term.resize(term.cols, term.rows - 1);
-        });
+        if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
+        fit.fit();
+        const screen = host.querySelector(".xterm-screen");
+        const limit = host.getBoundingClientRect().bottom - parseFloat(getComputedStyle(host).paddingBottom);
+        if (screen && screen.getBoundingClientRect().bottom > limit + 0.5 && term.rows > 2) term.resize(term.cols, term.rows - 1);
       }, 90);
     };
     const observer = new ResizeObserver(refit);
@@ -123,10 +121,9 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
 
     return () => {
       host.removeEventListener("mousedown", onFocus);
-      links.dispose();
+      stopLinks();
       stopFileDrop();
       observer.disconnect();
-      cancelAnimationFrame(raf);
       window.clearTimeout(settle);
       unsub();
       unregister();

@@ -45,3 +45,6 @@ body.pane-dragging .xterm { pointer-events: none; }
 .pane-body { flex: 1; min-height: 0; padding: var(--sp-2) var(--sp-1) var(--sp-1) var(--inset); user-select: text; overflow: hidden; }
 .pane-body .xterm { height: 100%; }
 .pane-body .xterm-viewport { overflow-y: auto; }
+/* xterm.css paints the viewport black, and xterm 6 paints the theme background only on the rows it lays out.
+   The part of a row that does not fit showed as a black band under the last row. The pane ground is the theme background. */
+.pane-body .xterm .xterm-viewport { background: none; }

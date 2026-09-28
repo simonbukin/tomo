@@ -1,6 +1,7 @@
 const COMMANDS: &[&str] = &[
     "rpc",
     "daemon_connected",
+    "clipboard_image",
     "browser_create",
     "browser_set_bounds",
     "browser_set_visible",
