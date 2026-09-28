@@ -98,6 +98,7 @@ async fn run(args: Args) -> Result<()> {
     tokio::spawn(system::run(daemon.clone()));
     tokio::spawn(sync::run(daemon.clone()));
     tokio::spawn(watch::run(daemon.clone()));
+    tokio::spawn(features::editor_pane::watch(daemon.clone()));
     tokio::spawn(settings::watch(daemon.clone()));
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;

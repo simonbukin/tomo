@@ -2,4 +2,5 @@
 //! an extension later without changing the generic runtime.
 pub mod browser;
 pub mod editor;
+pub mod editor_pane;
 pub mod reopen;
