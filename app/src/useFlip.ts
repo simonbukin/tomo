@@ -47,6 +47,13 @@ function shift(key: string, prev: Map<string, Box>, next: Map<string, Box>): { d
   return { dx: a.left - (pa?.left ?? 0) - (b.left - (pb?.left ?? 0)), dy: a.top - (pa?.top ?? 0) - (b.top - (pb?.top ?? 0)) };
 }
 
+/** Where an item sits inside its nearest moving ancestor. */
+function local(box: Box, boxes: Map<string, Box>): string | null {
+  const parent = box.parent ? boxes.get(box.parent) : null;
+  if (box.parent && !parent) return null;
+  return `${box.parent}|${Math.round(box.left - (parent?.left ?? 0))},${Math.round(box.top - (parent?.top ?? 0))}`;
+}
+
 /** A removed item stays on screen where it was and shuts from the bottom while the items under it slide up. */
 function ghost(root: HTMLElement, box: Box, timing: KeyframeAnimationOptions): Animation {
   const g = box.node;
@@ -70,7 +77,8 @@ function motion(root: HTMLElement): KeyframeAnimationOptions | null {
 /**
  * Animates the `data-flip` items of `ref` from where they were on the last render to where they are now
  * (FLIP). A new item opens from the top edge and a removed item shuts to it, in step with the items that
- * slide to make or close its space, so a list never jumps. An item inside another item moves with it.
+ * slide to make or close its space, so a list never jumps. A new item that takes the exact place of a
+ * removed one replaces it at once, so the two never show on top of each other. An item inside another item moves with it.
  * Without `deps` it checks every render. Uses the Web Animations API, the `--dur-open` and `--ease-out`
  * tokens, and does nothing under reduced motion or while a drag runs.
  */
@@ -87,15 +95,19 @@ export function useFlip(ref: React.RefObject<HTMLElement | null>, deps?: unknown
     last.current = next;
     const timing = animate && prev.size > 0 && !root.querySelector(".wt-dragging, .is-dragging") ? motion(root) : null;
     if (!timing) return;
-    for (const [key, box] of prev) {
-      if (next.has(key) || box.node.isConnected || (box.parent && !next.has(box.parent))) continue;
+    const removed = [...prev].filter(([key, box]) => !next.has(key) && !box.node.isConnected && (!box.parent || next.has(box.parent)));
+    const added = [...next].filter(([key]) => !prev.has(key));
+    const vacated = new Set(removed.map(([, box]) => local(box, prev)));
+    const swapped = new Set(added.filter(([, box]) => vacated.has(local(box, next))).map(([, box]) => local(box, next)));
+    for (const [, box] of removed) {
+      if (swapped.has(local(box, prev))) continue;
       const run = ghost(root, box, timing);
       ghosts.current.add(run);
       run.finished.catch(() => {}).finally(() => ghosts.current.delete(run));
     }
     for (const [key, box] of next) {
       if (!prev.has(key)) {
-        if (!box.parent || prev.has(box.parent)) box.node.animate([{ clipPath: SHUT, opacity: 0 }, { clipPath: OPEN, opacity: 1 }], timing);
+        if ((!box.parent || prev.has(box.parent)) && !swapped.has(local(box, next))) box.node.animate([{ clipPath: SHUT, opacity: 0 }, { clipPath: OPEN, opacity: 1 }], timing);
         continue;
       }
       const d = shift(key, prev, next);

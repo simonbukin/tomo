@@ -336,7 +336,9 @@ The focus ring is 2 px and lives in `base.css`. The town reveal keeps its own
 Lists never jump. `app/src/useFlip.ts` checks the sidebar after every render. An item that
 moves slides from where it was. A new item opens from its top edge, and a removed
 item (an archived worktree, a finished subagent) stays where it was and shuts,
-in step with the items that slide to make or close its space. It uses `--dur-open`
+in step with the items that slide to make or close its space. A new item that takes
+the exact place of a removed item (`+2 more` for the third subagent line) replaces it
+at once, so the two lines never show on top of each other. It uses `--dur-open`
 and `--ease-out`, and it stops while a drag runs.
 
 Under `prefers-reduced-motion: reduce` every duration is 0. The guard in `base.css` also stops every animation. No springs,
