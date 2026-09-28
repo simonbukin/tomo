@@ -26,6 +26,8 @@ pub struct Provider {
     pub resume_without_session: Option<&'static str>,
     /// Environment for a resume only, such as a switch that continues a turn that a daemon restart cut off.
     pub resume_env: &'static [(&'static str, &'static str)],
+    /// The provider sends an event when a session ends normally. Then a process that ends without one is dead.
+    pub reports_end: bool,
     pub hook_outcome: fn(&Value) -> HookOutcome,
     pub detects: fn(&Program) -> bool,
     pub nested_env: &'static [&'static str],
@@ -97,6 +99,8 @@ pub struct HookOutcome {
     pub session_ref: Option<String>,
     /// What the event says about a subagent. A provider without subagents leaves it `None`.
     pub subagent: Option<SubagentEvent>,
+    /// The state applies only to an agent that works or waits: it ends a turn that sent no stop event, such as an interrupt.
+    pub only_if_busy: bool,
 }
 
 pub struct SpawnPlan {
@@ -447,10 +451,10 @@ mod tests {
             hook_outcome(AgentKind::Claude, &serde_json::json!({"hook_event_name":"Notification","notification_type":"permission_prompt","session_id":"s1"}));
         assert_eq!(waiting.state, Some(AgentState::Waiting));
         assert_eq!(waiting.session_ref.as_deref(), Some("s1"));
-        let idle = hook_outcome(AgentKind::Codex, &serde_json::json!({"hook_event_name":"Stop"}));
-        assert_eq!(idle.state, Some(AgentState::Idle));
-        let none = hook_outcome(AgentKind::Claude, &serde_json::json!({"hook_event_name":"Notification","notification_type":"idle_prompt"}));
-        assert_eq!(none.state, None);
+        let done = hook_outcome(AgentKind::Codex, &serde_json::json!({"hook_event_name":"Stop"}));
+        assert_eq!(done.state, Some(AgentState::Done));
+        let interrupted = hook_outcome(AgentKind::Claude, &serde_json::json!({"hook_event_name":"Notification","notification_type":"idle_prompt"}));
+        assert_eq!((interrupted.state, interrupted.only_if_busy), (Some(AgentState::Idle), true), "idle_prompt ends only a turn that works or waits");
     }
 
     #[test]
@@ -530,8 +534,8 @@ mod tests {
             ("PostToolUseFailure", Some(Working)),
             ("PreCompact", Some(Working)),
             ("PermissionRequest", Some(Waiting)),
-            ("Stop", Some(Idle)),
-            ("StopFailure", Some(Idle)),
+            ("Stop", Some(Done)),
+            ("StopFailure", Some(Dead)),
             ("SessionEnd", Some(Exited)),
             ("PostCompact", None),
             ("SubagentStart", None),
@@ -546,7 +550,8 @@ mod tests {
             for t in ["permission_prompt", "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input"] {
                 assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": "Notification", "notification_type": t })), Some(Waiting), "{t}");
             }
-            for t in ["idle_prompt", "auth_success", ""] {
+            assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": "Notification", "notification_type": "idle_prompt" })), Some(Idle), "idle_prompt ends a turn that sent no Stop");
+            for t in ["auth_success", ""] {
                 assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": "Notification", "notification_type": t })), None, "{t}");
             }
         }
@@ -595,7 +600,7 @@ mod tests {
             ("agent_start", None, Some(Working)),
             ("ui_prompt_end", None, Some(Working)),
             ("ui_prompt_start", None, Some(Waiting)),
-            ("agent_settled", None, Some(Idle)),
+            ("agent_settled", None, Some(Done)),
             ("session_shutdown", Some("quit"), Some(Exited)),
             ("session_shutdown", Some("reload"), None),
             ("session_shutdown", None, None),

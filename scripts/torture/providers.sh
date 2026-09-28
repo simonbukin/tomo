@@ -86,7 +86,7 @@ for p in claude codex pi; do
 
   $RPC send "$A" 'work 2\r'
   state_is "$A" working 10 && check 0 "$p: a prompt -> working" || check 1 "$p: working" "$(agent_field "$A" state)"
-  state_is "$A" idle 16 && check 0 "$p: the end of the turn -> idle" || check 1 "$p: idle after work" "$(agent_field "$A" state)"
+  state_is "$A" done 16 && check 0 "$p: the end of the turn -> done" || check 1 "$p: done after work" "$(agent_field "$A" state)"
   if [ "$p" = pi ]; then
     S=$(agent_field "$A" session_ref)
     case "$S" in "$HOME"/.pi/agent/sessions/*.jsonl) [ -f "$S" ] && check 0 "pi: the session ref becomes the session file after the first message" || check 1 "pi: session file missing" "$S" ;; *) check 1 "pi: session file ref" "$S" ;; esac

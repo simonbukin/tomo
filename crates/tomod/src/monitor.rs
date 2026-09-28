@@ -6,6 +6,41 @@ use std::time::Duration;
 use tomo_proto::*;
 
 const BUSY_CPU_PERCENT: f32 = 3.0;
+const BUSY_SAMPLES: u32 = 2;
+const QUIET_MS: u64 = 10_000;
+
+/// The CPU fallback of one agent pane: busy samples in a row, and the time of the last busy sample.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Busy {
+    streak: u32,
+    last_busy_ms: u64,
+}
+
+/// The state that the CPU fallback reports: working after `BUSY_SAMPLES` busy samples in a row, idle after
+/// `QUIET_MS` below the threshold, and nothing in between. `merge` applies it only to an agent with no hook state.
+fn fallback(prev: Busy, busy: bool, now: u64) -> (Busy, Option<AgentState>) {
+    match busy {
+        true => {
+            let next = Busy { streak: prev.streak + 1, last_busy_ms: now };
+            (next, (next.streak >= BUSY_SAMPLES).then_some(AgentState::Working))
+        }
+        false => {
+            let next = Busy { streak: 0, ..prev };
+            (next, (now.saturating_sub(prev.last_busy_ms) >= QUIET_MS).then_some(AgentState::Idle))
+        }
+    }
+}
+
+/// The state of an agent whose process is gone. An agent that ended as asked (its provider reported the end,
+/// or Tomo stopped it) has no mark. One that vanished without an end event is dead, but only when an end event
+/// was due: its provider reports ends and this agent sent hook events. With no hooks there is nothing to miss.
+fn after_exit(state: AgentState, end_event_due: bool, stop_intent: bool) -> Option<AgentState> {
+    match state {
+        AgentState::Exited | AgentState::Dead => None,
+        _ if stop_intent || !end_event_due => Some(AgentState::Exited),
+        _ => Some(AgentState::Dead),
+    }
+}
 
 pub fn classify_all(inner: &Inner) -> Vec<ProcessInfo> {
     let roots: Vec<Root> = inner
@@ -79,26 +114,42 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                     .filter_map(|p| by_pid.get(&p))
                     .map(|&i| inner.proc_rows[i].cpu_percent)
                     .sum();
-                let state = (subtree_cpu > BUSY_CPU_PERCENT).then_some(AgentState::Working);
+                let prev = inner.busy.get(&pane_id).copied().unwrap_or_default();
+                let (busy, state) = fallback(prev, subtree_cpu > BUSY_CPU_PERCENT, now);
+                inner.busy.insert(pane_id.clone(), busy);
                 let report = AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: None, authority: Authority::Heuristic, at_ms: now };
                 Daemon::apply_report(inner, &report, Some(pid));
             }
             None => {
-                let gone = inner.agents.get(&pane_id).is_some_and(|a| a.pid.is_some() && a.state != AgentState::Exited);
-                if gone {
-                    let kind = inner.agents[&pane_id].kind;
-                    let report = AgentReport {
-                        pane_id: pane_id.clone(),
-                        kind,
-                        state: Some(AgentState::Exited),
-                        session_ref: None,
-                        authority: Authority::Lifecycle,
-                        at_ms: now,
-                    };
+                inner.busy.remove(&pane_id);
+                let stop_intent = inner.panes.get(&pane_id).is_some_and(|p| p.stop_intent);
+                let ended = inner
+                    .agents
+                    .get(&pane_id)
+                    .filter(|a| a.pid.is_some())
+                    .and_then(|a| {
+                        let end_event_due = crate::providers::provider(a.kind).reports_end && a.authority == Authority::Lifecycle;
+                        after_exit(a.state, end_event_due, stop_intent).map(|state| (a.kind, state))
+                    });
+                if let Some((kind, state)) = ended {
+                    let report = AgentReport { pane_id: pane_id.clone(), kind, state: Some(state), session_ref: None, authority: Authority::Lifecycle, at_ms: now };
                     Daemon::apply_report(inner, &report, None);
                 }
             }
         }
+    }
+
+    let expired: Vec<AgentPresence> = inner
+        .agents
+        .values()
+        .filter_map(|a| {
+            let kept = crate::subagents::expire(&a.subagents, a.state, now_ms());
+            (kept.len() != a.subagents.len()).then(|| AgentPresence { subagents: kept, ..a.clone() })
+        })
+        .collect();
+    for agent in expired {
+        inner.agents.insert(agent.pane_id.clone(), agent.clone());
+        Daemon::emit(inner, Event::AgentChanged { agent });
     }
 
     let resources = procs::worktrees_by_weight(&classify_all(inner));
@@ -136,5 +187,33 @@ pub async fn run(daemon: Arc<Daemon>) {
         tokio::time::sleep(if subscribed { Duration::from_secs(2) } else { Duration::from_secs(15) }).await;
         let d = daemon.clone();
         let _ = tokio::task::spawn_blocking(move || poll_and_scan(&d, false)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_fallback_needs_two_busy_samples_and_ten_quiet_seconds() {
+        let (one, s1) = fallback(Busy::default(), true, 1_000);
+        assert_eq!(s1, None, "one busy sample is a blip");
+        let (two, s2) = fallback(one, true, 3_000);
+        assert_eq!(s2, Some(AgentState::Working));
+        let (quiet, s3) = fallback(two, false, 5_000);
+        assert_eq!(s3, None, "two seconds of quiet is not idle yet");
+        let (_, s4) = fallback(quiet, false, 3_000 + QUIET_MS);
+        assert_eq!(s4, Some(AgentState::Idle));
+        let (_, blip) = fallback(quiet, true, 6_000);
+        assert_eq!(blip, None, "a quiet sample resets the streak");
+    }
+
+    #[test]
+    fn an_agent_that_vanished_is_dead_only_without_a_reported_or_asked_end() {
+        assert_eq!(after_exit(AgentState::Idle, true, false), Some(AgentState::Dead), "a crash: no session end, no stop");
+        assert_eq!(after_exit(AgentState::Working, true, true), Some(AgentState::Exited), "Tomo stopped it");
+        assert_eq!(after_exit(AgentState::Idle, false, false), Some(AgentState::Exited), "no end event was due: a provider without one, or an agent with no hooks");
+        assert_eq!(after_exit(AgentState::Exited, true, false), None, "a reported end stays an end");
+        assert_eq!(after_exit(AgentState::Dead, true, false), None);
     }
 }

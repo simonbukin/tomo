@@ -73,7 +73,10 @@ Rules:
    provider table.
 8. **Exit codes.** Exit 0, exit 130, SIGINT, SIGHUP and SIGTERM are an end you
    asked for: the agent is gone. Another non-zero exit or another signal, with
-   no stop intent, is `dead`.
+   no stop intent, is `dead`. When the agent is not the pane's own process, Tomo
+   sees no exit code: an agent that vanishes is `dead` only when an end event
+   was due (its provider reports session ends, and this agent sent hook
+   events) and none came. An agent with no hooks that vanishes is gone.
 
 ## Subagents
 
