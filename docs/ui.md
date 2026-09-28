@@ -148,6 +148,9 @@ so a branch name from a pull request works with one paste.
 - Known limit: a browser pane has no drag handle and is not a drop
   target. Its body is a native webview that does not get pointer events
   from the Tomo window.
+- An editor pane keeps its buffer, its undo history, and its scroll when
+  the tab switches away or the pane moves. The legend and the tab show `●`
+  before the file name while the buffer has edits. See [editor.md](editor.md).
 - A browser pane keeps its page when the tab switches away. The webview
   sleeps: it stays in memory with its page and its session, and it stops
   drawing. It comes back at the new size, and it closes with the pane. So
@@ -248,15 +251,19 @@ is on.
 - Hold Cmd over a URL or a file path in a terminal: Tomo underlines it.
   Without Cmd, a link shows no underline, and a plain click does nothing.
 - Cmd-click a URL: the worktree browser pane opens it.
-- Cmd-click `path`, `path:line`, or `path:line:col`: the daemon call
-  `open_location` starts `editor_command` at that place. See
-  `editor_command` in [data-model.md](data-model.md).
+- Cmd-click `path`, `path:line`, or `path:line:col` inside the worktree:
+  an editor pane opens the file at that place (see [editor.md](editor.md)).
+  A pane that already shows the file takes the focus. A path outside the
+  worktree goes to the daemon call `open_location`, which starts
+  `editor_command` at that place. See `editor_command` in
+  [data-model.md](data-model.md).
 - A relative path resolves against the pane cwd first, then against the
   worktree root. A path is a link only when the daemon call `paths_exist`
   finds it on disk.
 - Right-click a URL: `Open in pane`, `Open in browser` (the system browser),
-  and `Copy link`. Right-click a file path: `Open in editor`,
-  `Reveal in Finder`, and `Copy path`.
+  and `Copy link`. Right-click a file path: `Open in pane` (only inside the
+  worktree), `Open in editor` (`editor_command`), `Reveal in Finder`, and
+  `Copy path`.
 - Drop Finder files on a terminal pane: Tomo types the shell-escaped
   absolute paths, separated by spaces, through `pane_send`. On macOS, wry
   gives the drop position in view points, not in physical pixels. The hit
@@ -505,9 +512,9 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
   shows the full path. The list loads again every 10 seconds. `tree` reads
   one directory at a time with `fs_list`, in the daemon order: directories
   first, then name. A click on a directory opens it in place. In both views,
-  a double click on a file opens the editor, and a right click gives the
-  file menu: open in editor, reveal in finder, copy path, copy relative path
-  (`fileMenu` in `menus.ts`).
+  a click on a file opens it in an editor pane, and a right click gives the
+  file menu: open in pane, open in editor, reveal in finder, copy path, copy
+  relative path (`fileMenu` in `menus.ts`).
 - The rail and the open inspector read one table of id, label, and icon in
   `app/src/sections.tsx`. `SectionLabel` draws each inspector heading: the
   icon, the lowercase label, then the control of the section (`refresh`,
@@ -557,6 +564,7 @@ styles/
   ../signals.css          the NOW signal line, beside Signals.tsx
   ../WorktreeRow.css      the sidebar worktree row, beside Sidebar.tsx
   ../browser/browser.css  browser pane toolbar and host box
+  ../editor/editor.css    editor pane notice bar, compare view, error body
   palette.css   command palette
   towns.css     Japan map
   activity.css  activity feed

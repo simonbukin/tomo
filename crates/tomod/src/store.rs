@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 use tomo_proto::{
-    ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, Id, LayoutNode, PaneKind, WorktreeMetadata,
+    ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, EditorTarget, Id, LayoutNode, PaneKind, WorktreeMetadata,
 };
 
 pub struct Store {
@@ -66,6 +66,7 @@ pub struct PaneRow {
     pub created_at_ms: u64,
     pub kind: PaneKind,
     pub url: Option<String>,
+    pub editor: Option<EditorTarget>,
 }
 
 const SCHEMA: &str = r#"
@@ -167,7 +168,7 @@ fn meta_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<MetaRow> {
 const META_COLUMNS: [(&str, &str); 5] =
     [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT"), ("infra_name", "TEXT")];
 
-const PANE_COLUMNS: [(&str, &str); 2] = [("kind", "TEXT"), ("url", "TEXT")];
+const PANE_COLUMNS: [(&str, &str); 3] = [("kind", "TEXT"), ("url", "TEXT"), ("editor", "TEXT")];
 
 const ATTENTION_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("agent_kind", "TEXT"), ("resolved_at_ms", "INTEGER")];
 
@@ -206,14 +207,15 @@ fn pane_kind_str(k: PaneKind) -> &'static str {
     match k {
         PaneKind::Terminal => "terminal",
         PaneKind::Browser => "browser",
+        PaneKind::Editor => "editor",
     }
 }
 
 fn parse_pane_kind(s: Option<String>) -> PaneKind {
-    if s.as_deref() == Some("browser") {
-        PaneKind::Browser
-    } else {
-        PaneKind::Terminal
+    match s.as_deref() {
+        Some("browser") => PaneKind::Browser,
+        Some("editor") => PaneKind::Editor,
+        _ => PaneKind::Terminal,
     }
 }
 
@@ -384,7 +386,7 @@ impl Store {
 
     pub fn panes(&self) -> Result<Vec<PaneRow>> {
         let mut st =
-            self.conn.prepare("SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url FROM panes")?;
+            self.conn.prepare("SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url, editor FROM panes")?;
         let rows = st.query_map([], |r| {
             Ok(PaneRow {
                 id: r.get(0)?,
@@ -399,6 +401,7 @@ impl Store {
                 created_at_ms: r.get::<_, i64>(9)? as u64,
                 kind: parse_pane_kind(r.get(10)?),
                 url: r.get(11)?,
+                editor: r.get::<_, Option<String>>(12)?.and_then(|s| serde_json::from_str(&s).ok()),
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -406,11 +409,11 @@ impl Store {
 
     pub fn pane_upsert(&self, p: &PaneRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO panes (id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            "INSERT INTO panes (id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url, editor)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(id) DO UPDATE SET tab_id=excluded.tab_id, worktree_id=excluded.worktree_id, user_title=excluded.user_title,
                cwd=excluded.cwd, cols=excluded.cols, rows=excluded.rows, agent_kind=excluded.agent_kind,
-               session_ref=excluded.session_ref, kind=excluded.kind, url=excluded.url",
+               session_ref=excluded.session_ref, kind=excluded.kind, url=excluded.url, editor=excluded.editor",
             params![
                 p.id,
                 p.tab_id,
@@ -423,7 +426,8 @@ impl Store {
                 p.session_ref,
                 p.created_at_ms as i64,
                 pane_kind_str(p.kind),
-                p.url
+                p.url,
+                p.editor.as_ref().and_then(|e| serde_json::to_string(e).ok())
             ],
         )?;
         Ok(())
@@ -881,12 +885,37 @@ mod tests {
             created_at_ms: 1,
             kind: PaneKind::Browser,
             url: Some("http://localhost:1420/".into()),
+            editor: None,
         };
         s.pane_upsert(&row).unwrap();
         let back = s.panes().unwrap();
         assert_eq!((back[0].kind, back[0].url.as_deref()), (PaneKind::Browser, Some("http://localhost:1420/")));
         s.conn.execute("UPDATE panes SET kind = NULL, url = NULL", []).unwrap();
         assert_eq!(s.panes().unwrap()[0].kind, PaneKind::Terminal);
+    }
+
+    #[test]
+    fn editor_pane_keeps_its_file_and_cursor() {
+        let s = Store::open_in_memory().unwrap();
+        let target = EditorTarget { path: "src/main.rs".into(), line: 12, col: 4 };
+        let row = PaneRow {
+            id: "p1".into(),
+            tab_id: "t".into(),
+            worktree_id: "w".into(),
+            user_title: None,
+            cwd: PathBuf::from("/tmp"),
+            cols: 0,
+            rows: 0,
+            agent_kind: None,
+            session_ref: None,
+            created_at_ms: 1,
+            kind: PaneKind::Editor,
+            url: None,
+            editor: Some(target.clone()),
+        };
+        s.pane_upsert(&row).unwrap();
+        let back = s.panes().unwrap();
+        assert_eq!((back[0].kind, back[0].editor.clone()), (PaneKind::Editor, Some(target)));
     }
 
     #[test]

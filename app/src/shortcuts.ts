@@ -2,7 +2,7 @@ import type { Action, CommandGroup } from "./actions";
 import { describeBinding } from "./keys";
 import { useStore } from "./store";
 
-export const GROUP_ORDER: CommandGroup[] = ["Navigation", "Worktrees", "Tabs", "Panes", "Agents", "Browser", "General"];
+export const GROUP_ORDER: CommandGroup[] = ["Navigation", "Worktrees", "Tabs", "Panes", "Agents", "Browser", "Editor", "General"];
 
 /** Keys that the app handles outside `[keybindings]`: window zoom in `zoomKey`, and `?` in the shell key handler. */
 export const FIXED_BINDINGS: Record<string, string> = { zoom_in: "mod+=", zoom_out: "mod+-", zoom_reset: "mod+0", keyboard_shortcuts: "?" };

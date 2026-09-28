@@ -27,7 +27,7 @@ or a function from `actions.ts`. To add a command, add it to a file in
 command has no group.
 
 Groups, in display order: `Navigation`, `Worktrees`, `Tabs`, `Panes`,
-`Agents`, `Browser`, `General`. `COMMAND_GROUPS` in `actions.ts` gives
+`Agents`, `Browser`, `Editor`, `General`. `COMMAND_GROUPS` in `actions.ts` gives
 the groups for the commands in the `actions` list.
 
 ## Keybindings
@@ -38,6 +38,26 @@ replaces the default key for that command id. `effectiveBindings` in
 `shortcuts.ts` adds the keys that the app handles outside the config:
 Cmd with `=`, `-`, and `0` for window zoom, and `?` for the shortcut
 reference.
+
+## Keys in an editor pane
+
+An editor pane (see [editor.md](editor.md)) is a CodeMirror view. A key
+that has a Tomo binding goes to the window handler first: CodeMirror does
+not see it. So Cmd+D splits the pane, Cmd+W closes it, and Cmd+K opens the
+palette, as in a terminal. `tomoKeys` in `app/src/editor/cm.ts` does this.
+
+The one exception is Shift with an arrow key and no Alt or Ctrl. That key
+extends a selection, so it stays in the editor and does not reach the
+window. In an editor pane, Shift+Cmd+Left and Shift+Cmd+Right select to
+the line ends and do not change the tab.
+
+| Key | Command | Where |
+|-----|---------|-------|
+| Cmd+S | `editor_save` (Save file) | registry, default binding |
+| Cmd+P | `open_file` (Open file...) | registry, default binding |
+| Cmd+F, Cmd+G, Shift+Cmd+G | search, next match, previous match | CodeMirror |
+| Cmd+L | go to line | CodeMirror |
+| Cmd+Z, Shift+Cmd+Z | undo, redo | CodeMirror; the Edit menu items reach the same history |
 
 ## Shortcut reference
 
@@ -56,7 +76,10 @@ Cmd+K opens the palette. It lists:
 - the repo Actions of the worktree on screen (`start App`,
   `focus App logs`, `restart App`, `stop App`)
 - runtime endpoints (`open App :3000`)
-- every registry command, with its group and key
+- every registry command, with its group and key. `Open file...`
+  (Cmd+P) opens the palette at the file list of the worktree on screen:
+  the files of `fs_recent`, newest change first. Enter opens the file in
+  an editor pane.
 - worktrees and repos
 
 The ranking is a pure function, `rankEntries` in `paletteModel.ts`.
@@ -92,6 +115,8 @@ store state as a parameter, so tests call them with a fixture state.
 | Tab | rename · move left, move right · close, close others |
 | Pane | split right, split down, zoom, equalize, rotate, swap with › · send to › · rename pane, copy › (cwd, session id) · kill process tree, close |
 | Browser pane | back, forward, reload · open in external browser, copy › (url) · send to › · close |
+| Editor pane | save · open in (editor), reveal in finder, copy › (path, relative path) · send to › · close |
+| File (inspector) | open in pane, open in editor, reveal in finder · copy path, copy relative path |
 | Running Action | open, focus logs, restart, stop · copy › (url, port) |
 | Runtime endpoint row | open, focus logs, restart, stop · copy › (url, port) |
 

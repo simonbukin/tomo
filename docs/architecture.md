@@ -214,7 +214,10 @@ endpoint from the source, so Runtime does not depend on Actions.
 
 ## Feature boundary: Browser panes
 
-A pane has a `kind`: `terminal` or `browser`. A browser pane is a row in
+A pane has a `kind`: `terminal`, `browser`, or `editor`. `PaneKind::has_pty`
+is false for a browser and an editor, and the PTY code, restore, and the
+terminal-only calls read it. An editor pane holds a worktree file and a
+cursor; see [editor.md](editor.md). A browser pane is a row in
 `panes` with `kind = browser` and a `url`, and no PTY. The daemon owns the
 pane and the url; the Tauri process owns the page in a child webview
 labelled `browser-<pane id>`. See [browser.md](browser.md).

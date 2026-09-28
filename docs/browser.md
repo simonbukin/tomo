@@ -7,7 +7,8 @@ annotated evidence to an agent that already works in that worktree.
 
 ## Surface model
 
-`Pane.kind` is `terminal` or `browser`. A browser pane carries `Pane.url`
+`Pane.kind` is `terminal`, `browser`, or `editor` (see
+[editor.md](editor.md)). A browser pane carries `Pane.url`
 and reports `live: true` with `pid: null` and no agent. The daemon refuses
 `pane_send`, `pane_resize`, and `pane_attach` on a browser pane with
 `bad_request`. `pane_close`, `pane_swap`, `pane_zoom`, `pane_rename`, and

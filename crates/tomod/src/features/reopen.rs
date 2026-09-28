@@ -11,7 +11,7 @@ use crate::store::TabRow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tomo_proto::{AgentKind, AgentState, Id, LayoutNode, PaneKind};
+use tomo_proto::{AgentKind, AgentState, EditorTarget, Id, LayoutNode, PaneKind};
 
 pub const LIMIT: usize = 10;
 
@@ -32,6 +32,10 @@ pub enum ClosedPane {
         cwd: PathBuf,
         url: String,
     },
+    Editor {
+        cwd: PathBuf,
+        target: EditorTarget,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,8 +48,19 @@ pub struct ClosedTab {
     pub panes: Vec<(Id, ClosedPane)>,
 }
 
-pub fn closed_pane(kind: PaneKind, cwd: PathBuf, title: Option<String>, url: Option<String>, agent: Option<(AgentKind, Option<String>)>) -> ClosedPane {
+pub fn closed_pane(
+    kind: PaneKind,
+    cwd: PathBuf,
+    title: Option<String>,
+    url: Option<String>,
+    editor: Option<EditorTarget>,
+    agent: Option<(AgentKind, Option<String>)>,
+) -> ClosedPane {
     match (kind, agent) {
+        (PaneKind::Editor, _) => match editor {
+            Some(target) => ClosedPane::Editor { cwd, target },
+            None => ClosedPane::Terminal { cwd, title },
+        },
         (PaneKind::Browser, _) => ClosedPane::Browser { cwd, url: url.unwrap_or_else(|| "about:blank".to_string()) },
         (PaneKind::Terminal, Some((kind, Some(session_ref)))) => ClosedPane::Agent { cwd, title, kind, session_ref },
         (PaneKind::Terminal, _) => ClosedPane::Terminal { cwd, title },
@@ -98,7 +113,7 @@ pub fn remember(inner: &mut Inner, tab: &TabRow) {
             let p = inner.panes.get(&id)?;
             let agent =
                 inner.agents.get(&id).filter(|a| a.state != AgentState::Exited).map(|a| (a.kind, a.session_ref.clone().or_else(|| p.row.session_ref.clone())));
-            Some((id, closed_pane(p.row.kind, p.row.cwd.clone(), p.row.user_title.clone(), p.row.url.clone(), agent)))
+            Some((id, closed_pane(p.row.kind, p.row.cwd.clone(), p.row.user_title.clone(), p.row.url.clone(), p.row.editor.clone(), agent)))
         })
         .collect();
     let index = ordered_tabs(inner, &tab.worktree_id).iter().position(|t| t.id == tab.id).unwrap_or(0);
@@ -128,6 +143,12 @@ impl Daemon {
                 self.create_pane(inner, tab_id, worktree_id, cwd.clone(), PaneSpec { title: title.clone(), ..PaneSpec::default() })
             }
             ClosedPane::Browser { cwd, url } => Daemon::create_browser_pane(inner, tab_id, worktree_id, cwd.clone(), url.clone()),
+            ClosedPane::Editor { cwd, target } => {
+                let row = crate::features::browser::surface_row(tab_id, worktree_id, cwd.clone(), PaneKind::Editor, None, Some(target.clone()));
+                let id = Daemon::insert_surface_pane(inner, row)?;
+                self.editors_changed.notify_one();
+                Ok(id)
+            }
             ClosedPane::Agent { cwd, title, kind, session_ref } => {
                 let plan = crate::providers::launch(&inner.config, *kind, Some(session_ref), &self.paths.integrations_dir, &[]);
                 let line = plan.line();
@@ -235,17 +256,19 @@ mod tests {
     fn panes_come_back_by_kind_and_actions_never_rerun() {
         let cwd = PathBuf::from("/w");
         assert_eq!(
-            closed_pane(PaneKind::Browser, cwd.clone(), None, Some("http://localhost:3000".into()), None),
+            closed_pane(PaneKind::Browser, cwd.clone(), None, Some("http://localhost:3000".into()), None, None),
             ClosedPane::Browser { cwd: cwd.clone(), url: "http://localhost:3000".into() }
         );
         assert_eq!(
-            closed_pane(PaneKind::Terminal, cwd.clone(), None, None, Some((AgentKind::Claude, Some("s1".into())))),
+            closed_pane(PaneKind::Terminal, cwd.clone(), None, None, None, Some((AgentKind::Claude, Some("s1".into())))),
             ClosedPane::Agent { cwd: cwd.clone(), title: None, kind: AgentKind::Claude, session_ref: "s1".into() }
         );
         assert_eq!(
-            closed_pane(PaneKind::Terminal, cwd.clone(), None, None, Some((AgentKind::Codex, None))),
+            closed_pane(PaneKind::Terminal, cwd.clone(), None, None, None, Some((AgentKind::Codex, None))),
             ClosedPane::Terminal { cwd: cwd.clone(), title: None }
         );
-        assert_eq!(closed_pane(PaneKind::Terminal, cwd.clone(), Some("App".into()), None, None), ClosedPane::Terminal { cwd, title: Some("App".into()) });
+        let target = EditorTarget { path: "src/a.rs".into(), line: 3, col: 1 };
+        assert_eq!(closed_pane(PaneKind::Editor, cwd.clone(), None, None, Some(target.clone()), None), ClosedPane::Editor { cwd: cwd.clone(), target });
+        assert_eq!(closed_pane(PaneKind::Terminal, cwd.clone(), Some("App".into()), None, None, None), ClosedPane::Terminal { cwd, title: Some("App".into()) });
     }
 }

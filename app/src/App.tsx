@@ -14,6 +14,7 @@ import { Dialogs } from "./Dialogs";
 import { Home } from "./Home";
 import { findAction } from "./keys";
 import { BrowserHost } from "./browser/BrowserPane";
+import { EditorHost } from "./editor/EditorPane";
 import { TabLayout } from "./Layout";
 import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
@@ -43,6 +44,7 @@ const DEV_ROUTES: Record<string, () => Promise<{ default: ComponentType }>> = {
   "#ui-torture": () => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture })),
   "#ui-gallery": () => import("./dev/Gallery").then((m) => ({ default: m.Gallery })),
   "#terminal-lab": () => import("./dev/TerminalLab").then((m) => ({ default: m.TerminalLab })),
+  "#editor-lab": () => import("./dev/EditorLab").then((m) => ({ default: m.EditorLab })),
 };
 
 const devRoute = import.meta.env.DEV ? DEV_ROUTES[window.location.hash] : undefined;
@@ -171,6 +173,7 @@ function Shell() {
       <Dialogs />
       {builtins.map((a) => a.mount && <a.mount key={a.id} />)}
       <BrowserHost />
+      <EditorHost />
       <BottomStrip left={layout.left} />
       <ToastDock />
     </div>

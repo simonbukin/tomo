@@ -56,7 +56,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       term.loadAddon(webgl);
     } catch {}
     termRef.current = term;
-    const unregister = registerTerminal(paneId, { term, el: host });
+    const unregister = registerTerminal(paneId, { term, el: host, focus: () => term.focus() });
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
