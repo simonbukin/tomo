@@ -7,14 +7,14 @@ import { openMenu } from "./MenuHost";
 import { Combobox, IconButton, plainTextInput, SkeletonRows, Tooltip } from "./components/ui";
 import { fileMenu } from "./menus";
 import { openFile } from "./editor/editor";
-import { parseTags, setMetadata, spawnAgent } from "./actions";
+import { focusPane, parseTags, setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { useFlip } from "./useFlip";
 import { InspectorHead } from "./shell/TopStrip";
 import { InspectorSection } from "./sections";
 import {failQuietly, failToast, formatBytes, useStore} from "./store";
 import { gitDetails, inspectorSections } from "./addons";
-import type { AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
+import type { AgentPresence, AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
 
 
 export function RightSidebar({ worktree }: { worktree: Worktree }) {
@@ -155,10 +155,16 @@ export function ago(ms: number): string {
   return `${Math.floor(s / 86_400)}d`;
 }
 
+export type SessionRow = { session: AgentSession; paneId: Id | null };
+
+export const sessionRows = (sessions: AgentSession[], live: AgentPresence[]): SessionRow[] =>
+  sessions.map((session) => ({ session, paneId: live.find((a) => a.kind === session.kind && a.session_ref === session.id)?.pane_id ?? null }));
+
 /** Claude and Codex conversations that started in this worktree, read from the agents' own stores. */
 function SessionsSection({ w }: { w: Worktree }) {
   const [items, setItems] = useState<AgentSession[] | null>(null);
-  const live = useStore((s) => Object.values(s.agents).filter((a) => a.worktree_id === w.id && a.session_ref).map((a) => a.session_ref!));
+  const live = useStore((s) => Object.values(s.agents).filter((a) => a.worktree_id === w.id && a.session_ref));
+  const liveKey = live.map((a) => a.session_ref).join(",");
   useEffect(() => {
     setItems(null);
     if (!w.exists) return;
@@ -166,18 +172,20 @@ function SessionsSection({ w }: { w: Worktree }) {
     load();
     const t = window.setInterval(load, 30_000);
     return () => window.clearInterval(t);
-  }, [w.id, w.exists, live.join(",")]);
-  const resumable = (items ?? []).filter((s) => !live.includes(s.id));
+  }, [w.id, w.exists, liveKey]);
+  const rows = sessionRows(items ?? [], live);
   return (
-    <InspectorSection id="sessions" control={items && items.length > 0 ? <span className="right">{items.length}</span> : undefined}>
+    <InspectorSection id="sessions" control={rows.length > 0 ? <span className="right">{rows.length}</span> : undefined}>
       {items === null && w.exists && <SkeletonRows count={2} className="compact" label="looking for sessions" />}
       {items?.length === 0 && <div className="muted">no agent sessions rooted here</div>}
-      {resumable.map((s) => (
+      {rows.map(({ session: s, paneId }) => (
         <div key={`${s.kind}-${s.id}`} className="session-row" title={`${s.path}\n${s.turns} turns`}>
           <ProcessIcon agent={s.kind} size={11} />
           <span className="session-title">{s.title ?? s.id.slice(0, 8)}</span>
-          <span className="faint">{ago(s.updated_at_ms)}</span>
-          <button className="link" onClick={() => spawnAgent(s.kind, w.id, { resume: s.id, newTab: true })}>resume</button>
+          <span className="faint">{paneId ? "running" : ago(s.updated_at_ms)}</span>
+          {paneId
+            ? <button className="link" onClick={() => void focusPane(paneId)}>go to</button>
+            : <button className="link" onClick={() => spawnAgent(s.kind, w.id, { resume: s.id, newTab: true })}>resume</button>}
         </div>
       ))}
     </InspectorSection>
