@@ -79,5 +79,5 @@ fn hook_outcome(payload: &Value) -> HookOutcome {
         _ => None,
     };
     let session_ref = str_field(payload, "session_file").or_else(|| str_field(payload, "session_id")).map(str::to_string);
-    HookOutcome { state, session_ref }
+    HookOutcome { state, session_ref, subagent: None }
 }

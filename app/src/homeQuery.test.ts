@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_TAG, filterWorktrees, groupWorktrees, movedTags, sortWorktrees, type QueryContext } from "./homeQuery";
+import { NO_TAG, filterWorktrees, groupWorktrees, movedTags, sortWorktrees, worktreeStatus, type QueryContext } from "./homeQuery";
 import type { AgentPresence, Worktree } from "./types";
 
 function wt(id: string, extra: Partial<Worktree> = {}): Worktree {
@@ -47,5 +47,27 @@ describe("home query", () => {
 
   it("puts a worktree under each of its tags, with no tag last", () => {
     expect(groupWorktrees(list, "tag", ctx).map((g) => [g.key, g.items.map((w) => w.id)])).toEqual([["#exploring", ["b"]], ["#lr", ["a"]], ["#merged", ["a"]], ["no tag", ["c"]]]);
+  });
+});
+
+describe("worktree status", () => {
+  const item = (kind: "crash" | "agent_waiting", worktree_id = "w") => ({ id: kind, worktree_id, pane_id: null, kind, level: "attention", message: "", created_at_ms: 0, viewed_at_ms: null, resolved_at_ms: null }) as unknown as QueryContext["attention"][number];
+  const status = (agents: AgentPresence["state"][], attention: QueryContext["attention"] = [], w = wt("w")) =>
+    worktreeStatus(w, { agents: agents.map((state, i) => ({ ...agent("w", state), pane_id: `p${i}` })), attention });
+
+  it("puts the most urgent state first: needs you, then failed, then working, then idle", () => {
+    expect(status(["working", "waiting"])).toBe("needs");
+    expect(status(["working"], [item("crash")])).toBe("failed");
+    expect(status(["working"], [item("crash"), item("agent_waiting")])).toBe("needs");
+    expect(status(["idle", "working"])).toBe("working");
+    expect(status(["idle"])).toBe("idle");
+    expect(status(["unknown"])).toBe("unknown");
+  });
+
+  it("draws no mark where nothing runs, where the agent exited, or on an archived worktree", () => {
+    expect(status([])).toBeNull();
+    expect(status(["exited"])).toBeNull();
+    expect(status(["working"], [], wt("w", { archived_at_ms: 1 }))).toBeNull();
+    expect(status([], [item("crash", "other")])).toBeNull();
   });
 });

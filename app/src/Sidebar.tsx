@@ -10,19 +10,19 @@ import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass, tintClass } from "./glyphs";
+import { agentStatus, dotClass, statusDot, tintClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, RevealButton, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
-import { needsAttention } from "./homeQuery";
+import { needsAttention, worktreeStatus } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
-import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
+import type { Id, Repo, SidebarSort, Worktree } from "./types";
 import { useGlide } from "./glide";
-import { WorktreePreview } from "./WorktreePreview";
+import { SubagentList, WorktreePreview } from "./WorktreePreview";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
@@ -156,6 +156,9 @@ type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: I
 /** A row draws its agents as tinted provider icons, so the signal list leaves them out. */
 const AGENT_SIGNALS = ["agent"] as const;
 
+/** A row grows one unit for each subagent line, up to this many. */
+const SUBAGENT_LINES = 3;
+
 const repoKey = (id: Id) => `repo:${id}`;
 
 const openRepoHome = (repoId: Id) => setUi({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
@@ -227,23 +230,14 @@ function selectRow(e: React.MouseEvent, w: Worktree, siblings: Worktree[]): bool
   return false;
 }
 
-export function summarizeState(agents: AgentPresence[], attention: boolean): AgentState | "none" {
-  if (attention || agents.some((a) => a.state === "waiting")) return "waiting";
-  if (agents.some((a) => a.state === "working")) return "working";
-  if (agents.some((a) => a.state === "idle")) return "idle";
-  if (agents.some((a) => a.state === "unknown")) return "unknown";
-  return "none";
-}
-
 export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId }: { w: Worktree; active: boolean; siblings?: Worktree[]; sortable?: boolean; sortId?: string }) {
   const drag = useSortable({ id: sortId ?? w.id, data: { kind: "worktree", id: w.id, repoId: w.repo_id } satisfies DragData, disabled: !sortable || w.is_main || !!w.archived_at_ms });
   const selected = useStore((s) => s.selection.has(w.id));
   const agents = useStore((s) => agentsOf(s, w.id));
-  const attention = useStore((s) => needsAttention(w, queryContext(s)));
+  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  const summary = archived ? "none" : summarizeState(agents, attention);
   return (
     <HoverCard side="right" content={<WorktreePreview w={w} />}>
       <div
@@ -259,7 +253,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
         }}
       >
-        <span className={`${busy ? "state state-archiving" : dotClass(agentStatus(summary))}${selected ? " state-selected" : ""}`} />
+        <span {...statusDot(busy ? "archiving" : status, selected ? "state-selected" : undefined)} />
         <span className="wt-name-line">
           <span className="wt-name">{w.name}</span>
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
@@ -286,6 +280,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
           <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
         </span>
+        {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
       </div>
     </HoverCard>
   );

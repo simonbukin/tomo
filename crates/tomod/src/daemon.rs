@@ -9,6 +9,7 @@ use crate::procs::{self, ProcMonitor, ProcRow};
 use crate::providers;
 use crate::pty::{PtySession, Scrollback, Spawn};
 use crate::store::{MetaRow, PaneRow, Store, TabRow};
+use crate::subagents::{self, SubagentEvent};
 use anyhow::{anyhow, Result};
 use base64::Engine;
 use serde_json::{json, Value};
@@ -1067,6 +1068,7 @@ impl Daemon {
                 authority: Authority::Unknown,
                 updated_at_ms: now_ms(),
                 pid: None,
+                subagents: Vec::new(),
             };
             inner.agents.insert(id.clone(), presence.clone());
             Self::emit(inner, Event::AgentChanged { agent: presence.clone() });
@@ -1202,6 +1204,7 @@ impl Daemon {
                         authority: Authority::Unknown,
                         updated_at_ms: now_ms(),
                         pid: None,
+                        subagents: Vec::new(),
                     },
                 );
             }
@@ -1313,6 +1316,19 @@ impl Daemon {
         if next.state != AgentState::Waiting && previous == Some(AgentState::Waiting) {
             Self::resolve_waiting(inner, &report.pane_id);
         }
+    }
+
+    /// Folds one subagent event into the presence, then keeps what the parent's state allows.
+    fn apply_subagents(inner: &mut Inner, pane_id: &str, event: Option<&SubagentEvent>, at_ms: u64) {
+        let Some(cur) = inner.agents.get(pane_id) else { return };
+        let applied = event.map_or_else(|| cur.subagents.clone(), |e| subagents::apply(&cur.subagents, e, at_ms));
+        let next = subagents::settle(&applied, cur.state);
+        if next == cur.subagents {
+            return;
+        }
+        let agent = AgentPresence { subagents: next, ..cur.clone() };
+        inner.agents.insert(pane_id.to_string(), agent.clone());
+        Self::emit(inner, Event::AgentChanged { agent });
     }
 
     fn resolve_waiting(inner: &mut Inner, pane_id: &str) {
@@ -2327,9 +2343,10 @@ impl Daemon {
                 }
                 Self::apply_report(
                     &mut inner,
-                    &AgentReport { pane_id, kind, state: outcome.state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
+                    &AgentReport { pane_id: pane_id.clone(), kind, state: outcome.state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
                     None,
                 );
+                Self::apply_subagents(&mut inner, &pane_id, outcome.subagent.as_ref(), at_ms);
                 Ok(Value::Null)
             }
             Call::AgentReport(report) => {

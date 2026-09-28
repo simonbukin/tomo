@@ -6,7 +6,7 @@ import { RightSidebar } from "../RightSidebar";
 import { Sidebar } from "../Sidebar";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
-import type { AgentPresence, AgentState, Frame, GitSummary, Repo, Worktree } from "../types";
+import type { AgentPresence, AgentState, Frame, GitSummary, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -58,6 +58,8 @@ const agent = (worktreeId: string, kind: AgentPresence["kind"], state: AgentStat
   pid: null,
 });
 
+const sub = (id: string | null, label: string, state: AgentState, description: string | null, minutesAgo = 1): Subagent => ({ id, label, description, state, started_at_ms: Date.now() - minutesAgo * 60_000 });
+
 /** One named state of one component. The gallery renders each on its own, with nothing else on screen. */
 interface Scene {
   name: string;
@@ -72,6 +74,17 @@ const SCENES: Scene[] = [
   { name: "dirty tree", worktree: wt("dirty", { git: git({ dirty: true, files_changed: 3, insertions: 42, deletions: 7 }) }) },
   { name: "detached head", worktree: wt("detached", { branch: null, detached: true }) },
   { name: "one agent working", worktree: wt("working"), agents: [agent("working", "claude", "working")] },
+  { name: "one agent idle", worktree: wt("resting"), agents: [agent("resting", "claude", "idle")] },
+  {
+    name: "subagents",
+    worktree: wt("fanout"),
+    agents: [{ ...agent("fanout", "claude", "working"), subagents: [sub("s1", "Explore", "working", "find the hook table", 3), sub("s2", "Plan", "exited", "plan the status change", 5), sub(null, "general-purpose", "working", "check the reduced-motion guard", 0)] }],
+  },
+  {
+    name: "many subagents",
+    worktree: wt("swarm"),
+    agents: [{ ...agent("swarm", "claude", "waiting"), subagents: ["a", "b", "c", "d", "e"].map((id, i) => sub(id, "Explore", i === 0 ? "waiting" : "working", `read part ${id} of the docs`, i)) }],
+  },
   { name: "three agents", worktree: wt("crowd"), agents: [agent("crowd", "claude", "working"), agent("crowd", "codex", "idle", 1), agent("crowd", "pi", "waiting", 2)] },
   { name: "tags", worktree: wt("tagged", { metadata: { display_name: null, tags: ["checkout", "spike", "review"] } }) },
   { name: "archived", worktree: wt("archived", { archived_at_ms: Date.now() }) },
