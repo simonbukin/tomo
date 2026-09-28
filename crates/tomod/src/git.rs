@@ -174,9 +174,12 @@ fn summary_gix(worktree: &Path) -> Result<GitSummary> {
                         s.untracked += 1;
                     }
                 }
-                gix::status::index_worktree::Item::Modification { rela_path, .. } => {
+                gix::status::index_worktree::Item::Modification { rela_path, status, .. } => {
                     if seen.insert(rela_path.to_str_lossy().into_owned()) {
                         s.files_changed += 1;
+                        if matches!(status, gix::status::plumbing::index_as_worktree::EntryStatus::Conflict { .. }) {
+                            s.conflicts += 1;
+                        }
                     }
                 }
                 gix::status::index_worktree::Item::Rewrite { dirwalk_entry, .. } => {
@@ -546,6 +549,25 @@ mod tests {
         run_git(&dir.join("repo"), &["worktree", "prune"]);
 
         worktree_remove(&dir.join("repo"), &dir.join("a")).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn summary_counts_a_merge_conflict() {
+        let dir = repo_with_worktrees("conflict", &["feat"]);
+        std::fs::write(dir.join("feat/c.txt"), "a").unwrap();
+        run_git(&dir.join("feat"), &["add", "c.txt"]);
+        run_git(&dir.join("feat"), &["commit", "-q", "-m", "a"]);
+        std::fs::write(dir.join("repo/c.txt"), "b").unwrap();
+        run_git(&dir.join("repo"), &["add", "c.txt"]);
+        run_git(&dir.join("repo"), &["commit", "-q", "-m", "b"]);
+        let main = String::from_utf8(std::process::Command::new("git").args(["-C", dir.join("repo").to_str().unwrap(), "branch", "--show-current"]).output().unwrap().stdout).unwrap();
+        let merged = std::process::Command::new("git").args(["-C", dir.join("feat").to_str().unwrap(), "merge", "-q", main.trim()]).output().unwrap();
+        assert!(!merged.status.success(), "the fixture makes a conflict");
+
+        let s = summary(&dir.join("feat")).await.unwrap();
+        assert_eq!(s.conflicts, 1, "{s:?}");
+        assert!(s.dirty);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
