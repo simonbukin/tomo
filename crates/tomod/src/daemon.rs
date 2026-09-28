@@ -176,6 +176,8 @@ pub struct Daemon {
     pub tomo_bin: PathBuf,
     pub inner: Mutex<Inner>,
     pub stop: tokio::sync::Notify,
+    /// Set by `daemon_stop_kill_panes`: the stop ends every pane instead of leaving it in its holder.
+    pub kill_panes_on_stop: std::sync::atomic::AtomicBool,
     pub refresh: tokio::sync::Notify,
     pub repos_changed: tokio::sync::Notify,
     pub rt: tokio::runtime::Handle,
@@ -300,6 +302,7 @@ impl Daemon {
                 addons,
             }),
             stop: tokio::sync::Notify::new(),
+            kill_panes_on_stop: std::sync::atomic::AtomicBool::new(false),
             refresh: tokio::sync::Notify::new(),
             repos_changed: tokio::sync::Notify::new(),
             rt: tokio::runtime::Handle::current(),
@@ -834,6 +837,24 @@ impl Daemon {
         };
         let env = self.pane_env(inner, pane_id, &row.tab_id, &row.worktree_id);
         let env_remove = Self::inherited_env_to_remove();
+        let (sink, on_exit) = self.pty_sinks(pane_id);
+        let (session, replay) = PtySession::spawn(
+            Spawn { program: &program, args: &args, cwd: &cwd, env: &env, env_remove: &env_remove, cols: row.cols.max(2), rows: row.rows.max(2) },
+            &crate::holder::socket_path(&self.paths.pty_dir, pane_id),
+            sink,
+            on_exit,
+        )?;
+        let pane = inner.panes.get_mut(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
+        Self::take_replay(pane, &replay);
+        pane.pty = Some(Arc::new(session));
+        pane.exit_code = None;
+        if pane.pending_line.is_some() {
+            self.type_pending_when_quiet(pane_id.to_string());
+        }
+        Ok(())
+    }
+
+    fn pty_sinks(self: &Arc<Self>, pane_id: &str) -> (crate::pty::OutputSink, crate::pty::ExitSink) {
         let out_daemon = Arc::downgrade(self);
         let out_pane = pane_id.to_string();
         let sink: crate::pty::OutputSink = Arc::new(move |bytes: &[u8]| {
@@ -849,17 +870,32 @@ impl Daemon {
                 d.on_exit(&exit_pane, code);
             }
         });
-        let session = PtySession::spawn(
-            Spawn { program: &program, args: &args, cwd: &cwd, env: &env, env_remove: &env_remove, cols: row.cols.max(2), rows: row.rows.max(2) },
-            sink,
-            on_exit,
-        )?;
+        (sink, on_exit)
+    }
+
+    /// Output that the holder kept before this daemon attached. The caller holds the lock, so it goes in here and
+    /// not through `on_output`; no client is attached to the pane yet.
+    fn take_replay(pane: &mut PaneState, replay: &[u8]) {
+        if replay.is_empty() {
+            return;
+        }
+        pane.scrollback.push(replay);
+        if let Some(screen) = pane.screen.as_mut() {
+            screen.write(replay);
+        }
+        pane.last_output_ms = now_ms();
+    }
+
+    /// Reattaches a pane whose holder outlived the previous daemon. The process, its turn, and its children never stopped.
+    fn reattach_pty(self: &Arc<Self>, inner: &mut Inner, pane_id: &str) -> Result<()> {
+        let (sink, on_exit) = self.pty_sinks(pane_id);
+        let (session, replay) = PtySession::attach(&crate::holder::socket_path(&self.paths.pty_dir, pane_id), sink, on_exit)?;
         let pane = inner.panes.get_mut(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
+        Self::take_replay(pane, &replay);
+        let (cols, rows) = (pane.row.cols.max(2), pane.row.rows.max(2));
+        let _ = session.resize(cols, rows);
         pane.pty = Some(Arc::new(session));
         pane.exit_code = None;
-        if pane.pending_line.is_some() {
-            self.type_pending_when_quiet(pane_id.to_string());
-        }
         Ok(())
     }
 
@@ -1184,19 +1220,7 @@ impl Daemon {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
-            let resume_ref = row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string));
-            let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
-                (Some(kind), Some(session)) => {
-                    let plan = providers::launch(&inner.config, kind, Some(session), &self.paths.integrations_dir, &[]);
-                    (PaneOrigin::Resumed, Some(plan.line()))
-                }
-                _ => (PaneOrigin::Restored, None),
-            };
-            let scrollback = std::fs::read(self.paths.scrollback_dir.join(format!("{}.bin", row.id))).map(Scrollback::from_bytes).unwrap_or_default();
-            let mut scrollback = scrollback;
-            scrollback.push(b"\r\n\x1b[2m[tomo] daemon restarted: output above is from the previous session\x1b[0m\r\n");
             if let Some(kind) = row.agent_kind {
-                let _ = inner.store.attention_resolve_waiting(&row.id, now_ms());
                 inner.agents.insert(
                     row.id.clone(),
                     AgentPresence {
@@ -1216,22 +1240,46 @@ impl Daemon {
                 PaneState {
                     row: row.clone(),
                     pty: None,
-                    origin,
+                    origin: PaneOrigin::Live,
                     exit_code: None,
                     process_title: None,
                     process_cmd: None,
-                    pending_line: pending,
+                    pending_line: None,
                     last_output_ms: 0,
-                    scrollback,
+                    scrollback: Scrollback::default(),
                     screen: crate::vt::screen_for(crate::vt::VtEngine::parse(&engine).unwrap_or_default(), 120, 30, scrollback_lines),
                     stop_intent: false,
                     source: None,
                 },
             );
+            let reattached = crate::holder::socket_path(&self.paths.pty_dir, &row.id).exists()
+                && self.reattach_pty(&mut inner, &row.id).map_err(|e| tracing::info!("pane {} has no live holder: {e}", row.id)).is_ok();
+            if reattached {
+                continue;
+            }
+            let resume_ref = row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string));
+            let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
+                (Some(kind), Some(session)) => {
+                    let plan = providers::launch(&inner.config, kind, Some(session), &self.paths.integrations_dir, &[]);
+                    (PaneOrigin::Resumed, Some(plan.line()))
+                }
+                _ => (PaneOrigin::Restored, None),
+            };
+            let mut scrollback = std::fs::read(self.paths.scrollback_dir.join(format!("{}.bin", row.id))).map(Scrollback::from_bytes).unwrap_or_default();
+            scrollback.push(b"\r\n\x1b[2m[tomo] daemon restarted: output above is from the previous session\x1b[0m\r\n");
+            if row.agent_kind.is_some() {
+                let _ = inner.store.attention_resolve_waiting(&row.id, now_ms());
+            }
+            if let Some(pane) = inner.panes.get_mut(&row.id) {
+                pane.origin = origin;
+                pane.pending_line = pending;
+                pane.scrollback = scrollback;
+            }
             if let Err(e) = self.start_pty(&mut inner, &row.id, None) {
                 tracing::warn!("restore pane {}: {e}", row.id);
             }
         }
+        self.end_orphan_holders(&inner);
         let empty_tabs: Vec<Id> =
             inner.tabs.values().filter(|t| layout::pane_ids(&t.layout).iter().all(|p| !inner.panes.contains_key(p))).map(|t| t.id.clone()).collect();
         for id in empty_tabs {
@@ -1258,18 +1306,51 @@ impl Daemon {
         Ok(())
     }
 
-    /// Hangs up every pane. A daemon stop is never a crash, so every pane carries stop intent first.
+    /// Ends every pane: `tomo daemon stop --kill-panes`, and tests. A daemon stop is never a crash, so every pane carries stop intent first.
     pub fn shutdown(&self) {
-        let mut inner = self.lock();
-        for pane in inner.panes.values_mut() {
-            pane.stop_intent = true;
-        }
+        let pids: Vec<u32> = {
+            let mut inner = self.lock();
+            for pane in inner.panes.values_mut() {
+                pane.stop_intent = true;
+            }
+            for id in inner.panes.keys() {
+                self.persist_scrollback(&inner, id);
+            }
+            inner.panes.values().filter_map(|p| p.pty.as_ref()).map(|pty| {
+                pty.hangup();
+                pty.pid
+            }).collect()
+        };
+        wait_until_gone(&pids, std::time::Duration::from_secs(2));
+    }
+
+    /// Stops the daemon and leaves every pane running in its holder, for the next daemon to reattach.
+    /// The scrollback still goes to disk, for the case where a holder does not survive, such as a reboot.
+    pub fn detach_panes(&self) {
+        let inner = self.lock();
         for id in inner.panes.keys() {
             self.persist_scrollback(&inner, id);
         }
         for pane in inner.panes.values() {
             if let Some(pty) = &pane.pty {
-                pty.hangup();
+                pty.detach();
+            }
+        }
+    }
+
+    /// Hangs up a holder that no pane owns, such as one whose pane row a crash lost, so no process lives on unseen.
+    fn end_orphan_holders(&self, inner: &Inner) {
+        let Ok(entries) = std::fs::read_dir(&self.paths.pty_dir) else { return };
+        let orphans = entries.flatten().map(|e| e.path()).filter(|p| {
+            let pane_id = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            p.extension().is_some_and(|x| x == "sock") && !inner.panes.contains_key(&pane_id)
+        });
+        for socket in orphans {
+            match PtySession::end_holder(&socket) {
+                Ok(()) => tracing::info!("ended the orphan holder {}", socket.display()),
+                Err(_) => {
+                    let _ = std::fs::remove_file(&socket);
+                }
             }
         }
     }
@@ -2154,6 +2235,11 @@ impl Daemon {
                 self.stop.notify_one();
                 Ok(Value::Null)
             }
+            Call::DaemonStopKillPanes => {
+                self.kill_panes_on_stop.store(true, std::sync::atomic::Ordering::SeqCst);
+                self.stop.notify_one();
+                Ok(Value::Null)
+            }
             Call::IntegrationsInstall => {
                 providers::install(&self.tomo_bin).map_err(internal)?;
                 ok(providers::installed())
@@ -2508,6 +2594,14 @@ pub fn normalized_metadata(m: WorktreeMetadata) -> WorktreeMetadata {
 }
 
 /// `tagged #a · untagged #b` for a change of tags, or None when the set is the same.
+/// Waits until no process of `pids` is left, so that "stop and end every pane" is true when it returns.
+fn wait_until_gone(pids: &[u32], limit: std::time::Duration) {
+    let started = std::time::Instant::now();
+    while pids.iter().any(|pid| unsafe { libc::kill(*pid as i32, 0) } == 0) && started.elapsed() < limit {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
 pub fn tags_change_title(before: &[String], after: &[String]) -> Option<String> {
     let list = |word: &str, tags: Vec<&String>| (!tags.is_empty()).then(|| format!("{word} {}", tags.iter().map(|t| format!("#{t}")).collect::<Vec<_>>().join(" ")));
     let added = list("tagged", after.iter().filter(|t| !before.contains(t)).collect());

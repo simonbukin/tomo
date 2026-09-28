@@ -50,7 +50,7 @@ opinions.
 | Concept | Where it lives today |
 |---|---|
 | Repositories, worktrees, discovery, Git lifecycle, archive, restore | `crates/tomod/src/daemon.rs`, `git.rs`, `watch.rs` |
-| PTYs, panes, scrollback | `pty.rs`, `daemon.rs` |
+| PTYs, pane holders, panes, scrollback | `pty.rs`, `holder.rs`, `daemon.rs` |
 | Tabs, layout, layout persistence | `layout.rs`, `moves.rs`, `features/reopen.rs` (these do not move in this refactor) |
 | Processes, ownership, provenance | `procs.rs`, `monitor.rs` |
 | Agent abstraction, presence, authority | `agents.rs` (`merge`, `AgentPresence`); the provider specifics in `providers/` |

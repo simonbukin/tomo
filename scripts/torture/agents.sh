@@ -62,7 +62,7 @@ wait_for "[ \"\$(agent_field $B state)\" = idle ]" 16
 
 # 6. resume after daemon restart keeps the session ref
 SESS=$(agent_field $A session_ref)
-daemon_restart; sleep 8
+daemon_restart_cold; sleep 8
 $T pane list --json | jq_ "import sys; p=[x for x in d if x['id']=='$A']; sys.exit(0 if p and p[0]['origin']=='resumed' else 1)" && check 0 "agent pane comes back as resumed" || check 1 "resumed origin"
 wait_for "[ \"\$(agent_field $A state)\" = idle ]" 20 && [ "$(agent_field $A session_ref)" = "$SESS" ] && check 0 "resumed fake agent reports the same session" || check 1 "resume session" "$(agent_field $A session_ref) vs $SESS"
 

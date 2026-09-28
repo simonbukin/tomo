@@ -24,13 +24,16 @@ check() { if [ "$1" = 0 ]; then pass "$2"; else fail "$2${3:+ ($3)}"; fi; }
 summary() { echo "== $PASS_COUNT passed, $FAIL_COUNT failed, ${KNOWN_COUNT:-0} known limitations"; [ "$FAIL_COUNT" = 0 ]; }
 
 daemon_fresh() {
-  $T daemon stop >/dev/null 2>&1; sleep 0.5
+  $T daemon stop --kill-panes >/dev/null 2>&1; sleep 0.5
   rm -rf "$TOMO_DATA_DIR"; mkdir -p "$TOMO_DATA_DIR"
   [ -n "${1:-}" ] && printf '%s\n' "$1" > "$TOMO_DATA_DIR/config.toml"
   $T daemon start >/dev/null
 }
+# A restart keeps every pane running in its holder, as an upgrade does. A cold restart ends the panes first,
+# as a reboot does, so the next daemon restores and resumes them.
 daemon_restart() { $T daemon stop >/dev/null; sleep 1; until $T daemon status >/dev/null 2>&1; do $T daemon start >/dev/null 2>&1; sleep 0.5; done; }
-daemon_stop() { $T daemon stop >/dev/null 2>&1; }
+daemon_restart_cold() { $T daemon stop --kill-panes >/dev/null; sleep 1; until $T daemon status >/dev/null 2>&1; do $T daemon start >/dev/null 2>&1; sleep 0.5; done; }
+daemon_stop() { $T daemon stop --kill-panes >/dev/null 2>&1; }
 
 new_repo() { local d; d="$(mktemp -d /tmp/tomo-harness-repo.XXXX)"; d="$(cd "$d" && pwd -P)/repo"; git init -q "$d"; git -C "$d" commit -q --allow-empty -m init; echo "$d"; }
 wt_id() { $T worktree list --json | python3 -c "import json,sys; print([w['id'] for w in json.load(sys.stdin) if w['path']=='$1'][0])"; }

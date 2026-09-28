@@ -5,8 +5,8 @@ pane title, and `tomo pane list` prints it in the origin column.
 
 | Condition    | Meaning                                                                                   |
 |--------------|-------------------------------------------------------------------------------------------|
-| **live**     | The process that the daemon started still runs in the same PTY.                           |
-| **restored** | The daemon restarted. Tomo rebuilt the pane and started a fresh shell in the old cwd.     |
+| **live**     | The process that the daemon started still runs in the same PTY, also after a daemon restart. |
+| **restored** | The pane's process was gone. Tomo rebuilt the pane and started a fresh shell in the old cwd. |
 | **resumed**  | Like restored, and Tomo also relaunched the agent from its native session reference.      |
 
 Tomo never presents a resumed pane as the original process. The agent has the
@@ -17,7 +17,8 @@ same conversation, not the same pid.
 | Event                  | Live processes | Tabs and layout | Scrollback            | Agent conversation           |
 |------------------------|----------------|-----------------|-----------------------|------------------------------|
 | GUI closes or crashes  | yes            | yes             | yes, in daemon memory | yes, untouched               |
-| Daemon stops or dies   | no             | yes             | last 1 MB, from disk  | resumed when a reference exists |
+| Daemon stops or dies   | yes, in the pane holder | yes    | yes, from the holder  | untouched                    |
+| `daemon stop --kill-panes` | no         | yes             | last 1 MB, from disk  | resumed when a reference exists |
 | Machine reboots        | no             | yes             | last 1 MB, from disk  | resumed when a reference exists |
 
 ### GUI close
@@ -31,12 +32,16 @@ output. A running agent notices nothing.
 
 ### Daemon restart
 
-`tomod` owns the PTY master side. When it exits, the kernel hangs up every
-pane shell. On a clean stop (`tomo daemon stop`, SIGTERM) the daemon first
-writes each pane's scrollback to `<data dir>/scrollback/<pane id>.bin`.
+A pane holder owns each PTY (see [pane-holder.md](pane-holder.md)), so a
+daemon stop, an upgrade, or a crash does not end the panes. On a stop the
+daemon writes each pane's scrollback to `<data dir>/scrollback/<pane id>.bin`
+and detaches.
 
-On the next start, `Daemon::restore` reads tabs and panes from SQLite and for
-each pane:
+On the next start, `Daemon::restore` reads tabs and panes from SQLite. It
+reattaches each pane whose holder is still there and whose process still
+runs: the pane stays **live**, with the same pid, and the holder replays its
+output ring. For every other pane, for example after a reboot or
+`tomo daemon stop --kill-panes`, it:
 
 1. loads the saved scrollback, when present, and appends a dim separator line
    `[tomo] daemon restarted: output above is from the previous session`;

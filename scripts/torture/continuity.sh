@@ -98,7 +98,7 @@ $RPC call open_location "{\"path\":\"$R/missing.rs\",\"line\":1}" 2>&1 | grep -q
 # 8. a daemon restart restores an Action pane as a shell and does not rerun the Action
 SP2=$($T action run serve "$WT" --json | jq_ "print(d['pane']['id'])")
 wait_for "[ -f $R/marker-serve ]" 10; rm -f "$R/marker-serve"
-daemon_restart; sleep 2
+daemon_restart_cold; sleep 2
 [ "$(pane_field "$SP2" origin)" = restored ] && [ "$(pane_field "$SP2" source)" = None ] && check 0 "restart restores the Action pane without a source" || check 1 "restore action" "$(pane_field "$SP2" origin) $(pane_field "$SP2" source)"
 [ ! -f "$R/marker-serve" ] && check 0 "restart does not rerun the Action command" || check 1 "action reran on restart"
 reopen | grep -q not_found && check 0 "the closed-tab stack does not survive a daemon restart" || check 1 "stack after restart"

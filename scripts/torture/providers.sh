@@ -115,8 +115,8 @@ X=$(spawn claude); state_is "$X" idle
 $RPC send "$X" 'work 1\r'; state_is "$X" working 6; state_is "$X" idle 10
 $RPC send "$X" 'quit\r'; state_is "$X" exited 10
 
-# 4. a daemon restart resumes each agent with its provider's resume command line
-daemon_restart; sleep 8
+# 4. a cold restart (the panes ended, as after a reboot) resumes each agent with its provider's resume command line
+daemon_restart_cold; sleep 8
 for p in claude codex pi; do
   eval "A=\$A_$p; S=\$S_$p"
   FLAGS=$(resume_flags "$p" "$S")

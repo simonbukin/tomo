@@ -10,6 +10,8 @@ pub struct Paths {
     pub db: PathBuf,
     pub config: PathBuf,
     pub scrollback_dir: PathBuf,
+    /// One socket for each pane holder. The pane id names it; no version does.
+    pub pty_dir: PathBuf,
     pub integrations_dir: PathBuf,
     pub hook_log: PathBuf,
 }
@@ -35,6 +37,7 @@ impl Paths {
             db: data_dir.join("tomo.sqlite3"),
             config: data_dir.join("config.toml"),
             scrollback_dir: data_dir.join("scrollback"),
+            pty_dir: data_dir.join("pty"),
             integrations_dir: data_dir.join("integrations"),
             hook_log: data_dir.join("hooks.log"),
             data_dir,
@@ -43,6 +46,7 @@ impl Paths {
 
     pub fn ensure(&self) -> Result<()> {
         std::fs::create_dir_all(&self.scrollback_dir)?;
+        std::fs::create_dir_all(&self.pty_dir)?;
         std::fs::create_dir_all(&self.integrations_dir)?;
         Ok(())
     }
