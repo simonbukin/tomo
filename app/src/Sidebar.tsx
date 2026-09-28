@@ -14,7 +14,7 @@ import { agentStatus, dotClass, tintClass } from "./glyphs";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, RevealButton, type MenuItem } from "./components/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, RevealButton, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { needsAttention } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
@@ -22,6 +22,7 @@ import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { AgentPresence, AgentState, Id, Repo, SidebarSort, Worktree } from "./types";
 import { useGlide } from "./glide";
+import { WorktreePreview } from "./WorktreePreview";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
@@ -244,46 +245,48 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   const summary = archived ? "none" : summarizeState(agents, attention);
   return (
-    <div
-      ref={drag.setNodeRef}
-      {...drag.attributes}
-      {...drag.listeners}
-      style={{ transform: CSS.Translate.toString(drag.transform), transition: drag.transition }}
-      data-flip={w.id}
-      className={["wt-row", drag.isDragging && "wt-dragging", active && "wt-active", !w.exists && !archived && "wt-missing", archived && "wt-archived", busy && "wt-archiving", selected && "wt-selected"].filter(Boolean).join(" ")}
-      onClick={(e) => { if (!selectRow(e, w, siblings) && !archived && !busy) openWorktree(w.id); }}
-      onContextMenu={(e) => {
-        const sel = getState().selection;
-        openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
-      }}
-    >
-      <span className={`${busy ? "state state-archiving" : dotClass(agentStatus(summary))}${selected ? " state-selected" : ""}`} />
-      <span className="wt-name-line">
-        <span className="wt-name">{w.name}</span>
-        {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
-      </span>
-      <span className="wt-meta">
-        <RowError worktreeId={w.id} />
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
-          <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
-        </DropdownMenu>
-      </span>
-      <span className="wt-sub">
-        <span className="wt-branch" title={w.path}>
-          {busy ? <span className="wt-state">archiving...</span> : archived ? "archived" : null}
-          {(busy || archived) && " "}
-          {branch}
-          {w.git?.dirty ? " *" : ""}
+    <HoverCard side="right" content={<WorktreePreview w={w} />}>
+      <div
+        ref={drag.setNodeRef}
+        {...drag.attributes}
+        {...drag.listeners}
+        style={{ transform: CSS.Translate.toString(drag.transform), transition: drag.transition }}
+        data-flip={w.id}
+        className={["wt-row", drag.isDragging && "wt-dragging", active && "wt-active", !w.exists && !archived && "wt-missing", archived && "wt-archived", busy && "wt-archiving", selected && "wt-selected"].filter(Boolean).join(" ")}
+        onClick={(e) => { if (!selectRow(e, w, siblings) && !archived && !busy) openWorktree(w.id); }}
+        onContextMenu={(e) => {
+          const sel = getState().selection;
+          openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
+        }}
+      >
+        <span className={`${busy ? "state state-archiving" : dotClass(agentStatus(summary))}${selected ? " state-selected" : ""}`} />
+        <span className="wt-name-line">
+          <span className="wt-name">{w.name}</span>
+          {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
         </span>
-      </span>
-      <span className="wt-foot">
-        <span className="wt-agents">
-          {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentStatus(a.state))} />)}
+        <span className="wt-meta">
+          <RowError worktreeId={w.id} />
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
+          </DropdownMenu>
         </span>
-        <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
-        <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
-      </span>
-    </div>
+        <span className="wt-sub">
+          <span className="wt-branch" title={w.path}>
+            {busy ? <span className="wt-state">archiving...</span> : archived ? "archived" : null}
+            {(busy || archived) && " "}
+            {branch}
+            {w.git?.dirty ? " *" : ""}
+          </span>
+        </span>
+        <span className="wt-foot">
+          <span className="wt-agents">
+            {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentStatus(a.state))} />)}
+          </span>
+          <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
+          <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
+        </span>
+      </div>
+    </HoverCard>
   );
 }

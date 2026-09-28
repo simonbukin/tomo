@@ -11,7 +11,7 @@ const { applyFrame, getState, setState } = await import("../../store");
 const { RightSidebar } = await import("../../RightSidebar");
 const { RightRail } = await import("../../shell/RightRail");
 const { Signals, signalsFor } = await import("../../Signals");
-const { signalText } = await import("../../shell/LeftRail");
+const { signalText } = await import("../../WorktreePreview");
 const { RepoAvatar } = await import("../../Sidebar");
 const { defaultUi } = await import("../../uiState");
 
