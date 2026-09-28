@@ -10,6 +10,7 @@ pub static PROVIDER: Provider = Provider {
     kind: AgentKind::Claude,
     flags,
     resume_without_session: None,
+    resume_env: &[("CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "1"), ("CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS", "3600000")],
     hook_outcome,
     detects,
     nested_env: &["CLAUDECODE", "CLAUDE_CODE_*"],

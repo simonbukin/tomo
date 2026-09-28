@@ -104,6 +104,15 @@ Claude and Pi are resumable from the first prompt because Tomo chooses the id
 before launch. Codex becomes resumable once its `SessionStart` hook reports,
 which needs the user-level hooks from `tomo integrations install`.
 
+A resume can also set environment variables, from `resume_env` in the
+provider table (`crates/tomod/src/providers`). Claude sets
+`CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1`, so a turn that a daemon restart cut
+off continues by itself, and `CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS`
+to one hour, so a stale turn does not. A tool call that was running is not
+finished or run again: Claude marks it as cut off. Subagents and background
+shells do not come back. A new provider adds its own switches to its
+`resume_env`.
+
 A reference is only a pointer. The transcript stays in the agent's own store.
 If the agent cannot find the session, it says so in the pane and Tomo marks
 the presence exited.

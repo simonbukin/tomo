@@ -8,6 +8,7 @@ pub static PROVIDER: Provider = Provider {
     kind: AgentKind::Pi,
     flags,
     resume_without_session: None,
+    resume_env: &[],
     hook_outcome,
     detects,
     nested_env: &["PI_CODING_AGENT"],

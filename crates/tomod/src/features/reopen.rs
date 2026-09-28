@@ -5,7 +5,6 @@
 //! them here. A reopen builds new panes from the record; it never reruns the
 //! command that a pane source started.
 
-use crate::agents;
 use crate::daemon::{Daemon, Inner, PaneSpec};
 use crate::layout;
 use crate::store::TabRow;
@@ -131,7 +130,7 @@ impl Daemon {
             ClosedPane::Browser { cwd, url } => Daemon::create_browser_pane(inner, tab_id, worktree_id, cwd.clone(), url.clone()),
             ClosedPane::Agent { cwd, title, kind, session_ref } => {
                 let plan = crate::providers::launch(&inner.config, *kind, Some(session_ref), &self.paths.integrations_dir, &[]);
-                let line = agents::shell_line(&plan.argv);
+                let line = plan.line();
                 self.create_pane(
                     inner,
                     tab_id,
