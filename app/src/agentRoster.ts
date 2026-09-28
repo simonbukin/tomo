@@ -1,3 +1,4 @@
+import { effectiveState } from "./glyphs";
 import { repoName } from "./homeQuery";
 import type { AgentKind, AgentPresence, AgentState, Id, Repo, Worktree } from "./types";
 
@@ -28,7 +29,7 @@ export function agentRoster(agents: AgentPresence[], worktrees: Worktree[], repo
         paneId: a.pane_id,
         worktreeId: a.worktree_id,
         kind: a.kind,
-        state: a.state,
+        state: effectiveState(a),
         repo: w ? repoName(repos, w.repo_id) : "?",
         worktree: w?.name ?? "unknown",
         updatedAtMs: a.updated_at_ms,

@@ -10,12 +10,13 @@ import { homeEmpty } from "./emptyStates";
 import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
-import { filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees, worktreeStatus } from "./homeQuery";
+import { filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees } from "./homeQuery";
 import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass, statusDot, tintClass } from "./glyphs";
+import { agentStatus, dotClass, effectiveState, tintClass } from "./glyphs";
+import { WorktreeMark } from "./StateMark";
 import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
@@ -255,7 +256,6 @@ function Row({ w }: { w: Worktree }) {
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   return (
     <div
       data-flip={flip}
@@ -264,7 +264,7 @@ function Row({ w }: { w: Worktree }) {
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
       title={w.path}
     >
-      <span {...statusDot(busy ? "archiving" : status)} />
+      <WorktreeMark w={w} />
       <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       <span className="muted">{repo}</span>
       <span className="muted">{busy ? "archiving..." : archived ? "archived" : ""}</span>
@@ -306,7 +306,6 @@ export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string
   const busy = w.archiving;
   const sub = [repo, busy ? "archiving..." : archived ? "archived" : null].filter(Boolean).join(" · ");
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
-  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   const drag = useDraggable({ id: `${column ?? ""}|${w.id}`, data: { worktreeId: w.id, from: column }, disabled: column === undefined || archived || busy });
   return (
     <div
@@ -320,7 +319,7 @@ export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string
       title={[w.path, busy ? "archiving..." : null].filter(Boolean).join("\n")}
     >
       <div className="card-title">
-        <span {...statusDot(busy ? "archiving" : status)} />
+        <WorktreeMark w={w} />
         <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
       </div>
       {branch && (
@@ -333,7 +332,7 @@ export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string
       <div className="card-sub">{sub}{!w.exists && !archived && " · missing"}</div>
       {!archived && agents.length > 0 && (
         <div className="card-agents">
-          {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentStatus(a.state))} />)}
+          {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentStatus(effectiveState(a)))} />)}
         </div>
       )}
       {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={flip && `${flip}:sub`} />}

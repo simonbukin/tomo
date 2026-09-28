@@ -3,7 +3,8 @@ import { Fragment } from "react";
 import { addonViews } from "../addons";
 import { openWorktree } from "../actions";
 import { IconButton, Tooltip } from "../components/ui";
-import { STATUS_LABEL, statusDot } from "../glyphs";
+import { STATUS_LABEL } from "../glyphs";
+import { WorktreeMark } from "../StateMark";
 import { sortWorktrees, worktreeStatus } from "../homeQuery";
 import { byManualOrder } from "../order";
 import { useShortcuts } from "../shortcuts";
@@ -66,7 +67,7 @@ function RailWorktree({ w, active }: { w: Worktree; active: boolean }) {
   return (
     <Tooltip side="right" delay={0} content={<WorktreePreview w={w} />}>
       <button type="button" className="rail-wt" aria-label={label} aria-current={active ? "page" : undefined} onClick={() => openWorktree(w.id)}>
-        <span {...statusDot(status)} aria-hidden />
+        <WorktreeMark w={w} />
       </button>
     </Tooltip>
   );
