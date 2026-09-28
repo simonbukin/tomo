@@ -10,7 +10,7 @@ import { homeEmpty } from "./emptyStates";
 import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
-import { filterWorktrees, groupWorktrees, movedTags, needsAttention, sortWorktrees } from "./homeQuery";
+import { filterWorktrees, groupWorktrees, movedTags, sortWorktrees, worktreeStatus } from "./homeQuery";
 import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
@@ -251,7 +251,7 @@ function ScopeActivity({ worktreeIds }: { worktreeIds: readonly string[] }) {
 function Row({ w }: { w: Worktree }) {
   const flip = `row:${w.id}`;
   const repo = useStore((s) => repoName(s, w.repo_id));
-  const attention = useStore((s) => needsAttention(w, queryContext(s)));
+  const attention = useStore((s) => worktreeStatus(w, queryContext(s)) === "needs");
   const g = w.git;
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
@@ -299,7 +299,7 @@ function BoardColumn({ groupKey, droppable, children }: { groupKey: string; drop
 export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string; flip?: string }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
-  const attention = useStore((s) => needsAttention(w, queryContext(s)));
+  const attention = useStore((s) => worktreeStatus(w, queryContext(s)) === "needs");
   const mark = useStore((s) => branchMark(s, w));
   const g = w.git;
   const archived = !!w.archived_at_ms;
