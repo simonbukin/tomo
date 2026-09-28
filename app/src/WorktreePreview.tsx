@@ -41,14 +41,14 @@ export function SubagentList({ worktreeId, limit = Infinity }: { worktreeId: Id;
   return (
     <ul className="subagents" aria-label="subagents">
       {shown.map((sub, i) => (
-        <li key={sub.id ?? `launch-${i}`} className={`subagent is-${sub.state}`}>
+        <li key={sub.id ?? `launch-${i}`} data-flip={`sub:${worktreeId}:${sub.id ?? `launch-${i}`}`} className={`subagent is-${sub.state}`}>
           <span {...statusDot(agentStatus(sub.state))} />
           <span className="subagent-label">{sub.label}</span>
           <span className="subagent-desc">{sub.description}</span>
           <span className="subagent-age">{durationLabel(sub.started_at_ms)}</span>
         </li>
       ))}
-      {rest > 0 && <li className="subagent subagent-more">+{rest} more</li>}
+      {rest > 0 && <li data-flip={`sub:${worktreeId}:more`} className="subagent subagent-more">+{rest} more</li>}
     </ul>
   );
 }

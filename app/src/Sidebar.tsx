@@ -45,9 +45,8 @@ export function Sidebar() {
   const draggable = ui.lens === "repo";
   const groups = lensGroups(shown, ui.lens, ctx, { repos, sort: ui.sidebarSort, manualOrder: ui.manualOrder, repoOrder: ui.repoOrder });
   const listRef = useRef<HTMLDivElement>(null);
-  const order = groups.flatMap((g) => g.items).map((w) => w.id).join(",");
   const [dropped, setDropped] = useState(false);
-  useFlip(listRef, [order, groups.map((g) => g.key).join(","), ui.collapsedRepos.join(","), selectionSize], !dropped);
+  useFlip(listRef, undefined, !dropped);
   useEffect(() => {
     if (dropped) setDropped(false);
   }, [dropped]);
@@ -178,6 +177,7 @@ function Group({ group, active, sortable = false }: { group: LensGroup; active: 
       <div
         ref={drag.setActivatorNodeRef}
         className="section-label repo-head"
+        data-flip={repoKey(group.key)}
         {...drag.attributes}
         {...drag.listeners}
         onClick={() => (repo?.id ? openRepoHome(repo.id) : toggle())}
