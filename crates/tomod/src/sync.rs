@@ -8,9 +8,9 @@ use std::time::Duration;
 use tomo_proto::*;
 
 const TICK: Duration = Duration::from_secs(30);
-const EVERY_MS: u64 = 5 * 60 * 1000;
-/// A worktree create reuses a sync this young, so two creates in a row fetch once.
-pub const FRESH_MS: u64 = 30_000;
+/// The age of a sync that the background loop renews. A worktree create reuses a sync this young, because the loop
+/// keeps main that fresh while a client is subscribed; a fetch on every create cost the network round trip.
+pub const EVERY_MS: u64 = 5 * 60 * 1000;
 
 const DIVERGED: &str = "it has commits that its upstream does not have";
 const NO_UPSTREAM: &str = "the branch has no upstream";
