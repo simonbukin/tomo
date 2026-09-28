@@ -19,6 +19,7 @@ import { agentStatus, dotClass, statusDot, tintClass } from "./glyphs";
 import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
+import { SUBAGENT_LINES, SubagentList } from "./WorktreePreview";
 import { tagPrefill } from "./lenses";
 import type { Filter, FilterKind, HomeOptions, Worktree, WorktreePrefill } from "./types";
 import { useGlide } from "./glide";
@@ -266,6 +267,7 @@ function Row({ w }: { w: Worktree }) {
       <span className="runtime">
         {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
       </span>
+      {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
     </div>
   );
 }
@@ -320,6 +322,7 @@ export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
           {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentStatus(a.state))} />)}
         </div>
       )}
+      {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
       {w.metadata.tags.length > 0 && <div className="card-tags">{w.metadata.tags.map((t) => <span key={t} className="tag-chip">#{t}</span>)}</div>}
       {!archived && <Signals worktreeId={w.id} className="card-signals" omit={AGENT_SIGNALS} />}
       <RowError worktreeId={w.id} />

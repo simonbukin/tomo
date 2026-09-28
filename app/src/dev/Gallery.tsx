@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { applyFrame, getState, setState } from "../store";
+import { applyFrame, getState, setState, setUi } from "../store";
 import { defaultUi } from "../uiState";
-import { WorktreeCard } from "../Home";
+import { Home, WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
 import { Sidebar } from "../Sidebar";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
-import type { AgentPresence, AgentState, Frame, GitSummary, Repo, Subagent, Worktree } from "../types";
+import type { AgentPresence, AgentState, Frame, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -144,6 +144,12 @@ const MOTION: { label: string; run: () => void }[] = [
   { label: "reset", run: seed },
 ];
 
+/** The Home layouts. The list shows only for a search or a filter, so the list view filters out archived work. */
+const HOME_VIEWS: { label: string; home: Partial<HomeOptions> }[] = [
+  { label: "cards", home: { scope: { kind: "repo", repoId: REPO.id }, filters: [] } },
+  { label: "list", home: { scope: { kind: "all" }, filters: [{ kind: "archived", value: "no" }], view: "list", group: "none" } },
+];
+
 export function Gallery() {
   const [ready, setReady] = useState(false);
   const [inspector, setInspector] = useState(SCENES[1].worktree.id);
@@ -181,6 +187,22 @@ export function Gallery() {
           <LeftRail />
           <BottomStrip left="minimal" />
         </div>
+      </div>
+      <h2 className="gallery-head">home</h2>
+      <div className="gallery-picker">
+        {HOME_VIEWS.map((v) => (
+          <button key={v.label} type="button" className="seg" onClick={() => setUi({ home: { ...getState().ui.home, ...v.home } })}>
+            {v.label}
+          </button>
+        ))}
+        {MOTION.map((m) => (
+          <button key={m.label} type="button" className="seg" onClick={m.run}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div className="app gallery-home">
+        <Home />
       </div>
       <h2 className="gallery-head">right inspector</h2>
       <div className="gallery-picker">

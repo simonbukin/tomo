@@ -194,8 +194,10 @@ agent, or a subagent) means one thing everywhere:
 
 `worktreeStatus` in `app/src/homeQuery.ts` picks the mark of a worktree,
 most urgent first. `statusDot` in `glyphs.ts` gives the class and the
-tooltip. A row grows one unit for each live subagent, up to three lines,
-indented under the name.
+tooltip. A sidebar row, a Home card, and a Home list row each grow one unit
+for each live subagent, up to three lines, indented under the name. Past
+three, the last line counts the rest (`+2 more`). All three use
+`SubagentList` and `SUBAGENT_LINES` from `app/src/WorktreePreview.tsx`.
 
 `agentStatus` maps agent states onto it. `activityStatus` in
 `app/src/activityKinds.ts` maps activity kinds onto it through the kind

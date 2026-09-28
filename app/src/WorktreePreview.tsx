@@ -29,6 +29,9 @@ export function subagentsOf(agents: { subagents?: Subagent[] }[]): Subagent[] {
   return agents.flatMap((a) => a.subagents ?? []).sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.started_at_ms - b.started_at_ms);
 }
 
+/** A dense row or card grows one unit for each subagent line, up to this many. */
+export const SUBAGENT_LINES = 3;
+
 /**
  * The subagents, indented under their worktree. Past `limit` the last line counts the rest,
  * so the list never grows past `limit` lines.
