@@ -1,4 +1,4 @@
-import type { ILink, Terminal } from "@xterm/xterm";
+import type { IBufferRange, ILink, Terminal } from "@xterm/xterm";
 import { invoke } from "@tauri-apps/api/core";
 import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -82,16 +82,44 @@ function linkMenu(link: TermLink, paneId: Id): MenuItem[] {
 }
 
 /**
- * URLs and existing file paths in the terminal. Cmd-hover underlines one, Cmd-click opens it: a URL
+ * The dotted underline of a link under a plain hover. xterm draws only a solid underline, and the WebGL
+ * renderer draws it on its canvas, so this line is an element over the cells of the link.
+ */
+function linkHint(term: Terminal): { show: (range: IBufferRange) => void; hide: () => void } {
+  const hint = document.createElement("div");
+  hint.className = "term-link-hint";
+  return {
+    show: (range) => {
+      const screen = term.element?.querySelector<HTMLElement>(".xterm-screen");
+      if (!screen) return;
+      const cell = { width: screen.clientWidth / term.cols, height: screen.clientHeight / term.rows };
+      const row = range.start.y - 1 - term.buffer.active.viewportY;
+      Object.assign(hint.style, {
+        left: `${(range.start.x - 1) * cell.width}px`,
+        top: `${row * cell.height}px`,
+        width: `${(range.end.x - range.start.x + 1) * cell.width}px`,
+        height: `${cell.height}px`,
+      });
+      screen.appendChild(hint);
+    },
+    hide: () => hint.remove(),
+  };
+}
+
+/**
+ * URLs and existing file paths in the terminal. A plain hover draws a dotted underline; Cmd-hover draws a solid one, Cmd-click opens it: a URL
  * in the worktree browser, a file in an editor pane at its line. Right-click gives a menu. Returns the disposer.
  */
 export function registerTerminalLinks(term: Terminal, paneId: Id, host: HTMLElement): () => void {
   let meta = false;
   let shown: ILink[] = [];
-  let hovered: TermLink | null = null;
+  let hovered: { link: TermLink; range: IBufferRange } | null = null;
+  const hint = linkHint(term);
+  const showHint = () => (hovered && !meta ? hint.show(hovered.range) : hint.hide());
   const setMeta = (on: boolean) => {
     if (on === meta) return;
     meta = on;
+    showHint();
     shown.forEach((l) => {
       if (!l.decorations) return;
       l.decorations.underline = on;
@@ -101,7 +129,7 @@ export function registerTerminalLinks(term: Terminal, paneId: Id, host: HTMLElem
   const onKey = (e: KeyboardEvent | MouseEvent) => setMeta(e.metaKey);
   const onBlur = () => setMeta(false);
   const onMenu = (e: MouseEvent) => {
-    if (hovered) openMenu(e, linkMenu(hovered, paneId));
+    if (hovered) openMenu(e, linkMenu(hovered.link, paneId));
   };
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKey);
@@ -115,26 +143,37 @@ export function registerTerminalLinks(term: Terminal, paneId: Id, host: HTMLElem
       if (!found.length) return callback(undefined);
       void resolveLinks(found, paneId).then((links) => {
         // ponytail: string offsets equal cell columns only without wide characters, and wrapped lines are not joined.
-        shown = links.map((link) => ({
-          range: { start: { x: link.start + 1, y }, end: { x: link.end, y } },
-          text: text.slice(link.start, link.end),
-          decorations: { underline: meta, pointerCursor: meta },
-          activate: (e: MouseEvent) => {
-            if (e.metaKey) openLink(link, paneId);
-          },
-          hover: () => {
-            hovered = link;
-          },
-          leave: () => {
-            hovered = null;
-          },
-        }));
+        shown = links.map((link): ILink => {
+          const range = { start: { x: link.start + 1, y }, end: { x: link.end, y } };
+          return {
+            range,
+            text: text.slice(link.start, link.end),
+            decorations: { underline: meta, pointerCursor: meta },
+            activate: (e: MouseEvent) => {
+              if (e.metaKey) openLink(link, paneId);
+            },
+            hover: () => {
+              hovered = { link, range };
+              showHint();
+            },
+            leave: () => {
+              hovered = null;
+              showHint();
+            },
+          };
+        });
         callback(shown.length ? shown : undefined);
       });
     },
   });
+  const scroll = term.onScroll(() => {
+    hovered = null;
+    showHint();
+  });
   return () => {
     provider.dispose();
+    scroll.dispose();
+    hint.hide();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur);
