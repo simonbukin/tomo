@@ -6,7 +6,7 @@ import { builtins } from "../addons";
 import { rpcParsed } from "../api";
 import { systemStatsSchema } from "../schemas";
 import { openSettings } from "../commands/settings";
-import { IconButton } from "../components/ui";
+import { IconButton, RevealButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
 import { failQuietly, formatBytes, setState, useStore } from "../store";
 import type { SidebarMode, SystemStats } from "../types";
@@ -22,7 +22,7 @@ import { StatusSlot } from "./StatusSlot";
 export function BottomStrip({ left }: { left: SidebarMode }) {
   return (
     <footer className="bottom-strip" data-left={left}>
-      {left !== "closed" && <HelpControls />}
+      {left !== "closed" && <HelpControls minimal={left === "minimal"} />}
       <div className="bottom-middle">
         <div className="bottom-items">{builtins.map(({ id, bottomItem: Item }) => Item && <Item key={id} />)}</div>
         <div className="bottom-status">
@@ -38,17 +38,24 @@ export function BottomStrip({ left }: { left: SidebarMode }) {
   );
 }
 
-function HelpControls() {
+const addRepo = () => setState({ dialog: { kind: "add-repo" } });
+
+function HelpControls({ minimal }: { minimal: boolean }) {
   const shortcut = useShortcuts();
   return (
     <div className="bottom-left">
       <IconButton label="Keyboard shortcuts" shortcut={shortcut("keyboard_shortcuts")} tooltipSide="top" onClick={() => runAction("keyboard_shortcuts")}>
         <CircleHelp className="icon" />
       </IconButton>
-      <button type="button" className="bottom-add" onClick={() => setState({ dialog: { kind: "add-repo" } })}>
-        <Plus className="icon" />
-        <span>add repo</span>
-      </button>
+      {minimal ? (
+        <IconButton label="New repo" tooltipSide="top" className="bottom-add" onClick={addRepo}>
+          <Plus className="icon" />
+        </IconButton>
+      ) : (
+        <RevealButton label="new repo" name="New repo" className="bottom-add" onClick={addRepo}>
+          <Plus className="icon" />
+        </RevealButton>
+      )}
     </div>
   );
 }

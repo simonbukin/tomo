@@ -109,4 +109,8 @@
 .gallery-cell { margin: 0; display: grid; gap: var(--sp-1); }
 .gallery-caption { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); }
 .gallery-picker { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: var(--sp-3); }
+.gallery-shells { display: flex; gap: var(--sp-4); align-items: start; }
+.gallery-shell { --right-col: 0px; width: 560px; height: 700px; border: 1px solid var(--line); overflow: hidden; }
+.gallery-shell[data-shell="open"] { --left-col: 280px; }
+.gallery-shell[data-shell="minimal"] { --left-col: 48px; width: 360px; }
 .gallery-inspector { width: 300px; height: 520px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }

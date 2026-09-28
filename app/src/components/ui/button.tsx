@@ -42,3 +42,26 @@ export function IconButton({ label, shortcut, tooltipSide, tooltipDelay, variant
     </Tooltip>
   );
 }
+
+export interface RevealButtonProps extends Omit<ButtonProps, "size" | "aria-label"> {
+  /** The words that show beside the icon on hover and focus. */
+  label: string;
+  /** Accessible name, when it must say more than the label. */
+  name?: string;
+  children?: ReactNode;
+}
+
+/**
+ * An icon control that shows its label on hover or focus. The label opens to the left over what is
+ * there, so nothing beside the control moves.
+ */
+export function RevealButton({ label, name = label, className, children, variant = "ghost", ...rest }: RevealButtonProps) {
+  return (
+    <Button aria-label={name} variant={variant} size="icon" className={cx("btn-reveal", className)} {...rest}>
+      <span className="btn-reveal-label" aria-hidden>
+        {label}
+      </span>
+      {children}
+    </Button>
+  );
+}

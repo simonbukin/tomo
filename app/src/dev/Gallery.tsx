@@ -3,6 +3,9 @@ import { applyFrame, getState, setState } from "../store";
 import { defaultUi } from "../uiState";
 import { WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
+import { Sidebar } from "../Sidebar";
+import { LeftRail } from "../shell/LeftRail";
+import { BottomStrip } from "../shell/BottomStrip";
 import type { AgentPresence, AgentState, Frame, GitSummary, Repo, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
@@ -124,6 +127,17 @@ export function Gallery() {
             <WorktreeCard w={s.worktree} />
           </figure>
         ))}
+      </div>
+      <h2 className="gallery-head">sidebar</h2>
+      <div className="gallery-shells">
+        <div className="app gallery-shell" data-shell="open">
+          <Sidebar />
+          <BottomStrip left="open" />
+        </div>
+        <div className="app gallery-shell" data-shell="minimal">
+          <LeftRail />
+          <BottomStrip left="minimal" />
+        </div>
       </div>
       <h2 className="gallery-head">right inspector</h2>
       <div className="gallery-picker">
