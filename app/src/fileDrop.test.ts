@@ -22,9 +22,10 @@ describe("dropText", () => {
 });
 
 describe("drop hit test", () => {
-  it("converts physical pixels through the scale factor and zoom", () => {
-    expect(cssPoint({ x: 400, y: 200 }, 2, 1.25)).toEqual({ x: 160, y: 80 });
-    expect(cssPoint({ x: 10, y: 10 }, 0, 0)).toEqual({ x: 10, y: 10 });
+  it("converts view points through the zoom only", () => {
+    expect(cssPoint({ x: 400, y: 200 }, 1.25)).toEqual({ x: 320, y: 160 });
+    expect(cssPoint({ x: 400, y: 200 }, 1)).toEqual({ x: 400, y: 200 });
+    expect(cssPoint({ x: 10, y: 10 }, 0)).toEqual({ x: 10, y: 10 });
   });
 
   it("hits only inside a visible rect", () => {

@@ -10,7 +10,7 @@ import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
 import {failQuietly, getState, keyBindings, splitsAllowed, useStore} from "./store";
 import { registerTerminal } from "./terminals";
-import { listenFileDrop, registerTerminalLinks } from "./terminalHooks";
+import { listenFileDrop, pasteClipboard, registerTerminalLinks } from "./terminalHooks";
 import { Columns2, Rows2, X } from "lucide-react";
 import { openMenu } from "./MenuHost";
 import { IconButton } from "./components/ui";
@@ -83,7 +83,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
         return false;
       }
       if (e.metaKey && e.key.toLowerCase() === "v") {
-        navigator.clipboard.readText().then((t) => t && term.paste(t)).catch(() => {});
+        void pasteClipboard(term);
         return false;
       }
       return true;

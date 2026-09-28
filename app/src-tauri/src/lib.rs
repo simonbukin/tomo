@@ -191,6 +191,33 @@ fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
     link.tx.lock().unwrap().is_some()
 }
 
+const SAVE_CLIPBOARD_PNG: &str = r#"on run argv
+set f to open for access POSIX file (item 1 of argv) with write permission
+try
+write (the clipboard as «class PNGf») to f
+on error e
+close access f
+error e
+end try
+close access f
+end run"#;
+
+/// Saves the image on the clipboard as a new PNG file and returns its path, or None when the clipboard holds no image.
+/// A terminal agent attaches an image from a pasted path, the same way it does for a dropped file.
+#[tauri::command]
+async fn clipboard_image() -> Option<String> {
+    let dir = std::env::temp_dir().join("tomo-paste");
+    std::fs::create_dir_all(&dir).ok()?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_millis();
+    let path = dir.join(format!("clipboard-{stamp}.png"));
+    let saved = tokio::process::Command::new("osascript").arg("-e").arg(SAVE_CLIPBOARD_PNG).arg(&path).output().await.is_ok_and(|o| o.status.success());
+    if saved && std::fs::metadata(&path).is_ok_and(|m| m.len() > 0) {
+        return Some(path.to_string_lossy().into_owned());
+    }
+    let _ = std::fs::remove_file(&path);
+    None
+}
+
 #[tauri::command]
 fn splash_ready(app: AppHandle) {
     if let Some(window) = app.get_window("main") {
@@ -244,6 +271,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             rpc,
             daemon_connected,
+            clipboard_image,
             splash_ready,
             browser::browser_create,
             browser::browser_set_bounds,
