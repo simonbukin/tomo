@@ -2,6 +2,7 @@ import type { Signal } from "./activityModel";
 import { agentStatus, dotClass, GLYPH, statusDot } from "./glyphs";
 import { durationLabel, gitLines } from "./previewModel";
 import { ProcessIcon } from "./ProcessIcon";
+import { signalDetail } from "./addons";
 import { signalsFor } from "./Signals";
 import { agentsOf, formatBytes, useStore } from "./store";
 import { KIND_LABEL, type Id, type Subagent, type Worktree } from "./types";
@@ -56,6 +57,11 @@ export function SubagentList({ worktreeId, limit = Infinity, flip }: { worktreeI
   );
 }
 
+function SignalDetail({ worktreeId, signal }: { worktreeId: Id; signal: Signal }) {
+  const Detail = signal.kind === "addon" ? signalDetail(signal.className) : null;
+  return Detail ? <Detail worktreeId={worktreeId} /> : <div>{signalText(signal)}</div>;
+}
+
 /** Everything the client knows about one worktree, for the hover card on a sidebar row or a rail square. */
 export function WorktreePreview({ w }: { w: Worktree }) {
   const agents = useStore((s) => agentsOf(s, w.id));
@@ -82,7 +88,7 @@ export function WorktreePreview({ w }: { w: Worktree }) {
       )}
       {signals.length > 0 && (
         <div className="wt-preview-block">
-          {signals.map((signal, i) => <div key={i}>{signalText(signal)}</div>)}
+          {signals.map((signal, i) => <SignalDetail key={i} worktreeId={w.id} signal={signal} />)}
         </div>
       )}
       {w.last_active_ms != null && <div className="faint">active {durationLabel(w.last_active_ms)} ago</div>}

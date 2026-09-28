@@ -321,7 +321,7 @@ GitHub, Usage, Actions, Runtime, and Agentation need:
 | `diagnosticsSection` | `DiagnosticsReport` in `shell/Diagnostics.tsx`, after the core sections and before the compact actions | usage |
 | `topbar.buttons`, `topbar.marks` | `HeaderControls` in `WorktreeHeader.tsx`: `buttons` before the editor button, `marks` after it and before the runtime and overflow buttons | actions |
 | `worktreeMenu(w, s)` | `overflowMenu` in `menus.ts`, first, with a separator after a list that is not empty | actions |
-| `signalLine { className, Line }` | `SignalLine` in `Signals.tsx`, for an addon signal of that class | runtime |
+| `signalLine { className, Line, Detail? }` | `SignalLine` in `Signals.tsx`, for an addon signal of that class; `Detail` in `WorktreePreview.tsx`, in place of the plain signal text | runtime (`Detail`: linear) |
 | `sourceMark` | the control of a pane source that another addon draws: the Action button in `addons/actions/Topbar.tsx`, through `sourceMarks()` | runtime |
 | `sourceMenu(worktreeId, source, s)` | the menu of a running pane source: `runningActionItems` in `addons/actions/commands.ts`, through `sourceMenu()`; `first` before "focus logs", `last` after the separator | runtime |
 | `appUrl(s, worktreeId)` | `CheckpointBanner` in `WorktreeHeader.tsx` and `appUrl` in `activityKinds.ts` (the first addon that returns a URL wins) | runtime |

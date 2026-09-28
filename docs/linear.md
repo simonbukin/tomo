@@ -21,7 +21,7 @@ signal, the issue rows in the git section, the palette entry, `tomo linear`,
 | branch parse, query, answer parse, poll rule | `crates/tomod/src/addons/linear/model.rs` |
 | Keychain, `curl`, the last answer, the poll | `crates/tomod/src/addons/linear/mod.rs` |
 | CLI | `Cmd::Linear` in `crates/tomo-cli/src/main.rs`, `print::linear_*` |
-| GUI | `app/src/addons/linear/`: `state.ts`, `model.ts` (signal, tint, palette), `Views.tsx` (icon, signal line, hover card, git rows), `index.ts` |
+| GUI | `app/src/addons/linear/`: `state.ts`, `model.ts` (signal, tint, palette), `Views.tsx` (icon, signal line, hover card lines, git rows), `index.ts` |
 
 ## The key
 
@@ -78,8 +78,10 @@ use Linear, so a missing key is not a problem.
 ## Display
 
 - The signal line on a card and a sidebar row shows the Linear mark, the
-  identifier, and the state name. A hover card adds the title, the priority,
-  and the assignee.
+  identifier, and the state name. The line has no hover card of its own.
+- The worktree hover card of a sidebar row or a rail square shows the
+  identifier, the state name with its tinted mark, the title, the priority,
+  and the assignee. The addon fills `signalLine.Detail` for this.
 - The mark has the team's colour for the state, mixed 70% with `--fg`. A pale
   colour such as `#e2e2e2` then still reads on a light theme.
 - The git section of the inspector shows the identifier and the title, which
