@@ -82,6 +82,11 @@ async fn run(args: Args) -> Result<()> {
                 tracing::warn!("initial discovery: {e}");
             }
             let _ = d.discover(daemon::Summaries::All).await;
+            let parents: std::collections::BTreeSet<std::path::PathBuf> = d.lock().worktrees.values().filter_map(|w| w.path.parent().map(std::path::Path::to_path_buf)).collect();
+            let swept = git::sweep_trash(&parents.into_iter().collect::<Vec<_>>());
+            if swept > 0 {
+                tracing::info!("deleting {swept} archived trees that an earlier delete left");
+            }
         });
     }
     tokio::spawn(monitor::run(daemon.clone()));

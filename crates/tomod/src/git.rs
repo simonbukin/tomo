@@ -335,7 +335,9 @@ pub async fn checkpoint(worktree: &Path, message: &str) -> Result<Option<String>
         return Ok(None);
     }
     git(worktree, &["add", "-A"]).await?;
-    git(worktree, &["commit", "-m", message]).await?;
+    // The checkpoint is a snapshot, not a commit that a person wrote, so the repository's hooks do not gate it.
+    // A hook such as a full typecheck is slower than GIT_TIMEOUT, and a lint hook refuses work in progress.
+    git(worktree, &["-c", "core.hooksPath=/dev/null", "commit", "--no-verify", "-m", message]).await?;
     Ok(Some(git(worktree, &["rev-parse", "HEAD"]).await?.trim().to_string()))
 }
 
@@ -343,8 +345,57 @@ pub async fn branch_exists(repo: &Path, branch: &str) -> bool {
     git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).await.is_ok()
 }
 
+/// A hidden sibling of `path` on the same volume, so a rename to it is instant.
+fn trash_path(path: &Path, now_ms: u64) -> PathBuf {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    path.with_file_name(format!(".{name}.tomo-trash-{now_ms}"))
+}
+
+/// Deletes `path` in a process that outlives the daemon: `sh` starts `rm` in the background and exits at once.
+fn delete_detached(path: &Path) {
+    let started = std::process::Command::new("/bin/sh")
+        .args(["-c", "rm -rf -- \"$1\" &", "sh"])
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if let Err(e) = started {
+        tracing::warn!("delete {}: {e}", path.display());
+    }
+}
+
+/// Deletes the trash in `dirs` that an earlier background delete did not finish, such as one that a reboot stopped.
+/// Returns how many it started to delete.
+pub fn sweep_trash(dirs: &[PathBuf]) -> usize {
+    let trash: Vec<PathBuf> = dirs
+        .iter()
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with('.') && e.file_name().to_string_lossy().contains(".tomo-trash-"))
+        .map(|e| e.path())
+        .collect();
+    trash.iter().for_each(|t| delete_detached(t));
+    trash.len()
+}
+
+/// Removes a worktree without a long delete under `GIT_TIMEOUT`: the tree moves aside, Git forgets only this
+/// worktree, and the files go in the background. A repository worktree has about 240,000 files, and
+/// `git worktree remove` deletes them inline. It also handles a tree that an earlier remove left half deleted.
 pub async fn worktree_remove(repo: &Path, path: &Path) -> Result<()> {
-    git(repo, &["worktree", "remove", "--force", &path.to_string_lossy()]).await.map(|_| ())
+    let trash = trash_path(path, tomo_proto::now_ms());
+    let moved_aside = path.exists() && std::fs::rename(path, &trash).is_ok();
+    let removed = match git(repo, &["worktree", "remove", "--force", &path.to_string_lossy()]).await {
+        Err(_) if !list_worktrees(repo).await?.iter().any(|w| w.path == path) => Ok(()),
+        other => other.map(|_| ()),
+    };
+    match (moved_aside, &removed) {
+        (true, Ok(())) => delete_detached(&trash),
+        (true, Err(_)) => std::fs::rename(&trash, path).with_context(|| format!("put {} back", path.display()))?,
+        (false, _) => {}
+    }
+    removed
 }
 
 pub async fn remote_url(repo: &Path) -> Option<String> {
@@ -427,6 +478,105 @@ mod compare {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run_git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git").args(["-c", "user.email=t@t", "-c", "user.name=t"]).args(args).current_dir(cwd).output().unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn repo_with_worktrees(name: &str, worktrees: &[&str]) -> PathBuf {
+        let dir = PathBuf::from(format!("/private/tmp/tomo-git-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        run_git(&dir, &["init", "-q", "repo"]);
+        run_git(&dir.join("repo"), &["commit", "-q", "--allow-empty", "-m", "init"]);
+        for w in worktrees {
+            run_git(&dir.join("repo"), &["worktree", "add", "-q", "-b", w, dir.join(w).to_str().unwrap()]);
+        }
+        dir
+    }
+
+    async fn gone_within(path: &Path, secs: u64) -> bool {
+        for _ in 0..secs * 10 {
+            if !path.exists() {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        false
+    }
+
+    #[tokio::test]
+    async fn worktree_remove_forgets_only_that_worktree_and_deletes_it_in_the_background() {
+        let dir = repo_with_worktrees("remove", &["a", "b"]);
+        std::fs::create_dir_all(dir.join("a/node_modules/pkg")).unwrap();
+        std::fs::write(dir.join("a/node_modules/pkg/index.js"), "x").unwrap();
+        std::fs::rename(dir.join("b"), dir.join("b-moved-by-hand")).unwrap();
+
+        worktree_remove(&dir.join("repo"), &dir.join("a")).await.unwrap();
+
+        let listed: Vec<PathBuf> = list_worktrees(&dir.join("repo")).await.unwrap().into_iter().map(|w| w.path).collect();
+        assert!(!listed.contains(&dir.join("a")));
+        assert!(listed.contains(&dir.join("b")), "a stale sibling is not pruned by accident");
+        assert!(!dir.join("a").exists());
+        let trash: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().contains("tomo-trash")).map(|e| e.path()).collect();
+        for t in &trash {
+            assert!(gone_within(t, 10).await, "the trash is deleted");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn worktree_remove_finishes_a_tree_that_an_earlier_remove_left_half_deleted() {
+        let dir = repo_with_worktrees("half", &["a"]);
+        std::fs::remove_file(dir.join("a/.git")).unwrap();
+        std::fs::create_dir_all(dir.join("a/apps/web")).unwrap();
+
+        worktree_remove(&dir.join("repo"), &dir.join("a")).await.unwrap();
+
+        assert!(list_worktrees(&dir.join("repo")).await.unwrap().iter().all(|w| w.path != dir.join("a")));
+        assert!(!dir.join("a").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn worktree_remove_accepts_a_worktree_that_git_already_forgot() {
+        let dir = repo_with_worktrees("forgotten", &["a"]);
+        std::fs::remove_dir_all(dir.join("a")).unwrap();
+        run_git(&dir.join("repo"), &["worktree", "prune"]);
+
+        worktree_remove(&dir.join("repo"), &dir.join("a")).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn sweep_deletes_only_tomo_trash() {
+        let dir = PathBuf::from(format!("/private/tmp/tomo-git-test-sweep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".kashiba.tomo-trash-1/apps")).unwrap();
+        std::fs::create_dir_all(dir.join("kashiba")).unwrap();
+        std::fs::create_dir_all(dir.join(".not-trash")).unwrap();
+
+        assert_eq!(sweep_trash(&[dir.clone(), dir.join("missing")]), 1);
+
+        assert!(gone_within(&dir.join(".kashiba.tomo-trash-1"), 10).await);
+        assert!(dir.join("kashiba").exists() && dir.join(".not-trash").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_checkpoint_does_not_run_the_repository_hooks() {
+        let dir = repo_with_worktrees("hooks", &["a"]);
+        let hooks = dir.join("a/.hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        std::fs::write(hooks.join("pre-commit"), "#!/bin/sh\necho lint failed >&2\nexit 1\n").unwrap();
+        std::process::Command::new("chmod").arg("+x").arg(hooks.join("pre-commit")).status().unwrap();
+        run_git(&dir.join("repo"), &["config", "core.hooksPath", ".hooks"]);
+        std::fs::write(dir.join("a/wip.ts"), "work in progress").unwrap();
+
+        assert!(checkpoint(&dir.join("a"), "tomo: archive checkpoint").await.unwrap().is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn parses_porcelain_with_detached_and_branch_entries() {

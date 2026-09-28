@@ -567,6 +567,9 @@ impl Daemon {
                 }
                 let existing = if strays.is_empty() { existing } else { inner.store.meta_one(&id)?.or(existing) };
                 let previous = inner.worktrees.get(&id);
+                // A listed worktree is restored only when its path exists again. A list that a discovery read
+                // before an archive removed the worktree still names it, and must not clear the archive mark.
+                let still_archived = existing.as_ref().filter(|_| !path.exists()).and_then(|m| m.archived_at_ms.map(|at| (at, m.archived_branch.clone())));
                 let row = MetaRow {
                     id: id.clone(),
                     repo_id: repo.id.clone(),
@@ -575,8 +578,8 @@ impl Daemon {
                     metadata: existing.as_ref().map(|m| m.metadata.clone()).unwrap_or_default(),
                     last_active_ms: existing.as_ref().and_then(|m| m.last_active_ms),
                     first_seen_ms: existing.as_ref().and_then(|m| m.first_seen_ms).or(Some(now_ms())),
-                    archived_at_ms: None,
-                    archived_branch: None,
+                    archived_at_ms: still_archived.as_ref().map(|(at, _)| *at),
+                    archived_branch: still_archived.and_then(|(_, branch)| branch),
                     infra_name: Some(crate::identity::infra_name(
                         existing.as_ref().and_then(|m| m.infra_name.as_deref()),
                         existing
@@ -591,7 +594,7 @@ impl Daemon {
                         || m.gitdir != gitdir
                         || m.repo_id != repo.id
                         || m.first_seen_ms.is_none()
-                        || m.archived_at_ms.is_some()
+                        || m.archived_at_ms != row.archived_at_ms
                         || m.infra_name.is_none()
                 });
                 if needs_write {
@@ -613,7 +616,7 @@ impl Daemon {
                         metadata: row.metadata,
                         last_active_ms: row.last_active_ms,
                         first_seen_ms: row.first_seen_ms,
-                        archived_at_ms: None,
+                        archived_at_ms: row.archived_at_ms,
                         infra_name: row.infra_name.clone().unwrap_or_default(),
                     },
                 );
@@ -1434,6 +1437,11 @@ impl Daemon {
     /// Makes every non-ignored change recoverable from the branch before the tree goes away.
     async fn archive_checkpoint(path: &Path, mode: CheckpointMode) -> Result<Option<String>, RpcError> {
         if mode == CheckpointMode::Discard {
+            return Ok(None);
+        }
+        // A tree without its `.git` file is what a remove that stopped halfway leaves. Git cannot commit from it,
+        // and its branch already holds everything that Git knew of, so there is nothing to checkpoint.
+        if git::gitdir_name(path).is_none() {
             return Ok(None);
         }
         let s = git::summary(path).await.map_err(|e| err(ErrorCode::Git, e.to_string()))?;
@@ -2868,4 +2876,49 @@ mod tests {
         drop(inner);
         let _ = std::fs::remove_dir_all(&dir);
     }
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_archive_finishes_a_tree_that_an_earlier_remove_left_half_deleted() {
+        let (dir, repo) = repo_fixture("half-deleted");
+        git_in(&repo, &["worktree", "add", "-q", "-b", "feat", "../kashiba"]);
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let id = path_id(&canonical(&dir.join("kashiba")));
+        std::fs::remove_file(dir.join("kashiba/.git")).unwrap();
+        std::fs::create_dir_all(dir.join("kashiba/apps/web")).unwrap();
+        daemon.discover(Summaries::Cached).await.unwrap();
+
+        daemon.handle_inner(0, Call::WorktreeArchive { worktree_id: id.clone(), checkpoint: CheckpointMode::Checkpoint }).await.unwrap();
+
+        assert!(daemon.lock().worktrees[&id].archived_at_ms.is_some());
+        assert!(!dir.join("kashiba").exists());
+        assert!(git::list_worktrees(&repo).await.unwrap().iter().all(|w| w.path != canonical(&dir.join("kashiba"))));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_discovery_that_still_lists_an_archived_worktree_does_not_restore_it() {
+        let (dir, repo) = repo_fixture("stale-list");
+        git_in(&repo, &["worktree", "add", "-q", "-b", "feat", "../kashiba"]);
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let path = canonical(&dir.join("kashiba"));
+        let id = path_id(&path);
+        {
+            let inner = daemon.lock();
+            let w = inner.worktrees[&id].clone();
+            let mut row = Daemon::meta_row_of(&inner, &w, w.metadata.clone());
+            row.archived_at_ms = Some(1);
+            row.archived_branch = Some("feat".into());
+            inner.store.meta_upsert(&row).unwrap();
+        }
+        std::fs::remove_dir_all(dir.join("kashiba")).unwrap();
+
+        daemon.discover(Summaries::Cached).await.unwrap();
+
+        assert!(git::list_worktrees(&repo).await.unwrap().iter().any(|w| w.path == path), "git still lists it, as a list read before the remove does");
+        assert_eq!(daemon.lock().worktrees[&id].archived_at_ms, Some(1));
+        assert_eq!(daemon.lock().store.meta_one(&id).unwrap().unwrap().archived_at_ms, Some(1), "the store keeps the mark");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
 }

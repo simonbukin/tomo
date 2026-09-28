@@ -152,7 +152,8 @@ An archive runs these steps in this order:
 2. Checkpoint commit when the tree is dirty (see
    [state-and-recovery.md](state-and-recovery.md)).
 3. Close the worktree's panes and kill the processes they own.
-4. `git worktree remove --force`.
+4. Move the tree aside, make Git forget it, and delete it in the background
+   (see [state-and-recovery.md](state-and-recovery.md)).
 5. `worktree.archived`.
 
 The gate runs before the checkpoint, so a gate script that inspects
