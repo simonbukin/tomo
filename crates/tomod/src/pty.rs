@@ -190,6 +190,8 @@ pub type ExitSink = Box<dyn FnOnce(Option<i32>) + Send>;
 pub struct PtySession {
     pub pid: u32,
     conn: Mutex<UnixStream>,
+    /// Set by `detach`: the connection ends because this daemon leaves, not because the child exited.
+    detached: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Starts a holder for `spec` and waits until it listens. Tests run the same server in a thread,
@@ -270,6 +272,8 @@ impl PtySession {
         };
         conn.set_read_timeout(None)?;
         let mut reader = conn.try_clone()?;
+        let detached = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let left = detached.clone();
         std::thread::Builder::new().name(format!("pty-read-{pid}")).spawn(move || {
             let code = loop {
                 match holder::read_frame(&mut reader) {
@@ -279,12 +283,13 @@ impl PtySession {
                         break code;
                     }
                     Ok(Some(_)) => {}
+                    Ok(None) | Err(_) if left.load(std::sync::atomic::Ordering::SeqCst) => return,
                     Ok(None) | Err(_) => break None,
                 }
             };
             on_exit(code);
         })?;
-        Ok((PtySession { pid, conn: Mutex::new(conn) }, replay))
+        Ok((PtySession { pid, conn: Mutex::new(conn), detached }, replay))
     }
 
     fn send(&self, frame: &Frame) -> Result<()> {
@@ -317,6 +322,7 @@ impl PtySession {
 
     /// Ends the connection without touching the child: the pane lives on in its holder.
     pub fn detach(&self) {
+        self.detached.store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = self.conn.lock().unwrap_or_else(|p| p.into_inner()).shutdown(std::net::Shutdown::Both);
     }
 }
@@ -413,6 +419,16 @@ mod tests {
         second.write(b"x\n").unwrap();
         assert!(text_until(Vec::new(), &rx, "after-x").contains("after-x"), "input reaches the child after a reattach");
         assert_eq!(erx.recv_timeout(std::time::Duration::from_secs(5)).unwrap(), Some(0));
+    }
+
+    #[test]
+    fn a_detached_session_reports_no_exit() {
+        let (sink, exit, _rx, erx) = sinks();
+        let args = vec!["-c".to_string(), "sleep 30".to_string()];
+        let (session, _) = PtySession::spawn(Spawn { program: "/bin/sh", args: &args, cwd: Path::new("/"), env: &[], env_remove: &[], cols: 80, rows: 24 }, &socket("detach-no-exit"), sink, exit).unwrap();
+        session.detach();
+        assert!(erx.recv_timeout(std::time::Duration::from_millis(500)).is_err(), "a daemon that leaves is not a pane that exited");
+        session.hangup();
     }
 
     #[test]
