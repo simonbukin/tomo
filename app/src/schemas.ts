@@ -279,6 +279,19 @@ export const layoutNodeSchema: z.ZodSchema<LayoutNode> = z.lazy(() => z.union([z
         second: layoutNodeSchema
     })]));
 
+export const mainSyncSchema = z.union([z.object({
+        "kind": z.literal("up_to_date")
+    }), z.object({
+        "kind": z.literal("forwarded"),
+        commits: z.number()
+    }), z.object({
+        "kind": z.literal("skipped"),
+        reason: z.string()
+    }), z.object({
+        "kind": z.literal("failed"),
+        message: z.string()
+    })]);
+
 export const metadataPatchSchema = z.object({
     display_name: z.string().optional().nullable(),
     tags: z.array(z.string()).optional()

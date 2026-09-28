@@ -100,6 +100,10 @@ pub enum Call {
     RepoRemove {
         repo_id: Id,
     },
+    /// Fetches the upstream of the main worktree, and fast-forwards it when that is safe.
+    RepoSync {
+        repo_id: Id,
+    },
     RepoClone {
         url: String,
         dest: PathBuf,
@@ -768,6 +772,16 @@ pub struct AgentCommand {
     pub args: Vec<String>,
 }
 
+/// What one sync of a repository's main worktree did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MainSync {
+    UpToDate,
+    Forwarded { commits: u32 },
+    Skipped { reason: String },
+    Failed { message: String },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Repo {
     pub id: Id,
@@ -1240,6 +1254,7 @@ mod bindings {
         HookEvent::export_all(&cfg).unwrap();
         IntegrationStatus::export_all(&cfg).unwrap();
         ConfigIssue::export_all(&cfg).unwrap();
+        MainSync::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
         ProcessInfo::export_all(&cfg).unwrap();
         PaneResult::export_all(&cfg).unwrap();

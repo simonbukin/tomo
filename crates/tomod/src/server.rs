@@ -23,8 +23,9 @@ pub async fn serve(daemon: Arc<Daemon>, listener: UnixListener) {
     }
 }
 
+/// A call that waits on the network runs in its own task, so it does not hold up the other calls of its client.
 fn is_slow(call: &Call) -> bool {
-    crate::dispatch::is_slow(call)
+    matches!(call, Call::WorktreeCreate(_) | Call::RepoSync { .. }) || crate::dispatch::is_slow(call)
         || matches!(
             call,
             Call::RepoAdd { .. }

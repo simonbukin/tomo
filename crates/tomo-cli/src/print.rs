@@ -223,6 +223,18 @@ fn clock(at_ms: u64, offset_s: i64) -> String {
     format!("{:02}:{:02}", of_day / 3600, (of_day % 3600) / 60)
 }
 
+pub fn main_sync(r: &MainSync, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    match r {
+        MainSync::UpToDate => println!("up to date"),
+        MainSync::Forwarded { commits } => println!("fast-forwarded {commits} commits"),
+        MainSync::Skipped { reason } => println!("not synced: {reason}"),
+        MainSync::Failed { message } => println!("sync failed: {message}"),
+    }
+}
+
 pub fn integration_status(list: &[IntegrationStatus], json: bool) {
     if json {
         return emit_json(&list);

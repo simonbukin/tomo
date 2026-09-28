@@ -42,6 +42,7 @@ export * from "./IntegrationStatus";
 export * from "./Integrations";
 export * from "./IssueLevel";
 export * from "./LayoutNode";
+export * from "./MainSync";
 export * from "./MetadataPatch";
 export * from "./NoticeLevel";
 export * from "./NotificationSettings";
