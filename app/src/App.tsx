@@ -42,6 +42,7 @@ import { useWindowChrome, useWindowWidth } from "./windowChrome";
 const DEV_ROUTES: Record<string, () => Promise<{ default: ComponentType }>> = {
   "#ui-torture": () => import("./dev/UiTorture").then((m) => ({ default: m.UiTorture })),
   "#ui-gallery": () => import("./dev/Gallery").then((m) => ({ default: m.Gallery })),
+  "#terminal-lab": () => import("./dev/TerminalLab").then((m) => ({ default: m.TerminalLab })),
 };
 
 const devRoute = import.meta.env.DEV ? DEV_ROUTES[window.location.hash] : undefined;
