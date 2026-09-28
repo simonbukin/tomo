@@ -40,7 +40,7 @@ export function DropdownMenuContent({ children, className, side = "bottom", alig
 function ItemBody({ icon, shortcut, checked, children }: { icon?: ReactNode; shortcut?: string; checked?: boolean; children: ReactNode }) {
   return (
     <>
-      <span className="menu-check">{checked ? <Check className="icon" /> : icon}</span>
+      {(checked !== undefined || icon) && <span className="menu-check">{checked ? <Check className="icon" /> : icon}</span>}
       <span className="menu-label">{children}</span>
       {shortcut && <span className="menu-shortcut">{shortcut}</span>}
     </>
@@ -91,7 +91,7 @@ export function DropdownMenuSub({ label, icon, disabled, children }: { label: Re
   return (
     <Menu.SubmenuRoot disabled={disabled}>
       <Menu.SubmenuTrigger className="menu-item" disabled={disabled}>
-        <span className="menu-check">{icon}</span>
+        {icon && <span className="menu-check">{icon}</span>}
         <span className="menu-label">{label}</span>
         <ChevronRight className="icon menu-chevron" />
       </Menu.SubmenuTrigger>
