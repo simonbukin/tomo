@@ -2405,6 +2405,7 @@ impl Daemon {
             Call::FsList { worktree_id, rel_path } => self.fs_list(worktree_id, rel_path).await,
             Call::FsRecent { worktree_id, limit } => self.fs_recent(worktree_id, limit).await,
             Call::OpenExternal { worktree_id, rel_path, target } => self.open_external(worktree_id, rel_path, target).await,
+            Call::PathsExist { paths } => ok(paths.iter().map(|p| p.is_absolute() && p.exists()).collect::<Vec<_>>()),
             Call::OpenLocation { path, line, col } => self.open_location(path, line, col).await,
             Call::SessionList { worktree_id, limit } => {
                 let cwd = self.lock().worktrees.get(&worktree_id).map(|w| w.path.clone()).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;

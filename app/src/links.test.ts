@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findLinks, resolvePath } from "./links";
+import { candidatePaths, findLinks, resolvePath } from "./links";
 
 const texts = (line: string) => findLinks(line).map((l) => line.slice(l.start, l.end));
 
@@ -14,6 +14,15 @@ describe("findLinks", () => {
     expect(findLinks("  --> /Users/me/foo.rs:44:3")[0]).toMatchObject({ path: "/Users/me/foo.rs", line: 44, col: 3 });
     expect(texts("at run (./lib/a.ts:1:9)")).toEqual(["./lib/a.ts:1:9"]);
     expect(texts("~/notes/todo.md:2, and README.md:10.")).toEqual(["~/notes/todo.md:2", "README.md:10"]);
+  });
+
+  it("finds bare paths and drops the full stop that ends a sentence", () => {
+    expect(findLinks("edited src/app.tsx and ./README.md.")).toEqual([
+      { kind: "file", start: 7, end: 18, path: "src/app.tsx", line: null, col: null },
+      { kind: "file", start: 23, end: 34, path: "./README.md", line: null, col: null },
+    ]);
+    expect(texts("wrote /tmp/out, see docs/")).toEqual(["/tmp/out"]);
+    expect(texts("no paths in plain words or 3.14 or a:b")).toEqual([]);
   });
 
   it("ignores times, host ports, versions, and the port inside a URL", () => {
@@ -34,5 +43,19 @@ describe("resolvePath", () => {
     expect(resolvePath("/etc//hosts", "/w", null)).toBe("/etc/hosts");
     expect(resolvePath("~/n.md", "/w", "/Users/me")).toBe("/Users/me/n.md");
     expect(resolvePath("~/n.md", "/w", null)).toBeNull();
+  });
+});
+
+describe("candidatePaths", () => {
+  it("tries the pane cwd, then the worktree root, without repeats", () => {
+    expect(candidatePaths("src/a.ts", "/w/app", "/w", null)).toEqual(["/w/app/src/a.ts", "/w/src/a.ts"]);
+    expect(candidatePaths("src/a.ts", "/w", "/w", null)).toEqual(["/w/src/a.ts"]);
+    expect(candidatePaths("src/a.ts", "/w", null, null)).toEqual(["/w/src/a.ts"]);
+  });
+
+  it("keeps an absolute or home path to one place", () => {
+    expect(candidatePaths("/etc/hosts", "/w/app", "/w", null)).toEqual(["/etc/hosts"]);
+    expect(candidatePaths("~/n.md", "/w/app", "/w", "/Users/me")).toEqual(["/Users/me/n.md"]);
+    expect(candidatePaths("~/n.md", "/w/app", "/w", null)).toEqual([]);
   });
 });

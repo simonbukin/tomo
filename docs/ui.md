@@ -239,11 +239,18 @@ is on.
 
 ## Terminal links and file drop
 
-- Cmd-click a URL in a terminal: the worktree browser pane opens it. A plain
-  click does nothing.
-- Cmd-click `path:line` or `path:line:col`: the daemon call `open_location`
-  starts `editor_command` at that place. A relative path resolves against
-  the pane cwd. See `editor_command` in [data-model.md](data-model.md).
+- Hold Cmd over a URL or a file path in a terminal: Tomo underlines it.
+  Without Cmd, a link shows no underline, and a plain click does nothing.
+- Cmd-click a URL: the worktree browser pane opens it.
+- Cmd-click `path`, `path:line`, or `path:line:col`: the daemon call
+  `open_location` starts `editor_command` at that place. See
+  `editor_command` in [data-model.md](data-model.md).
+- A relative path resolves against the pane cwd first, then against the
+  worktree root. A path is a link only when the daemon call `paths_exist`
+  finds it on disk.
+- Right-click a URL: `Open in pane`, `Open in browser` (the system browser),
+  and `Copy link`. Right-click a file path: `Open in editor`,
+  `Reveal in Finder`, and `Copy path`.
 - Drop Finder files on a terminal pane: Tomo types the shell-escaped
   absolute paths, separated by spaces, through `pane_send`. On macOS, wry
   gives the drop position in view points, not in physical pixels. The hit
@@ -256,7 +263,7 @@ is on.
   because only some agents read the clipboard on Ctrl-V, and a shell reads
   it as a quoted insert.
 
-The pure parts are `findLinks` and `resolvePath` in `links.ts`, and
+The pure parts are `findLinks`, `resolvePath`, and `candidatePaths` in `links.ts`, and
 `shellEscape`, `dropText`, and the hit test in `fileDrop.ts`. The xterm link
 provider and the Tauri drop listener are in `terminalHooks.ts`.
 
