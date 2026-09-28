@@ -15,7 +15,7 @@ import { KIND_LABEL, type FsEntry, type Worktree } from "./types";
 
 export const FILES_KEY = "files";
 
-/** The files of the worktree on screen, newest change first, while the palette is open. */
+/** The files of the worktree on screen, newest change first, while the palette shows the file list. */
 function useWorktreeFiles(open: boolean, worktreeId: string | null): FsEntry[] {
   const [files, setFiles] = useState<FsEntry[]>([]);
   useEffect(() => {
@@ -99,13 +99,13 @@ export function Palette() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const worktreeId = state?.ui.view === "worktree" ? state.ui.activeWorktreeId : null;
-  const files = useWorktreeFiles(!!open, worktreeId);
+  const top = stack[stack.length - 1];
+  const files = useWorktreeFiles(!!open && top?.entry.key === FILES_KEY, worktreeId);
   const filesEntry: PaletteEntry | null = useMemo(
-    () => (worktreeId ? { key: FILES_KEY, label: "open file...", hint: files.length ? `${files.length} files` : "files", context: true, children: () => fileEntries(worktreeId, files) } : null),
+    () => (worktreeId ? { key: FILES_KEY, label: "open file", children: () => fileEntries(worktreeId, files) } : null),
     [worktreeId, files],
   );
-  const root = useMemo(() => (state ? [...(filesEntry ? [filesEntry] : []), ...paletteEntries(state)] : []), [state, filesEntry]);
-  const top = stack[stack.length - 1];
+  const root = useMemo(() => (state ? paletteEntries(state) : []), [state]);
   const entries = useMemo(() => (top ? (top.entry.key === FILES_KEY && filesEntry ? filesEntry : top.entry).children?.() ?? [] : root), [top, root, filesEntry]);
   const results = useMemo(() => rankEntries(entries, query, top ? [] : recent).slice(0, 60), [entries, top, query, recent]);
 
