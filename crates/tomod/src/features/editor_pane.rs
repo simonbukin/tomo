@@ -24,7 +24,7 @@ pub const MAX_BYTES: u64 = 2 * 1024 * 1024;
 pub fn resolve(root: &Path, path: &str) -> Result<(PathBuf, String), RpcError> {
     let outside = || err(ErrorCode::BadRequest, format!("{path} is outside the worktree"));
     let root = root.canonicalize().map_err(|e| err(ErrorCode::NotFound, format!("worktree folder: {e}")))?;
-    let given = Path::new(path.trim());
+    let given = Path::new(path);
     if path.trim().is_empty() || given.components().any(|c| c == Component::ParentDir) {
         return Err(outside());
     }
@@ -86,6 +86,23 @@ pub fn read_text(real: &Path, rel: &str) -> Result<FileText, RpcError> {
     Ok(FileText { path: rel.to_string(), content: text_of(rel, bytes)?, version, mtime_ms: mtime_ms(real) })
 }
 
+fn check_version(real: &Path, rel: &str, expected: Option<&str>) -> Result<(), RpcError> {
+    let current = match std::fs::read(real) {
+        Ok(bytes) => Some(version_of(&bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(err(ErrorCode::Io, format!("{rel}: {e}"))),
+    };
+    if current.as_deref() == expected {
+        return Ok(());
+    }
+    let why = match (&current, expected) {
+        (None, _) => "was deleted",
+        (Some(_), None) => "already exists",
+        _ => "changed",
+    };
+    Err(err(ErrorCode::Conflict, format!("{rel} {why} on disk since it was read")))
+}
+
 /// Replaces the file through a temporary file in the same folder and a rename, so a reader
 /// never sees half a file. The file keeps its mode. `expected` is the version that the
 /// writer read; `None` means that the file must not exist yet.
@@ -93,19 +110,7 @@ pub fn write_text(real: &Path, rel: &str, content: &str, expected: Option<&str>)
     if content.len() as u64 > MAX_BYTES {
         return Err(too_big(rel, content.len() as u64));
     }
-    let current = match std::fs::read(real) {
-        Ok(bytes) => Some(version_of(&bytes)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(err(ErrorCode::Io, format!("{rel}: {e}"))),
-    };
-    if current.as_deref() != expected {
-        let why = match (&current, expected) {
-            (None, _) => "was deleted",
-            (Some(_), None) => "already exists",
-            _ => "changed",
-        };
-        return Err(err(ErrorCode::Conflict, format!("{rel} {why} on disk since it was read")));
-    }
+    check_version(real, rel, expected)?;
     let io = |e: std::io::Error| err(ErrorCode::Io, format!("{rel}: {e}"));
     let dir = real.parent().ok_or_else(|| err(ErrorCode::BadRequest, format!("{rel} has no folder")))?;
     let name = real.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -119,11 +124,15 @@ pub fn write_text(real: &Path, rel: &str, content: &str, expected: Option<&str>)
         if let Some(mode) = mode {
             std::fs::set_permissions(&tmp, mode)?;
         }
-        std::fs::rename(&tmp, real)
-    })();
+        Ok(())
+    })()
+    .map_err(io)
+    // The fsync above takes milliseconds; a second check narrows the window for a write by an agent to the rename itself.
+    .and_then(|()| check_version(real, rel, expected))
+    .and_then(|()| std::fs::rename(&tmp, real).map_err(io));
     if let Err(e) = written {
         let _ = std::fs::remove_file(&tmp);
-        return Err(io(e));
+        return Err(e);
     }
     Ok(FileWritten { version: version_of(content.as_bytes()), mtime_ms: mtime_ms(real) })
 }
@@ -282,6 +291,7 @@ mod tests {
         assert_eq!(code(resolve(&wt, "src/../../outside/secret")), ErrorCode::BadRequest);
         assert_eq!(code(resolve(&wt, &t.0.join("outside/secret").to_string_lossy())), ErrorCode::BadRequest);
         assert_eq!(code(resolve(&wt, "")), ErrorCode::BadRequest);
+        assert_eq!(resolve(&wt, "src/a.rs ").unwrap().1, "src/a.rs ");
         std::os::unix::fs::symlink(t.0.join("outside/secret"), wt.join("link")).unwrap();
         std::os::unix::fs::symlink(t.0.join("outside"), wt.join("dirlink")).unwrap();
         assert_eq!(code(resolve(&wt, "link")), ErrorCode::BadRequest);

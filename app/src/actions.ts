@@ -252,6 +252,14 @@ const failOn = (worktreeId: Id, op: string) => (e: unknown) => {
   toast({ level: "error", title: `${op} failed`, detail: message });
 };
 
+/** A warning for an archive that drops unsaved editor buffers, or an empty string. */
+function unsavedIn(worktreeIds: Id[]): string {
+  const paths = Object.values(getState().panes)
+    .filter((p) => worktreeIds.includes(p.worktree_id) && isDirty(p.id))
+    .map((p) => p.editor?.path ?? p.id);
+  return paths.length ? ` Unsaved edits in ${paths.join(", ")} are lost.` : "";
+}
+
 export function archiveWorktree(worktreeId: Id): void {
   const w = byId(worktreeId);
   if (!w) return;
@@ -259,7 +267,7 @@ export function archiveWorktree(worktreeId: Id): void {
     dialog: {
       kind: "confirm",
       title: `Archive ${w.name}?`,
-      body: ARCHIVE_BODY,
+      body: ARCHIVE_BODY + unsavedIn([worktreeId]),
       confirmLabel: "Archive",
       check: DISCARD_LABEL,
       onConfirm: (discard) => {
@@ -367,7 +375,7 @@ export function bulkArchive(ids: Id[]): void {
     dialog: {
       kind: "confirm",
       title: `Archive ${targets.length} worktrees?`,
-      body: `${targets.map((w) => w.name).join(", ")}. ${ARCHIVE_BODY}${skipped ? ` ${skipped} skipped (main or already archived).` : ""}`,
+      body: `${targets.map((w) => w.name).join(", ")}. ${ARCHIVE_BODY}${unsavedIn(targets.map((w) => w.id))}${skipped ? ` ${skipped} skipped (main or already archived).` : ""}`,
       confirmLabel: "Archive all",
       check: DISCARD_LABEL,
       onConfirm: async (discard) => {

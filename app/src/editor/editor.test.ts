@@ -16,7 +16,7 @@ const tab = { id: "t1", worktree_id: "w1", title: "main.rs", position: 0, is_act
 
 function withEditor(dirty: boolean) {
   store.setState({ panes: { e1: aPane({ id: "e1", kind: "editor", editor: { path: "src/main.rs", line: 1, col: 1 } }) }, tabs: { w1: [tab] }, dialog: null });
-  putSession({ paneId: "e1", worktreeId: "w1", path: "src/main.rs", doc: edited(loaded("v1"), dirty), state: null, view: null, saved: null, scroll: null, queue: Promise.resolve(), comparing: false });
+  putSession({ paneId: "e1", worktreeId: "w1", path: "src/main.rs", doc: edited(loaded("v1"), dirty), state: null, view: null, show: null, saved: null, scroll: null, queue: Promise.resolve(), comparing: false });
 }
 
 afterEach(() => {
