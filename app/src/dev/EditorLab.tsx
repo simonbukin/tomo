@@ -54,6 +54,7 @@ const disk: Disk = new Map<string, { text: string; version: number } | "binary">
   ["src/normal.rs", { text: normal, version: 1 }],
   ["data/big.json", { text: JSON.stringify(Array.from({ length: 16000 }, (_, i) => ({ id: i, name: `row ${i}`, tags: ["a", "b"], ok: i % 3 === 0 })), null, 1), version: 1 }],
   ["logo.png", "binary"],
+  ["run.bat", { text: "@echo off\r\necho one\r\necho two\r\n", version: 1 }],
 ]);
 
 const fail = (code: string, message: string) => Promise.reject({ code, message });
@@ -99,6 +100,7 @@ const TABS: Tab[] = [
   tab("t2", "normal.rs", 1, { type: "leaf", pane_id: "e3" }, "e3"),
   tab("t3", "big.json", 2, { type: "leaf", pane_id: "e4" }, "e4"),
   tab("t4", "logo.png", 3, { type: "leaf", pane_id: "e5" }, "e5"),
+  tab("t5", "run.bat", 4, { type: "leaf", pane_id: "e6" }, "e6"),
 ];
 
 const config = (scheme: "dark" | "light") =>
@@ -114,7 +116,7 @@ export function EditorLab() {
   useEffect(() => {
     (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = { invoke: (cmd: string, args: { method: string; params: Record<string, unknown> }) => (cmd === "rpc" ? fakeRpc(args.method, args.params ?? {}) : Promise.resolve(null)) };
     const w: Worktree = aWorktree({ id: "w1", name: "kobe", path: ROOT });
-    const panes = [editor("e1", "t1", "src/main.rs"), editor("e2", "t1", "notes/todo.md"), editor("e3", "t2", "src/normal.rs"), editor("e4", "t3", "data/big.json"), editor("e5", "t4", "logo.png")];
+    const panes = [editor("e1", "t1", "src/main.rs"), editor("e2", "t1", "notes/todo.md"), editor("e3", "t2", "src/normal.rs"), editor("e4", "t3", "data/big.json"), editor("e5", "t4", "logo.png"), editor("e6", "t5", "run.bat")];
     setState({
       ...getState(),
       loaded: true,

@@ -17,6 +17,8 @@ export interface Session {
   /** The buffer while no view shows it. */
   state: EditorState | null;
   view: EditorView | null;
+  /** Makes the view of a mounted pane once the buffer exists. */
+  show: (() => void) | null;
   /** The text of the base version, to tell a real edit from an edit that was undone. */
   saved: Text | null;
   scroll: StateEffect<unknown> | null;

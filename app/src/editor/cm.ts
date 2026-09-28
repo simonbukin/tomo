@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { bracketMatching, foldGutter, foldKeymap, HighlightStyle, indentOnInput, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { gotoLine, highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, Prec, type Extension, type Text, type TransactionSpec } from "@codemirror/state";
+import { Compartment, EditorState, Prec, Text, type Extension, type TransactionSpec } from "@codemirror/state";
 import { crosshairCursor, drawSelection, dropCursor, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers, rectangularSelection } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import { onFrame, rpc, RpcFailure, rpcParsed } from "../api";
@@ -121,8 +121,12 @@ function keepCursor(s: Session, state: EditorState): void {
   );
 }
 
-function extensionsFor(s: Session): Extension[] {
+/** A file with CRLF line ends keeps them: without this, a save would rewrite every line. */
+const lineEndsOf = (text: string): Extension => (text.includes("\r\n") ? EditorState.lineSeparator.of("\r\n") : []);
+
+function extensionsFor(s: Session, text: string): Extension[] {
   return [
+    lineEndsOf(text),
     tomoKeys,
     lineNumbers(),
     foldGutter(),
@@ -180,7 +184,7 @@ async function readDisk(s: Session): Promise<Read> {
 function replaceText(s: Session, text: string): void {
   const state = current(s);
   if (!state) return;
-  const change = model.minimalChange(state.doc.toString(), text);
+  const change = model.minimalChange(state.sliceDoc(), text);
   const tr = state.update({ changes: change ?? [] });
   s.saved = tr.state.doc;
   if (s.view) s.view.dispatch(tr);
@@ -197,7 +201,8 @@ async function syncDisk(s: Session, target: EditorTarget | null): Promise<void> 
     const step = model.opened(read);
     const at = pendingReveal.get(s.paneId) ?? target ?? { line: 1, col: 1 };
     pendingReveal.delete(s.paneId);
-    const state = EditorState.create({ doc: step.reload ?? "", extensions: extensionsFor(s) });
+    const text = step.reload ?? "";
+    const state = EditorState.create({ doc: text, extensions: extensionsFor(s, text) });
     s.state = state.update({ selection: { anchor: posOf(state.doc, at.line, at.col) } }).state;
     s.saved = s.state.doc;
     setDoc(s.paneId, () => step.doc);
@@ -206,7 +211,9 @@ async function syncDisk(s: Session, target: EditorTarget | null): Promise<void> 
   }
   const step = model.diskRead(s.doc, read);
   if (step.reload !== undefined) replaceText(s, step.reload);
-  setDoc(s.paneId, () => step.doc);
+  if (read.kind === "missing") s.saved = Text.empty;
+  const doc = current(s)?.doc;
+  setDoc(s.paneId, () => (read.kind === "missing" && doc ? model.edited(step.doc, !doc.eq(Text.empty)) : step.doc));
 }
 
 function enqueue(s: Session, job: () => Promise<void>): Promise<void> {
@@ -219,7 +226,7 @@ function onFileChanged(frame: Frame): void {
   const { worktree_id, path } = frame.data as { worktree_id: Id; path: string };
   allSessions()
     .filter((s) => s.worktreeId === worktree_id && s.path === path)
-    .forEach((s) => void enqueue(s, () => syncDisk(s, null)));
+    .forEach((s) => void enqueue(s, () => syncDisk(s, null)).then(() => s.show?.()));
 }
 
 onFrame(onFileChanged);
@@ -234,7 +241,7 @@ export const fileChanged = (worktreeId: Id, path: string): void => onFileChanged
 export function mount(paneId: Id, host: HTMLElement, worktreeId: Id, target: EditorTarget): () => void {
   const started = performance.now();
   const known = getSession(paneId);
-  const s: Session = known ?? { paneId, worktreeId, path: target.path, doc: model.initialDoc, state: null, view: null, saved: null, scroll: null, queue: Promise.resolve(), comparing: false };
+  const s: Session = known ?? { paneId, worktreeId, path: target.path, doc: model.initialDoc, state: null, view: null, show: null, saved: null, scroll: null, queue: Promise.resolve(), comparing: false };
   if (!known) putSession(s);
   let view: EditorView | null = null;
   let disposed = false;
@@ -249,10 +256,12 @@ export function mount(paneId: Id, host: HTMLElement, worktreeId: Id, target: Edi
     if (host.closest(".pane-active")) v.focus();
     requestAnimationFrame(() => performance.measure(`editor paint ${s.path}`, { start: started, end: performance.now() }));
   };
+  s.show = show;
   if (s.state) show();
   void enqueue(s, () => syncDisk(s, target)).then(show);
   return () => {
     disposed = true;
+    if (s.show === show) s.show = null;
     unregister();
     if (!view) return;
     s.scroll = view.scrollSnapshot();
@@ -280,7 +289,7 @@ function write(s: Session, expected: string | null): Promise<void> {
     if (!state) return;
     const snapshot = state.doc;
     try {
-      const r = await rpcParsed("fs_write", fileWrittenSchema, { worktree_id: s.worktreeId, path: s.path, content: snapshot.toString(), expected_version: expected });
+      const r = await rpcParsed("fs_write", fileWrittenSchema, { worktree_id: s.worktreeId, path: s.path, content: snapshot.sliceString(0, snapshot.length, state.lineBreak), expected_version: expected });
       s.saved = snapshot;
       const now = current(s);
       setDoc(s.paneId, () => model.saved(r.version, !!now && !now.doc.eq(snapshot)));
@@ -335,7 +344,7 @@ export const dismiss = (paneId: Id): void => setDoc(paneId, model.dismiss);
 
 export function retry(paneId: Id): void {
   const s = getSession(paneId);
-  if (s) void enqueue(s, () => syncDisk(s, null));
+  if (s) void enqueue(s, () => syncDisk(s, null)).then(() => s.show?.());
 }
 
 /** A side-by-side view of the buffer and the disk text, both read-only. */

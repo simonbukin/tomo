@@ -93,13 +93,17 @@ text is lost.
    the same folder, calls `fsync`, gives it the mode of the old file, and
    renames it over the file. A reader sees the old file or the new file,
    never a part of one. On an error the temporary file is removed.
-4. The reply carries the new version.
+4. Just before the rename, the daemon reads the version again. If it
+   changed during the write and the `fsync`, the write fails with
+   `conflict` and the temporary file is removed.
+5. The reply carries the new version.
 
 `expected_version: null` means "the file must not exist". The editor uses
 it to create a new file, and to create again a file that was deleted.
 
-A small window stays open between step 2 and the rename: a write by an
-agent in that window is lost. The window is some microseconds long.
+A small window stays open between the second check and the rename: a
+write by an agent in that window is lost. The window is the length of one
+`rename` call.
 
 ## The watch
 
@@ -153,13 +157,15 @@ a red line in the bar.
 
 The legend and the tab show `●` before the file name while the buffer has
 edits. Undo back to the saved text removes the dot. Closing a pane or a tab
-with edits asks `Discard and close`. `close others` asks for each tab, and
+with edits asks `Discard and close`. The archive dialog names the files with
+unsaved edits, because an archive closes the panes. `close others` asks for each tab, and
 the last question wins; a tab that the user did not confirm stays open.
 
 ## Editing
 
 CodeMirror 6 with line numbers, folding, bracket match, search, undo, and
-multiple selections. Soft wrap is off. The language comes from the file
+multiple selections. Soft wrap is off. A file with CRLF line ends keeps them: the buffer uses
+`\r\n` as its line separator, so a save does not rewrite every line. The language comes from the file
 name (`@codemirror/language-data`) and loads after the first paint. The
 theme reads the slab tokens, so it follows dark and light with no second
 theme. The code font is the terminal font (`[terminal] font_family` and
@@ -237,3 +243,8 @@ reload, notice, compare, and conflict paths show in a browser.
   ask.
 - No autosave, no soft-wrap toggle, no editable merge.
 - A file that is open in two worktrees has two panes with no link.
+- The GUI finds an open pane for a path with a plain prefix test on the
+  worktree path. A path with another spelling of the same folder (for
+  example `/tmp` and `/private/tmp`) opens a second pane, or goes to the
+  external editor. The two buffers cannot overwrite each other: the second
+  save gets `conflict`.
