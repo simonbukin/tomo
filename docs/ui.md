@@ -260,10 +260,10 @@ is on.
 - A relative path resolves against the pane cwd first, then against the
   worktree root. A path is a link only when the daemon call `paths_exist`
   finds it on disk.
-- Right-click a URL: `Open in pane`, `Open in browser` (the system browser),
-  and `Copy link`. Right-click a file path: `Open in pane` (only inside the
-  worktree), `Open in editor` (`editor_command`), `Reveal in Finder`, and
-  `Copy path`.
+- Right-click a URL: `open in pane`, `open in external browser` (the system browser),
+  and `copy link`. Right-click a file path: `open in pane` (only inside the
+  worktree), `open in editor` (`editor_command`), `reveal in finder`, and
+  `copy path`.
 - Drop Finder files on a terminal pane: Tomo types the shell-escaped
   absolute paths, separated by spaces, through `pane_send`. On macOS, wry
   gives the drop position in view points, not in physical pixels. The hit

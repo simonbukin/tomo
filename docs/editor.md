@@ -192,7 +192,7 @@ not change the tab. See [keyboard.md](keyboard.md).
 - Terminal Cmd-click on `path`, `path:line`, or `path:line:col` inside the
   worktree opens it in an editor pane at that place. A path outside the
   worktree opens in `editor_command`. The right-click menu has
-  `Open in pane` and `Open in editor`.
+  `open in pane` and `open in editor`.
 - The Files section of the inspector: a click on a file opens it in a pane.
   The file menu has `open in pane` and `open in editor`.
 - The palette: `Open file...` (Cmd+P) lists the files of `fs_recent`,
