@@ -9,6 +9,7 @@ import { containsPoint, cssPoint, dropText } from "./fileDrop";
 import { candidatePaths, findLinks, type TermLink } from "./links";
 import type { MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
+import { openFile, worktreeRelative } from "./editor/editor";
 import {failQuietly, failToast, getState} from "./store";
 import { focusTerminal } from "./terminals";
 import type { Id } from "./types";
@@ -36,10 +37,27 @@ async function resolveLinks(links: TermLink[], paneId: Id): Promise<TermLink[]> 
   });
 }
 
-function openLink(link: TermLink, paneId: Id): void {
+type FileLink = Extract<TermLink, { kind: "file" }>;
+
+const openInExternalEditor = (link: FileLink) => rpc("open_location", { path: link.path, line: link.line, col: link.col }).catch(failToast("Could not open the file"));
+
+/** The worktree of the pane when the file is inside it: only such a file opens in an editor pane. */
+function editorWorktree(link: FileLink, paneId: Id): Id | null {
   const pane = getState().panes[paneId];
-  if (link.kind === "url") return openEndpoint(link.url, pane?.worktree_id);
-  rpc("open_location", { path: link.path, line: link.line, col: link.col }).catch(failToast("Could not open the file"));
+  const root = getState().worktrees.find((w) => w.id === pane?.worktree_id)?.path;
+  return pane && root && worktreeRelative(root, link.path) !== null ? pane.worktree_id : null;
+}
+
+function openInPane(link: FileLink, worktreeId: Id): void {
+  void openFile(worktreeId, link.path, link.line ? { line: link.line, col: link.col } : null);
+}
+
+/** A file inside the worktree opens in an editor pane; any other file opens in the external editor. */
+function openLink(link: TermLink, paneId: Id): void {
+  if (link.kind === "url") return openEndpoint(link.url, getState().panes[paneId]?.worktree_id);
+  const worktreeId = editorWorktree(link, paneId);
+  if (worktreeId) openInPane(link, worktreeId);
+  else void openInExternalEditor(link);
 }
 
 const copy = (text: string) => navigator.clipboard.writeText(text).catch(failToast("Could not copy"));
@@ -53,8 +71,10 @@ function linkMenu(link: TermLink, paneId: Id): MenuItem[] {
       { label: "Copy link", run: () => void copy(link.url) },
     ];
   }
+  const worktreeId = editorWorktree(link, paneId);
   return [
-    { label: "Open in editor", run: () => openLink(link, paneId) },
+    ...(worktreeId ? [{ label: "Open in pane", run: () => openInPane(link, worktreeId) }] : []),
+    { label: "Open in editor", run: () => void openInExternalEditor(link) },
     { label: "Reveal in Finder", run: () => void revealItemInDir(link.path).catch(failToast("Could not reveal the file")) },
     { separator: true },
     { label: "Copy path", run: () => void copy(link.path) },
@@ -63,7 +83,7 @@ function linkMenu(link: TermLink, paneId: Id): MenuItem[] {
 
 /**
  * URLs and existing file paths in the terminal. Cmd-hover underlines one, Cmd-click opens it: a URL
- * in the worktree browser, a file in the editor at its line. Right-click gives a menu. Returns the disposer.
+ * in the worktree browser, a file in an editor pane at its line. Right-click gives a menu. Returns the disposer.
  */
 export function registerTerminalLinks(term: Terminal, paneId: Id, host: HTMLElement): () => void {
   let meta = false;

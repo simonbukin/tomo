@@ -9,6 +9,7 @@
 @import "./home.css";
 @import "./terminal.css";
 @import "../browser/browser.css";
+@import "../editor/editor.css";
 @import "./palette.css";
 @import "./activity.css";
 @import "./agents.css";

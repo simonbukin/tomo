@@ -18,6 +18,7 @@ export type {
   Authority,
   Branch,
   CheckpointMode,
+  EditorTarget,
   Config,
   ConfigIssue,
   Diagnostic,

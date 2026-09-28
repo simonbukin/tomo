@@ -53,7 +53,8 @@ export interface State {
   daemonStatus: Status | null;
   /** The last `system_stats` sample. */
   system: SystemStats | null;
-  paletteOpen: boolean;
+  /** `files` opens the palette at the file list of the worktree on screen. */
+  paletteOpen: boolean | "files";
   shortcutsOpen: boolean;
   dialog: Dialog | null;
   connectionNonce: number;

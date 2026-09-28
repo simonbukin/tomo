@@ -25,6 +25,7 @@ const PANE: Pane = {
   process_cmd: null,
   kind: "terminal",
   url: null,
+  editor: null,
 };
 
 const config = (scheme: "dark" | "light") =>
@@ -54,7 +55,7 @@ export function TerminalLab() {
     });
     window.lab = {
       term: () => getTerminal(PANE.id)?.term,
-      write: (text) => getTerminal(PANE.id)?.term.write(text),
+      write: (text) => getTerminal(PANE.id)?.term?.write(text),
       size: (width, height) => setBox({ width, height }),
       theme: (scheme) => {
         document.documentElement.dataset.theme = scheme;

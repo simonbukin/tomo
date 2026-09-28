@@ -1,5 +1,6 @@
 import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
 import { browserCommand, openBrowser } from "./browser/browser";
+import { openFile } from "./editor/editor";
 import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
 import type { MenuItem } from "./components/ui";
@@ -247,9 +248,30 @@ export function browserMenu(paneId: Id, s: State = getState()): MenuItem[] {
   ];
 }
 
+export function editorMenu(paneId: Id, s: State = getState()): MenuItem[] {
+  const { pane, key } = paneContext(s, paneId);
+  const rel = pane?.editor?.path ?? "";
+  const root = s.worktrees.find((w) => w.id === pane?.worktree_id)?.path ?? "";
+  return [
+    { label: "save", shortcut: key("editor_save"), run: () => void import("./editor/cm").then((m) => m.save(paneId)) },
+    sep,
+    { label: `open in ${editorName(s.config?.editor_command)}`, disabled: !pane, run: () => openExternalFor(pane!.worktree_id, "editor", rel) },
+    { label: "reveal in finder", disabled: !pane, run: () => openExternalFor(pane!.worktree_id, "finder", rel) },
+    copyMenu([
+      ["Path", root && rel ? `${root}/${rel}` : null],
+      ["Relative path", rel, "relative path"],
+    ]),
+    sep,
+    sendToItem(s, pane),
+    sep,
+    { label: "close", shortcut: key("close_pane"), disabled: isLastPane(paneId, s), run: () => closePane(paneId) },
+  ];
+}
+
 export function fileMenu(w: Worktree, relPath: string): MenuItem[] {
   const abs = relPath ? `${w.path}/${relPath}` : w.path;
   return [
+    ...(relPath ? [{ label: "open in pane", run: () => void openFile(w.id, relPath) }] : []),
     { label: "open in editor", run: () => openExternalFor(w.id, "editor", relPath) },
     { label: "reveal in finder", run: () => openExternalFor(w.id, "finder", relPath) },
     sep,

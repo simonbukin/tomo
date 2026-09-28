@@ -40,6 +40,7 @@ export const aPane = (patch: Partial<Pane> = {}): Pane => ({
   process_cmd: null,
   kind: "terminal",
   url: null,
+  editor: null,
   ...patch,
 });
 

@@ -6,13 +6,14 @@ import { stepZoom, type Appearance } from "./appearance";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { RpcFailure, rpc, rpcParsed } from "./api";
 import { openInBrowser } from "./browser/browser";
+import { isDirty } from "./editor/sessions";
 import {activeTab, agentsOf, clearSelection, errorText, failQuietly, failToast, getState, needsMe, paneIds, setRowError, setState, setUi, showStatus, splitsAllowed, toast} from "./store";
 import { focusTerminal, neighbor } from "./terminals";
 import type { AgentKind, CheckpointMode, Id, SidebarSort, SplitDirection, Tab, Worktree } from "./types";
 
 const byId = (id: Id) => getState().worktrees.find((w) => w.id === id) ?? null;
 
-export type CommandGroup = "Navigation" | "Worktrees" | "Tabs" | "Panes" | "Agents" | "Browser" | "General";
+export type CommandGroup = "Navigation" | "Worktrees" | "Tabs" | "Panes" | "Agents" | "Browser" | "Editor" | "General";
 
 export interface Action {
   id: string;
@@ -78,9 +79,28 @@ export async function newTab(): Promise<void> {
   }
 }
 
-export async function closePane(paneId?: Id): Promise<void> {
+/** Asks before a close drops unsaved editor buffers. Runs `close` at once when nothing is unsaved. */
+function confirmUnsaved(paneIdsToClose: Id[], what: string, close: () => void): void {
+  const unsaved = paneIdsToClose.filter(isDirty).map((id) => getState().panes[id]?.editor?.path ?? id);
+  if (!unsaved.length) return close();
+  setState({
+    dialog: {
+      kind: "confirm",
+      title: `Close ${what} with unsaved edits?`,
+      body: `${unsaved.join(", ")} ${unsaved.length === 1 ? "has" : "have"} edits that are not saved. Closing discards them.`,
+      confirmLabel: "Discard and close",
+      destructive: true,
+      onConfirm: close,
+    },
+  });
+}
+
+export function closePane(paneId?: Id): void {
   const id = paneId ?? focusedPaneId();
-  if (!id) return;
+  if (id) confirmUnsaved([id], "pane", () => void closePaneNow(id));
+}
+
+async function closePaneNow(id: Id): Promise<void> {
   try {
     await rpc("pane_close", { pane_id: id, force: false });
   } catch (e) {
@@ -99,7 +119,12 @@ export async function closePane(paneId?: Id): Promise<void> {
   }
 }
 
-export async function closeTab(tabId: Id): Promise<void> {
+export function closeTab(tabId: Id): void {
+  const tab = Object.values(getState().tabs).flat().find((t) => t.id === tabId);
+  confirmUnsaved(tab ? paneIds(tab.layout) : [], "tab", () => void closeTabNow(tabId));
+}
+
+async function closeTabNow(tabId: Id): Promise<void> {
   try {
     await rpc("tab_close", { tab_id: tabId, force: false });
   } catch (e) {
