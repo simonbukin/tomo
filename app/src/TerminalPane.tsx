@@ -99,19 +99,17 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     });
 
     const unsub = onPaneOutput(paneId, (bytes) => term.write(bytes));
-    let raf = 0;
     let settle = 0;
+    // A resize clears the canvas and asks for a render on the next animation frame. Inside a frame
+    // callback that render lands one frame late, and the frame between paints an empty terminal.
     const refit = () => {
-      cancelAnimationFrame(raf);
       window.clearTimeout(settle);
       settle = window.setTimeout(() => {
-        raf = requestAnimationFrame(() => {
-          if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
-          fit.fit();
-          const screen = host.querySelector(".xterm-screen");
-          const limit = host.getBoundingClientRect().bottom - parseFloat(getComputedStyle(host).paddingBottom);
-          if (screen && screen.getBoundingClientRect().bottom > limit + 0.5 && term.rows > 2) term.resize(term.cols, term.rows - 1);
-        });
+        if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
+        fit.fit();
+        const screen = host.querySelector(".xterm-screen");
+        const limit = host.getBoundingClientRect().bottom - parseFloat(getComputedStyle(host).paddingBottom);
+        if (screen && screen.getBoundingClientRect().bottom > limit + 0.5 && term.rows > 2) term.resize(term.cols, term.rows - 1);
       }, 90);
     };
     const observer = new ResizeObserver(refit);
@@ -126,7 +124,6 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       links.dispose();
       stopFileDrop();
       observer.disconnect();
-      cancelAnimationFrame(raf);
       window.clearTimeout(settle);
       unsub();
       unregister();
