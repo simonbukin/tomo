@@ -1412,6 +1412,25 @@ pub struct Snapshot {
     pub linear: LinearStatus,
 }
 
+/// Where `tomo hook` keeps an agent hook event when the daemon is down, one `Call::AgentHook` as JSON per line.
+/// The daemon replays it at start. See docs/agent-states.md, rule 6.
+pub const HOOK_SPOOL: &str = "hook-spool.jsonl";
+/// `tomo hook` stops adding to the spool at this size.
+pub const HOOK_SPOOL_MAX_BYTES: u64 = 1024 * 1024;
+/// A payload field longer than this is left out of the spool: a tool input can be a whole file, and the state
+/// rules read only short fields such as the event name, the ids, and the notification type.
+const SPOOL_FIELD_MAX: usize = 1024;
+
+/// The spool line for a hook event, with its long payload fields left out.
+pub fn hook_spool_line(kind: AgentKind, pane_id: &str, payload: &serde_json::Value, at_ms: u64) -> String {
+    let short = match payload {
+        serde_json::Value::Object(map) => serde_json::Value::Object(map.iter().filter(|(_, v)| v.to_string().len() <= SPOOL_FIELD_MAX).map(|(k, v)| (k.clone(), v.clone())).collect()),
+        other => other.clone(),
+    };
+    let call = Call::AgentHook { kind, pane_id: pane_id.to_string(), payload: short, at_ms };
+    serde_json::to_string(&call).unwrap_or_default()
+}
+
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -1436,6 +1455,20 @@ mod tests {
         assert_eq!(cleared.apply(&base), WorktreeMetadata { display_name: None, tags: vec!["x".into()] });
         let tagged: MetadataPatch = serde_json::from_str(r#"{"tags": ["merged"]}"#).unwrap();
         assert_eq!(tagged.apply(&base), WorktreeMetadata { display_name: Some("a".into()), tags: vec!["merged".into()] });
+    }
+
+    #[test]
+    fn a_spool_line_keeps_the_short_fields_and_replays_as_the_same_call() {
+        let payload = serde_json::json!({ "hook_event_name": "Stop", "session_id": "s1", "tool_input": "x".repeat(5000) });
+        let line = hook_spool_line(AgentKind::Claude, "p1", &payload, 42);
+        assert!(line.len() < 300, "the long tool input is left out");
+        match serde_json::from_str::<Call>(&line).unwrap() {
+            Call::AgentHook { kind, pane_id, payload, at_ms } => {
+                assert_eq!((kind, pane_id.as_str(), at_ms), (AgentKind::Claude, "p1", 42));
+                assert_eq!(payload, serde_json::json!({ "hook_event_name": "Stop", "session_id": "s1" }));
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

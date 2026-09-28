@@ -122,6 +122,8 @@ pub struct Inner {
     pub diagnostics: std::collections::VecDeque<Diagnostic>,
     /// The current problem per `source:subject`, so a repeated poll records a diagnostic only on a change.
     pub problems: HashMap<String, String>,
+    /// The CPU fallback of each agent pane. See `monitor::fallback`.
+    pub busy: HashMap<Id, crate::monitor::Busy>,
     /// When `sync` last synced the main worktree of each repository.
     pub main_synced_ms: HashMap<Id, u64>,
     /// The repositories that `sync` works on now.
@@ -300,6 +302,7 @@ impl Daemon {
                 closed_tabs: Vec::new(),
                 diagnostics: std::collections::VecDeque::new(),
                 problems: HashMap::new(),
+                busy: HashMap::new(),
                 main_synced_ms: HashMap::new(),
                 main_syncing: HashSet::new(),
                 addons,
@@ -324,6 +327,11 @@ impl Daemon {
     // ---------------------------------------------------------------- events
 
     pub fn emit(inner: &mut Inner, event: Event) {
+        if let Event::AgentChanged { agent } = &event {
+            if let Err(e) = inner.store.pane_agent_save(agent) {
+                tracing::warn!("save agent of pane {}: {e}", agent.pane_id);
+            }
+        }
         inner.seq += 1;
         let frame = Frame::Event { seq: inner.seq, event };
         let Ok(text) = serde_json::to_string(&frame) else { return };
@@ -974,9 +982,11 @@ impl Daemon {
         for seam in &self.seams.pane_exited {
             seam(&mut inner, &exit);
         }
-        if let Some(agent) = inner.agents.get_mut(pane_id).filter(|a| a.state != AgentState::Exited) {
+        let stop_intent = exit.stop_intent;
+        if let Some(agent) = inner.agents.get_mut(pane_id).filter(|a| !matches!(a.state, AgentState::Exited | AgentState::Dead)) {
             let was_waiting = agent.state == AgentState::Waiting;
-            agent.state = AgentState::Exited;
+            agent.state = if ended_as_asked(code, stop_intent) { AgentState::Exited } else { AgentState::Dead };
+            agent.seen = false;
             agent.authority = Authority::Lifecycle;
             agent.updated_at_ms = now_ms();
             let agent = agent.clone();
@@ -985,6 +995,7 @@ impl Daemon {
             if was_waiting {
                 Self::resolve_waiting(&mut inner, pane_id);
             }
+            Self::apply_subagents(&mut inner, pane_id, None, now_ms());
         }
         if code == Some(0) {
             let _ = Self::remove_pane(&mut inner, pane_id);
@@ -1268,6 +1279,9 @@ impl Daemon {
             let reattached = crate::holder::socket_path(&self.paths.pty_dir, &row.id).exists()
                 && self.reattach_pty(&mut inner, &row.id).map_err(|e| tracing::info!("pane {} has no live holder: {e}", row.id)).is_ok();
             if reattached {
+                if let Some(saved) = inner.store.pane_agent_load(&row.id).filter(|a| row.agent_kind == Some(a.kind)) {
+                    inner.agents.insert(row.id.clone(), AgentPresence { worktree_id: row.worktree_id.clone(), pid: None, ..saved });
+                }
                 continue;
             }
             let resume_ref = row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string));
@@ -2472,9 +2486,11 @@ impl Daemon {
                 if !inner.panes.contains_key(&pane_id) {
                     return Ok(Value::Null);
                 }
+                let busy = inner.agents.get(&pane_id).is_some_and(|a| matches!(a.state, AgentState::Working | AgentState::Waiting));
+                let state = outcome.state.filter(|_| !outcome.only_if_busy || busy);
                 Self::apply_report(
                     &mut inner,
-                    &AgentReport { pane_id: pane_id.clone(), kind, state: outcome.state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
+                    &AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
                     None,
                 );
                 Self::apply_subagents(&mut inner, &pane_id, outcome.subagent.as_ref(), at_ms);
@@ -2650,6 +2666,12 @@ pub fn normalized_metadata(m: WorktreeMetadata) -> WorktreeMetadata {
 }
 
 /// `tagged #a · untagged #b` for a change of tags, or None when the set is the same.
+/// An exit that someone asked for: 0, a hangup, an interrupt, a terminate, or any exit after a Tomo stop.
+/// Every other exit of an agent pane is a failure. See docs/agent-states.md, rule 8.
+fn ended_as_asked(code: Option<i32>, stop_intent: bool) -> bool {
+    stop_intent || matches!(code, Some(0) | Some(129) | Some(130) | Some(143))
+}
+
 /// Waits until no process of `pids` is left, so that "stop and end every pane" is true when it returns.
 fn wait_until_gone(pids: &[u32], limit: std::time::Duration) {
     let started = std::time::Instant::now();
@@ -3050,6 +3072,17 @@ mod tests {
         assert_eq!(daemon.lock().worktrees[&id].archived_at_ms, Some(1));
         assert_eq!(daemon.lock().store.meta_one(&id).unwrap().unwrap().archived_at_ms, Some(1), "the store keeps the mark");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_agent_exit_is_dead_only_when_nobody_asked_for_it() {
+        assert!(ended_as_asked(Some(0), false));
+        assert!(ended_as_asked(Some(130), false), "Ctrl-C");
+        assert!(ended_as_asked(Some(143), false), "SIGTERM");
+        assert!(ended_as_asked(Some(1), true), "any exit after a Tomo stop");
+        assert!(!ended_as_asked(Some(1), false));
+        assert!(!ended_as_asked(Some(137), false), "SIGKILL that nobody in Tomo sent");
+        assert!(!ended_as_asked(None, false));
     }
 
     #[tokio::test(flavor = "multi_thread")]

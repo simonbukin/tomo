@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 use tomo_proto::{
-    ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AttentionItem, AttentionKind, AttentionLevel, EditorTarget, Id, LayoutNode, PaneKind, WorktreeMetadata,
+    ActivityEvent, ActivityKind, ActivityQuery, AgentKind, AgentPresence, AttentionItem, AttentionKind, AttentionLevel, EditorTarget, Id, LayoutNode, PaneKind, WorktreeMetadata,
 };
 
 pub struct Store {
@@ -168,7 +168,7 @@ fn meta_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<MetaRow> {
 const META_COLUMNS: [(&str, &str); 5] =
     [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT"), ("infra_name", "TEXT")];
 
-const PANE_COLUMNS: [(&str, &str); 3] = [("kind", "TEXT"), ("url", "TEXT"), ("editor", "TEXT")];
+const PANE_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("editor", "TEXT"), ("agent", "TEXT")];
 
 const ATTENTION_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("agent_kind", "TEXT"), ("resolved_at_ms", "INTEGER")];
 
@@ -431,6 +431,17 @@ impl Store {
             ],
         )?;
         Ok(())
+    }
+
+    /// Keeps the live state of the agent in a pane, so a daemon that reattaches the pane's holder knows it.
+    pub fn pane_agent_save(&self, agent: &AgentPresence) -> Result<()> {
+        self.conn.execute("UPDATE panes SET agent = ?2 WHERE id = ?1", params![agent.pane_id, serde_json::to_string(agent)?])?;
+        Ok(())
+    }
+
+    pub fn pane_agent_load(&self, pane_id: &str) -> Option<AgentPresence> {
+        let text: Option<String> = self.conn.query_row("SELECT agent FROM panes WHERE id = ?1", params![pane_id], |r| r.get(0)).ok().flatten();
+        text.and_then(|t| serde_json::from_str(&t).ok())
     }
 
     pub fn pane_delete(&self, id: &str) -> Result<()> {

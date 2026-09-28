@@ -9,6 +9,7 @@ pub static PROVIDER: Provider = Provider {
     flags,
     resume_without_session: None,
     resume_env: &[],
+    reports_end: true,
     hook_outcome,
     detects,
     nested_env: &["PI_CODING_AGENT"],
@@ -75,10 +76,10 @@ fn hook_outcome(payload: &Value) -> HookOutcome {
         "session_start" => Some(AgentState::Idle),
         "agent_start" | "ui_prompt_end" => Some(AgentState::Working),
         "ui_prompt_start" => Some(AgentState::Waiting),
-        "agent_settled" => Some(AgentState::Idle),
+        "agent_settled" => Some(AgentState::Done),
         "session_shutdown" if str_field(payload, "reason") == Some("quit") => Some(AgentState::Exited),
         _ => None,
     };
     let session_ref = str_field(payload, "session_file").or_else(|| str_field(payload, "session_id")).map(str::to_string);
-    HookOutcome { state, session_ref, subagent: None }
+    HookOutcome { state, session_ref, subagent: None, only_if_busy: false }
 }

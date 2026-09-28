@@ -18,10 +18,10 @@ wait_for "[ \"\$(agent_field $A state)\" = idle ]" 20 && check 0 "fake agent rep
 [ "$(agent_field $A session_ref)" != none ] && [ "$(agent_field $A session_ref)" != None ] && check 0 "session ref captured" || check 1 "session ref"
 [ "$(agent_field $A authority)" = lifecycle ] && check 0 "authority is lifecycle" || check 1 "authority" "$(agent_field $A authority)"
 
-# 2. working -> idle
+# 2. working -> done: a finished turn stays done until someone looks (docs/agent-states.md)
 $RPC send "$A" 'work 3\r'
 wait_for "[ \"\$(agent_field $A state)\" = working ]" 6 && check 0 "UserPromptSubmit -> working" || check 1 "working" "$(agent_field $A state)"
-wait_for "[ \"\$(agent_field $A state)\" = idle ]" 16 && check 0 "Stop -> idle" || check 1 "idle after work" "$(agent_field $A state)"
+wait_for "[ \"\$(agent_field $A state)\" = done ]" 16 && check 0 "Stop -> done" || check 1 "done after work" "$(agent_field $A state)"
 
 # 3. waiting + attention
 $RPC send "$A" 'wait\r'
@@ -49,7 +49,7 @@ $RPC call agent_report "{\"pane_id\":\"$A\",\"kind\":\"claude\",\"state\":\"work
 $RPC call agent_report "{\"pane_id\":\"$A\",\"kind\":\"claude\",\"state\":\"idle\",\"session_ref\":null,\"authority\":\"lifecycle\",\"at_ms\":$((now - 600000))}" >/dev/null
 [ "$(agent_field $A state)" = waiting ] && check 0 "old lifecycle event cannot rewind" || check 1 "stale lifecycle" "$(agent_field $A state)"
 $RPC call agent_report "{\"pane_id\":\"$A\",\"kind\":\"claude\",\"state\":\"working\",\"session_ref\":null,\"authority\":\"heuristic\",\"at_ms\":$((now + 16*60*1000))}" >/dev/null
-[ "$(agent_field $A state)" = working ] && check 0 "heuristic accepted once lifecycle is stale" || check 1 "stale threshold" "$(agent_field $A state)"
+[ "$(agent_field $A state)" = waiting ] && check 0 "a heuristic never replaces a hook state, however old" || check 1 "old hook state kept" "$(agent_field $A state)"
 $RPC call agent_report "{\"pane_id\":\"$A\",\"kind\":\"claude\",\"state\":\"idle\",\"session_ref\":null,\"authority\":\"lifecycle\",\"at_ms\":$((now + 17*60*1000))}" >/dev/null
 
 # 5. two same-kind agents in one worktree are independent

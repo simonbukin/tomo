@@ -11,6 +11,7 @@ pub static PROVIDER: Provider = Provider {
     flags,
     resume_without_session: None,
     resume_env: &[("CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "1"), ("CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS", "3600000")],
+    reports_end: true,
     hook_outcome,
     detects,
     nested_env: &["CLAUDECODE", "CLAUDE_CODE_*"],
@@ -126,13 +127,16 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
         "PermissionRequest" => Some(AgentState::Waiting),
         "Notification" => match str_field(payload, "notification_type").unwrap_or("") {
             "permission_prompt" | "elicitation_dialog" | "elicitation_url_dialog" | "agent_needs_input" => Some(AgentState::Waiting),
+            "idle_prompt" => Some(AgentState::Idle),
             _ => None,
         },
-        "Stop" | "StopFailure" => Some(AgentState::Idle),
+        "Stop" => Some(AgentState::Done),
+        "StopFailure" => Some(AgentState::Dead),
         "SessionEnd" => Some(AgentState::Exited),
         _ => None,
     };
-    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string), subagent: subagent_event(event, payload, state) }
+    let only_if_busy = event == "Notification" && str_field(payload, "notification_type") == Some("idle_prompt");
+    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string), subagent: subagent_event(event, payload, state), only_if_busy }
 }
 
 /// The tool that starts a subagent. Claude Code renamed `Task` to `Agent` and accepts both.

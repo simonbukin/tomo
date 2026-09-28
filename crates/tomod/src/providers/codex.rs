@@ -10,6 +10,7 @@ pub static PROVIDER: Provider = Provider {
     flags,
     resume_without_session: Some("--last"),
     resume_env: &[],
+    reports_end: false,
     hook_outcome: claude::hook_outcome,
     detects,
     nested_env: &["CODEX_THREAD_ID", "CODEX_SANDBOX*"],

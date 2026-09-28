@@ -859,7 +859,25 @@ async fn hook(agent: &str) -> Result<()> {
     if payload.is_null() {
         return Ok(());
     }
-    let Ok(c) = client::Client::connect().await else { return Ok(()) };
-    let _: Value = c.call(Call::AgentHook { kind, pane_id, payload, at_ms: now_ms() }).await.unwrap_or(Value::Null);
+    let at_ms = now_ms();
+    let Ok(c) = client::Client::connect().await else {
+        spool_hook(kind, &pane_id, &payload, at_ms);
+        return Ok(());
+    };
+    let _: Value = c.call(Call::AgentHook { kind, pane_id, payload, at_ms }).await.unwrap_or(Value::Null);
     Ok(())
+}
+
+/// Keeps a hook event for the daemon to replay when it starts, so a turn that ends during a restart still ends.
+/// A hook must never fail its agent, so every error here is ignored.
+fn spool_hook(kind: AgentKind, pane_id: &str, payload: &Value, at_ms: u64) {
+    use std::io::Write;
+    let path = client::data_dir().join(HOOK_SPOOL);
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() >= HOOK_SPOOL_MAX_BYTES) {
+        return;
+    }
+    let line = format!("{}\n", hook_spool_line(kind, pane_id, payload, at_ms));
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = file.write_all(line.as_bytes());
+    }
 }

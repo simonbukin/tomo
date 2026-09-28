@@ -39,6 +39,36 @@ struct Args {
     socket: Option<PathBuf>,
 }
 
+/// Replays the hook events that `tomo hook` kept while no daemon ran, oldest first. The spool moves aside first,
+/// so a hook that writes during the replay starts a new one. `merge` ignores an event older than the state it meets.
+async fn replay_hook_spool(daemon: &std::sync::Arc<daemon::Daemon>) {
+    const MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
+    let spool = daemon.paths.data_dir.join(tomo_proto::HOOK_SPOOL);
+    let taken = spool.with_extension("replaying");
+    if std::fs::rename(&spool, &taken).is_err() {
+        return;
+    }
+    let text = std::fs::read_to_string(&taken).unwrap_or_default();
+    let now = tomo_proto::now_ms();
+    let mut calls: Vec<(u64, tomo_proto::Call)> = text
+        .lines()
+        .filter_map(|line| serde_json::from_str::<tomo_proto::Call>(line).ok())
+        .filter_map(|call| match &call {
+            tomo_proto::Call::AgentHook { at_ms, .. } if now.saturating_sub(*at_ms) < MAX_AGE_MS => Some((*at_ms, call)),
+            _ => None,
+        })
+        .collect();
+    calls.sort_by_key(|(at_ms, _)| *at_ms);
+    let count = calls.len();
+    for (_, call) in calls {
+        let _ = dispatch::handle(daemon, 0, call).await;
+    }
+    let _ = std::fs::remove_file(&taken);
+    if count > 0 {
+        tracing::info!("replayed {count} hook events that arrived while no daemon ran");
+    }
+}
+
 fn try_lock(file: &std::fs::File) -> bool {
     use std::os::unix::io::AsRawFd;
     unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) == 0 }
@@ -79,6 +109,7 @@ async fn run(args: Args) -> Result<()> {
     tracing::info!("tomod {} listening on {}", daemon::VERSION, daemon.paths.socket.display());
 
     tokio::spawn(server::serve(daemon.clone(), listener));
+    replay_hook_spool(&daemon).await;
     {
         let d = daemon.clone();
         tokio::spawn(async move {

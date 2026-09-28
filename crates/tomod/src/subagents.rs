@@ -25,18 +25,32 @@ fn position_of(list: &[Subagent], id: &str) -> Option<usize> {
     list.iter().position(|s| s.id.as_deref() == Some(id))
 }
 
-fn with_state(list: &[Subagent], at: usize, state: AgentState) -> Vec<Subagent> {
-    list.iter().enumerate().map(|(i, s)| if i == at { Subagent { state, ..s.clone() } } else { s.clone() }).collect()
+fn with_state(list: &[Subagent], at: usize, state: AgentState, at_ms: u64) -> Vec<Subagent> {
+    list.iter().enumerate().map(|(i, s)| if i == at { Subagent { state, updated_at_ms: at_ms, ..s.clone() } } else { s.clone() }).collect()
 }
+
+/// A subagent with no event for this long, while its parent does not work, lost its stop event.
+pub const SILENT_MS: u64 = 30 * 60 * 1000;
 
 fn fresh(id: Option<String>, label: String, description: Option<String>, at_ms: u64) -> Subagent {
     Subagent { id, label, description, state: AgentState::Working, started_at_ms: at_ms, updated_at_ms: at_ms }
 }
 
+/// Adds `item`. Above the cap, the oldest finished subagents go first, and only then the oldest running ones.
 fn pushed(list: &[Subagent], item: Subagent) -> Vec<Subagent> {
     let all: Vec<Subagent> = list.iter().cloned().chain(std::iter::once(item)).collect();
     let extra = all.len().saturating_sub(MAX_SUBAGENTS);
-    all.into_iter().skip(extra).collect()
+    let finished: Vec<usize> = all.iter().enumerate().filter(|(_, s)| s.state == AgentState::Exited).map(|(i, _)| i).take(extra).collect();
+    let running: Vec<usize> = all.iter().enumerate().filter(|(i, _)| !finished.contains(i)).map(|(i, _)| i).take(extra - finished.len()).collect();
+    all.into_iter().enumerate().filter(|(i, _)| !finished.contains(i) && !running.contains(i)).map(|(_, s)| s).collect()
+}
+
+/// Drops a running subagent that sent nothing for `SILENT_MS` while its parent does not work.
+pub fn expire(list: &[Subagent], parent: AgentState, now: u64) -> Vec<Subagent> {
+    if parent == AgentState::Working {
+        return list.to_vec();
+    }
+    list.iter().filter(|s| s.state == AgentState::Exited || now.saturating_sub(s.updated_at_ms.max(s.started_at_ms)) < SILENT_MS).cloned().collect()
 }
 
 pub fn apply(list: &[Subagent], event: &SubagentEvent, at_ms: u64) -> Vec<Subagent> {
@@ -44,12 +58,12 @@ pub fn apply(list: &[Subagent], event: &SubagentEvent, at_ms: u64) -> Vec<Subage
         SubagentEvent::Launch { label, description } => pushed(list, fresh(None, label.clone(), description.clone(), at_ms)),
         SubagentEvent::Start { id, label } => match (position_of(list, id), unassigned_of(list, label)) {
             (Some(_), _) => list.to_vec(),
-            (None, Some(at)) => list.iter().enumerate().map(|(i, s)| if i == at { Subagent { id: Some(id.clone()), label: label.clone(), ..s.clone() } } else { s.clone() }).collect(),
+            (None, Some(at)) => list.iter().enumerate().map(|(i, s)| if i == at { Subagent { id: Some(id.clone()), label: label.clone(), updated_at_ms: at_ms, ..s.clone() } } else { s.clone() }).collect(),
             (None, None) => pushed(list, fresh(Some(id.clone()), label.clone(), None, at_ms)),
         },
-        SubagentEvent::Stop { id } => position_of(list, id).map_or_else(|| list.to_vec(), |at| with_state(list, at, AgentState::Exited)),
+        SubagentEvent::Stop { id } => position_of(list, id).map_or_else(|| list.to_vec(), |at| with_state(list, at, AgentState::Exited, at_ms)),
         SubagentEvent::Activity { id, state } => match position_of(list, id) {
-            Some(at) if list[at].state != AgentState::Exited => with_state(list, at, *state),
+            Some(at) if list[at].state != AgentState::Exited => with_state(list, at, *state, at_ms),
             _ => list.to_vec(),
         },
     }
@@ -59,8 +73,8 @@ pub fn apply(list: &[Subagent], event: &SubagentEvent, at_ms: u64) -> Vec<Subage
 /// subagents, and keeps one that still runs in the background. An exited parent keeps none.
 pub fn settle(list: &[Subagent], parent: AgentState) -> Vec<Subagent> {
     match parent {
-        AgentState::Exited => Vec::new(),
-        AgentState::Idle => list.iter().filter(|s| s.id.is_some() && s.state != AgentState::Exited).cloned().collect(),
+        AgentState::Exited | AgentState::Dead => Vec::new(),
+        AgentState::Idle | AgentState::Done => list.iter().filter(|s| s.id.is_some() && s.state != AgentState::Exited).cloned().collect(),
         _ => list.to_vec(),
     }
 }
@@ -79,6 +93,30 @@ mod tests {
 
     fn run(events: &[SubagentEvent]) -> Vec<Subagent> {
         events.iter().enumerate().fold(Vec::new(), |list, (i, e)| apply(&list, e, i as u64))
+    }
+
+    fn stop(id: &str) -> SubagentEvent {
+        SubagentEvent::Stop { id: id.into() }
+    }
+
+    #[test]
+    fn a_silent_subagent_under_a_parent_that_does_not_work_is_dropped() {
+        let list = run(&[start("a", "Explore"), start("b", "Plan")]);
+        let later = SILENT_MS + 10;
+        assert_eq!(expire(&list, AgentState::Working, later).len(), 2, "a working parent keeps them");
+        assert!(expire(&list, AgentState::Done, later).is_empty(), "a lost stop event ends with the parent's turn");
+        let touched = apply(&list, &SubagentEvent::Activity { id: "a".into(), state: AgentState::Working }, later - 5);
+        let kept: Vec<Option<String>> = expire(&touched, AgentState::Idle, later).into_iter().map(|s| s.id).collect();
+        assert_eq!(kept, [Some("a".to_string())], "an event resets the clock");
+    }
+
+    #[test]
+    fn above_the_cap_a_finished_subagent_goes_before_a_running_one() {
+        let events: Vec<SubagentEvent> = (0..MAX_SUBAGENTS).map(|i| start(&format!("s{i}"), "Explore")).chain([stop("s5"), start("new", "Explore")]).collect();
+        let list = run(&events);
+        assert_eq!(list.len(), MAX_SUBAGENTS);
+        assert!(list.iter().all(|s| s.id.as_deref() != Some("s5")), "the finished one went");
+        assert!(list.iter().any(|s| s.id.as_deref() == Some("s0")), "the oldest running one stayed");
     }
 
     #[test]
