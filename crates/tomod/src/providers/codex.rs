@@ -9,6 +9,7 @@ pub static PROVIDER: Provider = Provider {
     kind: AgentKind::Codex,
     flags,
     resume_without_session: Some("--last"),
+    resume_env: &[],
     hook_outcome: claude::hook_outcome,
     detects,
     nested_env: &["CODEX_THREAD_ID", "CODEX_SANDBOX*"],

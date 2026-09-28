@@ -1188,7 +1188,7 @@ impl Daemon {
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
                 (Some(kind), Some(session)) => {
                     let plan = providers::launch(&inner.config, kind, Some(session), &self.paths.integrations_dir, &[]);
-                    (PaneOrigin::Resumed, Some(agents::shell_line(&plan.argv)))
+                    (PaneOrigin::Resumed, Some(plan.line()))
                 }
                 _ => (PaneOrigin::Restored, None),
             };
@@ -1785,7 +1785,7 @@ impl Daemon {
             _ => Self::worktree_for_spawn(&inner.worktrees, spec.worktree_id.as_deref(), spec.cwd.as_deref())?,
         };
         let plan = providers::launch(&inner.config, spec.kind, spec.resume.as_deref(), &self.paths.integrations_dir, &spec.extra_args);
-        let line = agents::shell_line(&plan.argv);
+        let line = plan.line();
         let tab_id = if spec.new_tab { Some(Self::create_tab(&mut inner, &worktree_id, Some(spec.kind.label().to_string())).id) } else { spec.tab_id.clone() };
         let (tab_id, pane_id) = self.spawn_in_worktree(
             &mut inner,

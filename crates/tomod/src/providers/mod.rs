@@ -23,6 +23,8 @@ pub struct Provider {
     pub kind: AgentKind,
     pub flags: ProviderFlags,
     pub resume_without_session: Option<&'static str>,
+    /// Environment for a resume only, such as a switch that continues a turn that a daemon restart cut off.
+    pub resume_env: &'static [(&'static str, &'static str)],
     pub hook_outcome: fn(&Value) -> HookOutcome,
     pub detects: fn(&Program) -> bool,
     pub nested_env: &'static [&'static str],
@@ -95,8 +97,17 @@ pub struct HookOutcome {
 }
 
 pub struct SpawnPlan {
+    pub env: Vec<(String, String)>,
     pub argv: Vec<String>,
     pub session_ref: Option<String>,
+}
+
+impl SpawnPlan {
+    /// The line that a shell runs: `NAME=value ... command args`.
+    pub fn line(&self) -> String {
+        let env = self.env.iter().map(|(name, value)| format!("{name}={}", crate::agents::shell_quote(value)));
+        env.chain(std::iter::once(crate::agents::shell_line(&self.argv))).collect::<Vec<_>>().join(" ")
+    }
 }
 
 pub fn hook_outcome(kind: AgentKind, payload: &Value) -> HookOutcome {
@@ -110,7 +121,8 @@ fn str_field<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
 pub fn plan(kind: AgentKind, cmd: &AgentCommand, resume: Option<&str>, launch_dir: &Path, extra: &[String]) -> SpawnPlan {
     let (flags, session_ref) = (provider(kind).flags)(resume, launch_dir);
     let argv = std::iter::once(cmd.command.clone()).chain(cmd.args.iter().cloned()).chain(flags).chain(extra.iter().cloned()).collect();
-    SpawnPlan { argv, session_ref }
+    let env = resume.map_or_else(Vec::new, |_| provider(kind).resume_env.iter().map(|(name, value)| (name.to_string(), value.to_string())).collect());
+    SpawnPlan { env, argv, session_ref }
 }
 
 /// The command of `kind` from the config, with the flags of its provider and `extra`.
@@ -467,6 +479,15 @@ mod tests {
         let resumed = agent_plan(AgentKind::Claude, "claude", &[], Some("s1"), &[]);
         assert_eq!(resumed.argv, ["claude", "--settings", "/d/claude-hooks.json", "--resume", "s1"]);
         assert_eq!(resumed.session_ref.as_deref(), Some("s1"));
+    }
+
+    #[test]
+    fn only_a_resume_carries_the_provider_resume_env() {
+        let resumed = agent_plan(AgentKind::Claude, "claude", &[], Some("s1"), &[]);
+        assert_eq!(resumed.line(), "CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1 CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS=3600000 claude --settings /d/claude-hooks.json --resume s1");
+        assert!(agent_plan(AgentKind::Claude, "claude", &[], None, &[]).env.is_empty(), "a fresh session starts with no resume switches");
+        assert!(agent_plan(AgentKind::Codex, "codex", &[], Some("abc"), &[]).env.is_empty());
+        assert_eq!(SpawnPlan { env: vec![("A".into(), "b c".into())], argv: vec!["x".into()], session_ref: None }.line(), "A='b c' x");
     }
 
     #[test]
