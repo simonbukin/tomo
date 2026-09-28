@@ -178,24 +178,44 @@ its region, so you can see the preview and the region together.
 `app/src/glyphs.ts` holds the one status vocabulary:
 
 ```text
-● working    ◉ needs user    ○ idle    ✓ complete    × failed    ? unknown
+● working    ◉ needs you    ○ idle    ■ done    ✓ complete    × failed    ? no signal
 ```
 
-A live mark (the dot of a sidebar row, a Home card or row, a rail square, an
-agent, or a subagent) means one thing everywhere:
+A live mark is always a square. Motion and fill tell the states apart, then
+color. The mark means one thing on every surface: the sidebar row, the Home
+card and row, the rail, tabs, the hover card, and a subagent line (a smaller
+square). [agent-states.md](agent-states.md) is the source of these rules.
 
-| Mark | Status | Meaning |
-|------|--------|---------|
-| filled green, with a ring that pulses out | working | an agent works now |
-| filled amber | needs | an agent or an attention item waits for you |
-| filled red | failed | a crash that you did not see yet |
-| hollow grey | idle | an agent is open and waits for the next prompt |
-| hollow green | complete | done: a subagent that finished, an agent that exited |
-| no mark | none | nothing runs there |
+| Mark | Status | Meaning | Tooltip |
+|------|--------|---------|---------|
+| green square that turns 90° and rests at 45° (a rhombus), again and again | working | a turn is in progress, or a subagent of the agent runs | `working · 2 min` |
+| green square, head on, still | done | the turn finished and nobody has looked at the pane since | `done · finished 3 min ago` |
+| amber square | needs | the agent waits for an answer or a permission | `needs you` |
+| hollow grey square | idle | the agent is alive, has no turn, and was seen | `idle` |
+| red square | failed | the agent ended with a failure | `dead · exited` |
+| dotted grey outline | unknown | Tomo has no hook events from the agent | ``no signal · run `tomo integrations install` `` |
+| no mark | none | no agent |  |
 
-`worktreeStatus` in `app/src/homeQuery.ts` picks the mark of a worktree,
-most urgent first. `statusDot` in `glyphs.ts` gives the class and the
-tooltip. A sidebar row, a Home card, and a Home list row each grow one unit
+When working becomes done, the same element turns from the rhombus back to
+a square (a transition on `rotate`). With `prefers-reduced-motion`, working
+is a still rhombus. A state that the CPU fallback estimated
+(`AgentPresence.estimated`) looks the same, and its tooltip ends with
+`(estimated from CPU)`. `complete` (a hollow green square) is for work that
+ended, such as a merged PR or an Action that exited 0. It is not an agent
+mark.
+
+`StateMark`, `AgentMark`, and `WorktreeMark` in `app/src/StateMark.tsx` draw
+every mark. `effectiveState` in `glyphs.ts` shows a done or idle agent with a
+running subagent as working. `worktreeLead` in `app/src/homeQuery.ts` picks
+the agent whose mark is the worktree mark, first match wins: needs you, dead
+and not seen, working, done, dead and seen, idle, no signal. Only agents
+count. A crash of an Action is a row signal (`storybook exited 1`) and a red
+square on its own Action button, never the worktree mark. It stays in the
+attention list.
+
+`useAgentSeen` in `app/src/agentSeen.ts` calls `agent_seen` when an agent
+pane has focus in a focused, visible window. When the turn ends while you
+look, it waits 1.5 s first, so the done mark is visible. A sidebar row, a Home card, and a Home list row each grow one unit
 for each live subagent, up to three lines, indented under the name. Past
 three, the last line counts the rest (`+2 more`). All three use
 `SubagentList` and `SUBAGENT_LINES` from `app/src/WorktreePreview.tsx`.
@@ -203,8 +223,8 @@ three, the last line counts the rest (`+2 more`). All three use
 `agentStatus` maps agent states onto it. `activityStatus` in
 `app/src/activityKinds.ts` maps activity kinds onto it through the kind
 registry (see [activity.md](activity.md)). Dense rows (sidebar, Home, tabs, checkpoint banner, signals) draw the
-round `.state` dot from `dotClass(status)`. Text surfaces (Activity rows,
-palette hints, the crash signal) print `GLYPH[status]`. Do not add a glyph
+square `.state` mark from `StateMark` or `dotClass(status)`. Text surfaces (Activity rows,
+palette hints) print `GLYPH[status]`. Do not add a glyph
 or a status color for one feature.
 
 ## Hover previews
@@ -244,8 +264,10 @@ is on.
 
 ## Terminal links and file drop
 
-- Hold Cmd over a URL or a file path in a terminal: Tomo underlines it.
-  Without Cmd, a link shows no underline, and a plain click does nothing.
+- Move the pointer over a URL or a file path in a terminal: a light dotted
+  line shows under it. Hold Cmd: the line is solid and the pointer changes.
+  A plain click does nothing. xterm draws only a solid underline, so the
+  dotted line is an element over the cells of the link (`.term-link-hint`).
 - Cmd-click a URL: the worktree browser pane opens it.
 - Cmd-click `path`, `path:line`, or `path:line:col` inside the worktree:
   an editor pane opens the file at that place (see [editor.md](editor.md)).
