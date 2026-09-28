@@ -191,16 +191,29 @@ fn daemon_connected(link: State<'_, Arc<Link>>) -> bool {
     link.tx.lock().unwrap().is_some()
 }
 
-const SAVE_CLIPBOARD_PNG: &str = r#"on run argv
-set f to open for access POSIX file (item 1 of argv) with write permission
-try
-write (the clipboard as «class PNGf») to f
-on error e
-close access f
-error e
-end try
-close access f
-end run"#;
+/// Writes the image on a pasteboard to the file in argv[0] as PNG. argv[1] names a private pasteboard for tests;
+/// without it the script reads the general clipboard. Many apps put only TIFF on the pasteboard, so TIFF is converted.
+const SAVE_PASTEBOARD_PNG: &str = r#"ObjC.import('AppKit');
+function run(argv) {
+  const pb = argv[1] ? $.NSPasteboard.pasteboardWithName(argv[1]) : $.NSPasteboard.generalPasteboard;
+  let data = pb.dataForType($.NSPasteboardTypePNG);
+  if (data.isNil()) {
+    const tiff = pb.dataForType($.NSPasteboardTypeTIFF);
+    if (tiff.isNil()) throw new Error('no image on the pasteboard');
+    data = $.NSBitmapImageRep.imageRepWithData(tiff).representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $());
+  }
+  if (!data.writeToFileAtomically(argv[0], true)) throw new Error('could not write ' + argv[0]);
+}"#;
+
+async fn save_pasteboard_png(path: &std::path::Path, pasteboard: Option<&str>) -> bool {
+    let mut cmd = tokio::process::Command::new("osascript");
+    cmd.args(["-l", "JavaScript", "-e", SAVE_PASTEBOARD_PNG]).arg(path);
+    if let Some(name) = pasteboard {
+        cmd.arg(name);
+    }
+    let saved = cmd.output().await.is_ok_and(|o| o.status.success());
+    saved && std::fs::metadata(path).is_ok_and(|m| m.len() > 0)
+}
 
 /// Saves the image on the clipboard as a new PNG file and returns its path, or None when the clipboard holds no image.
 /// A terminal agent attaches an image from a pasted path, the same way it does for a dropped file.
@@ -210,8 +223,7 @@ async fn clipboard_image() -> Option<String> {
     std::fs::create_dir_all(&dir).ok()?;
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_millis();
     let path = dir.join(format!("clipboard-{stamp}.png"));
-    let saved = tokio::process::Command::new("osascript").arg("-e").arg(SAVE_CLIPBOARD_PNG).arg(&path).output().await.is_ok_and(|o| o.status.success());
-    if saved && std::fs::metadata(&path).is_ok_and(|m| m.len() > 0) {
+    if save_pasteboard_png(&path, None).await {
         return Some(path.to_string_lossy().into_owned());
     }
     let _ = std::fs::remove_file(&path);
@@ -295,6 +307,47 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    /// Puts a 2x2 image on a private pasteboard as `kind` (PNG or TIFF), so the test never touches the user's clipboard.
+    fn fill_private_pasteboard(name: &str, kind: &str) {
+        let script = format!(
+            "ObjC.import('AppKit'); const img = $.NSImage.alloc.initWithSize($.NSMakeSize(2, 2)); img.lockFocus; $.NSColor.redColor.set; $.NSRectFill($.NSMakeRect(0, 0, 2, 2)); img.unlockFocus; \
+             const tiff = img.TIFFRepresentation; const pb = $.NSPasteboard.pasteboardWithName('{name}'); pb.clearContents; \
+             if ('{kind}' === 'png') {{ pb.setDataForType($.NSBitmapImageRep.imageRepWithData(tiff).representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $()), $.NSPasteboardTypePNG); }} \
+             else {{ pb.setDataForType(tiff, $.NSPasteboardTypeTIFF); }}"
+        );
+        let out = std::process::Command::new("osascript").args(["-l", "JavaScript", "-e", &script]).output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn release_private_pasteboard(name: &str) {
+        let script = format!("ObjC.import('AppKit'); $.NSPasteboard.pasteboardWithName('{name}').releaseGlobally");
+        let _ = std::process::Command::new("osascript").args(["-l", "JavaScript", "-e", &script]).output();
+    }
+
+    #[tokio::test]
+    async fn an_image_on_the_pasteboard_is_saved_as_png_whether_it_came_as_png_or_tiff() {
+        for kind in ["png", "tiff"] {
+            let name = format!("tomo-test-{}-{kind}", std::process::id());
+            fill_private_pasteboard(&name, kind);
+            let path = std::env::temp_dir().join(format!("{name}.png"));
+            assert!(super::save_pasteboard_png(&path, Some(&name)).await, "{kind}");
+            let bytes = std::fs::read(&path).unwrap();
+            assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "{kind} becomes a PNG file");
+            let _ = std::fs::remove_file(&path);
+            release_private_pasteboard(&name);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_pasteboard_without_an_image_saves_nothing() {
+        let name = format!("tomo-test-{}-empty", std::process::id());
+        let script = format!("ObjC.import('AppKit'); const pb = $.NSPasteboard.pasteboardWithName('{name}'); pb.clearContents; pb.setStringForType('just text', $.NSPasteboardTypeString)");
+        std::process::Command::new("osascript").args(["-l", "JavaScript", "-e", &script]).output().unwrap();
+        let path = std::env::temp_dir().join(format!("{name}.png"));
+        assert!(!super::save_pasteboard_png(&path, Some(&name)).await);
+        release_private_pasteboard(&name);
+    }
+
     #[test]
     fn the_browser_host_does_not_name_agentation() {
         let hits: Vec<(&str, &str)> = [("browser.rs", include_str!("browser.rs")), ("main.rs", include_str!("main.rs"))]
