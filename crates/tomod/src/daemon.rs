@@ -548,6 +548,7 @@ impl Daemon {
         }
         let meta_rows = inner.store.meta_all()?;
         let mut next: HashMap<Id, WorktreeState> = HashMap::new();
+        let listed: HashSet<PathBuf> = found.iter().flat_map(|(_, entries, _)| entries.iter().map(|e| canonical(&e.path))).collect();
         for (repo, entries, common) in &found {
             let main_path = common.parent().map(Path::to_path_buf).unwrap_or_else(|| repo.path.clone());
             for entry in entries.iter().filter(|e| !e.bare) {
@@ -555,7 +556,9 @@ impl Daemon {
                 let id = path_id(&path);
                 let gitdir = git::gitdir_name(&path);
                 let existing = meta_rows.iter().find(|m| m.id == id).cloned().or_else(|| {
-                    let moved = meta_rows.iter().find(|m| m.repo_id == repo.id && m.gitdir.is_some() && m.gitdir == gitdir && !m.path.exists())?;
+                    // A worktree moved when Git no longer lists its old path. The old path can exist again: a process
+                    // that kept its absolute cwd, such as an agent that ran `git worktree move`, writes there.
+                    let moved = meta_rows.iter().find(|m| m.repo_id == repo.id && m.gitdir.is_some() && m.gitdir == gitdir && !listed.contains(&m.path))?;
                     self.rebind(&mut inner, &moved.id, &id, &path).ok()?;
                     Some(MetaRow { id: id.clone(), path: path.clone(), ..moved.clone() })
                 });
@@ -2921,4 +2924,42 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_moved_worktree_keeps_its_row_when_something_writes_to_its_old_path() {
+        let (dir, repo) = repo_fixture("moved-back");
+        git_in(&repo, &["worktree", "add", "-q", "-b", "feat", "../kagoshima"]);
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let old_id = path_id(&canonical(&dir.join("kagoshima")));
+        let patch = MetadataPatch { display_name: Some(Some("Kagoshima".into())), ..MetadataPatch::default() };
+        daemon.handle_inner(0, Call::MetadataSet { worktree_id: old_id.clone(), patch }).await.unwrap();
+        {
+            let mut inner = daemon.lock();
+            let tab = TabRow {
+                id: "t1".into(),
+                worktree_id: old_id.clone(),
+                title: "t".into(),
+                position: 0,
+                layout: LayoutNode::Leaf { pane_id: "p1".into() },
+                active_pane_id: None,
+                is_active: true,
+            };
+            inner.store.tab_upsert(&tab).unwrap();
+            inner.tabs.insert(tab.id.clone(), tab);
+        }
+
+        git_in(&repo, &["worktree", "move", "../kagoshima", "../renamed"]);
+        std::fs::create_dir_all(dir.join("kagoshima/.claude")).unwrap();
+        daemon.discover(Summaries::Cached).await.unwrap();
+
+        let inner = daemon.lock();
+        let linked: Vec<&WorktreeState> = inner.worktrees.values().filter(|w| !w.is_main).collect();
+        assert_eq!(linked.len(), 1, "one record, not the old name and the new path: {:?}", linked.iter().map(|w| (&w.id, &w.path)).collect::<Vec<_>>());
+        let w = linked[0];
+        assert_eq!(w.path, canonical(&dir.join("renamed")));
+        assert_eq!(w.metadata.display_name.as_deref(), Some("Kagoshima"), "the name follows the move");
+        assert_eq!(inner.tabs["t1"].worktree_id, w.id, "the tab follows the move");
+        drop(inner);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

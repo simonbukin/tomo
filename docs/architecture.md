@@ -104,8 +104,10 @@ without a registry.
 A moved worktree gets a new id. To keep metadata and tabs, discovery also
 records the Git `gitdir` name (`<common>/worktrees/<name>`). When a discovered
 worktree has no metadata row but a row with the same repository and gitdir
-name points at a path that no longer exists, the daemon rebinds that row and
-its tabs, panes, and attention items to the new id.
+name points at a path where Git lists no worktree, the daemon rebinds that
+row and its tabs, panes, and attention items to the new id. The test is Git's
+list, not the file system: a process that kept its absolute cwd, such as an
+agent that ran `git worktree move`, can create the old path again.
 
 Why: a path is the identity the user sees, and it works for the main
 worktree, which has no gitdir file. The gitdir name is the only stable token
