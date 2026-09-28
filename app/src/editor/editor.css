@@ -1,0 +1,30 @@
+/* ---- editor panes: the legend, a one-unit notice bar when the disk moved, then CodeMirror.
+   The colors of the text area come from the theme in editor/cm.ts, which reads the same tokens. */
+.editor-body { position: relative; flex: 1; min-height: 0; background: var(--bg); }
+.editor-host { position: absolute; inset: 0; }
+.editor-host > .cm-editor { position: absolute; inset: 0; }
+.editor-compare, .editor-error { position: absolute; inset: 0; z-index: 1; background: var(--bg); }
+
+.editor-bar { display: flex; align-items: center; gap: var(--inset); flex: none; height: var(--u); min-width: 0; padding: 0 var(--inset); overflow: hidden; box-shadow: inset 0 -1px 0 var(--line); background: var(--bg-1); font-size: var(--fs-1); color: var(--fg); }
+.editor-bar-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-bar .btn-link { flex: none; }
+.editor-bar .btn-link[aria-pressed="true"] { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+.editor-bar-error .editor-bar-text { color: var(--danger); }
+
+.editor-error { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--sp-3); padding: 0 var(--sp-5); color: var(--fg-2); font-size: var(--fs-2); }
+.editor-error p { margin: 0; max-width: 60ch; color: var(--fg); }
+.editor-error-actions { display: flex; gap: var(--sp-2); }
+
+.editor-compare { display: flex; flex-direction: column; }
+.editor-compare-head { display: grid; grid-template-columns: 1fr 1fr; flex: none; height: var(--u); box-shadow: inset 0 -1px 0 var(--line); font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); }
+.editor-compare-head span { display: flex; align-items: center; padding: 0 var(--inset); }
+.editor-compare-head span + span { box-shadow: inset 1px 0 0 var(--line); }
+.editor-compare-body { flex: 1; min-height: 0; overflow: auto; font-family: var(--editor-font, var(--mono)); }
+.editor-compare-body .cm-mergeView .cm-editor { height: auto; }
+.editor-compare-body .cm-merge-a .cm-changedLine, .editor-compare-body .cm-merge-a .cm-deletedChunk { background: var(--danger-soft); }
+.editor-compare-body .cm-merge-b .cm-changedLine, .editor-compare-body .cm-merge-b .cm-insertedLine { background: color-mix(in srgb, var(--working) 14%, var(--bg)); }
+.editor-compare-body .cm-merge-a .cm-changedText { background: color-mix(in srgb, var(--danger) 30%, transparent); }
+.editor-compare-body .cm-merge-b .cm-changedText { background: color-mix(in srgb, var(--working) 30%, transparent); }
+.editor-compare-body .cm-merge-a .cm-changedLineGutter, .editor-compare-body .cm-deletedLineGutter { background: var(--danger); }
+.editor-compare-body .cm-merge-b .cm-changedLineGutter { background: var(--working); }
+.editor-compare-body .cm-mergeViewEditor + .cm-mergeViewEditor { box-shadow: inset 1px 0 0 var(--line); }

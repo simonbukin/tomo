@@ -230,6 +230,7 @@ zoom_pane = "mod+shift+enter"
 move_tab_left/right = "mod+alt+shift+<arrow>"
 move_pane_left/right/up/down = "mod+ctrl+alt+<arrow>"
 equalize_panes = "mod+alt+e"
+open_file = "mod+p"            editor_save = "mod+s"
 ```
 
 `tomo config check` validates the file: unknown hook events, a hook `tag`

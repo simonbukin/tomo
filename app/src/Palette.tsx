@@ -1,13 +1,40 @@
 import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import { activateTab, allActions, focusPane, openWorktree, runAction } from "./actions";
+import { rpcParsed } from "./api";
+import { openFile } from "./editor/editor";
+import { fsEntrySchema } from "./schemas";
 import { builtins } from "./addons";
 import { Dialog, DialogContent } from "./components/ui";
 import { menuEntries, rankEntries, remembered, type PaletteEntry } from "./paletteModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { chordFor, effectiveBindings } from "./shortcuts";
-import { getState, repoName, setState, setUi, useStore, visibleRepos, type State } from "./store";
-import { KIND_LABEL, type Worktree } from "./types";
+import { failQuietly, getState, repoName, setState, setUi, useStore, visibleRepos, type State } from "./store";
+import { KIND_LABEL, type FsEntry, type Worktree } from "./types";
+
+export const FILES_KEY = "files";
+
+/** The files of the worktree on screen, newest change first, while the palette is open. */
+function useWorktreeFiles(open: boolean, worktreeId: string | null): FsEntry[] {
+  const [files, setFiles] = useState<FsEntry[]>([]);
+  useEffect(() => {
+    setFiles([]);
+    if (!open || !worktreeId) return;
+    let live = true;
+    rpcParsed("fs_recent", z.array(fsEntrySchema), { worktree_id: worktreeId, limit: 20_000 })
+      .then((f) => live && setFiles(f))
+      .catch(failQuietly("fs_recent"));
+    return () => {
+      live = false;
+    };
+  }, [open, worktreeId]);
+  return files;
+}
+
+export function fileEntries(worktreeId: string, files: FsEntry[]): PaletteEntry[] {
+  return files.map((f) => ({ key: `file:${f.rel_path}`, label: f.rel_path, run: () => void openFile(worktreeId, f.rel_path) }));
+}
 
 function addonEntries(s: State, w: Worktree, context: boolean): PaletteEntry[] {
   return builtins.flatMap((a) => a.paletteEntries?.(s, w, context) ?? []);
@@ -59,7 +86,6 @@ export function paletteEntries(s: State): PaletteEntry[] {
 
 interface Frame {
   entry: PaletteEntry;
-  entries: PaletteEntry[];
 }
 
 /** Tomo's own ranking and list inside the shared Dialog shell. */
@@ -72,15 +98,22 @@ export function Palette() {
   const [stack, setStack] = useState<Frame[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const root = useMemo(() => (state ? paletteEntries(state) : []), [state]);
+  const worktreeId = state?.ui.view === "worktree" ? state.ui.activeWorktreeId : null;
+  const files = useWorktreeFiles(!!open, worktreeId);
+  const filesEntry: PaletteEntry | null = useMemo(
+    () => (worktreeId ? { key: FILES_KEY, label: "open file...", hint: files.length ? `${files.length} files` : "files", context: true, children: () => fileEntries(worktreeId, files) } : null),
+    [worktreeId, files],
+  );
+  const root = useMemo(() => (state ? [...(filesEntry ? [filesEntry] : []), ...paletteEntries(state)] : []), [state, filesEntry]);
   const top = stack[stack.length - 1];
-  const results = useMemo(() => rankEntries(top ? top.entries : root, query, top ? [] : recent).slice(0, 60), [top, root, query, recent]);
+  const entries = useMemo(() => (top ? (top.entry.key === FILES_KEY && filesEntry ? filesEntry : top.entry).children?.() ?? [] : root), [top, root, filesEntry]);
+  const results = useMemo(() => rankEntries(entries, query, top ? [] : recent).slice(0, 60), [entries, top, query, recent]);
 
   useEffect(() => {
     if (!open) return;
     setQuery("");
     setIndex(0);
-    setStack([]);
+    setStack(open === "files" && filesEntry ? [{ entry: filesEntry }] : []);
   }, [open]);
 
   useEffect(() => setIndex(0), [query, stack.length]);
@@ -95,15 +128,15 @@ export function Palette() {
   const choose = (entry: PaletteEntry | undefined, direct = false) => {
     if (!entry) return;
     if (!entry.children) return run(entry);
-    const entries = entry.children();
-    if (direct && entries[0]?.run) return run(entries[0]);
+    const first = direct ? entry.children()[0] : undefined;
+    if (first?.run) return run(first);
     if (!top) remember(entry.key);
-    setStack((s) => [...s, { entry, entries }]);
+    setStack((s) => [...s, { entry }]);
     setQuery("");
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+    <Dialog open={!!open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="palette" initialFocus={inputRef} aria-label="Command palette">
         <label className="palette-input">
           <Search className="icon" />
@@ -116,7 +149,7 @@ export function Palette() {
             ref={inputRef}
             value={query}
             aria-label="Search commands"
-            placeholder={top ? `actions for ${top.entry.label}` : "worktree, tab, agent, or command"}
+            placeholder={top?.entry.key === FILES_KEY ? "file name or path" : top ? `actions for ${top.entry.label}` : "worktree, tab, agent, or command"}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") setIndex((i) => Math.min(results.length - 1, i + 1));
@@ -153,7 +186,7 @@ export function Palette() {
   );
 }
 
-export function openPalette(): void {
+export function openPalette(start: true | "files" = true): void {
   setUi({});
-  setState({ paletteOpen: true });
+  setState({ paletteOpen: start });
 }

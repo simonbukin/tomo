@@ -1,9 +1,11 @@
 import type { Terminal } from "@xterm/xterm";
 import type { Id } from "./types";
 
+/** A pane that takes the keyboard focus: a terminal, or an editor with no `term`. */
 export interface Registered {
-  term: Terminal;
+  term?: Terminal;
   el: HTMLElement;
+  focus: () => void;
 }
 
 const registry = new Map<Id, Registered>();
@@ -22,7 +24,7 @@ export function getTerminal(paneId: Id): Registered | undefined {
 export function focusTerminal(paneId: Id): boolean {
   const entry = registry.get(paneId);
   if (!entry) return false;
-  entry.term.focus();
+  entry.focus();
   return true;
 }
 

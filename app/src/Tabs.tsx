@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SortableContext } from "@dnd-kit/sortable";
-import { Globe, Plus, X } from "lucide-react";
+import { FileText, Globe, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc, rpcParsed } from "./api";
 import { activateTab, closeTab } from "./actions";
@@ -12,6 +12,7 @@ import { ProcessIcon } from "./ProcessIcon";
 import { useGlide } from "./glide";
 import { useShortcuts } from "./shortcuts";
 import { dotClass } from "./glyphs";
+import { useAnyDirty } from "./editor/sessions";
 import {failQuietly, paneIds, useStore} from "./store";
 import type { Id, Pane, Tab } from "./types";
 
@@ -60,6 +61,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
 function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; closable: boolean; editing: Editing; setEditing: (e: Editing) => void; commit: () => void }) {
   const lead = useStore((s) => leadPane(t, s.panes));
   const waiting = useStore((s) => paneIds(t.layout).some((id) => s.panes[id]?.agent?.state === "waiting"));
+  const dirty = useAnyDirty(paneIds(t.layout));
   const isEditing = editing?.id === t.id;
   const drag = useTabSortable(t.id, isEditing);
   const [preview, setPreview] = useState(false);
@@ -82,7 +84,15 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
       onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
     >
-      {waiting ? <span className={dotClass("needs")} /> : lead?.kind === "browser" ? <Globe className="icon proc-icon" size={11} aria-label="Browser" /> : <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />}
+      {waiting ? (
+        <span className={dotClass("needs")} />
+      ) : lead?.kind === "browser" ? (
+        <Globe className="icon proc-icon" size={11} aria-label="Browser" />
+      ) : lead?.kind === "editor" ? (
+        <FileText className="icon proc-icon" size={11} aria-label="Editor" />
+      ) : (
+        <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />
+      )}
       {isEditing ? (
         <input
           autoFocus
@@ -96,7 +106,10 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
           }}
         />
       ) : (
-        <span className="tab-title">{t.title}</span>
+        <span className="tab-title">
+          {dirty && <span aria-label="unsaved edits">● </span>}
+          {t.title}
+        </span>
       )}
       {closable && (
         <IconButton
@@ -115,7 +128,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
     </div>
   );
 
-  if (t.is_active || !lead || lead.kind === "browser") return el;
+  if (t.is_active || !lead || lead.kind !== "terminal") return el;
   return (
     <PreviewCard open={preview && !drag.busy} onOpenChange={setPreview}>
       <PreviewCardTrigger render={el} />

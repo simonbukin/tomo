@@ -6,6 +6,7 @@ import { agentSessionSchema, fsEntrySchema, processInfoSchema } from "./schemas"
 import { openMenu } from "./MenuHost";
 import { Combobox, IconButton, plainTextInput, SkeletonRows, Tooltip } from "./components/ui";
 import { fileMenu } from "./menus";
+import { openFile } from "./editor/editor";
 import { parseTags, setMetadata, spawnAgent } from "./actions";
 import { ProcessIcon } from "./ProcessIcon";
 import { useFlip } from "./useFlip";
@@ -194,7 +195,7 @@ function FilesSection({ w }: { w: Worktree }) {
   );
 }
 
-const openInEditor = (w: Worktree, rel: string) => rpc("open_external", { worktree_id: w.id, rel_path: rel, target: "editor" }).catch(failQuietly("open_external"));
+const openInPane = (w: Worktree, rel: string) => void openFile(w.id, rel);
 
 function RecentFiles({ w }: { w: Worktree }) {
   const [files, setFiles] = useState<FsEntry[] | null>(null);
@@ -212,7 +213,7 @@ function RecentFiles({ w }: { w: Worktree }) {
       {files?.length === 0 && <div className="muted">no files</div>}
       {files?.map((e) => (
         <Tooltip key={e.rel_path} content={<span className="mono">{e.rel_path}</span>} side="left">
-          <div className="file-row" onContextMenu={(ev) => openMenu(ev, fileMenu(w, e.rel_path))} onDoubleClick={() => openInEditor(w, e.rel_path)}>
+          <div className="file-row" onContextMenu={(ev) => openMenu(ev, fileMenu(w, e.rel_path))} onClick={() => openInPane(w, e.rel_path)}>
             <File className="icon" />
             <span className="file-name">{e.name}</span>
             <span className="file-age">{ago(e.modified_ms)}</span>
@@ -246,7 +247,7 @@ function FileTree({ w }: { w: Worktree }) {
   const render = (rel: string, depth: number): React.ReactNode =>
     (dirs[rel] ?? []).map((e) => (
       <div key={e.rel_path}>
-        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 14 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }} onDoubleClick={() => !e.is_dir && openInEditor(w, e.rel_path)}>
+        <div className={`file-row${selected === e.rel_path ? " file-selected" : ""}`} style={{ paddingLeft: 14 + depth * 12 }} onClick={() => { setSelected(e.rel_path); if (e.is_dir) toggle(e.rel_path); else openInPane(w, e.rel_path); }} onContextMenu={(ev) => { setSelected(e.rel_path); openMenu(ev, fileMenu(w, e.rel_path)); }}>
           {e.is_dir ? (openDirs.has(e.rel_path) ? <ChevronDown className="icon" /> : <ChevronRight className="icon" />) : <File className="icon" />}
           <span className="file-name">{e.name}</span>
         </div>
