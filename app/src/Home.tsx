@@ -2,7 +2,7 @@ import { GitBranch, ListFilter, Plus, Search, SlidersHorizontal, Star, X } from 
 import { addonApps, branchMark } from "./addons";
 import { Wordmark } from "./Brand";
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EventRow, fetchActivity } from "./Activity";
 import { openWorktree, setMetadata } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
@@ -23,6 +23,7 @@ import { SUBAGENT_LINES, SubagentList } from "./WorktreePreview";
 import { tagPrefill } from "./lenses";
 import type { Filter, FilterKind, HomeOptions, Worktree, WorktreePrefill } from "./types";
 import { useGlide } from "./glide";
+import { useFlip } from "./useFlip";
 
 const SCOPE_EVENTS = 8;
 
@@ -60,6 +61,13 @@ export function Home() {
   const empty = homeEmpty(s.repos.length, s.worktrees.filter((w) => !w.archived_at_ms).length, visible.length);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [dragged, setDragged] = useState<Worktree | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const layout = `${JSON.stringify(o.scope)}|${o.view}|${o.group}|${searching}`;
+  const shownLayout = useRef(layout);
+  useFlip(root, undefined, shownLayout.current === layout);
+  useLayoutEffect(() => {
+    shownLayout.current = layout;
+  });
   const cardOf = (data: Record<string, unknown> | undefined) => ({ w: s.worktrees.find((x) => x.id === data?.worktreeId), from: data?.from as string | undefined });
   const onDragStart = ({ active }: DragStartEvent) => setDragged(cardOf(active.data.current).w ?? null);
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -104,7 +112,7 @@ export function Home() {
   };
 
   return (
-    <div className="home">
+    <div className="home" ref={root}>
       <div className="home-bar">
         <label className="home-search">
           <Search className="icon" />
@@ -181,8 +189,8 @@ export function Home() {
       {scopePage && visible.length > 0 && (
         <>
           <div className="scope-cards">
-            {visible.map((w) => <WorktreeCard key={w.id} w={w} />)}
-            <button type="button" className="card-new" onClick={() => setState({ dialog: { kind: "create-worktree", ...scopePrefill } })}>
+            {visible.map((w) => <WorktreeCard key={w.id} w={w} flip={`card:${w.id}`} />)}
+            <button type="button" className="card-new" data-flip="card:new" onClick={() => setState({ dialog: { kind: "create-worktree", ...scopePrefill } })}>
               <Plus className="icon" /> create worktree
             </button>
           </div>
@@ -209,7 +217,7 @@ export function Home() {
         </DndContext>
       ) : (
         groups.map((g) => (
-          <section key={g.key || "all"} className="home-group">
+          <section key={g.key || "all"} className="home-group" data-flip={`group:${g.key}`}>
             {g.key && <div className="section-label">{repoFor(g.key) && <RepoAvatar repo={repoFor(g.key)!} />}{g.key}<span className="right">{g.items.length}</span></div>}
             <div className="wt-list">{g.items.map((w) => <Row key={w.id} w={w} />)}</div>
           </section>
@@ -232,7 +240,7 @@ function ScopeActivity({ worktreeIds }: { worktreeIds: readonly string[] }) {
   const events = useMemo(() => activity.filter((e) => e.worktree_id && ids.has(e.worktree_id)).slice(0, SCOPE_EVENTS), [activity, worktreeIds]);
   if (!events.length) return null;
   return (
-    <section className="scope-activity">
+    <section className="scope-activity" data-flip="scope-activity">
       <div className="section-label">recent activity</div>
       {events.map((e) => <EventRow key={e.id} e={e} />)}
     </section>
@@ -240,6 +248,7 @@ function ScopeActivity({ worktreeIds }: { worktreeIds: readonly string[] }) {
 }
 
 function Row({ w }: { w: Worktree }) {
+  const flip = `row:${w.id}`;
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
   const g = w.git;
@@ -249,6 +258,7 @@ function Row({ w }: { w: Worktree }) {
   const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   return (
     <div
+      data-flip={flip}
       className={`wt-list-row${attention ? " row-attention" : ""}${w.exists || archived ? "" : " row-missing"}${archived ? " row-archived" : ""}${busy ? " row-archiving" : ""}`}
       onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
@@ -267,7 +277,7 @@ function Row({ w }: { w: Worktree }) {
       <span className="runtime">
         {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
       </span>
-      {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
+      {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={`${flip}:sub`} />}
     </div>
   );
 }
@@ -282,8 +292,11 @@ function BoardColumn({ groupKey, droppable, children }: { groupKey: string; drop
   );
 }
 
-/** A card with a `column` can be dragged to another tag column. A worktree with two tags has a card in each. */
-export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
+/**
+ * A card with a `column` can be dragged to another tag column. A worktree with two tags has a card in each.
+ * A card with a `flip` key moves with `useFlip` instead of its own entrance.
+ */
+export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string; flip?: string }) {
   const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => needsAttention(w, queryContext(s)));
@@ -300,7 +313,8 @@ export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
       ref={drag.setNodeRef}
       {...drag.attributes}
       {...drag.listeners}
-      className={`card rise${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}${drag.isDragging ? " card-dragging" : ""}`}
+      data-flip={flip}
+      className={`card${flip ? "" : " rise"}${attention ? " card-attention" : ""}${w.exists || archived ? "" : " card-missing"}${archived ? " card-archived" : ""}${busy ? " card-archiving" : ""}${drag.isDragging ? " card-dragging" : ""}`}
       onClick={() => !archived && !busy && openWorktree(w.id)}
       onContextMenu={(e) => openMenu(e, worktreeMenu(w))}
       title={[w.path, busy ? "archiving..." : null].filter(Boolean).join("\n")}
@@ -322,7 +336,7 @@ export function WorktreeCard({ w, column }: { w: Worktree; column?: string }) {
           {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentStatus(a.state))} />)}
         </div>
       )}
-      {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
+      {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={flip && `${flip}:sub`} />}
       {w.metadata.tags.length > 0 && <div className="card-tags">{w.metadata.tags.map((t) => <span key={t} className="tag-chip">#{t}</span>)}</div>}
       {!archived && <Signals worktreeId={w.id} className="card-signals" omit={AGENT_SIGNALS} />}
       <RowError worktreeId={w.id} />

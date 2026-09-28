@@ -115,6 +115,7 @@ const nowMs = Date.now();
 const MOTION: { label: string; run: () => void }[] = [
   { label: "archive crowd", run: () => setState({ worktrees: getState().worktrees.map((w) => (w.id === "crowd" ? { ...w, archived_at_ms: nowMs } : w)) }) },
   { label: "add worktree", run: () => setState({ worktrees: [...getState().worktrees, wt("added")] }) },
+  { label: "touch quiet", run: () => setState({ worktrees: getState().worktrees.map((w) => (w.id === "quiet" ? { ...w, last_active_ms: Date.now() + 60_000 } : w)) }) },
   {
     label: "add subagent",
     run: () => {

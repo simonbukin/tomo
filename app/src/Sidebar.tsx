@@ -277,7 +277,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
           <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
         </span>
-        {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} />}
+        {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={`sub:${w.id}`} />}
       </div>
     </HoverCard>
   );
