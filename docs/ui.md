@@ -228,7 +228,16 @@ is on.
   starts `editor_command` at that place. A relative path resolves against
   the pane cwd. See `editor_command` in [data-model.md](data-model.md).
 - Drop Finder files on a terminal pane: Tomo types the shell-escaped
-  absolute paths, separated by spaces, through `pane_send`.
+  absolute paths, separated by spaces, through `pane_send`. On macOS, wry
+  gives the drop position in view points, not in physical pixels. The hit
+  test divides it by the webview zoom only.
+- Cmd-V with an image and no text on the clipboard: the app command
+  `clipboard_image` saves the image as a PNG file in
+  `$TMPDIR/tomo-paste` through `osascript`. Tomo then pastes the
+  shell-escaped path. Claude Code, Codex, and other agents attach an image
+  from a pasted path. A shell gets a plain path. Tomo does not send Ctrl-V,
+  because only some agents read the clipboard on Ctrl-V, and a shell reads
+  it as a quoted insert.
 
 The pure parts are `findLinks` and `resolvePath` in `links.ts`, and
 `shellEscape`, `dropText`, and the hit test in `fileDrop.ts`. The xterm link

@@ -1,7 +1,7 @@
 import type { IDisposable, Terminal } from "@xterm/xterm";
+import { invoke } from "@tauri-apps/api/core";
 import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openEndpoint } from "./actions";
 import { encodeBase64, rpc } from "./api";
 import { containsPoint, cssPoint, dropText } from "./fileDrop";
@@ -45,8 +45,7 @@ export function listenFileDrop(host: HTMLElement, paneId: Id): () => void {
     getCurrentWebview()
       .onDragDropEvent(async ({ payload }) => {
         if (payload.type !== "drop" || !payload.paths.length) return;
-        const scale = await getCurrentWindow().scaleFactor().catch(() => window.devicePixelRatio);
-        if (!containsPoint(host.getBoundingClientRect(), cssPoint(payload.position, scale, getState().ui.appearance.zoom))) return;
+        if (!containsPoint(host.getBoundingClientRect(), cssPoint(payload.position, getState().ui.appearance.zoom))) return;
         await rpc("pane_send", { pane_id: paneId, data_base64: encodeBase64(dropText(payload.paths)) }).catch(failQuietly("pane_send"));
         focusTerminal(paneId);
       })
@@ -60,4 +59,15 @@ export function listenFileDrop(host: HTMLElement, paneId: Id): () => void {
     disposed = true;
     unlisten?.();
   };
+}
+
+/**
+ * Pastes the clipboard text. With no text but an image, pastes the path of a PNG copy of the image,
+ * which Claude Code, Codex, and other agents attach like a dropped file. A shell gets a plain path.
+ */
+export async function pasteClipboard(term: Pick<Terminal, "paste">): Promise<void> {
+  const text = await navigator.clipboard.readText().catch(() => "");
+  if (text) return term.paste(text);
+  const image = await invoke<string | null>("clipboard_image").catch(() => null);
+  if (image) term.paste(dropText([image]));
 }

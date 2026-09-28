@@ -12,10 +12,13 @@ export function dropText(paths: readonly string[]): string {
   return paths.length ? `${paths.map(shellEscape).join(" ")} ` : "";
 }
 
-/** A drop position arrives in physical pixels; the DOM measures CSS pixels, which the webview zoom also scales. */
-export function cssPoint(physical: Point, scaleFactor: number, zoom: number): Point {
-  const k = (scaleFactor > 0 ? scaleFactor : 1) * (zoom > 0 ? zoom : 1);
-  return { x: physical.x / k, y: physical.y / k };
+/**
+ * A drop position in CSS pixels. Tauri types the position as physical, but on macOS wry reports
+ * view points (wry src/wkwebview/drag_drop.rs), so only the webview zoom separates it from CSS pixels.
+ */
+export function cssPoint(points: Point, zoom: number): Point {
+  const k = zoom > 0 ? zoom : 1;
+  return { x: points.x / k, y: points.y / k };
 }
 
 export function containsPoint(rect: { left: number; top: number; right: number; bottom: number }, p: Point): boolean {
