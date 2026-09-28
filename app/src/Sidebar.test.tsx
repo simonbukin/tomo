@@ -46,6 +46,8 @@ const agent = (paneId: string, state: AgentPresence["state"]): AgentPresence => 
   authority: "report",
   updated_at_ms: 0,
   pid: null,
+  estimated: false,
+  seen: false,
 });
 
 const initial = getState();
@@ -141,7 +143,7 @@ describe("worktree hover preview", () => {
 });
 
 describe("subagents in the row", () => {
-  const sub = (id: string, state: AgentPresence["state"], started: number) => ({ id, label: "Explore", description: `task ${id}`, state, started_at_ms: started });
+  const sub = (id: string, state: AgentPresence["state"], started: number) => ({ id, label: "Explore", description: `task ${id}`, state, started_at_ms: started , updated_at_ms: started });
   const withSubs = (subs: ReturnType<typeof sub>[]): AgentPresence => ({ ...agent("p1", "working"), subagents: subs });
 
   it("draws nothing for an agent without subagents, so a quiet row keeps its two units", () => {

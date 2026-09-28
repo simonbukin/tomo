@@ -9,6 +9,14 @@ import type { Subagent } from "./Subagent";
 
 export type AgentPresence = { pane_id: string, worktree_id: string, kind: AgentKind, state: AgentState, session_ref: string | null, authority: Authority, updated_at_ms: number, pid: number | null, 
 /**
+ * The state comes from the CPU fallback, because this agent process sent no hook event.
+ */
+estimated: boolean, 
+/**
+ * Someone looked at the pane since the state last changed. It ranks a seen `Dead` below `Working`.
+ */
+seen: boolean, 
+/**
  * Helper agents that this agent started and that still matter to the current turn.
  */
 subagents?: Array<Subagent>, };

@@ -204,6 +204,10 @@ pub enum Call {
         pane_id: Id,
         force: bool,
     },
+    /// The pane is on screen in a focused window: a `Done` agent there becomes `Idle`, and a `Dead` one counts as seen.
+    AgentSeen {
+        pane_id: Id,
+    },
     PaneFocus {
         pane_id: Id,
     },
@@ -1094,7 +1098,12 @@ impl std::str::FromStr for AgentKind {
 pub enum AgentState {
     Working,
     Waiting,
+    /// The turn finished and nobody has looked at the pane since. Seeing the pane makes it `Idle`.
+    Done,
     Idle,
+    /// The agent process ended by itself with a failure. See docs/agent-states.md.
+    Dead,
+    /// The agent ended as someone asked. It has no mark.
     Exited,
     Unknown,
 }
@@ -1104,7 +1113,9 @@ impl AgentState {
         match self {
             AgentState::Working => "●",
             AgentState::Waiting => "◉",
+            AgentState::Done => "✓",
             AgentState::Idle => "○",
+            AgentState::Dead => "✕",
             AgentState::Exited => "×",
             AgentState::Unknown => "?",
         }
@@ -1114,7 +1125,9 @@ impl AgentState {
         match self {
             AgentState::Working => "working",
             AgentState::Waiting => "waiting",
+            AgentState::Done => "done",
             AgentState::Idle => "idle",
+            AgentState::Dead => "dead",
             AgentState::Exited => "exited",
             AgentState::Unknown => "unknown",
         }
@@ -1142,6 +1155,12 @@ pub struct AgentPresence {
     pub authority: Authority,
     pub updated_at_ms: u64,
     pub pid: Option<u32>,
+    /// The state comes from the CPU fallback, because this agent process sent no hook event.
+    #[serde(default)]
+    pub estimated: bool,
+    /// Someone looked at the pane since the state last changed. It ranks a seen `Dead` below `Working`.
+    #[serde(default)]
+    pub seen: bool,
     /// Helper agents that this agent started and that still matter to the current turn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<Subagent>>", optional)]
@@ -1161,6 +1180,9 @@ pub struct Subagent {
     /// `working`, `waiting`, or `exited` when it is done.
     pub state: AgentState,
     pub started_at_ms: u64,
+    /// The last event of this subagent. One silent for 30 minutes under an idle parent is dropped.
+    #[serde(default)]
+    pub updated_at_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

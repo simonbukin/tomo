@@ -7,7 +7,7 @@ export const GLYPH: Record<Status, string> = { working: "●", needs: "◉", idl
 
 const DOT: Record<Status, string> = { working: "state-working", needs: "state-waiting", idle: "state-idle", complete: "state-done", failed: "state-fail", unknown: "state-unknown" };
 
-const AGENT: Record<AgentState | "none", Status | null> = { working: "working", waiting: "needs", idle: "idle", exited: "complete", unknown: "unknown", none: null };
+const AGENT: Record<AgentState | "none", Status | null> = { working: "working", waiting: "needs", done: "complete", idle: "idle", dead: "failed", exited: "complete", unknown: "unknown", none: null };
 
 export const agentStatus = (state: AgentState | "none"): Status | null => AGENT[state];
 

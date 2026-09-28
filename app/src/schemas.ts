@@ -19,7 +19,7 @@ export const agentCommandSchema = z.object({
     args: z.array(z.string())
 });
 
-export const agentStateSchema = z.union([z.literal("working"), z.literal("waiting"), z.literal("idle"), z.literal("exited"), z.literal("unknown")]);
+export const agentStateSchema = z.union([z.literal("working"), z.literal("waiting"), z.literal("done"), z.literal("idle"), z.literal("dead"), z.literal("exited"), z.literal("unknown")]);
 
 export const authoritySchema = z.union([z.literal("lifecycle"), z.literal("report"), z.literal("screen"), z.literal("heuristic"), z.literal("unknown")]);
 
@@ -28,7 +28,8 @@ export const subagentSchema = z.object({
     label: z.string(),
     description: z.string().nullable(),
     state: agentStateSchema,
-    started_at_ms: z.number()
+    started_at_ms: z.number(),
+    updated_at_ms: z.number()
 });
 
 export const agentReportSchema = z.object({
@@ -153,6 +154,8 @@ export const agentPresenceSchema = z.object({
     authority: authoritySchema,
     updated_at_ms: z.number(),
     pid: z.number().nullable(),
+    estimated: z.boolean(),
+    seen: z.boolean(),
     subagents: z.array(subagentSchema).optional()
 });
 

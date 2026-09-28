@@ -30,7 +30,7 @@ fn with_state(list: &[Subagent], at: usize, state: AgentState) -> Vec<Subagent> 
 }
 
 fn fresh(id: Option<String>, label: String, description: Option<String>, at_ms: u64) -> Subagent {
-    Subagent { id, label, description, state: AgentState::Working, started_at_ms: at_ms }
+    Subagent { id, label, description, state: AgentState::Working, started_at_ms: at_ms, updated_at_ms: at_ms }
 }
 
 fn pushed(list: &[Subagent], item: Subagent) -> Vec<Subagent> {

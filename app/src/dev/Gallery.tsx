@@ -56,9 +56,11 @@ const agent = (worktreeId: string, kind: AgentPresence["kind"], state: AgentStat
   authority: "lifecycle",
   updated_at_ms: Date.now(),
   pid: null,
+  estimated: false,
+  seen: false,
 });
 
-const sub = (id: string | null, label: string, state: AgentState, description: string | null, minutesAgo = 1): Subagent => ({ id, label, description, state, started_at_ms: Date.now() - minutesAgo * 60_000 });
+const sub = (id: string | null, label: string, state: AgentState, description: string | null, minutesAgo = 1): Subagent => ({ id, label, description, state, started_at_ms: Date.now() - minutesAgo * 60_000 , updated_at_ms: Date.now() - minutesAgo * 60_000 });
 
 /** One named state of one component. The gallery renders each on its own, with nothing else on screen. */
 interface Scene {

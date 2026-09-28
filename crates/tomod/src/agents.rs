@@ -1,41 +1,59 @@
-use tomo_proto::{AgentPresence, AgentReport, AgentState};
+use tomo_proto::{AgentPresence, AgentReport, AgentState, Authority};
 
-/// A weaker source may replace a stronger one only after this much silence.
-pub const STALE_MS: u64 = 15 * 60 * 1000;
+fn fresh(report: &AgentReport, worktree_id: &str, pid: Option<u32>) -> AgentPresence {
+    AgentPresence {
+        pane_id: report.pane_id.clone(),
+        worktree_id: worktree_id.to_string(),
+        kind: report.kind,
+        state: report.state.unwrap_or(AgentState::Unknown),
+        session_ref: report.session_ref.clone(),
+        authority: report.authority,
+        updated_at_ms: report.at_ms,
+        pid,
+        estimated: report.state.is_some() && report.authority == Authority::Heuristic,
+        seen: false,
+        subagents: Vec::new(),
+    }
+}
+
+/// Whether `report` may set the state. A hook state is never replaced by a weaker source, however old it is:
+/// an idle agent is quiet for hours, correctly. Among hook events, the one that fired last wins, whatever
+/// order the hook processes arrive in. See docs/agent-states.md.
+fn takes_state(cur: &AgentPresence, report: &AgentReport) -> bool {
+    match (report.state, cur.authority == Authority::Lifecycle) {
+        (None, _) => false,
+        (Some(_), true) => report.authority == Authority::Lifecycle && report.at_ms >= cur.updated_at_ms,
+        (Some(_), false) => report.authority < cur.authority || (report.authority == cur.authority && report.at_ms >= cur.updated_at_ms),
+    }
+}
 
 pub fn merge(current: Option<&AgentPresence>, report: &AgentReport, worktree_id: &str, pid: Option<u32>) -> Option<AgentPresence> {
     let Some(cur) = current else {
-        return Some(AgentPresence {
-            pane_id: report.pane_id.clone(),
-            worktree_id: worktree_id.to_string(),
-            kind: report.kind,
-            state: report.state.unwrap_or(AgentState::Unknown),
-            session_ref: report.session_ref.clone(),
-            authority: report.authority,
-            updated_at_ms: report.at_ms,
-            pid,
-            subagents: Vec::new(),
-        });
+        return Some(fresh(report, worktree_id, pid));
     };
+    let ended = matches!(cur.state, AgentState::Exited | AgentState::Dead);
+    if ended && pid.is_some() && cur.pid.is_some() && pid != cur.pid {
+        return Some(fresh(report, worktree_id, pid));
+    }
     let session_ref = report.session_ref.clone().or_else(|| cur.session_ref.clone());
     let pid = pid.or(cur.pid);
-    let stronger = report.authority < cur.authority;
-    let same_and_newer = report.authority == cur.authority && report.at_ms >= cur.updated_at_ms;
-    let stale = cur.updated_at_ms + STALE_MS < report.at_ms;
-    let accept_state = report.state.is_some() && (stronger || same_and_newer || stale);
-    let changed = accept_state || session_ref != cur.session_ref || pid != cur.pid || report.kind != cur.kind;
+    let accept = takes_state(cur, report);
+    let next_state = if accept { report.state.unwrap_or(cur.state) } else { cur.state };
+    let changed = accept || session_ref != cur.session_ref || pid != cur.pid || report.kind != cur.kind;
     if !changed {
         return None;
     }
     Some(AgentPresence {
         pane_id: cur.pane_id.clone(),
         worktree_id: cur.worktree_id.clone(),
-        kind: if stronger || same_and_newer { report.kind } else { cur.kind },
-        state: if accept_state { report.state.unwrap() } else { cur.state },
+        kind: if accept { report.kind } else { cur.kind },
+        state: next_state,
         session_ref,
-        authority: if accept_state { report.authority } else { cur.authority },
-        updated_at_ms: if accept_state { report.at_ms } else { cur.updated_at_ms },
+        authority: if accept { report.authority } else { cur.authority },
+        updated_at_ms: if accept { report.at_ms } else { cur.updated_at_ms },
         pid,
+        estimated: if accept { report.authority == Authority::Heuristic } else { cur.estimated },
+        seen: cur.seen && next_state == cur.state,
         subagents: cur.subagents.clone(),
     })
 }
@@ -63,11 +81,31 @@ mod tests {
     }
 
     #[test]
-    fn heuristic_does_not_overwrite_fresh_lifecycle_state() {
-        let cur = merge(None, &report(Authority::Lifecycle, Some(AgentState::Waiting), 1000), "w", Some(1)).unwrap();
+    fn a_heuristic_never_replaces_a_hook_state_however_old() {
+        let cur = merge(None, &report(Authority::Lifecycle, Some(AgentState::Idle), 1000), "w", Some(1)).unwrap();
         assert!(merge(Some(&cur), &report(Authority::Heuristic, Some(AgentState::Working), 2000), "w", Some(1)).is_none());
-        let after = merge(Some(&cur), &report(Authority::Heuristic, Some(AgentState::Working), 1000 + STALE_MS + 1), "w", Some(1)).unwrap();
-        assert_eq!(after.state, AgentState::Working);
+        assert!(merge(Some(&cur), &report(Authority::Heuristic, Some(AgentState::Working), 1000 + 24 * 3_600_000), "w", Some(1)).is_none(), "a day later too");
+    }
+
+    #[test]
+    fn the_fallback_sets_both_states_until_the_first_hook() {
+        let first = merge(None, &report(Authority::Heuristic, Some(AgentState::Working), 1), "w", Some(1)).unwrap();
+        assert!(first.estimated);
+        let quiet = merge(Some(&first), &report(Authority::Heuristic, Some(AgentState::Idle), 2), "w", Some(1)).unwrap();
+        assert_eq!((quiet.state, quiet.estimated), (AgentState::Idle, true));
+        let hooked = merge(Some(&quiet), &report(Authority::Lifecycle, Some(AgentState::Working), 3), "w", Some(1)).unwrap();
+        assert_eq!((hooked.state, hooked.estimated, hooked.authority), (AgentState::Working, false, Authority::Lifecycle));
+        assert!(merge(Some(&hooked), &report(Authority::Heuristic, Some(AgentState::Idle), 4), "w", Some(1)).is_none(), "the first hook ends the fallback");
+    }
+
+    #[test]
+    fn a_state_change_clears_seen_and_a_new_process_starts_fresh() {
+        let done = AgentPresence { seen: true, ..merge(None, &report(Authority::Lifecycle, Some(AgentState::Done), 1), "w", Some(1)).unwrap() };
+        let working = merge(Some(&done), &report(Authority::Lifecycle, Some(AgentState::Working), 2), "w", Some(1)).unwrap();
+        assert!(!working.seen);
+        let dead = merge(Some(&working), &report(Authority::Lifecycle, Some(AgentState::Dead), 3), "w", Some(1)).unwrap();
+        let next = merge(Some(&dead), &report(Authority::Heuristic, Some(AgentState::Working), 4), "w", Some(2)).unwrap();
+        assert_eq!((next.state, next.authority, next.pid), (AgentState::Working, Authority::Heuristic, Some(2)), "a new agent in the pane may use the fallback");
     }
 
     #[test]
@@ -105,11 +143,7 @@ mod tests {
             merge(Some(&waiting), &rep("p", Authority::Report, Some(AgentState::Idle), 12_000), "w", Some(7)).is_none(),
             "explicit report is weaker than lifecycle"
         );
-        let stale = merge(Some(&waiting), &rep("p", Authority::Heuristic, Some(AgentState::Working), 10_000 + STALE_MS + 1), "w", Some(7)).unwrap();
-        assert_eq!((stale.state, stale.authority), (AgentState::Working, Authority::Heuristic), "silent lifecycle yields to heuristic");
-        let back = merge(Some(&stale), &rep("p", Authority::Lifecycle, Some(AgentState::Idle), 10_000 + STALE_MS + 2), "w", Some(7)).unwrap();
-        assert_eq!(back.state, AgentState::Idle, "lifecycle regains authority immediately");
-        let exited = merge(Some(&back), &rep("p", Authority::Lifecycle, Some(AgentState::Exited), 10_000 + STALE_MS + 3), "w", None).unwrap();
+        let exited = merge(Some(&waiting), &rep("p", Authority::Lifecycle, Some(AgentState::Exited), 10_001), "w", None).unwrap();
         assert_eq!(exited.state, AgentState::Exited);
         assert_eq!(exited.pid, Some(7), "pid is kept until a new one is seen");
     }
