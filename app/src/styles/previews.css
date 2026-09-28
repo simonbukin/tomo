@@ -11,3 +11,8 @@
 .glyph-dirty { color: var(--waiting); }
 .glyph-complete { color: var(--success); }
 .glyph-idle, .glyph-unknown { color: var(--fg-3); }
+
+/* ---- worktree preview: the sidebar row and the rail square share it */
+.wt-preview { min-width: 220px; }
+.wt-preview-block { display: flex; flex-direction: column; gap: 2px; margin-top: var(--sp-1); padding-top: var(--sp-1); box-shadow: inset 0 1px 0 var(--line); }
+.wt-preview-agent { display: grid; grid-template-columns: 8px 11px auto minmax(0, 1fr) auto; align-items: center; column-gap: 6px; }
