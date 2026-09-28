@@ -405,14 +405,16 @@ is never narrower than its content. The middle section starts with
 `.bottom-items`: the `bottomItem` of each addon, in `builtins` order.
 
 ```text
-? ⚙ |      ✓ Copied branch      CPU 12%  MEM 8.4G  GPU 3% | ● 0.1.3
+?          + |      ✓ Copied branch   FPS 60  CPU 12%  MEM 8.4G  GPU 3% | ⚙ ● 0.1.3
 ```
 
-- Bottom-left: `?` runs `keyboard_shortcuts`, the gear opens Settings. Both
-  are `IconButton`s with a tooltip and the shortcut. In the minimal rail the
-  two buttons fit in 48 px. When the left sidebar is closed on screen, the
-  section is gone. The strip reads the mode on screen from `shellLayout`,
-  not the saved mode.
+- Bottom-left: `?` runs `keyboard_shortcuts`. The `+` at the right edge of
+  the section opens the dialog that adds a repo. In the open sidebar, `+` is
+  a `RevealButton`: on hover or focus, the label `new repo` opens to the
+  left over the empty space, and nothing beside it moves. In the minimal
+  rail, `+` is an `IconButton` with the tooltip `New repo`. When the left
+  sidebar is closed on screen, the section is gone. The strip reads the mode
+  on screen from `shellLayout`, not the saved mode.
 - Status slot: `StatusSlot` sits in the center, between the addon items
   and the metrics.
 - System metrics: `CPU 12%  MEM 8.4G  GPU 3%` from the daemon call
@@ -422,8 +424,15 @@ is never narrower than its content. The middle section starts with
   `--waiting`; 95 % uses `--hot`. Hover or click shows CPU, memory used of
   total, GPU and VRAM when present, the worktree with the most memory, and
   the daemon's own memory. Metrics hide while the daemon is disconnected.
-- Bottom-right: the health dot and the app version (`getVersion`, else the
-  daemon version). The dot has a text label (`Daemon healthy`,
+  Each label and its number center on one line. The UI face and the mono
+  face put their capitals at different heights, so `text-box: trim-both cap
+  alphabetic` trims each label and each number to its cap height and
+  baseline. The version and the `new repo` label use the same trim.
+  `FPS` before the metrics counts the frames of the webview. A click stops
+  or starts the count.
+- Bottom-right: the gear opens Settings. It is an `IconButton` with a
+  tooltip and the shortcut. Then come the health dot and the app version
+  (`getVersion`, else the daemon version). The dot has a text label (`Daemon healthy`,
   `Daemon reconnecting`, `Daemon disconnected`). Hover shows the daemon
   summary. A click opens diagnostics. See [diagnostics.md](diagnostics.md).
 
