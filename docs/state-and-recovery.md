@@ -133,15 +133,25 @@ directory. The steps, in order:
    changed.
 4. Every pane of the worktree closes and the processes those panes own are
    killed. Observed processes are never touched.
-5. `git worktree remove --force` runs. Git keeps the branch.
+5. The tree moves to a hidden sibling (`.<name>.tomo-trash-<ms>`), which is
+   instant on the same volume. `git worktree remove --force` then makes Git
+   forget only this worktree, and a detached `rm -rf` deletes the files. The
+   delete outlives the daemon. Git keeps the branch. A repository worktree
+   has about 240,000 files, so an inline delete under the 20 s git timeout
+   failed. The same step finishes a tree that an older remove left half
+   deleted: such a tree has no `.git` file, so the checkpoint skips it.
+   At startup the daemon deletes any `.tomo-trash-` sibling that a delete
+   did not finish, for example after a reboot.
 6. The metadata row gets `archived_at_ms` and `archived_branch`, and
    `worktree.archived` fires.
 
 ### The checkpoint
 
 A successful normal archive leaves all non-ignored user work recoverable
-from the branch. `git worktree remove --force` deletes the directory, so
-the checkpoint runs first.
+from the branch. Step 5 deletes the directory, so the checkpoint runs first.
+The checkpoint commit runs with `core.hooksPath=/dev/null` and `--no-verify`:
+it is a snapshot, not a commit that a person wrote, so a lint or typecheck
+hook of the repository does not refuse it.
 
 | Mode              | CLI               | Behavior                                                                 |
 |-------------------|-------------------|--------------------------------------------------------------------------|

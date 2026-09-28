@@ -104,7 +104,8 @@ branch. After a successful create the `worktree.created` hooks run.
 `archive` marks the worktree as archiving, runs the `worktree.before_archive`
 hooks (a non-zero exit aborts), commits a checkpoint when the tree is
 dirty, closes the worktree's terminals, kills the processes they own, and
-runs `git worktree remove --force`. The default `worktree.before_archive`
+moves the tree aside, makes Git forget that one worktree, and deletes the
+files in the background. The default `worktree.before_archive`
 hook deletes the build directories; see [hooks.md](hooks.md). The branch is kept, with the checkpoint on
 it. The worktree stays listed as archived.
 
