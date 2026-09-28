@@ -10,13 +10,14 @@ import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass, statusDot, tintClass } from "./glyphs";
+import { agentStatus, dotClass, effectiveState, tintClass } from "./glyphs";
+import { WorktreeMark } from "./StateMark";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, HoverCard, IconButton, MenuItems, RevealButton, type MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
-import { needsAttention, worktreeStatus } from "./homeQuery";
+import { needsAttention } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
@@ -231,7 +232,6 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
   const drag = useSortable({ id: sortId ?? w.id, data: { kind: "worktree", id: w.id, repoId: w.repo_id } satisfies DragData, disabled: !sortable || w.is_main || !!w.archived_at_ms });
   const selected = useStore((s) => s.selection.has(w.id));
   const agents = useStore((s) => agentsOf(s, w.id));
-  const status = useStore((s) => worktreeStatus(w, queryContext(s)));
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
@@ -250,7 +250,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
         }}
       >
-        <span {...statusDot(busy ? "archiving" : status, selected ? "state-selected" : undefined)} />
+        <WorktreeMark w={w} className={selected ? "state-selected" : undefined} />
         <span className="wt-name-line">
           <span className="wt-name">{w.name}</span>
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
@@ -272,7 +272,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
         </span>
         <span className="wt-foot">
           <span className="wt-agents">
-            {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentStatus(a.state))} />)}
+            {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentStatus(effectiveState(a)))} />)}
           </span>
           <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
           <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>

@@ -2,7 +2,8 @@ import type { ReactElement } from "react";
 import { nowSignals, type Signal } from "./activityModel";
 import { addonSignals, signalLine } from "./addons";
 import { HoverCard } from "./components/ui";
-import { agentStatus, dotClass, GLYPH } from "./glyphs";
+import { agentStatus, effectiveState } from "./glyphs";
+import { StateMark } from "./StateMark";
 import { AgentPreview } from "./HoverPreviews";
 import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, formatBytes, useStore, type State } from "./store";
@@ -21,28 +22,28 @@ export function signalsFor(s: State, worktreeId: Id): Signal[] {
 type AgentSignal = Extract<Signal, { kind: "agent" }>;
 
 function AgentHover({ worktreeId, signal, children }: { worktreeId: Id; signal: AgentSignal; children: ReactElement }) {
-  const agent = useStore((s) => agentsOf(s, worktreeId).filter((a) => a.kind === signal.agent && a.state === signal.state).sort((a, b) => b.updated_at_ms - a.updated_at_ms)[0] ?? null);
+  const agent = useStore((s) => agentsOf(s, worktreeId).filter((a) => a.kind === signal.agent && effectiveState(a) === signal.state).sort((a, b) => b.updated_at_ms - a.updated_at_ms)[0] ?? null);
   return <HoverCard content={agent && <AgentPreview agent={agent} />}>{children}</HoverCard>;
 }
 
 function SignalLine({ worktreeId, signal }: { worktreeId: Id; signal: Signal }) {
   switch (signal.kind) {
     case "attention":
-      return <span className="signal signal-attention"><span className={dotClass("needs")} />{signal.text}</span>;
+      return <span className="signal signal-attention"><StateMark mark="needs" />{signal.text}</span>;
     case "crash":
-      return <span className="signal signal-crash"><span className="signal-glyph">{GLYPH.failed}</span>{signal.text}</span>;
+      return <span className="signal signal-crash"><StateMark mark="failed" title="crashed" />{signal.text}</span>;
     case "agent":
       return (
         <AgentHover worktreeId={worktreeId} signal={signal}>
           {signal.state === "waiting" ? (
             <span className="signal agent-line is-waiting signal-attention">
-              <span className={dotClass("needs")} />
+              <StateMark mark="needs" />
               <ProcessIcon agent={signal.agent} size={11} />
               {KIND_LABEL[signal.agent]}
               <span className="signal-waiting-note">needs input</span>
             </span>
           ) : (
-            <span className={`signal agent-line is-${signal.state}`}><span className={dotClass(agentStatus(signal.state))} /><ProcessIcon agent={signal.agent} size={11} />{KIND_LABEL[signal.agent]}</span>
+            <span className={`signal agent-line is-${signal.state}`}><StateMark mark={agentStatus(signal.state)} /><ProcessIcon agent={signal.agent} size={11} />{KIND_LABEL[signal.agent]}</span>
           )}
         </AgentHover>
       );

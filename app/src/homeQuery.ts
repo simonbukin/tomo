@@ -1,7 +1,7 @@
 import { byManualOrder, mainFirst } from "./order";
 import { needsMeItem } from "./activityModel";
-import type { Status } from "./glyphs";
-import type { AgentPresence, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
+import { agentStatus, effectiveState, type Status } from "./glyphs";
+import type { AgentPresence, AgentState, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
 
 export interface QueryContext {
   repos: Repo[];
@@ -23,20 +23,28 @@ export function needsAttention(w: Worktree, ctx: QueryContext): boolean {
   return agentsOf(ctx.agents, w.id).some((a) => a.state === "waiting") || ctx.attention.some((a) => a.worktree_id === w.id && needsMeItem(a, ctx.agents));
 }
 
+const RANK: Partial<Record<AgentState, number>> = { waiting: 0, working: 2, done: 3, idle: 5, unknown: 6 };
+
+/** Where an agent ranks for the mark of its worktree, lowest first. See "A worktree" in docs/agent-states.md. */
+export function agentRank(a: AgentPresence): number {
+  const state = effectiveState(a);
+  return state === "dead" ? (a.seen ? 4 : 1) : (RANK[state] ?? 7);
+}
+
+export const mostUrgent = (agents: AgentPresence[]): AgentPresence | null =>
+  agents.reduce<AgentPresence | null>((top, a) => (top && agentRank(top) <= agentRank(a) ? top : a), null);
+
 /**
- * The one live mark of a worktree on every dense surface: the sidebar row, the Home card and row, and the rail.
- * Most urgent first. Null means that nothing runs there, and the surface draws no mark.
+ * The agent whose mark is the mark of the worktree on every dense surface: the sidebar row, the Home card and row,
+ * and the rail. Only agents count; a crash of an Action is a signal on the row. Null means no mark.
  */
-export function worktreeStatus(w: Worktree, ctx: Pick<QueryContext, "agents" | "attention">): Status | null {
-  if (w.archived_at_ms) return null;
-  const agents = agentsOf(ctx.agents, w.id);
-  const open = ctx.attention.filter((a) => a.worktree_id === w.id && needsMeItem(a, ctx.agents));
-  if (agents.some((a) => a.state === "waiting") || open.some((a) => a.kind !== "crash")) return "needs";
-  if (open.length) return "failed";
-  if (agents.some((a) => a.state === "working")) return "working";
-  if (agents.some((a) => a.state === "idle")) return "idle";
-  if (agents.some((a) => a.state === "unknown")) return "unknown";
-  return null;
+export function worktreeLead(w: Worktree, ctx: Pick<QueryContext, "agents">): AgentPresence | null {
+  return w.archived_at_ms ? null : mostUrgent(agentsOf(ctx.agents, w.id));
+}
+
+export function worktreeStatus(w: Worktree, ctx: Pick<QueryContext, "agents">): Status | null {
+  const lead = worktreeLead(w, ctx);
+  return lead && agentStatus(effectiveState(lead));
 }
 
 function agentStateOf(w: Worktree, ctx: QueryContext): string {

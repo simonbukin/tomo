@@ -1,3 +1,4 @@
+import { effectiveState } from "./glyphs";
 import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem } from "./types";
 
 /**
@@ -81,13 +82,16 @@ export interface SignalInput {
   addon: readonly AddonSignal[];
 }
 
+/** The short row text of a crash: "storybook exited with code 1" becomes "storybook exited 1". */
+export const crashText = (message: string): string => message.replace(/ exited with code (-?\d+)$/, " exited $1");
+
 /** The few things worth a glance on a NOW card, in priority order, at most three. */
 export function nowSignals(input: SignalInput): Signal[] {
-  const live = input.agents.filter((a) => a.state !== "exited");
+  const live = input.agents.filter((a) => a.state !== "exited").map((a) => ({ kind: a.kind, state: effectiveState(a) }));
   const open = input.attention.filter((a) => needsMeItem(a, input.agents));
   const checkpoint: Signal[] = open.some((a) => a.kind === "checkpoint") ? [{ kind: "attention", text: "review requested" }] : [];
   const waiting: Signal[] = live.filter((a) => a.state === "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
-  const crash: Signal[] = open.filter((a) => a.kind === "crash").map((a) => ({ kind: "crash", text: a.message }));
+  const crash: Signal[] = open.filter((a) => a.kind === "crash").map((a) => ({ kind: "crash", text: crashText(a.message) }));
   const agents: Signal[] = live.filter((a) => a.state !== "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
   const warn: Signal[] = input.rssBytes != null && input.rssBytes >= input.warnBytes ? [{ kind: "warn", bytes: input.rssBytes }] : [];
   const early = input.addon.filter((a) => a.beforeWarn);

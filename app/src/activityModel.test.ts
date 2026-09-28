@@ -84,6 +84,10 @@ describe("nowSignals", () => {
       { kind: "crash", text: "Storybook crashed" },
     ]);
   });
+  it("shortens the crash of an Action to its name and exit code", () => {
+    const out = nowSignals({ ...quiet, attention: [attention({ id: "cr", kind: "crash", message: "storybook exited with code 1" })] });
+    expect(out).toEqual([{ kind: "crash", text: "storybook exited 1" }]);
+  });
   it("shows a waiting agent once, as the agent line, not as a separate item", () => {
     expect(nowSignals({ ...quiet, agents: [agent("waiting")], attention: [attention({ pane_id: "p-claude" })] })).toEqual([{ kind: "agent", agent: "claude", state: "waiting" }]);
   });
