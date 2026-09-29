@@ -66,6 +66,7 @@ The main ones:
 - `inspectorSections`, `gitDetail`, `gitMarker`: the right inspector.
 - `worktreeSignals`, `signalLine`, `branchMark`: marks on worktree rows and cards.
 - `topbar`, `worktreeMenu`, `paletteEntries`, `commands`, `shortcuts`: actions.
+- `searchSources`: groups in the palette search. See [search.md](search.md).
 - `bottomItem`, `diagnosticsSection`: the bottom strip and the diagnostics report.
 - `apps`, `appUrl`, `paneSource`, `sourceMark`, `sourceMenu`: running apps and panes that an addon starts. The Apps view shows only when an addon has `apps`.
 - `onSnapshot`, `onFrame`, `mount`: read daemon state and events.

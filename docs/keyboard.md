@@ -92,6 +92,25 @@ It sorts by these keys, in this order:
 A match in the hint text counts as a fuzzy match. An entry that does not
 match the query does not show.
 
+### Search
+
+A typed query searches everything and shows the hits in groups: Commands,
+Worktrees, the addon groups, then Files, Sessions, Terminal, and Activity
+from the daemon. A first character narrows the scope: `>` commands, `/`
+files, `#` tags, `@` sessions, `$` terminal. The footer lists the prefixes
+while the query is empty. See [search.md](search.md).
+
+| Key | In a search |
+|-----|-------------|
+| Up, Down | move over every row of every group |
+| Tab | the first row of the next group |
+| Shift+Tab | the first row of this group, or of the group before |
+| Enter | run or open the hit; on `+N more in files`, narrow to that group |
+| Cmd+Enter | on a worktree, open it at once |
+
+The selection stays on its hit when later hits arrive. A hit that the
+daemon found does not go into `ui.paletteRecent`.
+
 ### Nested actions
 
 A worktree or a repo entry shows `›`. Enter opens a sub-list of its

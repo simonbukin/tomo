@@ -279,6 +279,29 @@ Desktop notifications use `tauri-plugin-notification` and need
 `[notifications] desktop`. The chime plays only when `[notifications] sounds`
 is on.
 
+## Palette search
+
+A typed query in the palette shows groups. [search.md](search.md) has the
+sources, the prefixes, and the numbers.
+
+- A group header is one unit high: the group name in mono `--fs-0` and
+  `--fg-3`, with a line above it. It shows `searching…` while its daemon
+  source has not finished, and `+N` when a group that no prefix narrows to
+  has more hits.
+- A name hit is one unit high. A content hit (a session message, a
+  terminal line, an activity detail) is two units high: the label and
+  `worktree · age` on the first line, the snippet in mono `--fs-1` on the
+  second.
+- `mark` shows the match: the substring, or the characters of a fuzzy
+  match. It uses `--accent-soft`; on the active row it is a lighter
+  mix of `--bg`.
+- `+N more in files` is a row of its own, with the prefix in a key cap.
+- The footer lists the prefixes while the query is empty, and the keys
+  while a query is typed.
+
+`app/src/searchModel.ts` holds the pure parts (scope, groups, rows,
+highlight). `app/src/search.ts` holds the daemon hook and what Enter does.
+
 ## Terminal links and file drop
 
 - Move the pointer over a URL or a file path in a terminal: a light dotted
