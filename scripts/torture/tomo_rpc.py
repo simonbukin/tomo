@@ -7,6 +7,8 @@
   tomo_rpc.py send <pane_id> <text>                send text (python escapes like \\r allowed)
   tomo_rpc.py events <seconds>                     count events on a subscribed connection
   tomo_rpc.py watch <seconds> <event>              print the data of each matching event as one JSON line
+  tomo_rpc.py search <query> [sources-json] [earlier queries...]
+                                                   search after the earlier queries on one connection; print the hits and timings per source
 """
 import base64, json, os, re, socket, sys, time
 
@@ -73,6 +75,24 @@ def main():
         for f in r.frames(float(sys.argv[2])):
             if "event" in f: n += 1
         print(n)
+    elif cmd == "search":
+        query, sources = sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else None
+        waiting = set(sources or ["file", "terminal", "session", "activity"])
+        out, started = {}, time.time()
+        for n, q in enumerate(sys.argv[4:] + [query], start=1):
+            r.send("search", {"query_id": n, "query": q, "sources": sources})
+        last = len(sys.argv[4:]) + 1
+        for f in r.frames(float(os.environ.get("SEARCH_SECONDS", "10"))):
+            if f.get("event") != "search_results": continue
+            d = f["data"]; ms = round((time.time() - started) * 1000, 1)
+            if d["query_id"] != last:
+                out.setdefault("stale", []).append(d["query_id"]); continue
+            s = out.setdefault(d["source"], {"first_ms": ms})
+            s.update(total=d["total"], done=d["done"], done_ms=ms, hits=[(h["label"], h["snippet"], h["target"]) for h in d["hits"]])
+            if d["done"]: waiting.discard(d["source"])
+            if not waiting: break
+        out["all_done_ms"] = round((time.time() - started) * 1000, 1)
+        print(json.dumps(out))
     elif cmd == "watch":
         r.call("subscribe")
         for f in r.frames(float(sys.argv[2])):
