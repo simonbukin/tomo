@@ -79,7 +79,7 @@ function claude() {
       hook("PreToolUse", tool(n))
       await sleep(n)
       hook("PostToolUse", { ...tool(n), tool_response: {} })
-      appendLine(transcript, { type: "assistant", message: { role: "assistant", model: "claude-fake-1", content: "done" } })
+      appendLine(transcript, { type: "assistant", message: { role: "assistant", content: "done" } })
       hook("Stop", { stop_hook_active: false })
     },
     wait: () => {

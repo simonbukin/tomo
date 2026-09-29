@@ -1,7 +1,7 @@
 #!/bin/bash
 # Sleeping agents (docs/sleeping-agents.md) with the fake Claude provider and a 3 s idle period: an idle agent
 # sleeps, input that was not sent, a child process, or a pane on screen keeps it awake, `tomo pane wake` and
-# `tomo pane send` resume the same session with its last model, a sleeping pane stays asleep through a restart
+# `tomo pane send` resume the same session, a sleeping pane stays asleep through a restart
 # and a cold restart, and an agent that ignores SIGTERM stays awake.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -62,13 +62,13 @@ phase_is "$STUBBORN" awake 4 && kill -0 "$STUBBORN_PID" && check 0 "the agent th
 $T pane keep-awake "$STUBBORN"
 [ "$(pane_field "$STUBBORN" keep_awake)" = True ] && check 0 "keep awake is saved on the pane" || check 1 "keep awake flag"
 
-# 4. tomo pane wake resumes the same session with the model it used last
+# 4. tomo pane wake resumes the same session with no model flag
 T0=$(python3 -c "import time; print(time.time())")
 $T pane wake "$A"
 phase_is "$A" awake 30 && check 0 "tomo pane wake wakes the agent" || check 1 "wake" "$(phase "$A")"
 echo "wake to first hook: $(python3 -c "import time; print(round(time.time() - $T0, 2))") s"
 state_is "$A" idle && [ "$(agent_field "$A" session_ref)" = "$S" ] && check 0 "the woken agent reports the same session" || check 1 "session after wake" "$(agent_field "$A" session_ref)"
-screen "$A" | grep "fake-provider claude session $S" | grep -qF -- "--resume $S --model claude-fake-1" && check 0 "the wake types the resume line with --model" || check 1 "resume line" "$(screen "$A" | grep 'argv:' | tail -1)"
+screen "$A" | grep "fake-provider claude session $S" | grep -F -- "--resume $S" | grep -qv -- "--model" && check 0 "the wake types the resume line with no model flag" || check 1 "resume line" "$(screen "$A" | grep 'argv:' | tail -1)"
 
 # 5. text sent to a sleeping pane wakes it and reaches the agent after its first hook
 A_PID=$(agent_pid "$A")

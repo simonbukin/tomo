@@ -59,8 +59,7 @@ resume cost no extra tokens and no extra latency for the model.
 1. Check the rules again under the lock.
 2. Save the snapshot: the pane's scrollback bytes and the terminal size, to
    `<data dir>/scrollback/<pane id>.snapshot`. Mark the pane `sleeping` in
-   its row (with the session reference, the provider, and the model that the
-   session used last).
+   its row (with the session reference and the provider).
 3. End the agent process only, not the pane's shell: SIGTERM to the agent
    pid, as an asked-for end (it is never `dead`, and no "exited" activity).
    The session file is complete: providers append each message as it
@@ -76,8 +75,8 @@ its cwd.
 1. A key or a click in the pane, "wake" in its menu, a Cmd-K result, or
    `tomo pane wake`.
 2. The daemon types `clear` and the provider's resume line into the pane's
-   shell (the same line a restore uses, with `resume_env`, and for Claude
-   `--model <model used last>`), and clears `sleeping`.
+   shell (the same line a restore uses, with `resume_env`), and clears
+   `sleeping`.
 3. The GUI shows "waking…" until the first output or hook, then the live
    terminal.
 4. Text that something sends to a sleeping pane (`tomo pane send`, a queued
@@ -87,7 +86,8 @@ its cwd.
 ## What sleeping loses, and what it keeps
 
 Kept: the conversation (the provider's session file), the pane, its layout,
-its cwd, the snapshot, the done mark, and the model.
+its cwd, the snapshot, and the done mark. The agent resumes with its
+configured model.
 
 Lost, and restored on wake only as far as the provider restores it:
 permissions that you allowed "for this session", MCP server connections
@@ -114,7 +114,7 @@ awake agent pane that lost its process.
 | 8 | Two wake triggers at once | The first wins; the pane is `waking` until the first output |
 | 9 | A key that woke the pane | It is not sent: it could land in the shell before the agent starts |
 | 10 | The snapshot is larger than the ring | The snapshot holds the ring (2 MB); "open transcript" reads older history |
-| 11 | Codex, Pi, other providers | The same flow through the provider table: its resume line, its safe children, its model flag. A provider that cannot resume never sleeps |
+| 11 | Codex, Pi, other providers | The same flow through the provider table: its resume line and its safe children. A provider that cannot resume never sleeps |
 | 12 | An agent with no hooks (the CPU fallback) | It never sleeps: its idle state is only estimated |
 | 13 | The agent is `dead` or exited | Nothing to sleep; the pane shows its last output as today |
 | 14 | Low memory pressure | Out of scope for now: sleep is by idle time only |
@@ -163,9 +163,10 @@ these points:
   events that fired before the old process ended do not count. A wake with
   no hook event in 30 s shows the live terminal and drops the queued input,
   which would land in the shell.
-- **The model flag is Claude only.** Claude gets `--model <model>` from the
-  newest assistant message in its session file. Codex and Pi resume with
-  their configured model.
+- **A wake names no model.** A Claude session file saves the model id
+  without `[1m]`, so a `--model` flag from it would change a 1M-context
+  session to the smaller context. Each agent resumes with its configured
+  model. A `/model` change in the session is lost at a sleep.
 - **`tomo pane sleep` skips three rules.** A sleep on request ignores the
   CPU, on-screen, and keep-awake rules, and the idle period. The rules that
   protect work stay.
