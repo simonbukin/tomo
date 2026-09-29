@@ -92,6 +92,16 @@ export interface InspectorSection {
   marker?: (s: State, w: Worktree) => RailMarker | null;
 }
 
+/** A group of the palette search. The palette ranks its entries with the core matcher. */
+export interface SearchGroup {
+  /** The group id. It must not change. */
+  id: string;
+  /** The group header. */
+  label: string;
+  /** Reads the store and starts no work. */
+  entries: (s: State) => PaletteEntry[];
+}
+
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */
 export interface Addon {
   id: string;
@@ -132,6 +142,8 @@ export interface Addon {
   branchMark?: (s: State, w: Worktree) => { tone: BranchTone; text: string } | null;
   /** Palette entries for one worktree: `context` is true in the root list for the worktree on screen, and false in its sub-list. */
   paletteEntries?: (s: State, w: Worktree, context: boolean) => PaletteEntry[];
+  /** Groups of the palette search, after the core groups that match as well as they do. */
+  searchSources?: readonly SearchGroup[];
   /** Commands with a key binding in this state. Read on each key press and by the shortcut reference. */
   shortcuts?: (s: State) => BoundCommand[];
   /** The `PaneSource.kind` that this addon starts, and how to restart or stop one of its panes from a crash toast or another addon's menu. */
