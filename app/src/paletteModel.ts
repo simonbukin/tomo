@@ -11,6 +11,12 @@ export interface PaletteEntry {
   run?: () => void;
   /** Present on an entry that opens a sub-list instead of running. */
   children?: () => PaletteEntry[];
+  /** A search hit: the text around the match, shown on a second line. */
+  snippet?: string;
+  /** A search hit: the name of its worktree. */
+  where?: string;
+  /** A search hit: when it last changed. */
+  at?: number;
 }
 
 export const MATCH = { none: -1, fuzzy: 0, substring: 1, prefix: 2, exact: 3 } as const;

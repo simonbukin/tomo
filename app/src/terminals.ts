@@ -1,3 +1,4 @@
+import type { SearchAddon } from "@xterm/addon-search";
 import type { Terminal } from "@xterm/xterm";
 import type { Id } from "./types";
 
@@ -26,6 +27,22 @@ export function focusTerminal(paneId: Id): boolean {
   if (!entry) return false;
   entry.focus();
   return true;
+}
+
+const searches = new WeakMap<Terminal, SearchAddon>();
+
+/** Selects the newest match of `text` in the scrollback of a mounted terminal and scrolls to it. False when it finds none. */
+export async function findInTerminal(paneId: Id, text: string): Promise<boolean> {
+  const term = registry.get(paneId)?.term;
+  if (!term) return false;
+  const { SearchAddon } = await import("@xterm/addon-search");
+  const addon = searches.get(term) ?? new SearchAddon();
+  if (!searches.has(term)) {
+    term.loadAddon(addon);
+    searches.set(term, addon);
+  }
+  term.clearSelection();
+  return addon.findPrevious(text, { caseSensitive: false });
 }
 
 export function paneRects(ids: Id[]): { id: Id; rect: DOMRect }[] {
