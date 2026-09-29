@@ -155,6 +155,14 @@ so a branch name from a pull request works with one paste.
   the pane was the last one of its tab, that empty tab closes; no process
   stops. A tab that already holds `max_panes_per_tab` panes refuses the
   drop. Panes never move to another worktree.
+- A pane whose agent sleeps shows `SleepView`: the saved terminal in a
+  read-only xterm under a bar that says `asleep · a key or a click wakes the
+  agent`. Scroll, select, copy, and Cmd-K terminal search work. A key or a
+  click (not a drag) calls `pane_wake`; the key is not sent. App shortcuts
+  and Cmd chords still work. While the agent resumes, the bar says
+  `waking…`, and the live terminal comes back at the first hook event. The
+  pane menu has `wake` and a `keep awake` check. In Cmd-K, a sleeping
+  agent shows as `wake Claude · <worktree>`.
 - A drop always calls `pane_move`, which uses the same split-tree
   functions as the commands. `LayoutDnd.tsx` holds the one drag context
   for the tab strip and the split layout, and it draws the preview.
@@ -213,6 +221,8 @@ square). [agent-states.md](agent-states.md) is the source of these rules.
 | hollow grey square | idle | the agent is alive, has no turn, and was seen | `idle` |
 | red square | failed | the agent ended with a failure | `dead · exited` |
 | dotted grey outline | unknown | Tomo has no hook events from the agent | ``no signal · run `tomo integrations install` `` |
+| grey square with a "z" cut out | sleeping | Tomo ended the idle agent; a key wakes it | `sleeping · idle 2 h · a key wakes it` |
+| green square with a "z" cut out | sleeping-done | the agent slept after a turn that nobody looked at | `sleeping · done 2 h · a key wakes it` |
 | no mark | none | no agent |  |
 
 When working becomes done, the same element turns from the rhombus back to
@@ -227,8 +237,9 @@ mark.
 every mark. `effectiveState` in `glyphs.ts` shows a done or idle agent with a
 running subagent as working. `worktreeLead` in `app/src/homeQuery.ts` picks
 the agent whose mark is the worktree mark, first match wins: needs you, dead
-and not seen, working, done, dead and seen, idle, no signal. Only agents
-count. A crash of an Action is a row signal (`storybook exited 1`) and a red
+and not seen, working, done, dead and seen, idle, no signal, sleeping after
+done, sleeping. An awake agent always wins over a sleeping one. Only agents
+count. `agentMark` in `glyphs.ts` gives the mark of one agent. A crash of an Action is a row signal (`storybook exited 1`) and a red
 square on its own Action button, never the worktree mark. It stays in the
 attention list.
 
