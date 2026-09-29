@@ -45,11 +45,11 @@ describe("the tab strip", () => {
   });
 
   it("marks a running setup hook as working and a failed one as dead", () => {
-    expect(bar().querySelector(".tab-pinned .tab-pin-mark")).toHaveClass("state-working");
+    expect(bar().querySelector(".tab-pinned .tab-pin-mark")).toHaveAttribute("data-mark", "working");
     cleanup();
     store.setState({ panes: { ...store.getState().panes, ps: aPane({ id: "ps", tab_id: "s", source: hook, hook_exit_code: 2 }) } });
     const mark = bar().querySelector(".tab-pinned .tab-pin-mark");
-    expect(mark).toHaveClass("state-fail");
+    expect(mark).toHaveAttribute("data-mark", "failed");
     expect(mark).toHaveAttribute("title", "hook exited 2");
   });
 

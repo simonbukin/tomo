@@ -34,9 +34,9 @@ describe("minimal left rail", () => {
   it("marks agents with squares and text labels, not color alone, and leaves an Action crash off the worktree mark", () => {
     render(<LeftRail />);
     const needs = screen.getByRole("button", { name: "aogashima, needs you" });
-    expect(needs.querySelector(".state-waiting")).not.toBeNull();
+    expect(needs.querySelector('[data-mark="needs"]')).not.toBeNull();
     const crashed = screen.getByRole("button", { name: "setagaya" });
-    expect(crashed.querySelector(".state-none")).not.toBeNull();
+    expect(crashed.querySelector('[data-mark="none"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "kamakura" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Activity, 1 need you" })).toBeInTheDocument();
   });

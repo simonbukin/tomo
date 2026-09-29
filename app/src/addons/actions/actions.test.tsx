@@ -63,15 +63,15 @@ describe("actions topbar", () => {
     render(<WorktreeHeader worktree={worktree} />);
     const buttons = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent);
     expect(buttons).toEqual(["Serve", "Lint", "Zed", "Reveal in Finder", "Actions config problem", "More actions"]);
-    expect(screen.getByRole("button", { name: "Serve" }).querySelector(".state-working")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Lint" }).querySelector(".state-working")).toBeNull();
+    expect(screen.getByRole("button", { name: "Serve" }).querySelector('[data-mark="working"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Lint" }).querySelector('[data-mark="working"]')).toBeNull();
   });
 
   it("marks a crashed action on its own button, with the exit in the tooltip", () => {
     const crash = { id: "c1", worktree_id: "w1", pane_id: "p1", kind: "crash", level: "attention", message: "Serve exited with code 1", created_at_ms: 1, viewed_at_ms: null, resolved_at_ms: null } as unknown as AttentionItem;
     store.setState({ panes: { p1: { ...servePane, live: false, exit_code: 1 } }, attention: [crash] });
     render(<WorktreeHeader worktree={worktree} />);
-    expect(screen.getByRole("button", { name: "Serve" }).querySelector(".state-fail")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Serve" }).querySelector('[data-mark="failed"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "Lint" }).querySelector(".state")).toBeNull();
   });
 

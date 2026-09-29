@@ -10,6 +10,7 @@ import { useResolvedTheme, xtermTheme } from "./theme";
 import { findAction } from "./keys";
 import {failQuietly, getState, keyBindings, splitsAllowed, useStore} from "./store";
 import { registerTerminal } from "./terminals";
+import { AgentMark } from "./StateMark";
 import { listenFileDrop, pasteClipboard, registerTerminalLinks } from "./terminalHooks";
 import { Columns2, Rows2, X } from "lucide-react";
 import { openMenu } from "./MenuHost";
@@ -148,7 +149,6 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const agent = pane?.agent && pane.agent.state !== "exited" ? pane.agent : null;
   const title = pane?.user_title ?? (agent ? agent.kind : (oscTitle ?? pane?.title ?? ""));
   const originNote = pane?.origin === "resumed" ? "resumed" : pane?.origin === "restored" ? "restored" : null;
-  const stateClass = agent?.sleep ? `state-sleeping${agent.state === "done" ? " state-sleeping-done" : ""}` : agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   const lastPane = useStore(() => isLastPane(paneId));
   const shortcut = useShortcuts();
   const splits = useStore(splitsAllowed);
@@ -158,7 +158,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
       <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
         <span className={splits ? "chip pane-grip" : "chip"} ref={drag.ref} {...drag.props}>
-          <span className={`state ${stateClass}`} />
+          {agent ? <AgentMark agent={agent} /> : <span className={`state ${pane && !pane.live ? "state-exited" : "state-none"}`} />}
           <ProcessIcon agent={agent?.kind} cmd={pane?.process_cmd} />
           <strong>{title}</strong>
           {agent && <span className="agent-state">{agent.sleep ?? agent.state}</span>}
