@@ -21,6 +21,7 @@ pub static PROVIDER: Provider = Provider {
     sessions,
     transcript_text,
     sleep_safe_children: &[],
+    session_saved: super::always_saved,
 };
 
 /// Codex keeps `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, with the cwd in

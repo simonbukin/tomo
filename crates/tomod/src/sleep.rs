@@ -125,27 +125,41 @@ pub fn period_ms(minutes: u32, test_override: Option<&str>) -> Option<u64> {
     Some(test_override.and_then(|v| v.parse::<u64>().ok()).unwrap_or(minutes as u64 * 60_000)).filter(|ms| *ms > 0)
 }
 
-/// What one input to the pane says about rule 5: `None` when it is no typing (a focus report), else whether
-/// it leaves text that nobody sent. Only an input that ends with Enter sends the line.
+/// What one input to the pane says about rule 5: `None` when it holds no text (a focus report, a terminal's
+/// answer to a query of the agent, an arrow key), else whether it leaves text that nobody sent. Only an input
+/// that ends with Enter sends the line.
 pub fn draft_after(bytes: &[u8]) -> Option<bool> {
-    let typed: Vec<u8> = strip_focus_reports(bytes);
+    let typed: Vec<u8> = strip_escape_sequences(bytes);
     (!typed.is_empty()).then(|| !matches!(typed.last(), Some(b'\r' | b'\n')))
 }
 
-fn strip_focus_reports(bytes: &[u8]) -> Vec<u8> {
-    const REPORTS: [&[u8]; 2] = [b"\x1b[I", b"\x1b[O"];
+/// ECMA-48 control sequences: CSI ends at a byte in 0x40..=0x7E; OSC, DCS, APC, PM, and SOS end at BEL or ST.
+fn strip_escape_sequences(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
-    let mut rest = bytes;
-    while !rest.is_empty() {
-        match REPORTS.iter().find(|r| rest.starts_with(r)) {
-            Some(r) => rest = &rest[r.len()..],
-            None => {
-                out.push(rest[0]);
-                rest = &rest[1..];
-            }
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != 0x1b {
+            out.push(bytes[i]);
+            i += 1;
+            continue;
         }
+        i += match bytes.get(i + 1) {
+            Some(b'[') => bytes[i + 2..].iter().position(|b| (0x40..=0x7e).contains(b)).map_or(bytes.len() - i, |n| n + 3),
+            Some(b']' | b'P' | b'_' | b'^' | b'X') => string_end(&bytes[i + 2..]).map_or(bytes.len() - i, |n| n + 2),
+            Some(b'O') => 3.min(bytes.len() - i),
+            Some(_) => 2,
+            None => 1,
+        };
     }
     out
+}
+
+fn string_end(rest: &[u8]) -> Option<usize> {
+    rest.iter().enumerate().find_map(|(n, b)| match b {
+        0x07 => Some(n + 1),
+        0x1b if rest.get(n + 1) == Some(&b'\\') => Some(n + 2),
+        _ => None,
+    })
 }
 
 /// The per-pane state of this feature. Memory only: the `sleep` column of the pane row is the durable part.
@@ -215,6 +229,12 @@ fn facts(inner: &Inner, agent: &AgentPresence, open_attention: &HashSet<Id>) -> 
     })
 }
 
+/// Checked only when the idle period ends, because it reads the disk. An unsaved session starts the period again.
+fn session_saved(inner: &Inner, pane_id: &str) -> bool {
+    let Some(agent) = inner.agents.get(pane_id) else { return false };
+    dirs::home_dir().zip(agent.session_ref.as_deref()).is_some_and(|(home, session)| (providers::provider(agent.kind).session_saved)(&home, session))
+}
+
 fn stamp(inner: &Inner, agent: &AgentPresence) -> Stamp {
     let input_at_ms = inner.panes.get(&agent.pane_id).map_or(0, |p| p.sleep.input_at_ms);
     Stamp { state: agent.state, state_at_ms: agent.updated_at_ms, input_at_ms, pid: agent.pid }
@@ -242,8 +262,11 @@ pub fn tick(daemon: &Arc<Daemon>, inner: &mut Inner, now: u64) {
             advance(inner.sleep_clocks.get(&a.pane_id).copied(), stamp(inner, a), eligible, now).map(|c| (a.pane_id.clone(), c))
         })
         .collect();
-    let ready: Vec<Id> = clocks.iter().filter(|(_, c)| due(c, period, now)).map(|(id, _)| id.clone()).collect();
-    inner.sleep_clocks = clocks;
+    let (ready, unsaved): (Vec<Id>, Vec<Id>) = clocks.iter().filter(|(_, c)| due(c, period, now)).map(|(id, _)| id.clone()).partition(|id| session_saved(inner, id));
+    inner.sleep_clocks = clocks
+        .into_iter()
+        .map(|(id, c)| if unsaved.contains(&id) { (id, Clock { since_ms: now, ..c }) } else { (id, c) })
+        .collect();
     for pane_id in ready {
         if let Err(e) = begin(daemon, inner, &pane_id) {
             Daemon::diagnostic(inner, DiagnosticLevel::Warning, "sleep", format!("pane {pane_id}: {}", e.message));
@@ -587,6 +610,11 @@ mod tests {
         assert_eq!(draft_after(b"\x1b[200~a\nb\x1b[201~\r"), Some(false), "a bracketed paste that submits");
         assert_eq!(draft_after(b"\x1b[I"), None, "a focus report is no typing");
         assert_eq!(draft_after(b"x\x1b[O"), Some(true));
+        assert_eq!(draft_after(b"\x1b[?62;22c"), None, "a terminal's answer to a device query is no typing");
+        assert_eq!(draft_after(b"\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\"), None, "an answer to a color query is no typing");
+        assert_eq!(draft_after(b"\x1b[?0u\x1b[12;1R"), None, "keyboard and cursor answers are no typing");
+        assert_eq!(draft_after(b"\x1bP>|xterm.js(5.5.0)\x1b\\"), None, "a version answer is no typing");
+        assert_eq!(draft_after(b"\x1b[A\x1bOB"), None, "arrow keys in both cursor modes add no text");
     }
 
     #[test]
