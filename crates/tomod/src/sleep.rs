@@ -294,9 +294,8 @@ fn begin(daemon: &Arc<Daemon>, inner: &mut Inner, pane_id: &str) -> Result<(), R
     let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
     std::fs::write(snapshot_path(daemon, pane_id), encode_snapshot(pane.row.cols, pane.row.rows, &pane.scrollback.snapshot()))
         .map_err(|e| internal(e.into()))?;
-    let model = dirs::home_dir().zip(agent.session_ref.as_deref()).and_then(|(home, session)| (providers::provider(agent.kind).last_model)(&home, session));
     let pane = inner.panes.get_mut(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-    pane.row.sleep = Some(SleepRow { at_ms: now_ms(), model });
+    pane.row.sleep = Some(SleepRow { at_ms: now_ms() });
     pane.sleep.ending_pid = Some(pid);
     let row = pane.row.clone();
     inner.store.pane_upsert(&row).map_err(internal)?;
@@ -360,9 +359,8 @@ pub fn wake(daemon: &Arc<Daemon>, inner: &mut Inner, pane_id: &str) -> Result<()
         Some(Sleep::Asleep) => {}
     }
     let session = agent.session_ref.clone().ok_or_else(|| err(ErrorCode::BadRequest, "the sleeping agent has no session"))?;
-    let pane = inner.panes.get(pane_id).filter(|p| p.pty.is_some() && p.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "the pane is not live"))?;
-    let model = pane.row.sleep.as_ref().and_then(|z| z.model.clone());
-    let line = providers::wake_line(&inner.config, agent.kind, &session, model.as_deref(), &daemon.paths.integrations_dir);
+    inner.panes.get(pane_id).filter(|p| p.pty.is_some() && p.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "the pane is not live"))?;
+    let line = providers::wake_line(&inner.config, agent.kind, &session, &daemon.paths.integrations_dir);
     let pane = inner.panes.get_mut(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
     pane.pending_line = Some(format!("clear; {line}"));
     pane.row.sleep = None;

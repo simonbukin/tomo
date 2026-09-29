@@ -73,11 +73,10 @@ pub struct PaneRow {
     pub keep_awake: bool,
 }
 
-/// What a wake needs besides the session reference and the provider, which the row already holds.
+/// When the agent of the pane went to sleep. The row already holds the session reference and the provider.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SleepRow {
     pub at_ms: u64,
-    pub model: Option<String>,
 }
 
 const SCHEMA: &str = r#"
@@ -926,7 +925,7 @@ mod tests {
         let back = s.panes().unwrap();
         assert_eq!((back[0].kind, back[0].url.as_deref()), (PaneKind::Browser, Some("http://localhost:1420/")));
         assert_eq!((back[0].sleep.clone(), back[0].keep_awake), (None, false));
-        let asleep = SleepRow { at_ms: 9, model: Some("claude-opus-4-6".into()) };
+        let asleep = SleepRow { at_ms: 9 };
         s.pane_upsert(&PaneRow { sleep: Some(asleep.clone()), keep_awake: true, ..row.clone() }).unwrap();
         assert_eq!((s.panes().unwrap()[0].sleep.clone(), s.panes().unwrap()[0].keep_awake), (Some(asleep), true), "the sleep mark and keep awake persist");
         s.conn.execute("UPDATE panes SET kind = NULL, url = NULL", []).unwrap();
