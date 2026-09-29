@@ -98,11 +98,9 @@ export const dotClass = (status: Status | null): string => `state ${status ? DOT
 /** The live mark of a worktree or an agent: a status, the archive in progress, or nothing. */
 export type Mark = Status | "archiving" | null;
 
-/** Props for the square of a live mark, with its meaning as the tooltip unless `title` says more. */
-export function statusDot(mark: Mark, extra?: string, title?: string): { className: string; title?: string } {
-  const className = [mark === "archiving" ? "state state-archiving" : dotClass(mark), extra].filter(Boolean).join(" ");
-  return { className, title: mark === "archiving" ? "archiving" : mark ? (title ?? STATUS_LABEL[mark]) : undefined };
-}
+/** The tooltip of a live mark: its meaning, unless `title` says more. */
+export const markTitle = (mark: Mark, title?: string): string | undefined =>
+  mark === "archiving" ? "archiving" : mark ? (title ?? STATUS_LABEL[mark]) : undefined;
 
 /** How a branch stands with its upstream. An addon that watches the branch picks one. */
 export type BranchTone = "open" | "closed" | "merged" | "pending" | "failed";

@@ -154,8 +154,8 @@ describe("subagents in the row", () => {
     const row = renderRow(worktree(), [withSubs([sub("a", "working", 1), sub("b", "exited", 2)])]);
     const lines = [...row.querySelectorAll(".wt-row .subagents .subagent")];
     expect(lines.map((l) => l.querySelector(".subagent-desc")!.textContent)).toEqual(["task a", "task b"]);
-    expect(lines[0].querySelector(".state")).toHaveClass("state-working");
-    expect(lines[1].querySelector(".state")).toHaveClass("state-done");
+    expect(lines[0].querySelector(".state")).toHaveAttribute("data-mark", "working");
+    expect(lines[1].querySelector(".state")).toHaveAttribute("data-mark", "done");
     expect(lines[1].querySelector(".state")).toHaveAttribute("title", "done");
   });
 

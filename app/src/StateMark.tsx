@@ -1,15 +1,22 @@
 import { cx } from "./components/ui";
-import { agentMark, agentTitle, statusDot, type Mark } from "./glyphs";
+import { agentMark, agentTitle, markTitle, type Mark } from "./glyphs";
 import { worktreeLead } from "./homeQuery";
 import { queryContext, useStore } from "./store";
 import type { AgentPresence, Worktree } from "./types";
 
+const CELLS = Array.from({ length: 9 }, (_, i) => <i key={i} />);
+
 /**
- * The one live mark: a square whose motion, fill, and color tell the state. A change of state keeps the element,
- * so the working rhombus turns back to a square when it becomes done. `small` is the size of a subagent line.
+ * The one live mark: a 3×3 dot matrix. Color says what, motion says busy, and the pattern tells the still states
+ * apart (see `.mx` in base.css). A change of state keeps the element, so the cells fade to the new pattern.
+ * `small` is the size of a subagent line.
  */
 export function StateMark({ mark, title, small, className, hidden }: { mark: Mark; title?: string; small?: boolean; className?: string; hidden?: boolean }) {
-  return <span {...statusDot(mark, cx(small && "state-small", className), title)} aria-hidden={hidden || undefined} />;
+  return (
+    <span className={cx("state mx", small && "state-small", className)} data-mark={mark ?? "none"} title={markTitle(mark, title)} aria-hidden={hidden || undefined}>
+      {CELLS}
+    </span>
+  );
 }
 
 export function AgentMark({ agent, small, className }: { agent: AgentPresence | null; small?: boolean; className?: string }) {
