@@ -3,7 +3,23 @@ import { GLYPH, type BranchTone } from "../../glyphs";
 import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
 import type { Id, Worktree } from "../../types";
+import type { SearchGroup } from "../types";
 import { prOf } from "./state";
+
+const openWorktree = (id: Id) => (): void => void import("../../actions").then((a) => a.openWorktree(id));
+
+/** The pull request of each worktree that the inspector asked about, by number and title. Enter opens the worktree. */
+export const searchSources: SearchGroup[] = [
+  {
+    id: "github",
+    label: "Pull requests",
+    entries: (s) =>
+      s.worktrees.flatMap((w) => {
+        const pr = prOf(s, w.id);
+        return pr ? [{ key: `github-pr:${w.id}`, label: `#${pr.number} ${pr.title}`, hint: `${w.name} · ${pr.draft ? "draft" : pr.state}`, run: openWorktree(w.id) }] : [];
+      }),
+  },
+];
 
 const GITHUB_REMOTE_PREFIXES = ["git@github.com:", "https://github.com/", "http://github.com/", "ssh://git@github.com/"];
 
