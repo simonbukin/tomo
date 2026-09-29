@@ -1,6 +1,6 @@
 import { byManualOrder, mainFirst } from "./order";
 import { needsMeItem } from "./activityModel";
-import { agentStatus, effectiveState, type Status } from "./glyphs";
+import { agentMark, effectiveState, type Status } from "./glyphs";
 import type { AgentPresence, AgentState, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
 
 export interface QueryContext {
@@ -25,8 +25,12 @@ export function needsAttention(w: Worktree, ctx: QueryContext): boolean {
 
 const RANK: Partial<Record<AgentState, number>> = { waiting: 0, working: 2, done: 3, idle: 5, unknown: 6 };
 
-/** Where an agent ranks for the mark of its worktree, lowest first. See "A worktree" in docs/agent-states.md. */
+/**
+ * Where an agent ranks for the mark of its worktree, lowest first. See "A worktree" in docs/agent-states.md.
+ * A sleeping agent ranks after every awake one, and one that slept after `done` first among them.
+ */
 export function agentRank(a: AgentPresence): number {
+  if (a.sleep) return a.state === "done" ? 8 : 9;
   const state = effectiveState(a);
   return state === "dead" ? (a.seen ? 4 : 1) : (RANK[state] ?? 7);
 }
@@ -44,7 +48,7 @@ export function worktreeLead(w: Worktree, ctx: Pick<QueryContext, "agents">): Ag
 
 export function worktreeStatus(w: Worktree, ctx: Pick<QueryContext, "agents">): Status | null {
   const lead = worktreeLead(w, ctx);
-  return lead && agentStatus(effectiveState(lead));
+  return lead && agentMark(lead);
 }
 
 function agentStateOf(w: Worktree, ctx: QueryContext): string {

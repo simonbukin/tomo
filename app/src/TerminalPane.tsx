@@ -18,6 +18,7 @@ import { isLastPane, paneMenu } from "./menus";
 import { ProcessIcon } from "./ProcessIcon";
 import { useShortcuts } from "./shortcuts";
 import { PaneDropZone, usePaneDrag } from "./LayoutDnd";
+import { SleepView } from "./SleepView";
 import type { Id } from "./types";
 import "@xterm/xterm/css/xterm.css";
 
@@ -27,13 +28,15 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const config = useStore((s) => s.config);
   const theme = useResolvedTheme();
   const connectionNonce = useStore((s) => s.connectionNonce);
+  const sleep = useStore((s) => s.agents[paneId]?.sleep ?? null);
+  const sleeping = sleep !== null;
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const [oscTitle, setOscTitle] = useState<string | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !config) return;
+    if (!host || !config || sleeping) return;
     const term = new Terminal({
       allowProposedApi: true,
       fontFamily: config.font_family,
@@ -131,7 +134,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
       term.dispose();
       termRef.current = null;
     };
-  }, [paneId, connectionNonce, config?.font_family, config?.font_size, config?.scrollback_lines]);
+  }, [paneId, connectionNonce, sleeping, config?.font_family, config?.font_size, config?.scrollback_lines]);
 
   useEffect(() => {
     if (active) termRef.current?.focus();
@@ -145,7 +148,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const agent = pane?.agent && pane.agent.state !== "exited" ? pane.agent : null;
   const title = pane?.user_title ?? (agent ? agent.kind : (oscTitle ?? pane?.title ?? ""));
   const originNote = pane?.origin === "resumed" ? "resumed" : pane?.origin === "restored" ? "restored" : null;
-  const stateClass = agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
+  const stateClass = agent?.sleep ? `state-sleeping${agent.state === "done" ? " state-sleeping-done" : ""}` : agent ? `state-${agent.state}` : pane && !pane.live ? "state-exited" : "state-none";
   const lastPane = useStore(() => isLastPane(paneId));
   const shortcut = useShortcuts();
   const splits = useStore(splitsAllowed);
@@ -158,7 +161,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
           <span className={`state ${stateClass}`} />
           <ProcessIcon agent={agent?.kind} cmd={pane?.process_cmd} />
           <strong>{title}</strong>
-          {agent && <span className="agent-state">{agent.state}</span>}
+          {agent && <span className="agent-state">{agent.sleep ?? agent.state}</span>}
           {zoomed && <span className="pane-note pane-zoomed" title="Only this pane is shown. Press the zoom key again to unzoom.">zoomed</span>}
           {originNote && <span className="pane-note" title="This pane was rebuilt after a daemon restart">{originNote}</span>}
           {pane && !pane.live && <span className="pane-note">exited {pane.exit_code ?? ""}</span>}
@@ -170,7 +173,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
           {!lastPane && <IconButton label="Close pane" shortcut={active ? shortcut("close_pane") : undefined} onClick={() => closePane(paneId)}><X className="icon" /></IconButton>}
         </span>
       </div>
-      <div className="pane-body" ref={hostRef} />
+      {sleep ? <SleepView paneId={paneId} waking={sleep === "waking"} active={active} /> : <div className="pane-body" ref={hostRef} />}
       {splits && <PaneDropZone paneId={paneId} />}
     </div>
     </div>

@@ -1,7 +1,7 @@
 import { ChevronRight, Search } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { activateTab, allActions, focusPane, openWorktree, runAction } from "./actions";
+import { activateTab, allActions, focusPane, openWorktree, runAction, wakePane } from "./actions";
 import { rpcParsed } from "./api";
 import { openFile } from "./editor/editor";
 import { fsEntrySchema } from "./schemas";
@@ -69,11 +69,14 @@ function commandEntries(s: State): PaletteEntry[] {
   const agents: PaletteEntry[] = Object.values(s.agents).flatMap((a) => {
     const w = byWorktree.get(a.worktree_id);
     if (!w || a.state === "exited" || !s.panes[a.pane_id]) return [];
+    const asleep = a.sleep === "asleep";
     const run = async () => {
       await openWorktree(w.id);
       await focusPane(a.pane_id);
+      if (asleep) wakePane(a.pane_id);
     };
-    return [{ key: `agent:${a.pane_id}`, label: `focus ${KIND_LABEL[a.kind]} · ${w.name}`, hint: a.state, context: w.id === here?.id, run: () => void run() }];
+    const label = `${asleep ? "wake" : "focus"} ${KIND_LABEL[a.kind]} · ${w.name}`;
+    return [{ key: `agent:${a.pane_id}`, label, hint: a.sleep ? "sleeping" : a.state, context: w.id === here?.id, run: () => void run() }];
   });
   const contextual = here ? addonEntries(s, here, true) : [];
   const commands: PaletteEntry[] = allActions()

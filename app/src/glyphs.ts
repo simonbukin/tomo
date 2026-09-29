@@ -4,12 +4,23 @@ import type { AgentPresence, AgentState, Pane, Subagent } from "./types";
 /**
  * The one status vocabulary: sidebar, Home, tabs, Activity, palette, and previews all map to it.
  * `done` is a turn that nobody looked at yet; `complete` is work that ended, such as a merged PR or an Action that exited 0.
+ * `sleeping` is an agent that Tomo ended after the idle period; `sleeping-done` slept after a turn that nobody looked at.
  */
-export type Status = "working" | "needs" | "idle" | "done" | "complete" | "failed" | "unknown";
+export type Status = "working" | "needs" | "idle" | "done" | "complete" | "failed" | "unknown" | "sleeping" | "sleeping-done";
 
-export const GLYPH: Record<Status, string> = { working: "●", needs: "◉", idle: "○", done: "■", complete: "✓", failed: "×", unknown: "?" };
+export const GLYPH: Record<Status, string> = { working: "●", needs: "◉", idle: "○", done: "■", complete: "✓", failed: "×", unknown: "?", sleeping: "z", "sleeping-done": "Z" };
 
-const DOT: Record<Status, string> = { working: "state-working", needs: "state-waiting", idle: "state-idle", done: "state-done", complete: "state-complete", failed: "state-fail", unknown: "state-unknown" };
+const DOT: Record<Status, string> = {
+  working: "state-working",
+  needs: "state-waiting",
+  idle: "state-idle",
+  done: "state-done",
+  complete: "state-complete",
+  failed: "state-fail",
+  unknown: "state-unknown",
+  sleeping: "state-sleeping",
+  "sleeping-done": "state-sleeping state-sleeping-done",
+};
 
 const AGENT: Record<AgentState | "none", Status | null> = { working: "working", waiting: "needs", done: "done", idle: "idle", dead: "failed", exited: "complete", unknown: "unknown", none: null };
 
@@ -23,16 +34,34 @@ export function effectiveState(agent: Pick<AgentPresence, "state" | "subagents">
   return quiet && (agent.subagents ?? []).some(running) ? "working" : agent.state;
 }
 
+/** The mark of an agent: the sleep icon while it sleeps or wakes, else the mark of its state. */
+export function agentMark(agent: Pick<AgentPresence, "state" | "subagents" | "sleep">): Status | null {
+  if (agent.sleep) return agent.state === "done" ? "sleeping-done" : "sleeping";
+  return agentStatus(effectiveState(agent));
+}
+
 /** A finished subagent reports `exited`; its mark is a still green square, like a finished turn. */
 export const subagentStatus = (state: AgentState): Status | null => (state === "exited" ? "done" : agentStatus(state));
 
 /** What each mark means, for the tooltip and the accessible name of a mark. */
-export const STATUS_LABEL: Record<Status, string> = { working: "working", needs: "needs you", idle: "idle", done: "done", complete: "complete", failed: "dead", unknown: "no signal" };
+export const STATUS_LABEL: Record<Status, string> = {
+  working: "working",
+  needs: "needs you",
+  idle: "idle",
+  done: "done",
+  complete: "complete",
+  failed: "dead",
+  unknown: "no signal",
+  sleeping: "sleeping",
+  "sleeping-done": "sleeping · done",
+};
 
 /** The tooltip of an agent mark: the state, and when it matters, for how long or why. */
-export function agentTitle(agent: Pick<AgentPresence, "state" | "subagents" | "updated_at_ms" | "estimated">, now = Date.now()): string {
+export function agentTitle(agent: Pick<AgentPresence, "state" | "subagents" | "updated_at_ms" | "estimated" | "sleep">, now = Date.now()): string {
   const state = effectiveState(agent);
   const since = durationLabel(agent.updated_at_ms, now);
+  if (agent.sleep === "waking") return "waking";
+  if (agent.sleep) return `sleeping · ${state === "done" ? "done" : "idle"} ${since} · a key wakes it`;
   const text: Partial<Record<AgentState, string>> = {
     working: `working · ${since}`,
     done: `done · finished ${since} ago`,
@@ -78,7 +107,17 @@ export function statusDot(mark: Mark, extra?: string, title?: string): { classNa
 /** How a branch stands with its upstream. An addon that watches the branch picks one. */
 export type BranchTone = "open" | "closed" | "merged" | "pending" | "failed";
 
-const TINT: Record<Status, string> = { working: "tint-working", needs: "tint-needs", idle: "tint-idle", done: "tint-ok", complete: "tint-ok", failed: "tint-fail", unknown: "tint-unknown" };
+const TINT: Record<Status, string> = {
+  working: "tint-working",
+  needs: "tint-needs",
+  idle: "tint-idle",
+  done: "tint-ok",
+  complete: "tint-ok",
+  failed: "tint-fail",
+  unknown: "tint-unknown",
+  sleeping: "tint-idle",
+  "sleeping-done": "tint-ok",
+};
 
 /** Colors an icon by status, the way `dotClass` colors a square. */
 export const tintClass = (status: Status | null): string => (status ? TINT[status] : "tint-none");

@@ -10,7 +10,7 @@ import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RowError } from "./RowError";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass, effectiveState, tintClass } from "./glyphs";
+import { agentMark, dotClass, tintClass } from "./glyphs";
 import { WorktreeMark } from "./StateMark";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
@@ -272,7 +272,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
         </span>
         <span className="wt-foot">
           <span className="wt-agents">
-            {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentStatus(effectiveState(a)))} />)}
+            {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentMark(a))} />)}
           </span>
           <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
           <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
