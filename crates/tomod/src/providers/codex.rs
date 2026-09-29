@@ -19,6 +19,7 @@ pub static PROVIDER: Provider = Provider {
     installed,
     gap,
     sessions,
+    transcript_text,
 };
 
 /// Codex keeps `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, with the cwd in
@@ -31,6 +32,30 @@ fn sessions(home: &Path, cwd: &Path) -> Vec<AgentSession> {
 
 fn text_of(content: &Value) -> Option<String> {
     content.as_array()?.iter().find_map(|p| (p.get("type")?.as_str()? == "input_text").then(|| p.get("text")?.as_str().map(str::to_string))?)
+}
+
+#[derive(serde::Deserialize)]
+struct Line {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    payload: Option<Payload>,
+}
+
+#[derive(serde::Deserialize)]
+struct Payload {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    message: Option<String>,
+}
+
+/// Codex writes each message twice: as an `event_msg` and as a `response_item`. Only the `event_msg` is read.
+fn transcript_text(line: &str) -> Option<String> {
+    if !line.contains("\"event_msg\"") {
+        return None;
+    }
+    let parsed: Line = serde_json::from_str(line).ok()?;
+    let payload = parsed.payload.filter(|_| parsed.kind.as_deref() == Some("event_msg"))?;
+    matches!(payload.kind.as_deref(), Some("user_message" | "agent_message")).then_some(payload.message?).filter(|t| super::is_prompt(t))
 }
 
 /// Parses one rollout file. `None` when its cwd is not `cwd`.

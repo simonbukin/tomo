@@ -354,6 +354,21 @@ pub enum Call {
         #[serde(default)]
         limit: Option<usize>,
     },
+    /// Starts a search and returns at once. Results arrive as `search_results` events with the same `query_id`,
+    /// only on this connection. A new search on the connection cancels the one before it; an empty query only cancels.
+    Search {
+        query_id: u64,
+        query: String,
+        /// The sources to search. `None` means all of them.
+        #[serde(default)]
+        sources: Option<Vec<SearchSource>>,
+        /// The most hits of each source. The default is 8.
+        #[serde(default)]
+        limit: Option<usize>,
+        /// The worktree on screen. Its files rank first among equal matches.
+        #[serde(default)]
+        worktree_id: Option<Id>,
+    },
     RuntimeList {
         #[serde(default)]
         worktree_id: Option<Id>,
@@ -629,6 +644,48 @@ pub enum Event {
         worktree_id: Id,
         path: String,
     },
+    /// Hits of one source for one `search` call. Sent only to the client that searched. Each frame of a source
+    /// holds all its hits so far, best first; `done` marks the last frame of that source.
+    SearchResults {
+        query_id: u64,
+        source: SearchSource,
+        hits: Vec<SearchHit>,
+        /// Every match found, also the ones past the limit.
+        total: u32,
+        done: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchSource {
+    File,
+    Terminal,
+    Session,
+    Activity,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SearchHit {
+    /// Stable for the same thing across queries.
+    pub key: String,
+    pub label: String,
+    /// The text around a content match, on one line.
+    pub snippet: Option<String>,
+    pub worktree_id: Option<Id>,
+    pub at_ms: Option<u64>,
+    pub target: SearchTarget,
+}
+
+/// What opening a hit does.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SearchTarget {
+    File { worktree_id: Id, path: String, line: Option<u32> },
+    Pane { pane_id: Id },
+    /// `pane_id` is the live pane of the session. Without one, opening resumes the session.
+    Session { agent: AgentKind, session_id: String, worktree_id: Id, pane_id: Option<Id> },
+    Activity { worktree_id: Option<Id>, pane_id: Option<Id> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

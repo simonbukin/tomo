@@ -5811,6 +5811,7 @@ dependencies = [
  "gix",
  "itertools 0.15.0",
  "libc",
+ "memchr",
  "mnml-libghostty-vt",
  "notify",
  "portable-pty",

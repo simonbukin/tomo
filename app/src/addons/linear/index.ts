@@ -1,5 +1,5 @@
 import type { Addon } from "../types";
-import { linearSignals, paletteEntries, SIGNAL_CLASS } from "./model";
+import { linearSignals, paletteEntries, searchSources, SIGNAL_CLASS } from "./model";
 import { applyLinearFrame, replaceLinear } from "./state";
 import { LinearDetail, LinearPreviewDetail, LinearSignal } from "./Views";
 
@@ -11,6 +11,7 @@ export const linear: Addon = {
   worktreeSignals: linearSignals,
   signalLine: { className: SIGNAL_CLASS, Line: LinearSignal, Detail: LinearPreviewDetail },
   paletteEntries,
+  searchSources,
   onSnapshot: replaceLinear,
   onFrame: applyLinearFrame,
 };

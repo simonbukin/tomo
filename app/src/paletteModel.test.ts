@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MenuItem } from "./components/ui";
+import matchCases from "./matchCases.json";
 import { MATCH, matchText, menuEntries, rankEntries, remembered, type PaletteEntry } from "./paletteModel";
 
 const e = (key: string, label: string, extra: Partial<PaletteEntry> = {}): PaletteEntry => ({ key, label, ...extra });
@@ -13,6 +14,12 @@ describe("matchText", () => {
     expect(matchText("app", "reapply").tier).toBe(MATCH.substring);
     expect(matchText("app", "a p p").tier).toBe(MATCH.fuzzy);
     expect(matchText("app", "zsh").tier).toBe(MATCH.none);
+  });
+
+  it.each(matchCases)("gives the daemon's grade for $query in $text", ({ query, text, tier, gaps }) => {
+    const got = matchText(query, text);
+    expect(got.tier).toBe(tier);
+    if (tier >= 0) expect(got.gaps).toBe(gaps);
   });
 });
 
