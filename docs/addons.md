@@ -326,6 +326,7 @@ GitHub, Usage, Actions, Runtime, and Agentation need:
 | `sourceMenu(worktreeId, source, s)` | the menu of a running pane source: `runningActionItems` in `addons/actions/commands.ts`, through `sourceMenu()`; `first` before "focus logs", `last` after the separator | runtime |
 | `appUrl(s, worktreeId)` | `CheckpointBanner` in `WorktreeHeader.tsx` and `appUrl` in `activityKinds.ts` (the first addon that returns a URL wins) | runtime |
 | `paletteEntries(s, w, context)` | `Palette.tsx`: the context list of the worktree on screen and the worktree sub-list, before the endpoint entries | actions |
+| `searchSources` (`{ id, label, entries(s) }`) | `localGroups` in `Palette.tsx`: one group each in a palette search, after Commands and Worktrees; the palette ranks the entries (see [search.md](search.md)) | linear, github |
 | `shortcuts(s)` | `keyBindings` in `store.ts`, `runAction` in `actions.ts`, and `ShortcutReference.tsx` | actions |
 | `browserToolbar` (`{ paneId, worktreeId, url, setCovering }`) | `BrowserPane.tsx` in `app/src/browser/`, after the url field and before open-external; the page hides while an item sets `covering` | agentation |
 | `paneSource { kind, restart }` | the crash toast in `attention.ts`: Restart calls the addon that owns the `kind` of the pane source | actions |
