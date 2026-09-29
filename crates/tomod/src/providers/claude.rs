@@ -21,6 +21,9 @@ pub static PROVIDER: Provider = Provider {
     gap: super::no_gap,
     sessions,
     transcript_text,
+    sleep_safe_children: &["caffeinate"],
+    last_model,
+    model_flag: Some("--model"),
 };
 
 /// Claude Code keeps `~/.claude/projects/<encoded cwd>/<session id>.jsonl`.
@@ -101,6 +104,17 @@ fn transcript_text(line: &str) -> Option<String> {
         Content::Parts(parts) => parts.into_iter().filter(|p| p.kind.as_deref() == Some("text")).filter_map(|p| p.text).collect::<Vec<_>>().join("\n"),
     };
     super::is_prompt(&text).then_some(text)
+}
+
+/// The model of the newest assistant message. The session file lives under the directory of the cwd where the
+/// agent started, which the pane may have left, so every project directory is tried.
+fn last_model(home: &Path, session_ref: &str) -> Option<String> {
+    let name = format!("{session_ref}.jsonl");
+    let file = std::fs::read_dir(home.join(".claude").join("projects")).ok()?.flatten().map(|d| d.path().join(&name)).find(|p| p.is_file())?;
+    super::read_tail(&file).iter().rev().filter(|l| l.contains("\"type\":\"assistant\"")).find_map(|l| {
+        let v: Value = serde_json::from_str(l).ok()?;
+        v.pointer("/message/model").and_then(Value::as_str).filter(|m| !m.is_empty() && !m.starts_with('<')).map(str::to_string)
+    })
 }
 
 /// Parses one session file. `None` when it holds no user turn.
@@ -253,6 +267,23 @@ pub fn hooks_settings(tomo_bin: &Path) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_last_model_is_the_newest_real_assistant_model_in_any_project_dir() {
+        let home = std::env::temp_dir().join(format!("tomo-claude-model-{}", std::process::id()));
+        let dir = project_dir(&home, Path::new("/w/started-here"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let lines = [
+            r#"{"type":"assistant","message":{"model":"claude-sonnet-4-5","content":"a"}}"#,
+            r#"{"type":"user","message":{"content":"b"}}"#,
+            r#"{"type":"assistant","message":{"model":"claude-opus-4-6","content":"c"}}"#,
+            r#"{"type":"assistant","message":{"model":"<synthetic>","content":"API error"}}"#,
+        ];
+        std::fs::write(dir.join("s1.jsonl"), lines.join("\n")).unwrap();
+        assert_eq!(last_model(&home, "s1").as_deref(), Some("claude-opus-4-6"));
+        assert_eq!(last_model(&home, "missing"), None);
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     #[test]
     fn claude_dir_encoding_matches_claude_code() {

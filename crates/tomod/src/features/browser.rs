@@ -29,6 +29,8 @@ pub(crate) fn surface_row(tab_id: &str, worktree_id: &str, cwd: PathBuf, kind: P
         kind,
         url,
         editor,
+        sleep: None,
+        keep_awake: false,
     }
 }
 
@@ -59,6 +61,7 @@ impl Daemon {
                 scrollback: Scrollback::default(),
                 screen: None,
                 source: None,
+                sleep: Default::default(),
             },
         );
         let mut ev = events::envelope(inner, "pane.created", Some(&worktree_id));

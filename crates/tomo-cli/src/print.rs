@@ -86,12 +86,20 @@ pub fn metadata(m: &WorktreeMetadata, json: bool) {
     println!("tags         {}", if m.tags.is_empty() { "-".to_string() } else { m.tags.join(", ") });
 }
 
+fn sleep_note(sleep: Option<Sleep>) -> &'static str {
+    match sleep {
+        Some(Sleep::Asleep) => " (asleep)",
+        Some(Sleep::Waking) => " (waking)",
+        None => "",
+    }
+}
+
 pub fn panes(panes: &[Pane], json: bool) {
     if json {
         return emit_json(&panes);
     }
     for p in panes {
-        let agent = p.agent.as_ref().map(|a| format!("  {} {}", a.state.glyph(), a.kind.label())).unwrap_or_default();
+        let agent = p.agent.as_ref().map(|a| format!("  {} {}{}", a.state.glyph(), a.kind.label(), sleep_note(a.sleep))).unwrap_or_default();
         let state = if p.live { "live" } else { "exited" };
         println!("{}  tab {}  wt {}  {:<8} pid {:<6} {:?}  {}{}", p.id, p.tab_id, p.worktree_id, state, p.pid.unwrap_or(0), p.origin, p.title, agent);
         println!("    {}", p.cwd.display());

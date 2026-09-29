@@ -254,6 +254,20 @@ enum PaneCmd {
     KillTree {
         pane: Option<String>,
     },
+    #[command(about = "End the idle agent of the pane now; a key or `tomo pane wake` resumes its session")]
+    Sleep {
+        pane: Option<String>,
+    },
+    #[command(about = "Resume the sleeping agent of the pane")]
+    Wake {
+        pane: Option<String>,
+    },
+    #[command(about = "Keep the agent of the pane awake: it does not sleep after the idle period")]
+    KeepAwake {
+        pane: Option<String>,
+        #[arg(long, help = "Let the agent sleep again")]
+        off: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -593,6 +607,15 @@ async fn run() -> Result<()> {
         }
         Cmd::Pane(PaneCmd::KillTree { pane }) => {
             let _: Value = c.call(Call::PaneKillTree { pane_id: pane_ref(pane)? }).await?;
+        }
+        Cmd::Pane(PaneCmd::Sleep { pane }) => {
+            let _: Value = c.call(Call::PaneSleep { pane_id: pane_ref(pane)? }).await?;
+        }
+        Cmd::Pane(PaneCmd::Wake { pane }) => {
+            let _: Value = c.call(Call::PaneWake { pane_id: pane_ref(pane)? }).await?;
+        }
+        Cmd::Pane(PaneCmd::KeepAwake { pane, off }) => {
+            let _: Value = c.call(Call::PaneKeepAwake { pane_id: pane_ref(pane)?, keep: !off }).await?;
         }
         Cmd::Tab(TabCmd::List { worktree }) => {
             let id = resolve_worktree_id(&c, worktree).await?;

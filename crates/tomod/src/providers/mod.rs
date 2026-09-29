@@ -39,6 +39,11 @@ pub struct Provider {
     /// The message text of one line of a session file: what the user or the agent wrote, without tool calls,
     /// tool output, or thinking. `None` for every other line.
     pub transcript_text: fn(line: &str) -> Option<String>,
+    /// Child programs of the agent that a sleep may end, because they hold no work.
+    pub sleep_safe_children: &'static [&'static str],
+    /// The model that the session used last, from the session file, and the flag that picks it on a resume.
+    pub last_model: fn(home: &Path, session_ref: &str) -> Option<String>,
+    pub model_flag: Option<&'static str>,
 }
 
 /// What an installed provider still needs before Tomo sees its lifecycle events.
@@ -61,6 +66,33 @@ pub fn no_sessions(_home: &Path, _cwd: &Path) -> Vec<AgentSession> {
 
 pub fn no_transcript(_line: &str) -> Option<String> {
     None
+}
+
+pub fn no_model(_home: &Path, _session_ref: &str) -> Option<String> {
+    None
+}
+
+/// The resume line after a sleep: the restore line, plus the model flag when the session names its model.
+pub fn wake_line(config: &Config, kind: AgentKind, session_ref: &str, model: Option<&str>, launch_dir: &Path) -> String {
+    let extra: Vec<String> = provider(kind).model_flag.zip(model).map(|(flag, m)| vec![flag.to_string(), m.to_string()]).unwrap_or_default();
+    launch(config, kind, Some(session_ref), launch_dir, &extra).line()
+}
+
+const TAIL_BYTES: u64 = 256 * 1024;
+
+/// The complete lines in the last 256 KB of a file, newest last. A session file can be hundreds of megabytes.
+pub(crate) fn read_tail(path: &Path) -> Vec<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(path) else { return Vec::new() };
+    let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+    let start = len.saturating_sub(TAIL_BYTES);
+    let mut bytes = Vec::new();
+    if f.seek(SeekFrom::Start(start)).and_then(|_| f.read_to_end(&mut bytes)).is_err() {
+        return Vec::new();
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let complete = if start > 0 { text.split_once('\n').map_or("", |(_, rest)| rest) } else { &text };
+    complete.lines().map(str::to_string).collect()
 }
 
 pub fn provider(kind: AgentKind) -> &'static Provider {

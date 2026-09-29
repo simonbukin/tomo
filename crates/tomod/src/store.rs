@@ -68,6 +68,16 @@ pub struct PaneRow {
     pub kind: PaneKind,
     pub url: Option<String>,
     pub editor: Option<EditorTarget>,
+    /// Set while the agent of the pane sleeps. It is written before the agent process ends.
+    pub sleep: Option<SleepRow>,
+    pub keep_awake: bool,
+}
+
+/// What a wake needs besides the session reference and the provider, which the row already holds.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SleepRow {
+    pub at_ms: u64,
+    pub model: Option<String>,
 }
 
 const SCHEMA: &str = r#"
@@ -169,7 +179,8 @@ fn meta_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<MetaRow> {
 const META_COLUMNS: [(&str, &str); 5] =
     [("first_seen_ms", "INTEGER"), ("archived_at_ms", "INTEGER"), ("archived_branch", "TEXT"), ("state", "TEXT"), ("infra_name", "TEXT")];
 
-const PANE_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("editor", "TEXT"), ("agent", "TEXT")];
+const PANE_COLUMNS: [(&str, &str); 6] =
+    [("kind", "TEXT"), ("url", "TEXT"), ("editor", "TEXT"), ("agent", "TEXT"), ("sleep", "TEXT"), ("keep_awake", "INTEGER NOT NULL DEFAULT 0")];
 
 const TAB_COLUMNS: [(&str, &str); 1] = [("pinned", "INTEGER NOT NULL DEFAULT 0")];
 
@@ -392,7 +403,7 @@ impl Store {
 
     pub fn panes(&self) -> Result<Vec<PaneRow>> {
         let mut st =
-            self.conn.prepare("SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url, editor FROM panes")?;
+            self.conn.prepare("SELECT id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url, editor, sleep, keep_awake FROM panes")?;
         let rows = st.query_map([], |r| {
             Ok(PaneRow {
                 id: r.get(0)?,
@@ -408,6 +419,8 @@ impl Store {
                 kind: parse_pane_kind(r.get(10)?),
                 url: r.get(11)?,
                 editor: r.get::<_, Option<String>>(12)?.and_then(|s| serde_json::from_str(&s).ok()),
+                sleep: r.get::<_, Option<String>>(13)?.and_then(|s| serde_json::from_str(&s).ok()),
+                keep_awake: r.get::<_, i64>(14)? != 0,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -415,11 +428,12 @@ impl Store {
 
     pub fn pane_upsert(&self, p: &PaneRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO panes (id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url, editor)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            "INSERT INTO panes (id, tab_id, worktree_id, user_title, cwd, cols, rows, agent_kind, session_ref, created_at_ms, kind, url, editor, sleep, keep_awake)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
              ON CONFLICT(id) DO UPDATE SET tab_id=excluded.tab_id, worktree_id=excluded.worktree_id, user_title=excluded.user_title,
                cwd=excluded.cwd, cols=excluded.cols, rows=excluded.rows, agent_kind=excluded.agent_kind,
-               session_ref=excluded.session_ref, kind=excluded.kind, url=excluded.url, editor=excluded.editor",
+               session_ref=excluded.session_ref, kind=excluded.kind, url=excluded.url, editor=excluded.editor,
+               sleep=excluded.sleep, keep_awake=excluded.keep_awake",
             params![
                 p.id,
                 p.tab_id,
@@ -433,7 +447,9 @@ impl Store {
                 p.created_at_ms as i64,
                 pane_kind_str(p.kind),
                 p.url,
-                p.editor.as_ref().and_then(|e| serde_json::to_string(e).ok())
+                p.editor.as_ref().and_then(|e| serde_json::to_string(e).ok()),
+                p.sleep.as_ref().and_then(|z| serde_json::to_string(z).ok()),
+                p.keep_awake as i64
             ],
         )?;
         Ok(())
@@ -903,10 +919,16 @@ mod tests {
             kind: PaneKind::Browser,
             url: Some("http://localhost:1420/".into()),
             editor: None,
+            sleep: None,
+            keep_awake: false,
         };
         s.pane_upsert(&row).unwrap();
         let back = s.panes().unwrap();
         assert_eq!((back[0].kind, back[0].url.as_deref()), (PaneKind::Browser, Some("http://localhost:1420/")));
+        assert_eq!((back[0].sleep.clone(), back[0].keep_awake), (None, false));
+        let asleep = SleepRow { at_ms: 9, model: Some("claude-opus-4-6".into()) };
+        s.pane_upsert(&PaneRow { sleep: Some(asleep.clone()), keep_awake: true, ..row.clone() }).unwrap();
+        assert_eq!((s.panes().unwrap()[0].sleep.clone(), s.panes().unwrap()[0].keep_awake), (Some(asleep), true), "the sleep mark and keep awake persist");
         s.conn.execute("UPDATE panes SET kind = NULL, url = NULL", []).unwrap();
         assert_eq!(s.panes().unwrap()[0].kind, PaneKind::Terminal);
     }
@@ -929,6 +951,8 @@ mod tests {
             kind: PaneKind::Editor,
             url: None,
             editor: Some(target.clone()),
+            sleep: None,
+            keep_awake: false,
         };
         s.pane_upsert(&row).unwrap();
         let back = s.panes().unwrap();

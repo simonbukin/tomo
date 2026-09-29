@@ -98,6 +98,7 @@ pub struct PaneState {
     pub source: Option<PaneSource>,
     /// The exit code of a pane-mode hook command, read from the marker that its script prints.
     pub hook_exit: Option<i32>,
+    pub sleep: crate::sleep::PaneSleep,
 }
 
 const DIAGNOSTICS_KEPT: usize = 200;
@@ -126,6 +127,8 @@ pub struct Inner {
     pub problems: HashMap<String, String>,
     /// The CPU fallback of each agent pane. See `monitor::fallback`.
     pub busy: HashMap<Id, crate::monitor::Busy>,
+    /// The idle clock of each agent pane that may sleep. See `sleep::advance`.
+    pub sleep_clocks: HashMap<Id, crate::sleep::Clock>,
     /// When `sync` last synced the main worktree of each repository.
     pub main_synced_ms: HashMap<Id, u64>,
     /// The repositories that `sync` works on now.
@@ -309,6 +312,7 @@ impl Daemon {
                 diagnostics: std::collections::VecDeque::new(),
                 problems: HashMap::new(),
                 busy: HashMap::new(),
+                sleep_clocks: HashMap::new(),
                 main_synced_ms: HashMap::new(),
                 main_syncing: HashSet::new(),
                 addons,
@@ -493,6 +497,7 @@ impl Daemon {
             url: p.row.url.clone(),
             editor: p.row.editor.clone(),
             hook_exit_code: p.hook_exit,
+            keep_awake: p.row.keep_awake,
         })
     }
 
@@ -694,15 +699,19 @@ impl Daemon {
         Ok(())
     }
 
-    /// Types `text` into the live agent of a pane as one bracketed paste, then submits it. Returns the agent and the pane for a hook.
+    /// Types `text` into the live agent of a pane as one bracketed paste, then submits it. A sleeping agent wakes
+    /// first and gets the text after its first hook event. Returns the agent and the pane for a hook.
     #[allow(dead_code, reason = "addon seam; the base ships no addons")]
-    pub fn paste_to_agent(inner: &Inner, pane_id: &str, text: &str) -> Result<(AgentPresence, HookPane), RpcError> {
+    pub fn paste_to_agent(self: &Arc<Self>, inner: &mut Inner, pane_id: &str, text: &str) -> Result<(AgentPresence, HookPane), RpcError> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
         let agent =
             inner.agents.get(pane_id).filter(|a| a.state != AgentState::Exited).cloned().ok_or_else(|| err(ErrorCode::BadRequest, "pane has no live agent"))?;
-        let pty = pane.pty.clone().filter(|_| pane.exit_code.is_none()).ok_or_else(|| err(ErrorCode::BadRequest, "agent pane is not live"))?;
-        pty.write(pasted(text).as_bytes()).map_err(internal)?;
-        Ok((agent, HookPane { id: pane.row.id.clone(), tab_id: pane.row.tab_id.clone(), cwd: pane.row.cwd.clone() }))
+        if pane.pty.is_none() || pane.exit_code.is_some() {
+            return Err(err(ErrorCode::BadRequest, "agent pane is not live"));
+        }
+        let hook_pane = HookPane { id: pane.row.id.clone(), tab_id: pane.row.tab_id.clone(), cwd: pane.row.cwd.clone() };
+        crate::sleep::send_input(self, inner, pane_id, pasted(text).as_bytes())?;
+        Ok((agent, hook_pane))
     }
 
     pub fn hook_pane(inner: &Inner, pane_id: &str) -> Option<HookPane> {
@@ -1114,6 +1123,8 @@ impl Daemon {
             kind: PaneKind::Terminal,
             url: None,
             editor: None,
+            sleep: None,
+            keep_awake: false,
         };
         inner.store.pane_upsert(&row)?;
         inner.panes.insert(
@@ -1137,6 +1148,7 @@ impl Daemon {
                 stop_intent: false,
                 hook_exit: None,
                 source: None,
+                sleep: Default::default(),
             },
         );
         if let Some(kind) = agent_kind {
@@ -1152,6 +1164,7 @@ impl Daemon {
                 estimated: false,
                 seen: false,
                 subagents: Vec::new(),
+                sleep: None,
             };
             inner.agents.insert(id.clone(), presence.clone());
             Self::emit(inner, Event::AgentChanged { agent: presence.clone() });
@@ -1278,6 +1291,7 @@ impl Daemon {
                         estimated: false,
                         seen: false,
                         subagents: Vec::new(),
+                        sleep: row.sleep.as_ref().map(|_| Sleep::Asleep),
                     },
                 );
             }
@@ -1297,17 +1311,24 @@ impl Daemon {
                     stop_intent: false,
                     hook_exit: None,
                     source: None,
+                    sleep: Default::default(),
                 },
             );
             let reattached = crate::holder::socket_path(&self.paths.pty_dir, &row.id).exists()
                 && self.reattach_pty(&mut inner, &row.id).map_err(|e| tracing::info!("pane {} has no live holder: {e}", row.id)).is_ok();
-            if reattached {
+            let asleep = row.sleep.as_ref().map(|_| Sleep::Asleep);
+            if reattached || asleep.is_some() {
                 if let Some(saved) = inner.store.pane_agent_load(&row.id).filter(|a| row.agent_kind == Some(a.kind)) {
-                    inner.agents.insert(row.id.clone(), AgentPresence { worktree_id: row.worktree_id.clone(), pid: None, ..saved });
+                    inner.agents.insert(row.id.clone(), AgentPresence { worktree_id: row.worktree_id.clone(), pid: None, sleep: asleep, ..saved });
                 }
+            }
+            if reattached {
                 continue;
             }
-            let resume_ref = row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string));
+            let resume_ref = match asleep {
+                Some(_) => None,
+                None => row.session_ref.clone().or_else(|| row.agent_kind.and_then(|k| providers::provider(k).resume_without_session).map(str::to_string)),
+            };
             let (origin, pending) = match (row.agent_kind, resume_ref.as_deref()) {
                 (Some(kind), Some(session)) => {
                     let plan = providers::launch(&inner.config, kind, Some(session), &self.paths.integrations_dir, &[]);
@@ -2487,11 +2508,33 @@ impl Daemon {
             }
             Call::PaneSend { pane_id, data_base64 } => {
                 let data = B64.decode(data_base64).map_err(|e| err(ErrorCode::BadRequest, e.to_string()))?;
-                Self::terminal_only(&self.lock(), &pane_id)?;
-                let pty = self.lock().panes.get(&pane_id).and_then(|p| p.pty.clone()).ok_or_else(|| err(ErrorCode::NotFound, "pane not live"))?;
-                pty.write(&data).map_err(internal)?;
+                let mut inner = self.lock();
+                Self::terminal_only(&inner, &pane_id)?;
+                crate::sleep::send_input(self, &mut inner, &pane_id, &data)?;
                 Ok(Value::Null)
             }
+            Call::PaneSleep { pane_id } => {
+                let mut inner = self.lock();
+                Self::terminal_only(&inner, &pane_id)?;
+                crate::sleep::sleep_now(self, &mut inner, &pane_id)?;
+                Ok(Value::Null)
+            }
+            Call::PaneWake { pane_id } => {
+                let mut inner = self.lock();
+                Self::terminal_only(&inner, &pane_id)?;
+                crate::sleep::wake(self, &mut inner, &pane_id)?;
+                Ok(Value::Null)
+            }
+            Call::PaneKeepAwake { pane_id, keep } => {
+                let mut inner = self.lock();
+                let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+                pane.row.keep_awake = keep;
+                let row = pane.row.clone();
+                inner.store.pane_upsert(&row).map_err(internal)?;
+                Self::emit_pane(&mut inner, &pane_id);
+                Ok(Value::Null)
+            }
+            Call::PaneSnapshot { pane_id } => ok(crate::sleep::read_snapshot(self, &pane_id)?),
             Call::PaneResize { pane_id, cols, rows } => self.pane_resize(pane_id, cols, rows).await,
             Call::PaneAttach { pane_id } => self.pane_attach(client_id, pane_id).await,
             Call::PaneDetach { pane_id } => {
@@ -2512,7 +2555,7 @@ impl Daemon {
             Call::AgentHook { kind, pane_id, payload, at_ms } => {
                 let outcome = providers::hook_outcome(kind, &payload);
                 let mut inner = self.lock();
-                if !inner.panes.contains_key(&pane_id) {
+                if !inner.panes.contains_key(&pane_id) || !crate::sleep::hook_counts(&inner, &pane_id, at_ms) {
                     return Ok(Value::Null);
                 }
                 let busy = inner.agents.get(&pane_id).is_some_and(|a| matches!(a.state, AgentState::Working | AgentState::Waiting));
@@ -2523,6 +2566,7 @@ impl Daemon {
                     None,
                 );
                 Self::apply_subagents(&mut inner, &pane_id, outcome.subagent.as_ref(), at_ms);
+                crate::sleep::woke(self, &mut inner, &pane_id);
                 Ok(Value::Null)
             }
             Call::AgentReport(report) => {
