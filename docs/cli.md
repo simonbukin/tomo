@@ -176,6 +176,9 @@ tomo pane send <text> [--pane P] [--no-newline]
 tomo pane close [pane] [--force]
 tomo pane rename <title> [--pane P]
 tomo pane kill-tree [pane]
+tomo pane sleep [pane]
+tomo pane wake [pane]
+tomo pane keep-awake [pane] [--off]
 ```
 
 `create` splits the active pane of the active tab; without a tab it creates
@@ -186,6 +189,15 @@ same tab. `zoom` asks the GUI to show one pane full size or to unzoom it;
 the saved layout does not change. `send` writes to the PTY as if typed; a
 newline is appended unless `--no-newline`. `kill-tree` sends SIGKILL to
 every process under the pane shell and keeps the shell.
+
+`sleep` ends the idle agent of the pane now and keeps its session; see
+[sleeping-agents.md](sleeping-agents.md). It refuses an agent that works,
+has a child process, has a running subagent or an open attention item, or
+has input that was not sent. It does not wait for the idle period, and it
+ignores the CPU, on-screen, and keep-awake rules. `wake` types the resume
+line into the pane's shell. `send` to a sleeping pane wakes the agent and
+gives it the text after its first hook event. `keep-awake` stops the pane
+from sleeping after the idle period; `--off` lets it sleep again.
 
 ### agent
 

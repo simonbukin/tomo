@@ -18,6 +18,7 @@ color, so a state reads at a glance and without color.
 | idle | hollow gray square | The agent is alive, has no turn, and was seen |
 | dead | red square | The agent process ended by itself with a failure: a crash, a non-zero exit, a signal that nobody in Tomo sent, or a `StopFailure` |
 | no signal | dotted gray square | Tomo sees the agent process but has no hook events from it |
+| sleeping | square with a "z" cut out: gray after idle, green after done | Tomo ended the idle agent and keeps its session; a key wakes it. See [sleeping-agents.md](sleeping-agents.md) |
 
 When `working` ends in `done`, the rhombus turns 45° back to a square as it
 turns green: the motion itself shows that the work finished.
@@ -106,7 +107,13 @@ Priority, first match wins:
 5. dead, seen.
 6. idle.
 7. no signal: every agent has no signal.
-8. no mark: no agent.
+8. sleeping, green: every agent sleeps, and one slept after `done`.
+9. sleeping, gray: every agent sleeps.
+10. no mark: no agent.
+
+A sleeping agent keeps its state (`idle` or `done`) and gets `sleep:
+asleep`, or `sleep: waking` while it resumes. Hook events of the process
+that ends are ignored, so a sleep is never `dead` and records no exit.
 
 A crash of a non-agent pane, for example an Action, is a signal on the row
 ("storybook exited 1") and a mark on its own Action button, never the worktree

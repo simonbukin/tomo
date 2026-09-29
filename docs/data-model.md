@@ -192,6 +192,7 @@ commented copy when the file is missing.
 | `resource_warning_gb` | `2.0`                                     | Memory above which the sidebar shows a total |
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
 | `max_panes_per_tab`   | `4`                                       | A split or spawn into a tab that holds this many panes opens a new tab. `1` means tabs only: the window offers no split and no pane drag |
+| `sleep_after_minutes` | `60`                                      | An idle agent sleeps after this many minutes. `0` turns sleeping off. See [sleeping-agents.md](sleeping-agents.md) |
 | `[theme]`             | `name = "system"`, slab light and dark | Base theme, `light`/`dark` for system mode, and color overrides. See [theming.md](theming.md) |
 | `[terminal]`          | `font_family = "ui-monospace, Menlo, monospace"`, `font_size = 13` | Terminal font. The older top-level `font_family`, `font_size`, and `theme = "dark"` still work |
 | `[notifications]`     | `desktop = true`, `sounds = false`        | Desktop notifications and rare sounds   |

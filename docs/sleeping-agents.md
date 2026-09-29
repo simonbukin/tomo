@@ -140,3 +140,43 @@ of the worktree is awake, the worktree shows the mark of that agent, as today.
 1. The default is 60 minutes.
 2. A pane on screen stays awake, also when the window has no focus.
 3. A sleeping pane and a sleeping worktree show the sleep icon.
+
+## As built
+
+The code is in `crates/tomod/src/sleep.rs` (the rules, the idle clock,
+sleep, and wake), `app/src/SleepView.tsx` (the snapshot view), and
+`agentMark` in `app/src/glyphs.ts` (the icon). `scripts/torture/sleep.sh`
+tests it with a 3 s period. The build differs from the design above in
+these points:
+
+- **The snapshot holds 1 MB, not 2 MB.** It is the daemon's scrollback of
+  the pane (1 MB), which is what the pane showed. The holder ring stays
+  2 MB.
+- **On screen means attached.** A client shows a pane when it sent
+  `pane_attach` and no `pane_detach`. The GUI attaches only the panes of
+  the tab on screen, so no new call was necessary.
+- **One more rule.** The agent process must run under the pane's shell.
+  An agent that is the pane's own process never sleeps, because its end
+  would end the pane.
+- **Waking ends at the first hook event.** The shell echoes the typed
+  line, so the first output cannot tell that the agent started. Hook
+  events that fired before the old process ended do not count. A wake with
+  no hook event in 30 s shows the live terminal and drops the queued input,
+  which would land in the shell.
+- **The model flag is Claude only.** Claude gets `--model <model>` from the
+  newest assistant message in its session file. Codex and Pi resume with
+  their configured model.
+- **`tomo pane sleep` skips three rules.** A sleep on request ignores the
+  CPU, on-screen, and keep-awake rules, and the idle period. The rules that
+  protect work stay.
+- **The sleep bar shows while asleep too.** It says `asleep · a key or a
+  click wakes the agent`, so a frozen pane does not look broken.
+- **A sleep mark heals.** When a pane is marked asleep but an agent runs in
+  it (a daemon crash between the mark and the signal), the next tick
+  clears the mark.
+- **Test period.** `TOMO_SLEEP_AFTER_MS` in the daemon environment
+  overrides `sleep_after_minutes`. Only the torture scripts use it.
+
+Not built yet: "open transcript" (build order step 3; the Cmd-K session
+index keeps message text for search only and has no view), and the
+"start a new session" menu item of edge case 6.
