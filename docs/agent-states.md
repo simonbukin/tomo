@@ -7,22 +7,28 @@ the rail, tabs, and the hover card.
 
 ## The marks
 
-The mark is always a square. Motion and fill tell the states apart, then
-color, so a state reads at a glance and without color.
+The mark is a 3×3 dot matrix. Three channels each do one job:
+
+- **Color says what:** green is the agent's work, amber is you, red is broken,
+  and gray is quiet or Tomo's own work.
+- **Motion says busy:** only working and archiving move. Their cells twinkle,
+  each on its own period, so the pattern never repeats. Needs you beats in
+  unison, which reads as a call, not as work.
+- **Pattern says which:** every still state has its own shape, so no two
+  states differ by color alone.
 
 | State | Mark | Meaning |
 |---|---|---|
-| working | green square that turns 90° and rests at 45° (a rhombus), again and again | A turn is in progress, or a subagent of this agent runs |
-| done | green square, head on, still | The turn finished and nobody has looked at the pane since |
-| needs you | amber square, still | The agent waits for an answer or a permission |
-| idle | hollow gray square | The agent is alive, has no turn, and was seen |
-| dead | red square | The agent process ended by itself with a failure: a crash, a non-zero exit, a signal that nobody in Tomo sent, or a `StopFailure` |
-| no signal | dotted gray square | Tomo sees the agent process but has no hook events from it |
-| sleeping | square with a "z" cut out: gray after idle, green after done | Tomo ended the idle agent and keeps its session; a key wakes it. See [sleeping-agents.md](sleeping-agents.md) |
+| working | green, all cells twinkle | A turn is in progress, or a subagent of this agent runs |
+| done | green, all nine cells, still | The turn finished and nobody has looked at the pane since |
+| needs you | amber plus, beats in unison | The agent waits for an answer or a permission |
+| idle | gray center cell | The agent is alive, has no turn, and was seen |
+| dead | red X | The agent process ended by itself with a failure: a crash, a non-zero exit, a signal that nobody in Tomo sent, or a `StopFailure` |
+| no signal | gray corners | Tomo sees the agent process but has no hook events from it |
+| sleeping | a Z: gray after idle, green after done | Tomo ended the idle agent and keeps its session; a key wakes it. See [sleeping-agents.md](sleeping-agents.md) |
 
-When `working` ends in `done`, the rhombus turns 45° back to a square as it
-turns green: the motion itself shows that the work finished.
-`prefers-reduced-motion` keeps the rhombus still.
+A change of state keeps the element, so the cells fade from one pattern to
+the next. `prefers-reduced-motion` stops the twinkle and the beat.
 
 ## One agent
 
@@ -82,8 +88,8 @@ Rules:
 ## Subagents
 
 A subagent is `working` from its start to its stop. Its own marks use the
-same squares at a smaller size: working, done (green, still), needs you, and
-dead.
+same matrix at the 6px size, with no gaps between the cells: working,
+done (green, still), needs you, and dead.
 
 - `SubagentStart` adds it, `SubagentStop` marks it done.
 - A finished turn of the parent keeps a subagent that still runs (a

@@ -208,26 +208,29 @@ its region, so you can see the preview and the region together.
 
 A live mark is always a square. Motion and fill tell the states apart, then
 color. The mark means one thing on every surface: the sidebar row, the Home
-card and row, the rail, tabs, the hover card, and a subagent line (a smaller
-square). [agent-states.md](agent-states.md) is the source of these rules.
+card and row, the rail, tabs, the pane legend, the hover card, and a
+subagent line (a smaller matrix). [agent-states.md](agent-states.md) is the source of these rules.
 
 | Mark | Status | Meaning | Tooltip |
 |------|--------|---------|---------|
-| green square that turns 90° and rests at 45° (a rhombus), again and again | working | a turn is in progress, or a subagent of the agent runs | `working · 2 min` |
-| green square, head on, still | done | the turn finished and nobody has looked at the pane since | `done · finished 3 min ago` |
-| amber square | needs | the agent waits for an answer or a permission | `needs you` |
-| hollow grey square | idle | the agent is alive, has no turn, and was seen | `idle` |
-| red square | failed | the agent ended with a failure | `dead · exited` |
-| dotted grey outline | unknown | Tomo has no hook events from the agent | ``no signal · run `tomo integrations install` `` |
-| grey square with a "z" cut out | sleeping | Tomo ended the idle agent; a key wakes it | `sleeping · idle 2 h · a key wakes it` |
-| green square with a "z" cut out | sleeping-done | the agent slept after a turn that nobody looked at | `sleeping · done 2 h · a key wakes it` |
+| green, all cells twinkle | working | a turn is in progress, or a subagent of the agent runs | `working · 2 min` |
+| green, all nine cells, still | done | the turn finished and nobody has looked at the pane since | `done · finished 3 min ago` |
+| amber plus, beats in unison | needs | the agent waits for an answer or a permission | `needs you` |
+| grey center cell | idle | the agent is alive, has no turn, and was seen | `idle` |
+| red X | failed | the agent ended with a failure | `dead · exited` |
+| grey corners | unknown | Tomo has no hook events from the agent | ``no signal · run `tomo integrations install` `` |
+| grey Z | sleeping | Tomo ended the idle agent; a key wakes it | `sleeping · idle 2 h · a key wakes it` |
+| green Z | sleeping-done | the agent slept after a turn that nobody looked at | `sleeping · done 2 h · a key wakes it` |
+| grey, all cells twinkle | archiving | Tomo checkpoints and removes the worktree | `archiving` |
 | no mark | none | no agent |  |
 
-When working becomes done, the same element turns from the rhombus back to
-a square (a transition on `rotate`). With `prefers-reduced-motion`, working
-is a still rhombus. A state that the CPU fallback estimated
+The mark is a 3×3 matrix of whole-pixel cells: 2px cells with 1px gaps at
+8px, and no gaps at the 6px subagent size. Color says what, motion says busy,
+and the pattern tells the still states apart. When the state changes, the
+same element keeps its cells, which fade to the new pattern. With
+`prefers-reduced-motion`, nothing twinkles or beats. A state that the CPU fallback estimated
 (`AgentPresence.estimated`) looks the same, and its tooltip ends with
-`(estimated from CPU)`. `complete` (a hollow green square) is for work that
+`(estimated from CPU)`. `complete` (the green ring) is for work that
 ended, such as a merged PR or an Action that exited 0. It is not an agent
 mark.
 
