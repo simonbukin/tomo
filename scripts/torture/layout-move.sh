@@ -86,9 +86,18 @@ for i in $(seq 1 25); do $RPC call tab_move "{\"tab_id\":\"${TABS[$((RANDOM % 3)
 expect "rapid reorder keeps positions 0..n-1" "$(tabs | jq_ "print(sorted(t['position'] for t in d))")" "[0, 1, 2]"
 $RPC call tab_move "{\"tab_id\":\"$T2\",\"position\":0}" >/dev/null
 $RPC call tab_move "{\"tab_id\":\"$TAB\",\"position\":1}" >/dev/null
+pinned() { tabs | jq_ "print(' '.join(t['title'] for t in sorted(d, key=lambda t: t['position']) if t['pinned']))"; }
+$T tab pin "$T3" >/dev/null
+expect "a pinned tab moves to the front" "$(titles) | $(pinned)" "Terminal App Claude | Terminal"
+$RPC call tab_move "{\"tab_id\":\"$T2\",\"position\":0}" >/dev/null
+expect "an unpinned tab cannot move in front of a pinned tab" "$(titles)" "Terminal App Claude"
+$T tab pin "$TAB" >/dev/null; $T tab unpin "$TAB" >/dev/null
+expect "an unpinned tab goes to the start of the unpinned tabs" "$(titles) | $(pinned)" "Terminal Claude App | Terminal"
+rpc_code tab_pin '{"tab_id":"nope","pinned":true}' not_found && pass "tab_pin with a stale id is not_found" || fail "tab_pin stale id"
 order=$(titles); layout=$(leaves "$TAB")
 daemon_restart; sleep 1
 expect "tab order survives a daemon restart" "$(titles)" "$order"
+expect "the pin survives a daemon restart" "$(pinned)" "Terminal"
 expect "moved layout survives a daemon restart" "$(leaves "$TAB")" "$layout"
 step 5 "after restart"
 
