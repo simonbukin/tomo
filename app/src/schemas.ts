@@ -265,6 +265,8 @@ export const systemStatsSchema = z.object({
     top_worktree: worktreeResourcesSchema.nullable()
 });
 
+export const searchSourceSchema = z.union([z.literal("file"), z.literal("terminal"), z.literal("session"), z.literal("activity")]);
+
 export const evidenceBundleSchema = z.object({
     source: z.string(),
     worktree_id: z.string(),
@@ -501,6 +503,26 @@ export const runtimeActivitySchema = z.literal("endpoint_discovered");
 
 export const runtimeProtocolSchema = z.union([z.literal("http"), z.literal("https"), z.literal("tcp")]);
 
+export const searchTargetSchema = z.union([z.object({
+        "kind": z.literal("file"),
+        worktree_id: z.string(),
+        path: z.string(),
+        line: z.number().nullable()
+    }), z.object({
+        "kind": z.literal("pane"),
+        pane_id: z.string()
+    }), z.object({
+        "kind": z.literal("session"),
+        agent: agentKindSchema,
+        session_id: z.string(),
+        worktree_id: z.string(),
+        pane_id: z.string().nullable()
+    }), z.object({
+        "kind": z.literal("activity"),
+        worktree_id: z.string().nullable(),
+        pane_id: z.string().nullable()
+    })]);
+
 export const runtimeEndpointSchema = z.object({
     id: z.string(),
     worktree_id: z.string(),
@@ -656,6 +678,15 @@ export const configSchema = z.object({
     agents: z.any(),
     hooks: z.array(hookDefSchema),
     notifications: notificationSettingsSchema
+});
+
+export const searchHitSchema = z.object({
+    key: z.string(),
+    label: z.string(),
+    snippet: z.string().nullable(),
+    worktree_id: z.string().nullable(),
+    at_ms: z.number().nullable(),
+    target: searchTargetSchema
 });
 
 export const hookEventSchema = z.object({
@@ -858,5 +889,14 @@ export const eventSchema = z.union([z.object({
         "data": z.object({
             worktree_id: z.string(),
             path: z.string()
+        })
+    }), z.object({
+        "event": z.literal("search_results"),
+        "data": z.object({
+            query_id: z.number(),
+            source: searchSourceSchema,
+            hits: z.array(searchHitSchema),
+            total: z.number(),
+            done: z.boolean()
         })
     })]);

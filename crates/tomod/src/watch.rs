@@ -70,6 +70,7 @@ pub async fn run(daemon: Arc<Daemon>) {
                 let burst: Vec<Change> = std::iter::once(change).chain(drain(&mut rx).await).collect();
                 let files: BTreeSet<usize> = burst.iter().filter_map(|c| match c { Change::File(i) => Some(*i), Change::Git => None }).collect();
                 if burst.iter().any(|c| matches!(c, Change::Git)) {
+                    daemon.search.files_changed();
                     let _ = daemon.discover(Summaries::Cached).await;
                 } else {
                     for i in files {
