@@ -4,3 +4,4 @@ pub mod browser;
 pub mod editor;
 pub mod editor_pane;
 pub mod reopen;
+pub mod search;

@@ -58,7 +58,7 @@ pub fn plain_tail(bytes: &[u8], lines: usize) -> Vec<String> {
     rendered[rendered.len().saturating_sub(lines)..].to_vec()
 }
 
-fn render_line(raw: &str) -> String {
+pub(crate) fn render_line(raw: &str) -> String {
     let mut cells: Vec<char> = Vec::new();
     let mut cursor = 0usize;
     for c in raw.chars() {
@@ -78,7 +78,7 @@ fn render_line(raw: &str) -> String {
     cells.into_iter().collect::<String>().trim_end().to_string()
 }
 
-fn strip_escapes(bytes: &[u8]) -> Vec<u8> {
+pub(crate) fn strip_escapes(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {

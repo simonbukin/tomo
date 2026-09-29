@@ -1,0 +1,15 @@
+[
+  { "query": "", "text": "anything", "tier": 3, "gaps": 0 },
+  { "query": "Palette", "text": "palette", "tier": 3, "gaps": 0 },
+  { "query": "pal", "text": "palette.tsx", "tier": 2, "gaps": 0 },
+  { "query": "palette", "text": "app/src/Palette.tsx", "tier": 2, "gaps": 0 },
+  { "query": "model", "text": "app/src/paletteModel.ts", "tier": 1, "gaps": 0 },
+  { "query": "feat", "text": "tomo · feat/x", "tier": 2, "gaps": 0 },
+  { "query": "src pal", "text": "app/src/Palette.tsx", "tier": 0, "gaps": 5 },
+  { "query": "pmt", "text": "app/src/paletteModel.ts", "tier": 0, "gaps": 19 },
+  { "query": "  aoga ", "text": "aogashima", "tier": 2, "gaps": 0 },
+  { "query": "zzz", "text": "palette", "tier": -1, "gaps": 0 },
+  { "query": "tsx", "text": "app/src/Palette.tsx", "tier": 2, "gaps": 0 },
+  { "query": "ette.t", "text": "app/src/Palette.tsx", "tier": 1, "gaps": 0 },
+  { "query": "über", "text": "docs/Über.md", "tier": 2, "gaps": 0 }
+]

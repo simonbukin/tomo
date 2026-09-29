@@ -192,6 +192,7 @@ pub struct Daemon {
     pub editors_changed: tokio::sync::Notify,
     pub rt: tokio::runtime::Handle,
     pub seams: Seams,
+    pub search: crate::features::search::Index,
 }
 
 pub fn err(code: ErrorCode, msg: impl Into<String>) -> RpcError {
@@ -320,6 +321,7 @@ impl Daemon {
             rt: tokio::runtime::Handle::current(),
             seams,
             paths,
+            search: Default::default(),
         });
         providers::write_launch_files(&daemon.paths.integrations_dir, &daemon.tomo_bin)?;
         Ok(daemon)
@@ -2583,6 +2585,9 @@ impl Daemon {
                     .map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 ok(list)
             }
+            Call::Search { query_id, query, sources, limit, worktree_id } => {
+                crate::features::search::start(self, client_id, crate::features::search::Request { query_id, query, sources, limit, worktree_id })
+            }
             Call::DiagnosticsList { limit } => {
                 let inner = self.lock();
                 ok(inner.diagnostics.iter().rev().take(limit.map_or(DIAGNOSTICS_KEPT, |n| n as usize)).cloned().collect::<Vec<_>>())
@@ -2728,7 +2733,7 @@ pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn a_repo() -> Repo {
@@ -2860,7 +2865,7 @@ mod tests {
         assert_eq!(pasted("a\nb"), "\x1b[200~a\nb\x1b[201~\r");
     }
 
-    fn no_seams() -> Seams {
+    pub(crate) fn no_seams() -> Seams {
         Seams { worktree_namer: None, worktree_created: vec![], worktree_rebound: vec![], worktree_files: vec![], pane_exited: vec![], process_polled: vec![], hook_events: vec![] }
     }
 
