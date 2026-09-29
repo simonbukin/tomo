@@ -1,5 +1,5 @@
 import { durationLabel } from "./previewModel";
-import type { AgentPresence, AgentState, Subagent } from "./types";
+import type { AgentPresence, AgentState, Pane, Subagent } from "./types";
 
 /**
  * The one status vocabulary: sidebar, Home, tabs, Activity, palette, and previews all map to it.
@@ -41,6 +41,26 @@ export function agentTitle(agent: Pick<AgentPresence, "state" | "subagents" | "u
   };
   const label = text[state] ?? STATUS_LABEL[agentStatus(state) ?? "unknown"];
   return agent.estimated && state !== "unknown" ? `${label} (estimated from CPU)` : label;
+}
+
+/** The `source.kind` of a pane that a pane-mode hook started. */
+export const HOOK_SOURCE = "hook";
+
+type HookPane = Pick<Pane, "source" | "hook_exit_code" | "exit_code" | "live">;
+
+/** The mark of a pane-mode hook: working while its command runs, done on exit 0, dead on another exit. Other panes have none. */
+export function hookStatus(pane: HookPane): Status | null {
+  if (pane.source?.kind !== HOOK_SOURCE) return null;
+  const code = pane.hook_exit_code ?? pane.exit_code;
+  if (code === null) return pane.live ? "working" : null;
+  return code === 0 ? "done" : "failed";
+}
+
+export function hookTitle(pane: HookPane): string | undefined {
+  const status = hookStatus(pane);
+  const code = pane.hook_exit_code ?? pane.exit_code;
+  if (status === "working") return "hook running";
+  return status ? `hook exited ${code}` : undefined;
 }
 
 /** Classes for the status square that stands for the glyph in dense rows. */

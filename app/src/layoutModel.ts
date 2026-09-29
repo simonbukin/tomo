@@ -39,9 +39,11 @@ export function reorder(ids: Id[], id: Id, position: number): Id[] {
   return [...rest.slice(0, at), id, ...rest.slice(at)];
 }
 
+/** Like the daemon: pinned tabs stay before unpinned tabs, so a move never crosses from one group to the other. */
 export function reorderTabs(tabs: Tab[], tabId: Id, position: number): Tab[] {
   const byId = new Map(tabs.map((t) => [t.id, t]));
-  return reorder(tabs.map((t) => t.id), tabId, position).map((id, i) => ({ ...byId.get(id)!, position: i }));
+  const moved = reorder(tabs.map((t) => t.id), tabId, position).map((id) => byId.get(id)!);
+  return [...moved.filter((t) => t.pinned), ...moved.filter((t) => !t.pinned)].map((t, i) => ({ ...t, position: i }));
 }
 
 /** The side of the hovered tab where the dragged tab lands. */

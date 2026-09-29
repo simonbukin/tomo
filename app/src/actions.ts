@@ -495,7 +495,11 @@ export function promptMetadata(field: "display_name" | "tags", worktreeId?: Id):
 export function renameCurrentTab(): void {
   const s = getState();
   const tab = activeTab(s, s.ui.activeWorktreeId);
-  if (!tab) return;
+  if (tab) renameTab(tab);
+}
+
+/** Asks for the new title in a dialog. A pinned tab has no room to edit its title in place. */
+export function renameTab(tab: Tab): void {
   setState({
     dialog: {
       kind: "prompt",

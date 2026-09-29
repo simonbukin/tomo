@@ -2,7 +2,7 @@ import { closeOtherTabs, currentWorktree, equalizeTab, focusedPaneId, rotateSpli
 import { browserCommand, openBrowser } from "../browser/browser";
 import { activeTab, getState, setState, splitsAllowed } from "../store";
 import type { Id } from "../types";
-import { movePane, moveTab as moveTabTo } from "./panes";
+import { movePane, moveTab as moveTabTo, pinTab } from "./panes";
 
 export function moveTab(tabId: Id, delta: number): void {
   const tabs = Object.values(getState().tabs).find((list) => list.some((t) => t.id === tabId)) ?? [];
@@ -22,6 +22,11 @@ const withTab = (run: (tabId: Id) => void) => () => {
   if (tab) run(tab.id);
 };
 
+const activePinned = (): boolean => {
+  const s = getState();
+  return !!activeTab(s, s.ui.activeWorktreeId)?.pinned;
+};
+
 const focusedBrowser = (): Id | null => {
   const id = focusedPaneId();
   return id && getState().panes[id]?.kind === "browser" ? id : null;
@@ -38,6 +43,8 @@ export const commands: Action[] = [
   { id: "rotate_split", label: "Rotate split", group: "Panes", whenWorktree: true, offered: () => splitsAllowed(getState()), run: withTab((id) => rotateSplit(id)) },
   { id: "move_tab_left", label: "Move tab left", group: "Tabs", whenWorktree: true, run: withTab((id) => moveTab(id, -1)) },
   { id: "move_tab_right", label: "Move tab right", group: "Tabs", whenWorktree: true, run: withTab((id) => moveTab(id, 1)) },
+  { id: "pin_tab", label: "Pin tab", group: "Tabs", whenWorktree: true, when: () => !activePinned(), run: withTab((id) => pinTab(id, true)) },
+  { id: "unpin_tab", label: "Unpin tab", group: "Tabs", whenWorktree: true, when: activePinned, run: withTab((id) => pinTab(id, false)) },
   { id: "close_other_tabs", label: "Close other tabs", group: "Tabs", whenWorktree: true, run: withTab((id) => closeOtherTabs(id)) },
   { id: "new_browser", label: "New browser", group: "Browser", whenWorktree: true, run: () => void (currentWorktree() && openBrowser(currentWorktree()!.id)) },
   { id: "browser_back", label: "Browser back", group: "Browser", whenWorktree: true, when: () => !!focusedBrowser(), run: browser("browser_back") },

@@ -41,6 +41,7 @@ export const aPane = (patch: Partial<Pane> = {}): Pane => ({
   kind: "terminal",
   url: null,
   editor: null,
+  hook_exit_code: null,
   ...patch,
 });
 
@@ -52,6 +53,7 @@ export const aTab = (patch: Partial<Tab> = {}): Tab => ({
   layout: { type: "leaf", pane_id: "p1" },
   active_pane_id: "p1",
   is_active: true,
+  pinned: false,
   ...patch,
 });
 

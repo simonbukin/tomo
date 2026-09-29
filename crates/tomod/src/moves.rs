@@ -44,19 +44,45 @@ fn activate(inner: &mut Inner, worktree_id: &str, tab_id: &str, pane_id: &str) -
     changed.into_iter().try_for_each(|t| put_tab(inner, t))
 }
 
-/// Moves a tab to `position` among its worktree's tabs and renumbers them 0..n.
-/// Returns the worktree id.
-pub fn move_tab(inner: &mut Inner, tab_id: &str, position: u32) -> Result<Id, RpcError> {
-    let worktree_id = inner.tabs.get(tab_id).ok_or_else(|| not_found("tab"))?.worktree_id.clone();
+/// The same tabs with the pinned ones first. Each group keeps its order in `ids`.
+pub fn pinned_first(ids: &[Id], pinned: impl Fn(&str) -> bool) -> Vec<Id> {
+    let (first, rest): (Vec<Id>, Vec<Id>) = ids.iter().cloned().partition(|id| pinned(id));
+    [first, rest].concat()
+}
+
+fn ordered_ids(inner: &Inner, worktree_id: &str) -> Vec<Id> {
     let mut siblings: Vec<(i64, Id)> = inner.tabs.values().filter(|t| t.worktree_id == worktree_id).map(|t| (t.position, t.id.clone())).collect();
     siblings.sort();
-    let ids: Vec<Id> = siblings.into_iter().map(|(_, id)| id).collect();
-    let changed: Vec<TabRow> = layout::reorder(&ids, tab_id, position as usize)
+    siblings.into_iter().map(|(_, id)| id).collect()
+}
+
+/// Numbers the tabs 0..n in the order of `order`, with the pinned tabs first.
+pub fn renumber(inner: &mut Inner, order: &[Id]) -> Result<(), RpcError> {
+    let changed: Vec<TabRow> = pinned_first(order, |id| inner.tabs.get(id).is_some_and(|t| t.pinned))
         .iter()
         .enumerate()
         .filter_map(|(i, id)| inner.tabs.get(id).filter(|t| t.position != i as i64).map(|t| TabRow { position: i as i64, ..t.clone() }))
         .collect();
-    changed.into_iter().try_for_each(|t| put_tab(inner, t))?;
+    changed.into_iter().try_for_each(|t| put_tab(inner, t))
+}
+
+/// Moves a tab to `position` among its worktree's tabs and renumbers them 0..n.
+/// A move never pins or unpins: the tab stays inside its own group. Returns the worktree id.
+pub fn move_tab(inner: &mut Inner, tab_id: &str, position: u32) -> Result<Id, RpcError> {
+    let worktree_id = inner.tabs.get(tab_id).ok_or_else(|| not_found("tab"))?.worktree_id.clone();
+    let ids = ordered_ids(inner, &worktree_id);
+    renumber(inner, &layout::reorder(&ids, tab_id, position as usize))?;
+    Ok(worktree_id)
+}
+
+/// Pins or unpins a tab. It goes to the end of the pinned tabs, or to the start of the unpinned tabs.
+/// Returns the worktree id.
+pub fn pin_tab(inner: &mut Inner, tab_id: &str, pinned: bool) -> Result<Id, RpcError> {
+    let tab = inner.tabs.get(tab_id).ok_or_else(|| not_found("tab"))?.clone();
+    let worktree_id = tab.worktree_id.clone();
+    put_tab(inner, TabRow { pinned, ..tab })?;
+    let ids = ordered_ids(inner, &worktree_id);
+    renumber(inner, &ids)?;
     Ok(worktree_id)
 }
 

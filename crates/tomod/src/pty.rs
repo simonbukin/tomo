@@ -38,6 +38,10 @@ impl Scrollback {
     pub fn plain_tail(&self, lines: usize) -> Vec<String> {
         plain_tail(&self.bytes, lines)
     }
+
+    pub fn last_bytes(&self, n: usize) -> &[u8] {
+        &self.bytes[self.bytes.len().saturating_sub(n)..]
+    }
 }
 
 const TAIL_WINDOW: usize = 64 * 1024;

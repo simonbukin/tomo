@@ -138,10 +138,16 @@ hook resolve the worktree without arguments, as they do inside a Tomo pane.
 continues. The process runs detached from any request. Its exit code and
 output land in the log.
 
-**pane**. Tomo opens a terminal pane in the worktree with the title
-`hook: <event>`, exports the environment, and types the command. You watch
-the output in the GUI. Use it for setup that you want to see, such as
-`pnpm install`. Pane hooks receive no stdin; they read `TOMO_EVENT_JSON`.
+**pane**. Tomo opens a new tab in the worktree with the title
+`hook: <event>` (`Setup` for `worktree.created`), exports the environment,
+and runs the command. The tab is pinned: it sits first in the strip as an
+icon, and the tab you had in front stays in front. The icon shows a mark:
+`working` while the command runs, a green square when it exits 0, and a
+red square when it fails. So a failed setup shows at a glance; click the
+icon to read the output. After the command, the pane keeps a login shell.
+Unpin the tab from its menu if you want it back as a normal tab. Pane
+hooks receive no stdin; they read `TOMO_EVENT_JSON`. A command that calls
+`exit` ends the pane; the mark then comes from the pane exit code.
 
 ## The gate
 
