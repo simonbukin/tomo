@@ -24,6 +24,10 @@ export function moveTab(tabId: Id, position: number): void {
   });
 }
 
+export function pinTab(tabId: Id, pinned: boolean): void {
+  rpc("tab_pin", { tab_id: tabId, pinned }).catch(failToast(pinned ? "Pin failed" : "Unpin failed"));
+}
+
 export type PaneTarget = { paneId: Id } | { tabId: Id };
 
 export function movePane(paneId: Id, target: PaneTarget, place: DropPlace): void {

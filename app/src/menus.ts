@@ -3,6 +3,7 @@ import { browserCommand, openBrowser } from "./browser/browser";
 import { openFile } from "./editor/editor";
 import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
+import { pinTab } from "./commands/panes";
 import type { MenuItem } from "./components/ui";
 import { chordFor, effectiveBindings } from "./shortcuts";
 import { activeTab, clearSelection, getState, paneIds, setState, splitsAllowed, type State } from "./store";
@@ -142,9 +143,10 @@ export function tabMenu(t: Tab, rename: () => void, s: State = getState()): Menu
   const key = (id: string) => (t.is_active ? shortcutIn(s, id) : undefined);
   return [
     { label: "rename", shortcut: key("rename_tab"), run: rename },
+    { label: t.pinned ? "unpin tab" : "pin tab", run: () => pinTab(t.id, !t.pinned) },
     sep,
-    { label: "move left", shortcut: key("move_tab_left"), disabled: idx <= 0, run: () => moveTab(t.id, -1) },
-    { label: "move right", shortcut: key("move_tab_right"), disabled: idx < 0 || idx >= tabs.length - 1, run: () => moveTab(t.id, 1) },
+    { label: "move left", shortcut: key("move_tab_left"), disabled: idx <= 0 || tabs[idx - 1].pinned !== t.pinned, run: () => moveTab(t.id, -1) },
+    { label: "move right", shortcut: key("move_tab_right"), disabled: idx < 0 || idx >= tabs.length - 1 || tabs[idx + 1].pinned !== t.pinned, run: () => moveTab(t.id, 1) },
     sep,
     { label: "close", shortcut: key("close_tab"), run: () => closeTab(t.id) },
     { label: "close others", shortcut: key("close_other_tabs"), disabled: tabs.length < 2, run: () => closeOtherTabs(t.id) },
