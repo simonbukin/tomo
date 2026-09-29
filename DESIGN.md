@@ -48,8 +48,10 @@ Slab is neutral ink on a neutral ground. Color carries status only.
   text. `--accent` is the same value as `--fg`; there is no brand hue.
 - **Semantic state** is one vocabulary for the whole app: `--working`,
   `--waiting`, `--danger`, `--success`, plus the soft tints `--waiting-soft`
-  and `--danger-soft`. The markers are small squares: filled for a live
-  state, hollow for a quiet one. See `styles/base.css` and
+  and `--danger-soft`. The live mark of an agent or a worktree is a 3×3 dot
+  matrix: color says what, motion says busy, and a pattern tells each still
+  state apart. Other markers (git, checks, pull requests) are small squares:
+  filled for a live state, hollow for a quiet one. See `styles/base.css` and
   `app/src/glyphs.ts`.
 - Do not invent a feature status color. If a feature needs a new state, add it
   to the shared vocabulary or map it onto an existing one.
