@@ -26,6 +26,7 @@ const PANE: Pane = {
   kind: "terminal",
   url: null,
   editor: null,
+  hook_exit_code: null,
 };
 
 const config = (scheme: "dark" | "light") =>

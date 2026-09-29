@@ -50,6 +50,7 @@ pub struct TabRow {
     pub layout: LayoutNode,
     pub active_pane_id: Option<Id>,
     pub is_active: bool,
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -170,6 +171,8 @@ const META_COLUMNS: [(&str, &str); 5] =
 
 const PANE_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("editor", "TEXT"), ("agent", "TEXT")];
 
+const TAB_COLUMNS: [(&str, &str); 1] = [("pinned", "INTEGER NOT NULL DEFAULT 0")];
+
 const ATTENTION_COLUMNS: [(&str, &str); 4] = [("kind", "TEXT"), ("url", "TEXT"), ("agent_kind", "TEXT"), ("resolved_at_ms", "INTEGER")];
 
 fn add_missing_columns(conn: &Connection, table: &str, columns: &[(&str, &str)]) -> Result<()> {
@@ -184,6 +187,7 @@ fn add_missing_columns(conn: &Connection, table: &str, columns: &[(&str, &str)])
 fn migrate(conn: &Connection) -> Result<()> {
     add_missing_columns(conn, "worktree_meta", &META_COLUMNS)?;
     add_missing_columns(conn, "panes", &PANE_COLUMNS)?;
+    add_missing_columns(conn, "tabs", &TAB_COLUMNS)?;
     add_missing_columns(conn, "attention", &ATTENTION_COLUMNS)
 }
 
@@ -347,7 +351,7 @@ impl Store {
     }
 
     pub fn tabs(&self) -> Result<Vec<TabRow>> {
-        let mut st = self.conn.prepare("SELECT id, worktree_id, title, position, layout, active_pane_id, is_active FROM tabs ORDER BY position")?;
+        let mut st = self.conn.prepare("SELECT id, worktree_id, title, position, layout, active_pane_id, is_active, pinned FROM tabs ORDER BY position")?;
         let rows = st.query_map([], |r| {
             let layout: String = r.get(4)?;
             Ok((
@@ -358,24 +362,25 @@ impl Store {
                 layout,
                 r.get::<_, Option<String>>(5)?,
                 r.get::<_, i64>(6)?,
+                r.get::<_, i64>(7)?,
             ))
         })?;
         Ok(rows
             .filter_map(|r| r.ok())
-            .filter_map(|(id, worktree_id, title, position, layout, active_pane_id, is_active)| {
+            .filter_map(|(id, worktree_id, title, position, layout, active_pane_id, is_active, pinned)| {
                 let layout = serde_json::from_str(&layout).ok()?;
-                Some(TabRow { id, worktree_id, title, position, layout, active_pane_id, is_active: is_active != 0 })
+                Some(TabRow { id, worktree_id, title, position, layout, active_pane_id, is_active: is_active != 0, pinned: pinned != 0 })
             })
             .collect())
     }
 
     pub fn tab_upsert(&self, t: &TabRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO tabs (id, worktree_id, title, position, layout, active_pane_id, is_active)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO tabs (id, worktree_id, title, position, layout, active_pane_id, is_active, pinned)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET worktree_id=excluded.worktree_id, title=excluded.title, position=excluded.position,
-               layout=excluded.layout, active_pane_id=excluded.active_pane_id, is_active=excluded.is_active",
-            params![t.id, t.worktree_id, t.title, t.position, serde_json::to_string(&t.layout)?, t.active_pane_id, t.is_active as i64],
+               layout=excluded.layout, active_pane_id=excluded.active_pane_id, is_active=excluded.is_active, pinned=excluded.pinned",
+            params![t.id, t.worktree_id, t.title, t.position, serde_json::to_string(&t.layout)?, t.active_pane_id, t.is_active as i64, t.pinned as i64],
         )?;
         Ok(())
     }
@@ -941,11 +946,25 @@ mod tests {
             layout: LayoutNode::Leaf { pane_id: "p".into() },
             active_pane_id: None,
             is_active: true,
+            pinned: false,
         })
         .unwrap();
-        s.conn.execute("INSERT INTO tabs VALUES ('t2','w','y',1,'{bad',NULL,0)", []).unwrap();
+        s.conn.execute("INSERT INTO tabs VALUES ('t2','w','y',1,'{bad',NULL,0,0)", []).unwrap();
         let tabs = s.tabs().unwrap();
         assert_eq!(tabs.len(), 1);
         assert_eq!(tabs[0].id, "t1");
+    }
+
+    #[test]
+    fn a_tab_from_an_old_schema_is_unpinned_and_the_pin_persists() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        conn.execute("INSERT INTO tabs VALUES ('t1','w','x',0,'{\"type\":\"leaf\",\"pane_id\":\"p\"}',NULL,1)", []).unwrap();
+        migrate(&conn).unwrap();
+        let s = Store { conn };
+        let old = s.tabs().unwrap().remove(0);
+        assert!(!old.pinned);
+        s.tab_upsert(&TabRow { pinned: true, ..old }).unwrap();
+        assert!(s.tabs().unwrap()[0].pinned);
     }
 }

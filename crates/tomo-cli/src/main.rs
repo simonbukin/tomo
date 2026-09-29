@@ -270,6 +270,13 @@ enum TabCmd {
         tab: String,
         title: String,
     },
+    #[command(about = "Pin a tab: it moves before the unpinned tabs and shows as an icon")]
+    Pin {
+        tab: String,
+    },
+    Unpin {
+        tab: String,
+    },
     Close {
         tab: String,
         #[arg(long)]
@@ -599,6 +606,12 @@ async fn run() -> Result<()> {
         }
         Cmd::Tab(TabCmd::Rename { tab, title }) => {
             let _: Value = c.call(Call::TabRename { tab_id: tab, title }).await?;
+        }
+        Cmd::Tab(TabCmd::Pin { tab }) => {
+            let _: Value = c.call(Call::TabPin { tab_id: tab, pinned: true }).await?;
+        }
+        Cmd::Tab(TabCmd::Unpin { tab }) => {
+            let _: Value = c.call(Call::TabPin { tab_id: tab, pinned: false }).await?;
         }
         Cmd::Tab(TabCmd::Close { tab, force }) => {
             let _: Value = c.call(Call::TabClose { tab_id: tab, force }).await?;

@@ -52,7 +52,7 @@ describe("reorder", () => {
     expect(reorder(["a", "b"], "x", 0)).toEqual(["a", "b"]);
   });
   it("renumbers tab positions", () => {
-    const tabs = ["Claude", "shell", "App", "Storybook"].map((title, i) => ({ id: title, title, position: i * 10, worktree_id: "w", layout: leaf(title), active_pane_id: title, is_active: i === 0 }) satisfies Tab);
+    const tabs = ["Claude", "shell", "App", "Storybook"].map((title, i) => ({ id: title, title, position: i * 10, worktree_id: "w", layout: leaf(title), active_pane_id: title, is_active: i === 0, pinned: false }) satisfies Tab);
     const next = reorderTabs(tabs, "App", 1);
     expect(next.map((t) => t.title)).toEqual(["Claude", "App", "shell", "Storybook"]);
     expect(next.map((t) => t.position)).toEqual([0, 1, 2, 3]);

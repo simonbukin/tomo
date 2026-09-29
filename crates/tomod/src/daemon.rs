@@ -96,6 +96,8 @@ pub struct PaneState {
     pub stop_intent: bool,
     /// Set by the code that spawned the pane. Memory only: a restore starts without it.
     pub source: Option<PaneSource>,
+    /// The exit code of a pane-mode hook command, read from the marker that its script prints.
+    pub hook_exit: Option<i32>,
 }
 
 const DIAGNOSTICS_KEPT: usize = 200;
@@ -441,6 +443,7 @@ impl Daemon {
             layout: t.layout.clone(),
             active_pane_id: t.active_pane_id.clone(),
             is_active: t.is_active,
+            pinned: t.pinned,
         }
     }
 
@@ -487,6 +490,7 @@ impl Daemon {
             kind: p.row.kind,
             url: p.row.url.clone(),
             editor: p.row.editor.clone(),
+            hook_exit_code: p.hook_exit,
         })
     }
 
@@ -928,12 +932,20 @@ impl Daemon {
                 screen.write(bytes);
             }
             pane.last_output_ms = now_ms();
+            let hook_running = pane.hook_exit.is_none() && pane.source.as_ref().is_some_and(|s| s.kind == crate::events::HOOK_SOURCE);
+            if hook_running {
+                pane.hook_exit = crate::events::hook_exit_in(pane.scrollback.last_bytes(bytes.len() + crate::events::HOOK_EXIT_LOOKBACK));
+            }
+            let hook_ended = hook_running && pane.hook_exit.is_some();
             let encoded = B64.encode(bytes);
             let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id: pane_id.to_string(), data_base64: encoded } };
             if let Ok(text) = serde_json::to_string(&frame) {
                 for client in inner.clients.values().filter(|c| c.attached.contains(pane_id)) {
                     let _ = client.tx.send(text.clone());
                 }
+            }
+            if hook_ended {
+                Self::emit_pane(&mut inner, pane_id);
             }
         }
     }
@@ -1076,6 +1088,7 @@ impl Daemon {
             layout: LayoutNode::Leaf { pane_id: String::new() },
             active_pane_id: None,
             is_active: true,
+            pinned: false,
         };
         inner.tabs.insert(tab.id.clone(), tab.clone());
         tab
@@ -1120,6 +1133,7 @@ impl Daemon {
                     inner.config.scrollback_lines as usize,
                 ),
                 stop_intent: false,
+                hook_exit: None,
                 source: None,
             },
         );
@@ -1279,6 +1293,7 @@ impl Daemon {
                     scrollback: Scrollback::default(),
                     screen: crate::vt::screen_for(crate::vt::VtEngine::parse(&engine).unwrap_or_default(), 120, 30, scrollback_lines),
                     stop_intent: false,
+                    hook_exit: None,
                     source: None,
                 },
             );
@@ -2385,6 +2400,12 @@ impl Daemon {
                 Self::emit_tabs(&mut inner, &tab.worktree_id);
                 ok(Self::tab_view(&inner, &tab))
             }
+            Call::TabPin { tab_id, pinned } => {
+                let mut inner = self.lock();
+                let worktree_id = crate::moves::pin_tab(&mut inner, &tab_id, pinned)?;
+                Self::emit_tabs(&mut inner, &worktree_id);
+                ok(Self::tab_view(&inner, &inner.tabs[&tab_id]))
+            }
             Call::TabReopen { worktree_id } => {
                 let mut inner = self.lock();
                 if !inner.worktrees.get(&worktree_id).is_some_and(|w| w.exists) {
@@ -2857,7 +2878,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn a_setup_hook_runs_in_its_own_tab_behind_a_plain_terminal() {
         let (dir, repo) = repo_fixture("setup-tab");
-        std::fs::write(dir.join("data/config.toml"), "[[hooks]]\nevent = \"worktree.created\"\nmode = \"pane\"\ncommand = \"sleep 30\"\n").unwrap();
+        std::fs::write(dir.join("data/config.toml"), "[[hooks]]\nevent = \"worktree.created\"\nmode = \"pane\"\ncommand = \"sleep 1; false\"\n").unwrap();
         let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
         daemon.lock().config.shell = "/bin/sh".into();
         daemon.handle(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
@@ -2868,13 +2889,56 @@ mod tests {
         let id = created["id"].as_str().unwrap().to_string();
 
         let inner = daemon.lock();
-        let mut tabs: Vec<&TabRow> = inner.tabs.values().filter(|t| t.worktree_id == id).collect();
-        tabs.sort_by_key(|t| t.position);
-        assert_eq!(tabs.iter().map(|t| (t.title.as_str(), t.is_active)).collect::<Vec<_>>(), vec![("Tab 1", true), ("Setup", false)]);
-        let setup_pane = layout::pane_ids(&tabs[1].layout)[0].clone();
+        let tabs: Vec<(String, bool, bool)> = Daemon::tabs_of(&inner, &id).into_iter().map(|t| (t.title, t.is_active, t.pinned)).collect();
+        assert_eq!(tabs, vec![("Setup".into(), false, true), ("Tab 1".into(), true, false)], "the setup tab is pinned first, the plain terminal stays in front");
+        assert!(inner.store.tabs().unwrap().iter().any(|t| t.title == "Setup" && t.pinned && t.position == 0), "the pin is stored");
+        let setup_tab = Daemon::tabs_of(&inner, &id).remove(0);
+        let setup_pane = layout::pane_ids(&setup_tab.layout)[0].clone();
         assert!(inner.panes[&setup_pane].pending_line.is_none(), "the hook runs as the pane command, not as typed input");
+        assert_eq!(inner.panes[&setup_pane].source.as_ref().map(|s| s.kind.as_str()), Some(crate::events::HOOK_SOURCE));
         drop(inner);
+        let code = wait_for(|| daemon.lock().panes.get(&setup_pane).and_then(|p| p.hook_exit)).await;
+        assert_eq!(code, 1, "the pane reports the exit of the hook command while its shell lives on");
         daemon.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pinned_tabs_stay_before_unpinned_tabs_through_pins_moves_and_a_restart() {
+        let (dir, repo) = repo_fixture("pinned-tabs");
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let worktree_id = daemon.lock().worktrees.keys().next().unwrap().clone();
+        let mut ids = vec![];
+        for title in ["a", "b", "c", "d"] {
+            let tab: Tab = serde_json::from_value(daemon.handle_inner(0, Call::TabCreate { worktree_id: worktree_id.clone(), title: Some(title.into()) }).await.unwrap()).unwrap();
+            ids.push(tab.id);
+        }
+        let order = |d: &Daemon| Daemon::tabs_of(&d.lock(), &worktree_id).into_iter().map(|t| format!("{}{}", t.title, if t.pinned { "*" } else { "" })).collect::<Vec<_>>().join(" ");
+        let call = |c: Call| daemon.handle_inner(0, c);
+
+        call(Call::TabPin { tab_id: ids[2].clone(), pinned: true }).await.unwrap();
+        assert_eq!(order(&daemon), "c* a b d");
+        call(Call::TabPin { tab_id: ids[3].clone(), pinned: true }).await.unwrap();
+        assert_eq!(order(&daemon), "c* d* a b", "a new pin goes to the end of the pinned tabs");
+        call(Call::TabMove { tab_id: ids[1].clone(), position: 0 }).await.unwrap();
+        assert_eq!(order(&daemon), "c* d* b a", "an unpinned tab cannot move in front of a pinned tab");
+        call(Call::TabMove { tab_id: ids[2].clone(), position: 9 }).await.unwrap();
+        assert_eq!(order(&daemon), "d* c* b a", "a pinned tab cannot move behind an unpinned tab");
+        call(Call::TabPin { tab_id: ids[3].clone(), pinned: false }).await.unwrap();
+        assert_eq!(order(&daemon), "c* d b a", "an unpin goes to the start of the unpinned tabs");
+        let missing = call(Call::TabPin { tab_id: "nope".into(), pinned: true }).await.unwrap_err();
+        assert!(matches!(missing.code, ErrorCode::NotFound));
+        call(Call::TabMove { tab_id: ids[0].clone(), position: 1 }).await.unwrap();
+        call(Call::TabClose { tab_id: ids[2].clone(), force: true }).await.unwrap();
+        call(Call::TabReopen { worktree_id: worktree_id.clone() }).await.unwrap();
+        assert_eq!(order(&daemon), "c* a d b", "a reopened tab keeps its pin");
+
+        daemon.shutdown();
+        let again = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        again.restore().unwrap();
+        assert_eq!(order(&again), "c* a d b", "the pins and the order survive a restart");
+        again.shutdown();
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -3015,6 +3079,7 @@ mod tests {
                 layout: LayoutNode::Leaf { pane_id: "p1".into() },
                 active_pane_id: None,
                 is_active: true,
+                pinned: false,
             };
             inner.store.tab_upsert(&tab).unwrap();
             inner.tabs.insert(tab.id.clone(), tab);
@@ -3108,6 +3173,7 @@ mod tests {
                 layout: LayoutNode::Leaf { pane_id: "p1".into() },
                 active_pane_id: None,
                 is_active: true,
+                pinned: false,
             };
             inner.store.tab_upsert(&tab).unwrap();
             inner.tabs.insert(tab.id.clone(), tab);

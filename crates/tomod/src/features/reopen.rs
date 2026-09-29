@@ -46,6 +46,7 @@ pub struct ClosedTab {
     pub layout: LayoutNode,
     pub active_pane_id: Option<Id>,
     pub panes: Vec<(Id, ClosedPane)>,
+    pub pinned: bool,
 }
 
 pub fn closed_pane(
@@ -124,6 +125,7 @@ pub fn remember(inner: &mut Inner, tab: &TabRow) {
         layout: tab.layout.clone(),
         active_pane_id: tab.active_pane_id.clone(),
         panes,
+        pinned: tab.pinned,
     };
     inner.closed_tabs = push(&inner.closed_tabs, closed);
 }
@@ -183,15 +185,12 @@ impl Daemon {
         if let Some(t) = inner.tabs.get_mut(&tab.id) {
             t.layout = layout;
             t.active_pane_id = active;
+            t.pinned = closed.pinned;
+            let row = t.clone();
+            let _ = inner.store.tab_upsert(&row);
         }
         let order: Vec<Id> = ordered_tabs(inner, worktree_id).into_iter().map(|t| t.id).collect();
-        for (position, id) in insert_at(&order, &tab.id, closed.index).iter().enumerate() {
-            if let Some(t) = inner.tabs.get_mut(id) {
-                t.position = position as i64;
-                let row = t.clone();
-                let _ = inner.store.tab_upsert(&row);
-            }
-        }
+        let _ = crate::moves::renumber(inner, &insert_at(&order, &tab.id, closed.index));
         Daemon::touch(inner, worktree_id);
         Daemon::emit_tabs(inner, worktree_id);
         for id in ids.values() {
@@ -207,7 +206,7 @@ mod tests {
     use tomo_proto::SplitDirection;
 
     fn tab(worktree_id: &str, title: &str) -> ClosedTab {
-        ClosedTab { worktree_id: worktree_id.into(), title: title.into(), index: 0, layout: layout::leaf("p"), active_pane_id: None, panes: vec![] }
+        ClosedTab { worktree_id: worktree_id.into(), title: title.into(), index: 0, layout: layout::leaf("p"), active_pane_id: None, panes: vec![], pinned: false }
     }
 
     fn split(a: LayoutNode, b: LayoutNode) -> LayoutNode {

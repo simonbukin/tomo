@@ -12,7 +12,7 @@ const { edited, loaded } = await import("./model");
 const { aPane } = await import("../test-fixtures");
 const store = await import("../store");
 
-const tab = { id: "t1", worktree_id: "w1", title: "main.rs", position: 0, is_active: true, active_pane_id: "e1", layout: { type: "leaf" as const, pane_id: "e1" } };
+const tab = { id: "t1", worktree_id: "w1", title: "main.rs", position: 0, is_active: true, pinned: false, active_pane_id: "e1", layout: { type: "leaf" as const, pane_id: "e1" } };
 
 function withEditor(dirty: boolean) {
   store.setState({ panes: { e1: aPane({ id: "e1", kind: "editor", editor: { path: "src/main.rs", line: 1, col: 1 } }) }, tabs: { w1: [tab] }, dialog: null });

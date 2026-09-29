@@ -20,4 +20,8 @@ url: string | null,
 /**
  * The file and cursor of an editor surface.
  */
-editor: EditorTarget | null, };
+editor: EditorTarget | null, 
+/**
+ * The exit code of the command of a pane-mode hook, when it has exited. Memory only.
+ */
+hook_exit_code: number | null, };
