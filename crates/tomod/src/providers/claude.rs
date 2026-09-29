@@ -22,6 +22,7 @@ pub static PROVIDER: Provider = Provider {
     sessions,
     transcript_text,
     sleep_safe_children: &["caffeinate"],
+    session_saved,
 };
 
 /// Claude Code keeps `~/.claude/projects/<encoded cwd>/<session id>.jsonl`.
@@ -29,6 +30,12 @@ pub static PROVIDER: Provider = Provider {
 pub fn project_dir(home: &Path, cwd: &Path) -> PathBuf {
     let encoded: String = cwd.to_string_lossy().chars().map(|c| if c == '/' || c == '.' { '-' } else { c }).collect();
     home.join(".claude").join("projects").join(encoded)
+}
+
+/// The pane may have left the directory where the agent started, so every project directory is tried.
+fn session_saved(home: &Path, session_ref: &str) -> bool {
+    let name = format!("{session_ref}.jsonl");
+    std::fs::read_dir(home.join(".claude").join("projects")).map_or(false, |dirs| dirs.flatten().any(|d| d.path().join(&name).is_file()))
 }
 
 fn sessions(home: &Path, cwd: &Path) -> Vec<AgentSession> {

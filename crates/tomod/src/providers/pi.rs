@@ -20,6 +20,7 @@ pub static PROVIDER: Provider = Provider {
     sessions: super::no_sessions,
     transcript_text: super::no_transcript,
     sleep_safe_children: &[],
+    session_saved: super::always_saved,
 };
 
 fn detects(p: &Program) -> bool {

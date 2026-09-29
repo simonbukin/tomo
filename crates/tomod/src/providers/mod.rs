@@ -41,6 +41,8 @@ pub struct Provider {
     pub transcript_text: fn(line: &str) -> Option<String>,
     /// Child programs of the agent that a sleep may end, because they hold no work.
     pub sleep_safe_children: &'static [&'static str],
+    /// Whether the provider saved the session, so a resume can find it. Claude saves no file before the first turn.
+    pub session_saved: fn(home: &Path, session_ref: &str) -> bool,
 }
 
 /// What an installed provider still needs before Tomo sees its lifecycle events.
@@ -63,6 +65,10 @@ pub fn no_sessions(_home: &Path, _cwd: &Path) -> Vec<AgentSession> {
 
 pub fn no_transcript(_line: &str) -> Option<String> {
     None
+}
+
+pub fn always_saved(_home: &Path, _session_ref: &str) -> bool {
+    true
 }
 
 /// The resume line after a sleep. It names no model: a Claude session file drops the `[1m]` of a 1M-context
