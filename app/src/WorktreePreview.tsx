@@ -1,5 +1,5 @@
 import type { Signal } from "./activityModel";
-import { agentStatus, effectiveState, GLYPH, STATUS_LABEL, subagentStatus } from "./glyphs";
+import { agentMark, agentStatus, GLYPH, STATUS_LABEL, subagentStatus } from "./glyphs";
 import { AgentMark, StateMark } from "./StateMark";
 import { durationLabel, gitLines } from "./previewModel";
 import { ProcessIcon } from "./ProcessIcon";
@@ -80,7 +80,7 @@ export function WorktreePreview({ w }: { w: Worktree }) {
               <AgentMark agent={a} />
               <ProcessIcon agent={a.kind} size={11} />
               <span>{KIND_LABEL[a.kind]}</span>
-              <span className="muted">{STATUS_LABEL[agentStatus(effectiveState(a)) ?? "unknown"]}</span>
+              <span className="muted">{STATUS_LABEL[agentMark(a) ?? "unknown"]}</span>
               <span className="faint">{durationLabel(a.updated_at_ms)}</span>
             </div>
           ))}

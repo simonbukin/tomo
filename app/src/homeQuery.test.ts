@@ -69,6 +69,14 @@ describe("worktree status", () => {
     expect(s("unknown")).toBe("unknown");
   });
 
+  it("shows the sleep icon when every agent sleeps: green when one slept after done, and an awake agent wins", () => {
+    expect(status([{ state: "idle", sleep: "asleep" }])).toBe("sleeping");
+    expect(status([{ state: "idle", sleep: "asleep" }, { state: "done", sleep: "asleep" }])).toBe("sleeping-done");
+    expect(status([{ state: "done", sleep: "waking" }])).toBe("sleeping-done");
+    expect(status([{ state: "done", sleep: "asleep" }, { state: "idle" }])).toBe("idle");
+    expect(status([{ state: "idle", sleep: "asleep" }, { state: "unknown" }])).toBe("unknown");
+  });
+
   it("counts an agent with a running subagent as working", () => {
     expect(status([{ state: "done", subagents: running }])).toBe("working");
     expect(status([{ state: "idle", subagents: running }, { state: "done" }])).toBe("working");

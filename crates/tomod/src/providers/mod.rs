@@ -39,6 +39,8 @@ pub struct Provider {
     /// The message text of one line of a session file: what the user or the agent wrote, without tool calls,
     /// tool output, or thinking. `None` for every other line.
     pub transcript_text: fn(line: &str) -> Option<String>,
+    /// Child programs of the agent that a sleep may end, because they hold no work.
+    pub sleep_safe_children: &'static [&'static str],
 }
 
 /// What an installed provider still needs before Tomo sees its lifecycle events.
@@ -61,6 +63,12 @@ pub fn no_sessions(_home: &Path, _cwd: &Path) -> Vec<AgentSession> {
 
 pub fn no_transcript(_line: &str) -> Option<String> {
     None
+}
+
+/// The resume line after a sleep. It names no model: a Claude session file drops the `[1m]` of a 1M-context
+/// model, so a model flag from it would shrink the context. The agent resumes with its configured model.
+pub fn wake_line(config: &Config, kind: AgentKind, session_ref: &str, launch_dir: &Path) -> String {
+    launch(config, kind, Some(session_ref), launch_dir, &[]).line()
 }
 
 pub fn provider(kind: AgentKind) -> &'static Provider {

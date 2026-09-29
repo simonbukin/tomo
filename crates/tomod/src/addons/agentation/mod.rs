@@ -17,7 +17,7 @@ pub fn send(daemon: &Arc<Daemon>, pane_id: &str, bundle: &EvidenceBundle) -> Res
         let mut inner = daemon.lock();
         let worktree_id = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.row.worktree_id.clone();
         let text = evidence_text(&worktree_label(&inner, &bundle.worktree_id, &worktree_id), &runtime_label(&inner, &worktree_id, bundle), bundle);
-        let (agent, hook_pane) = Daemon::paste_to_agent(&inner, pane_id, &text)?;
+        let (agent, hook_pane) = daemon.paste_to_agent(&mut inner, pane_id, &text)?;
         let event = ActivityEvent {
             pane_id: Some(pane_id.to_string()),
             agent_kind: Some(agent.kind),

@@ -20,6 +20,7 @@ pub static PROVIDER: Provider = Provider {
     gap,
     sessions,
     transcript_text,
+    sleep_safe_children: &[],
 };
 
 /// Codex keeps `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, with the cwd in

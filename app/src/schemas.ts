@@ -54,6 +54,8 @@ export const subagentSchema = z.object({
     updated_at_ms: z.number()
 });
 
+export const sleepSchema = z.union([z.literal("asleep"), z.literal("waking")]);
+
 export const agentReportSchema = z.object({
     pane_id: z.string(),
     kind: agentKindSchema,
@@ -188,7 +190,8 @@ export const agentPresenceSchema = z.object({
     pid: z.number().nullable(),
     estimated: z.boolean(),
     seen: z.boolean(),
-    subagents: z.array(subagentSchema).optional()
+    subagents: z.array(subagentSchema).optional(),
+    sleep: sleepSchema.optional()
 });
 
 export const attentionItemSchema = z.object({
@@ -459,7 +462,8 @@ export const paneSchema = z.object({
     kind: paneKindSchema,
     url: z.string().nullable(),
     editor: editorTargetSchema.nullable(),
-    hook_exit_code: z.number().nullable()
+    hook_exit_code: z.number().nullable(),
+    keep_awake: z.boolean()
 });
 
 export const tabSchema = z.object({
@@ -471,6 +475,12 @@ export const tabSchema = z.object({
     active_pane_id: z.string().nullable(),
     is_active: z.boolean(),
     pinned: z.boolean()
+});
+
+export const paneSnapshotSchema = z.object({
+    cols: z.number(),
+    rows: z.number(),
+    data_base64: z.string()
 });
 
 export const prStatusResultSchema = z.object({
@@ -677,7 +687,8 @@ export const configSchema = z.object({
     keybindings: z.any(),
     agents: z.any(),
     hooks: z.array(hookDefSchema),
-    notifications: notificationSettingsSchema
+    notifications: notificationSettingsSchema,
+    sleep_after_minutes: z.number()
 });
 
 export const searchHitSchema = z.object({

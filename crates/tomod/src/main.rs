@@ -18,6 +18,7 @@ mod providers;
 mod pty;
 mod server;
 mod settings;
+mod sleep;
 mod store;
 mod subagents;
 mod sync;

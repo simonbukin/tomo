@@ -48,4 +48,9 @@ body.pane-dragging .xterm { pointer-events: none; }
 /* xterm.css paints the viewport black, and xterm 6 paints the theme background only on the rows it lays out.
    The part of a row that does not fit showed as a black band under the last row. The pane ground is the theme background. */
 .pane-body .xterm .xterm-viewport { background: none; }
+/* A sleeping agent: a thin bar that says how to wake it, over its saved terminal, read only. */
+.pane-asleep { display: flex; flex-direction: column; padding: 0; }
+.pane-snapshot { flex: 1; min-height: 0; padding: var(--sp-2) var(--sp-1) var(--sp-1) var(--inset); cursor: default; }
+.pane-sleep-bar { flex: none; height: var(--u); display: flex; align-items: center; padding: 0 var(--inset); box-shadow: inset 0 -1px 0 var(--line); font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); }
+.pane-sleep-bar-waking { color: var(--fg); animation: pulse 1.2s ease-in-out infinite; }
 .term-link-hint { position: absolute; z-index: 10; box-sizing: border-box; border-bottom: 1px dotted var(--fg-2); pointer-events: none; }

@@ -13,6 +13,7 @@ fn fresh(report: &AgentReport, worktree_id: &str, pid: Option<u32>) -> AgentPres
         estimated: report.state.is_some() && report.authority == Authority::Heuristic,
         seen: false,
         subagents: Vec::new(),
+        sleep: None,
     }
 }
 
@@ -55,6 +56,7 @@ pub fn merge(current: Option<&AgentPresence>, report: &AgentReport, worktree_id:
         estimated: if accept { report.authority == Authority::Heuristic } else { cur.estimated },
         seen: cur.seen && next_state == cur.state,
         subagents: cur.subagents.clone(),
+        sleep: cur.sleep,
     })
 }
 

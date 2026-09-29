@@ -27,6 +27,7 @@ const PANE: Pane = {
   url: null,
   editor: null,
   hook_exit_code: null,
+  keep_awake: false,
 };
 
 const config = (scheme: "dark" | "light") =>

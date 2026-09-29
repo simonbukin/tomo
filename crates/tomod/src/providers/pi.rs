@@ -19,6 +19,7 @@ pub static PROVIDER: Provider = Provider {
     gap: super::no_gap,
     sessions: super::no_sessions,
     transcript_text: super::no_transcript,
+    sleep_safe_children: &[],
 };
 
 fn detects(p: &Program) -> bool {

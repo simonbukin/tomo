@@ -21,6 +21,7 @@ pub static PROVIDER: Provider = Provider {
     gap: super::no_gap,
     sessions,
     transcript_text,
+    sleep_safe_children: &["caffeinate"],
 };
 
 /// Claude Code keeps `~/.claude/projects/<encoded cwd>/<session id>.jsonl`.

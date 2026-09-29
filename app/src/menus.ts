@@ -1,4 +1,4 @@
-import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setKeepAwake, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom, wakePane } from "./actions";
 import { browserCommand, openBrowser } from "./browser/browser";
 import { openFile } from "./editor/editor";
 import { builtins } from "./addons";
@@ -222,6 +222,13 @@ export function paneMenu(paneId: Id, s: State = getState()): MenuItem[] {
       : []),
     ...(splitsAllowed(s) ? [sep, sendToItem(s, pane)] : []),
     sep,
+    ...(pane?.agent && pane.agent.state !== "exited"
+      ? [
+          ...(s.agents[paneId]?.sleep === "asleep" ? [{ label: "wake", run: () => wakePane(paneId) }] : []),
+          { label: "keep awake", checked: pane.keep_awake, run: () => setKeepAwake(paneId, !pane.keep_awake) },
+          sep,
+        ]
+      : []),
     { label: "rename pane...", run: () => renamePane(paneId) },
     copyMenu([
       ["CWD", pane?.cwd],

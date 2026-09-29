@@ -65,6 +65,7 @@ struct FileConfig {
     theme: Option<toml::Value>,
     terminal: Option<toml::Value>,
     max_panes_per_tab: Option<u32>,
+    sleep_after_minutes: Option<u32>,
     #[serde(default)]
     keybindings: BTreeMap<String, String>,
     #[serde(default)]
@@ -109,6 +110,7 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 # resource_warning_gb = 2.0
 # scrollback_lines = 10000
 # max_panes_per_tab = 4   # a split into a full tab opens a new tab; 1 means tabs only, no splits
+# sleep_after_minutes = 60   # an idle agent sleeps and resumes on a key; 0 turns sleeping off
 
 # Hooks run ordinary commands when something happens. The event JSON arrives
 # on stdin and in TOMO_EVENT_JSON. mode = "pane" runs the command in a visible
@@ -186,7 +188,7 @@ pub const THEME_TOKENS: [&str; 14] = [
 const BASE_THEMES: [&str; 3] = ["system", "slab-dark", "slab-light"];
 /// Accent presets from before slab, which has no hue. A preset now gives a warning and no color.
 const RETIRED_ACCENT_PRESETS: [&str; 4] = ["murasaki", "sora", "sakura", "sumi"];
-const SETTABLE_KEYS: [&str; 14] = [
+const SETTABLE_KEYS: [&str; 15] = [
     "shell",
     "editor_command",
     "worktree_parent_dir",
@@ -196,6 +198,7 @@ const SETTABLE_KEYS: [&str; 14] = [
     "font_family",
     "font_size",
     "max_panes_per_tab",
+    "sleep_after_minutes",
     "theme",
     "terminal",
     "keybindings",
@@ -340,6 +343,7 @@ fn merge(file: FileConfig) -> (Config, Vec<ConfigIssue>) {
         font_size,
         theme,
         max_panes_per_tab: file.max_panes_per_tab.unwrap_or(4).max(1),
+        sleep_after_minutes: file.sleep_after_minutes.unwrap_or(60),
         keybindings,
         agents,
         hooks,

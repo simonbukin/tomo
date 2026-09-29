@@ -7,4 +7,8 @@ import type { HookDef } from "./HookDef";
 import type { NotificationSettings } from "./NotificationSettings";
 import type { ThemeConfig } from "./ThemeConfig";
 
-export type Config = { shell: string, editor_command: Array<string>, worktree_parent_dir: string | null, branch_prefix: string, resource_warning_bytes: number, scrollback_lines: number, vt_engine: string, font_family: string, font_size: number, theme: ThemeConfig, max_panes_per_tab: number, keybindings: { [key in string]: string }, agents: { [key in string]: AgentCommand }, hooks: Array<HookDef>, notifications: NotificationSettings, };
+export type Config = { shell: string, editor_command: Array<string>, worktree_parent_dir: string | null, branch_prefix: string, resource_warning_bytes: number, scrollback_lines: number, vt_engine: string, font_family: string, font_size: number, theme: ThemeConfig, max_panes_per_tab: number, keybindings: { [key in string]: string }, agents: { [key in string]: AgentCommand }, hooks: Array<HookDef>, notifications: NotificationSettings, 
+/**
+ * An idle agent sleeps after this many minutes. 0 turns sleeping off.
+ */
+sleep_after_minutes: number, };

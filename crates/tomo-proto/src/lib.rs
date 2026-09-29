@@ -254,6 +254,23 @@ pub enum Call {
     PaneKillTree {
         pane_id: Id,
     },
+    /// Ends the idle agent of the pane now and keeps its session to resume. See docs/sleeping-agents.md.
+    PaneSleep {
+        pane_id: Id,
+    },
+    /// Resumes the sleeping agent of the pane. A pane that already wakes answers at once.
+    PaneWake {
+        pane_id: Id,
+    },
+    /// A pane that is kept awake never sleeps after the idle period.
+    PaneKeepAwake {
+        pane_id: Id,
+        keep: bool,
+    },
+    /// The terminal as it was when the agent of the pane went to sleep.
+    PaneSnapshot {
+        pane_id: Id,
+    },
     /// What the pane shows now, one string per row. Empty when `[terminal] engine` is `xterm`,
     /// because then the client keeps the screen and the daemon does not.
     PaneScreen {
@@ -910,6 +927,13 @@ pub struct Config {
     pub hooks: Vec<HookDef>,
     #[serde(default)]
     pub notifications: NotificationSettings,
+    /// An idle agent sleeps after this many minutes. 0 turns sleeping off.
+    #[serde(default = "default_sleep_after_minutes")]
+    pub sleep_after_minutes: u32,
+}
+
+fn default_sleep_after_minutes() -> u32 {
+    60
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1143,6 +1167,17 @@ pub struct Pane {
     /// The exit code of the command of a pane-mode hook, when it has exited. Memory only.
     #[serde(default)]
     pub hook_exit_code: Option<i32>,
+    /// The agent of this pane never sleeps after the idle period.
+    #[serde(default)]
+    pub keep_awake: bool,
+}
+
+/// The saved terminal of a sleeping pane: its output bytes and the size that they were drawn at.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct PaneSnapshot {
+    pub cols: u16,
+    pub rows: u16,
+    pub data_base64: String,
 }
 
 /// A file of the worktree and a 1-based cursor position.
@@ -1315,6 +1350,19 @@ pub struct AgentPresence {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<Subagent>>", optional)]
     pub subagents: Vec<Subagent>,
+    /// Tomo ended the idle agent process and keeps its session, or it resumes the session now.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sleep: Option<Sleep>,
+}
+
+/// An agent that sleeps: its process ended after a long idle period, and a key resumes its session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum Sleep {
+    Asleep,
+    /// The resume line is typed; the first hook event of the agent ends this.
+    Waking,
 }
 
 /// A helper agent that an agent started, such as a Claude Code subagent. The provider maps its own hook
@@ -1573,6 +1621,7 @@ mod bindings {
         FileWritten::export_all(&cfg).unwrap();
         ProcessInfo::export_all(&cfg).unwrap();
         PaneResult::export_all(&cfg).unwrap();
+        PaneSnapshot::export_all(&cfg).unwrap();
         WorktreeOpened::export_all(&cfg).unwrap();
         SpawnResult::export_all(&cfg).unwrap();
         MetadataPatch::export_all(&cfg).unwrap();

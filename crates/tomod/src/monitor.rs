@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tomo_proto::*;
 
-const BUSY_CPU_PERCENT: f32 = 3.0;
+pub(crate) const BUSY_CPU_PERCENT: f32 = 3.0;
 const BUSY_SAMPLES: u32 = 2;
 const QUIET_MS: u64 = 10_000;
 
@@ -56,7 +56,6 @@ pub fn classify_all(inner: &Inner) -> Vec<ProcessInfo> {
 const FULL_CWD_REFRESH_MS: u64 = 20_000;
 
 pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
-    let _ = daemon;
     let roots: Vec<u32> = inner.panes.values().filter(|p| p.exit_code.is_none()).filter_map(|p| p.pty.as_ref().map(|x| x.pid)).collect();
     let full = force_full || now_ms().saturating_sub(inner.last_full_poll_ms) >= FULL_CWD_REFRESH_MS;
     if full {
@@ -101,6 +100,9 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
             }
         }
 
+        if inner.agents.get(&pane_id).is_some_and(|a| a.sleep == Some(Sleep::Asleep)) {
+            continue;
+        }
         let descendants = procs::descendants(&inner.proc_rows, root_pid);
         let agent_proc = descendants
             .iter()
@@ -151,6 +153,8 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
         inner.agents.insert(agent.pane_id.clone(), agent.clone());
         Daemon::emit(inner, Event::AgentChanged { agent });
     }
+
+    crate::sleep::tick(daemon, inner, now_ms());
 
     let resources = procs::worktrees_by_weight(&classify_all(inner));
     let changed = resources.len() != inner.resources.len()

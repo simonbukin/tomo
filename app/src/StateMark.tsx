@@ -1,5 +1,5 @@
 import { cx } from "./components/ui";
-import { agentStatus, agentTitle, effectiveState, statusDot, type Mark } from "./glyphs";
+import { agentMark, agentTitle, statusDot, type Mark } from "./glyphs";
 import { worktreeLead } from "./homeQuery";
 import { queryContext, useStore } from "./store";
 import type { AgentPresence, Worktree } from "./types";
@@ -13,7 +13,7 @@ export function StateMark({ mark, title, small, className, hidden }: { mark: Mar
 }
 
 export function AgentMark({ agent, small, className }: { agent: AgentPresence | null; small?: boolean; className?: string }) {
-  return <StateMark mark={agent && agentStatus(effectiveState(agent))} title={agent ? agentTitle(agent) : undefined} small={small} className={className} />;
+  return <StateMark mark={agent && agentMark(agent)} title={agent ? agentTitle(agent) : undefined} small={small} className={className} />;
 }
 
 /** The mark of a worktree: the mark of its most urgent agent, or the archive in progress. */
