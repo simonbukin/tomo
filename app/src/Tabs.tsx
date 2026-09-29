@@ -3,8 +3,8 @@ import { SortableContext } from "@dnd-kit/sortable";
 import { FileText, Globe, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc, rpcParsed } from "./api";
-import { activateTab, closeTab } from "./actions";
-import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger } from "./components/ui";
+import { activateTab, closeTab, renameTab } from "./actions";
+import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger, Tooltip } from "./components/ui";
 import { keepInPlace, NewTabDrop, useTabSortable } from "./LayoutDnd";
 import { openMenu } from "./MenuHost";
 import { spawnMenu, tabMenu } from "./menus";
@@ -12,7 +12,8 @@ import { ProcessIcon } from "./ProcessIcon";
 import { useGlide } from "./glide";
 import { useShortcuts } from "./shortcuts";
 import { mostUrgent } from "./homeQuery";
-import { AgentMark } from "./StateMark";
+import { AgentMark, StateMark } from "./StateMark";
+import { HOOK_SOURCE, hookStatus, hookTitle } from "./glyphs";
 import { useAnyDirty } from "./editor/sessions";
 import {failQuietly, paneIds, useStore} from "./store";
 import type { AgentPresence, Id, Pane, Tab } from "./types";
@@ -28,6 +29,13 @@ function leadPane(tab: Tab, panes: Record<Id, Pane>): Pane | undefined {
 /** The most urgent live agent of a tab, whose mark the tab shows. */
 function tabAgent(tab: Tab, agents: Record<Id, AgentPresence>): AgentPresence | null {
   return mostUrgent(paneIds(tab.layout).flatMap((id) => (agents[id] && agents[id].state !== "exited" ? [agents[id]] : [])));
+}
+
+/** The pane of a tab that a pane-mode hook started, whose mark the tab shows when no agent runs. */
+function hookPane(tab: Tab, panes: Record<Id, Pane>): Pane | undefined {
+  return paneIds(tab.layout)
+    .map((id) => panes[id])
+    .find((p) => p?.source?.kind === HOOK_SOURCE);
 }
 
 type Editing = { id: Id; value: string } | null;
@@ -67,6 +75,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
 function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; closable: boolean; editing: Editing; setEditing: (e: Editing) => void; commit: () => void }) {
   const lead = useStore((s) => leadPane(t, s.panes));
   const agent = useStore((s) => tabAgent(t, s.agents));
+  const hook = useStore((s) => hookPane(t, s.panes));
   const dirty = useAnyDirty(paneIds(t.layout));
   const isEditing = editing?.id === t.id;
   const drag = useTabSortable(t.id, isEditing);
@@ -80,17 +89,22 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       role="tab"
       aria-selected={t.is_active}
       style={drag.style}
-      className={cx("tab", t.is_active && "tab-active", drag.className)}
+      aria-label={t.pinned ? t.title : undefined}
+      className={cx("tab", t.pinned && "tab-pinned", t.is_active && "tab-active", drag.className)}
       onMouseDown={(e) => {
         if (e.button === 1) closeTab(t.id);
       }}
       onClick={() => {
         if (!editing) activateTab(t.id);
       }}
-      onDoubleClick={() => setEditing({ id: t.id, value: t.title })}
-      onContextMenu={(e) => openMenu(e, tabMenu(t, () => setEditing({ id: t.id, value: t.title })))}
+      onDoubleClick={() => (t.pinned ? renameTab(t) : setEditing({ id: t.id, value: t.title }))}
+      onContextMenu={(e) => openMenu(e, tabMenu(t, () => (t.pinned ? renameTab(t) : setEditing({ id: t.id, value: t.title }))))}
     >
-      {agent && <AgentMark agent={agent} />}
+      {agent ? (
+        <AgentMark agent={agent} small={t.pinned} className={t.pinned ? "tab-pin-mark" : undefined} />
+      ) : (
+        hook && <StateMark mark={hookStatus(hook)} title={hookTitle(hook)} small={t.pinned} className={t.pinned ? "tab-pin-mark" : undefined} />
+      )}
       {lead?.kind === "browser" ? (
         <Globe className="icon proc-icon" size={11} aria-label="Browser" />
       ) : lead?.kind === "editor" ? (
@@ -98,7 +112,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       ) : (
         <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />
       )}
-      {isEditing ? (
+      {t.pinned ? null : isEditing ? (
         <input
           autoFocus
           className="tab-edit"
@@ -116,7 +130,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
           {t.title}
         </span>
       )}
-      {closable && (
+      {closable && !t.pinned && (
         <IconButton
           label="Close tab"
           shortcut={t.is_active ? shortcut("close_tab") : undefined}
@@ -133,7 +147,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
     </div>
   );
 
-  if (t.is_active || !lead || lead.kind !== "terminal") return el;
+  if (t.is_active || !lead || lead.kind !== "terminal") return t.pinned ? <Tooltip content={t.title}>{el}</Tooltip> : el;
   return (
     <PreviewCard open={preview && !drag.busy} onOpenChange={setPreview}>
       <PreviewCardTrigger render={el} />

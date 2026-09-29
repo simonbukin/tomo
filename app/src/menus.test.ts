@@ -49,9 +49,9 @@ describe("worktree menu", () => {
 });
 
 describe("tab menu", () => {
-  it("has rename, move, and close, with move disabled at the edges", () => {
+  it("has rename, pin, move, and close, with move disabled at the edges", () => {
     const first = tabMenu(tabs[0], () => {}, state);
-    expect(labels(first)).toEqual(["rename", "—", "move left", "move right", "—", "close", "close others"]);
+    expect(labels(first)).toEqual(["rename", "pin tab", "—", "move left", "move right", "—", "close", "close others"]);
     expect(entry(first, "move left").disabled).toBe(true);
     expect(entry(first, "move right").disabled).toBe(false);
     expect(entry(tabMenu(tabs[1], () => {}, state), "move right").disabled).toBe(true);

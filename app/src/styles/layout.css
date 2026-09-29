@@ -52,6 +52,8 @@
 .tab { position: relative; display: flex; align-items: center; flex: 0 1 140px; min-width: 72px; gap: 6px; padding: 0 0 0 var(--inset); color: var(--fg-2); font-size: var(--fs-1); box-shadow: inset -1px 0 0 var(--line); }
 .tab:hover { color: var(--fg); background: var(--bg-1); }
 .tab-active, .tab-active:hover { background: var(--fg); color: var(--bg); box-shadow: none; }
+.tab-pinned { flex: none; width: var(--u); min-width: var(--u); padding: 0; justify-content: center; }
+.tab-pinned .tab-pin-mark { position: absolute; right: 3px; bottom: 3px; }
 .tab-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tab-edit { width: 100%; height: 20px; padding: 0 4px; font-size: var(--fs-1); }
 .tab-close { flex: none; width: var(--u); height: var(--u); opacity: 0; color: inherit; }
