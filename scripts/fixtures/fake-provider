@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Pretends to be Claude Code, Codex, or Pi for the harness. No model calls.
 // usage: fake-provider claude|codex|pi [the provider's own flags]
-// stdin: work N | wait | quit
+// stdin: work N | wait | quit | child (start a child process) | ignore-term (ignore SIGTERM)
 //
 // Each flavor reads the same integration files as the real binary, sends the
 // same hook payloads, keeps session files under $HOME, and fails a resume the
@@ -79,7 +79,7 @@ function claude() {
       hook("PreToolUse", tool(n))
       await sleep(n)
       hook("PostToolUse", { ...tool(n), tool_response: {} })
-      appendLine(transcript, { type: "assistant", message: { role: "assistant", content: "done" } })
+      appendLine(transcript, { type: "assistant", message: { role: "assistant", model: "claude-fake-1", content: "done" } })
       hook("Stop", { stop_hook_active: false })
     },
     wait: () => {
@@ -184,6 +184,12 @@ async function main() {
     } else if (command === "wait") {
       await agent.wait()
       console.log("waiting for approval")
+    } else if (command === "child") {
+      require("child_process").spawn("sleep", ["600"], { stdio: "ignore" })
+      console.log("child started")
+    } else if (command === "ignore-term") {
+      process.on("SIGTERM", () => console.log("SIGTERM ignored"))
+      console.log("ignoring SIGTERM")
     } else if (command === "quit") {
       await agent.quit()
       console.log("bye")
