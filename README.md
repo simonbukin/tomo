@@ -28,6 +28,19 @@ Tomo keeps everything (worktrees, terminals, agents and so on) organized. The re
 - **Hooks and a CLI**: run your commands on Tomo events, and drive all of Tomo from `tomo` with `--json`.
 - **Addons**: add state, commands, and a place in the window through a few seams.
 
+## My stuff
+
+Only on `simon-main`: my addons and my config.
+
+- **Linear**: the issue that a branch names, in its state color, in the worktree hover and in `⌘K` search. Read only.
+- **GitHub**: the pull request of each branch through `gh`, as a tag on the worktree and in `⌘K` search.
+- **Usage**: how much of each provider's allowance is used, in the bottom strip.
+- **Actions**: named commands for each repo in `.tomo.toml`, one button each, marked when one crashes.
+- **Runtime**: the ports that pane processes listen on, with the pane that owns each one.
+- **Agentation**: notes on a browser page go straight into a live agent pane.
+- **Towns**: each new worktree gets the name of a Japanese town, and Tomo keeps the towns you unlocked.
+- **My config**: tabs only with no splits, the slab-dark theme, and a setup hook that copies the `.env` files and runs `pnpm install` in a new acme worktree.
+
 ## This repo
 
 - **`main`** is the base: a clean, flat copy for you to install, use, and take
