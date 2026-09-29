@@ -4,6 +4,25 @@
 
 Tomo keeps everything (worktrees, terminals, agents and so on) organized. The rest is up to you!
 
+## Features
+
+- **Worktrees first**: every worktree of a repo in one sidebar, with its terminals, agents, and tags.
+- **Terminals that survive**: each pane runs in its own process, so a daemon or app restart keeps your shells and agents.
+- **Agent state tracking**: hooks from Claude Code, Codex, and Pi show working, done, needs you, idle, or dead for each agent and worktree.
+- **Subagents**: each live subagent shows under its agent.
+- **Resume after a restart**: agent sessions come back, including a turn that the restart cut off.
+- **Sleeping agents**: an agent idle for an hour ends and leaves a scrollable snapshot; a key resumes the same session.
+- **Code editor**: a CodeMirror 6 pane for quick edits, opened from the palette or a file path in a terminal.
+- **Search everything**: `⌘K` finds worktrees, files, terminal scrollback, and agent sessions as you type.
+- **Terminal links**: `⌘`-click a file path or a URL in any terminal.
+- **Paste and drop**: paste an image or drop a file on a terminal, and the agent gets its path.
+- **Main stays current**: each repo's main worktree fast-forwards to its upstream on its own.
+- **Archive**: checkpoint, close, and remove a worktree in one step, and keep its branch.
+- **Pinned tabs**: pin a tab as a small icon that stays first.
+- **Attention**: `⌘⇧A` jumps to the next agent that needs you.
+- **Hooks and a CLI**: run your commands on Tomo events, and drive all of Tomo from `tomo` with `--json`.
+- **Addons**: add state, commands, and a place in the window through a few seams.
+
 ## This repo
 
 - **`main`** is the base: a clean, flat copy for you to install, use, and take
