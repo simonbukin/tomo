@@ -125,6 +125,23 @@ so a branch name from a pull request works with one paste.
 - Drag a tab to reorder it. The other tabs stay in place; an accent line
   shows where the tab lands. The strip changes at once, then the
   `tabs_changed` snapshot from `tab_move` wins. The order persists.
+- Pin a tab with `pin tab` in its menu or in the palette (`tab_pin`,
+  `tomo tab pin`). The daemon stores the pin. A pinned tab is one 28 px
+  square at the left of the strip: the process icon and a small state
+  mark, with no title and no close button. The title is in the tooltip,
+  and a rename opens a dialog. Pinned tabs never shrink.
+- Pinned tabs always come before unpinned tabs. A drag or `move left`
+  and `move right` never pin or unpin: the tab stays inside its own group,
+  and the daemon clamps the position to that group. A new pin goes to the
+  end of the pinned tabs; an unpin goes to the start of the unpinned tabs.
+- The mark of a tab: the agent mark when an agent runs in the tab.
+  Otherwise, for a tab that a pane-mode hook opened: `working` while the
+  hook command runs, `done` when it exits 0, and `dead` when it exits with
+  another code. A plain shell has no mark. The hook script prints a
+  private OSC (`ESC ] 7771 ; tomo-hook-exit=<code> BEL`) that the daemon
+  reads into `hook_exit_code` on the pane. It is memory only, so the hook
+  mark goes away after a daemon restart.
+- `next_tab` and `prev_tab` include pinned tabs, in strip order. A pinned tab closes with the same confirmation as other tabs.
 - Drag a pane by its title chip in the legend. The terminal body never
   starts a drag, so text selection works as before. While the drag is
   active, a translucent shape shows the layout that the drop makes, not the

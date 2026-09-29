@@ -112,7 +112,7 @@ store state as a parameter, so tests call them with a fixture state.
 | Object | Items |
 |--------|-------|
 | Worktree | open, new tab, new terminal, new claude, new codex, new pi · tags ›, rename · open in (editor), reveal in finder, copy › (path, branch, worktree id) · archive or restore |
-| Tab | rename · move left, move right · close, close others |
+| Tab | rename, pin tab or unpin tab · move left, move right · close, close others |
 | Pane | split right, split down, zoom, equalize, rotate, swap with › · send to › · rename pane, copy › (cwd, session id) · kill process tree, close |
 | Browser pane | back, forward, reload · open in external browser, copy › (url) · send to › · close |
 | Editor pane | save · open in (editor), reveal in finder, copy › (path, relative path) · send to › · close |
@@ -121,7 +121,9 @@ store state as a parameter, so tests call them with a fixture state.
 | Runtime endpoint row | open, focus logs, restart, stop · copy › (url, port) |
 
 `move left` and `move right` call `tab_move` with the new 0-based
-position. `send to` lists the other tabs of the worktree and calls
+position. They are off at the edge between pinned and unpinned tabs.
+`pin tab` and `unpin tab` call `tab_pin`; the palette has the same two
+commands in the `Tabs` group, with no default key. `send to` lists the other tabs of the worktree and calls
 `pane_move` with `tab_id` and `place: "right"`. A menu item shows a key
 only when the registry command acts on that object: for example, the
 pane menu shows `⌘D` on `split right` only for the focused pane.
