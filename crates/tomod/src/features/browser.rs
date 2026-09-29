@@ -53,6 +53,7 @@ impl Daemon {
                 process_title: None,
                 process_cmd: None,
                 stop_intent: false,
+                hook_exit: None,
                 pending_line: None,
                 last_output_ms: 0,
                 scrollback: Scrollback::default(),

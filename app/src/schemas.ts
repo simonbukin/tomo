@@ -456,7 +456,8 @@ export const paneSchema = z.object({
     process_cmd: z.string().nullable(),
     kind: paneKindSchema,
     url: z.string().nullable(),
-    editor: editorTargetSchema.nullable()
+    editor: editorTargetSchema.nullable(),
+    hook_exit_code: z.number().nullable()
 });
 
 export const tabSchema = z.object({
@@ -466,7 +467,8 @@ export const tabSchema = z.object({
     position: z.number(),
     layout: layoutNodeSchema,
     active_pane_id: z.string().nullable(),
-    is_active: z.boolean()
+    is_active: z.boolean(),
+    pinned: z.boolean()
 });
 
 export const prStatusResultSchema = z.object({

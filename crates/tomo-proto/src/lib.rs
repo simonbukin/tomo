@@ -165,6 +165,11 @@ pub enum Call {
         tab_id: Id,
         title: String,
     },
+    /// Pins or unpins a tab. Pinned tabs always come before unpinned tabs.
+    TabPin {
+        tab_id: Id,
+        pinned: bool,
+    },
     /// Moves a tab to `position` among its worktree's tabs (0-based); the others shift.
     TabMove {
         tab_id: Id,
@@ -1029,6 +1034,9 @@ pub struct Tab {
     pub layout: LayoutNode,
     pub active_pane_id: Option<Id>,
     pub is_active: bool,
+    /// A pinned tab sorts before every unpinned tab and draws as an icon.
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -1075,6 +1083,9 @@ pub struct Pane {
     /// The file and cursor of an editor surface.
     #[serde(default)]
     pub editor: Option<EditorTarget>,
+    /// The exit code of the command of a pane-mode hook, when it has exited. Memory only.
+    #[serde(default)]
+    pub hook_exit_code: Option<i32>,
 }
 
 /// A file of the worktree and a 1-based cursor position.

@@ -220,12 +220,17 @@ impl Daemon {
         let tab = Self::create_tab(inner, &w.id, Some(title.clone()));
         let shell = inner.config.shell.clone();
         let argv = [shell.clone(), "-c".to_string(), hook_pane_script(&hook_env(event), &hook.command, &event.event, &shell)];
-        self.spawn_in_worktree(
+        let (_, pane_id) = self.spawn_in_worktree(
             inner,
             &w.id,
             w.path.clone(),
-            SpawnSpec { tab_id: Some(&tab.id), command: Some(&argv), title: Some(title), ..SpawnSpec::default() },
+            SpawnSpec { tab_id: Some(&tab.id), command: Some(&argv), title: Some(title.clone()), ..SpawnSpec::default() },
         )?;
+        if let Some(pane) = inner.panes.get_mut(&pane_id) {
+            pane.source = Some(PaneSource { kind: HOOK_SOURCE.into(), id: event.event.clone(), label: title });
+        }
+        Self::emit_pane(inner, &pane_id);
+        crate::moves::pin_tab(inner, &tab.id, true)?;
         Self::activate_tab(inner, &front)
     }
 }
@@ -237,11 +242,32 @@ pub fn hook_tab_title(event: &str) -> String {
     }
 }
 
+/// The `source.kind` of a pane that a pane-mode hook started.
+pub const HOOK_SOURCE: &str = "hook";
+
+/// A private OSC that the hook script prints with the exit code. The terminal ignores it; the daemon reads it.
+const HOOK_EXIT_OSC: &[u8] = b"\x1b]7771;tomo-hook-exit=";
+
 pub fn hook_pane_script(env: &[(String, String)], command: &str, event: &str, shell: &str) -> String {
     let exports: String = env.iter().map(|(k, v)| format!("export {}={}\n", k, crate::agents::shell_quote(v))).collect();
     let quote = crate::agents::shell_quote;
-    format!("{exports}{command}\nprintf '\\n[tomo] %s hook exited %s\\n' {} \"$?\"\nexec {} -l\n", quote(event), quote(shell))
+    format!(
+        "{exports}{command}\ns=$?\nprintf '\\n[tomo] %s hook exited %s\\n\\033]7771;tomo-hook-exit=%s\\007' {} \"$s\" \"$s\"\nexec {} -l\n",
+        quote(event),
+        quote(shell)
+    )
 }
+
+/// The exit code in the last hook marker of `bytes`, when a whole marker is there.
+pub fn hook_exit_in(bytes: &[u8]) -> Option<i32> {
+    let start = bytes.windows(HOOK_EXIT_OSC.len()).rposition(|w| w == HOOK_EXIT_OSC)? + HOOK_EXIT_OSC.len();
+    let rest = &bytes[start..];
+    let end = rest.iter().position(|&b| b == 0x07)?;
+    std::str::from_utf8(&rest[..end]).ok()?.parse().ok()
+}
+
+/// How many bytes before a new chunk can hold the start of a marker that the chunk ends.
+pub const HOOK_EXIT_LOOKBACK: usize = HOOK_EXIT_OSC.len() + 12;
 
 #[cfg(test)]
 mod tests {
@@ -390,6 +416,15 @@ mod tests {
         assert!(text.contains("[tomo] worktree.created hook exited 1"), "{text}");
         assert!(text.trim_end().ends_with("-l"), "the last step execs the shell: {text}");
         assert!(!text.contains("export"), "no export lines reach the terminal: {text}");
+        assert_eq!(hook_exit_in(&out.stdout), Some(1));
+    }
+
+    #[test]
+    fn the_hook_exit_marker_needs_its_whole_sequence_and_the_last_one_wins() {
+        assert_eq!(hook_exit_in(b"out\x1b]7771;tomo-hook-exit=0\x07$ "), Some(0));
+        assert_eq!(hook_exit_in(b"\x1b]7771;tomo-hook-exit=0\x07 again \x1b]7771;tomo-hook-exit=127\x07"), Some(127));
+        assert_eq!(hook_exit_in(b"\x1b]7771;tomo-hook-exit=12"), None, "the chunk ends inside the marker");
+        assert_eq!(hook_exit_in(b"[tomo] worktree.created hook exited 1"), None);
     }
 
     #[test]

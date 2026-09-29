@@ -93,7 +93,7 @@ declare global {
 
 const editor = (id: string, tab: string, path: string): Pane => aPane({ id, tab_id: tab, title: path.split("/").pop()!, cwd: ROOT, kind: "editor", editor: { path, line: 14, col: 5 } });
 
-const tab = (id: string, title: string, position: number, layout: Tab["layout"], active: string): Tab => ({ id, worktree_id: "w1", title, position, is_active: position === 0, active_pane_id: active, layout });
+const tab = (id: string, title: string, position: number, layout: Tab["layout"], active: string): Tab => ({ id, worktree_id: "w1", title, position, is_active: position === 0, active_pane_id: active, layout, pinned: false });
 
 const TABS: Tab[] = [
   tab("t1", "main.rs", 0, { type: "split", id: "s1", direction: "horizontal", ratio: 0.55, first: { type: "leaf", pane_id: "e1" }, second: { type: "leaf", pane_id: "e2" } }, "e1"),
