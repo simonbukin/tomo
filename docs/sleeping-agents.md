@@ -43,9 +43,12 @@ All of these must be true for the whole idle period (default 60 minutes,
    can name child commands that are safe to end (`sleep_safe_children`).
 4. Its process tree used no CPU above the fallback threshold.
 5. Nobody typed into the pane, and the last input ended with Enter: a prompt
-   that you typed and did not send must never be lost.
+   that you typed and did not send must never be lost. A focus report, an arrow
+   key, or the terminal's answer to a query of the agent is no typing.
 6. No client shows the pane on screen.
-7. The session has a reference and its provider can resume.
+7. The session has a reference, its provider can resume, and the provider
+   saved the session. Claude saves no session file before the first turn, so
+   an agent that you never used stays awake.
 8. The pane is not marked "keep awake" (a pane menu item, like a pin).
 
 The idle period starts again at any change of these.
