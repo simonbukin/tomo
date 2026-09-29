@@ -24,4 +24,8 @@ editor: EditorTarget | null,
 /**
  * The exit code of the command of a pane-mode hook, when it has exited. Memory only.
  */
-hook_exit_code: number | null, };
+hook_exit_code: number | null, 
+/**
+ * The agent of this pane never sleeps after the idle period.
+ */
+keep_awake: boolean, };

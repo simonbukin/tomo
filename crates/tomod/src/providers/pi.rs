@@ -19,6 +19,9 @@ pub static PROVIDER: Provider = Provider {
     gap: super::no_gap,
     sessions: super::no_sessions,
     transcript_text: super::no_transcript,
+    sleep_safe_children: &[],
+    last_model: super::no_model,
+    model_flag: None,
 };
 
 fn detects(p: &Program) -> bool {

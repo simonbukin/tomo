@@ -5,6 +5,7 @@
 import type { AgentKind } from "./AgentKind";
 import type { AgentState } from "./AgentState";
 import type { Authority } from "./Authority";
+import type { Sleep } from "./Sleep";
 import type { Subagent } from "./Subagent";
 
 export type AgentPresence = { pane_id: string, worktree_id: string, kind: AgentKind, state: AgentState, session_ref: string | null, authority: Authority, updated_at_ms: number, pid: number | null, 
@@ -19,4 +20,8 @@ seen: boolean,
 /**
  * Helper agents that this agent started and that still matter to the current turn.
  */
-subagents?: Array<Subagent>, };
+subagents?: Array<Subagent>, 
+/**
+ * Tomo ended the idle agent process and keeps its session, or it resumes the session now.
+ */
+sleep?: Sleep, };

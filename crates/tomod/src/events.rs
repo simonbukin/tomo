@@ -290,6 +290,7 @@ mod tests {
             agents: Default::default(),
             hooks,
             notifications: Default::default(),
+            sleep_after_minutes: 60,
         }
     }
 

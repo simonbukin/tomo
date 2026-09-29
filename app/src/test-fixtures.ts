@@ -42,6 +42,7 @@ export const aPane = (patch: Partial<Pane> = {}): Pane => ({
   url: null,
   editor: null,
   hook_exit_code: null,
+  keep_awake: false,
   ...patch,
 });
 
