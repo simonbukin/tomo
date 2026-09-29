@@ -15,7 +15,7 @@ import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, st
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
 import { Signals } from "./Signals";
-import { agentStatus, dotClass, effectiveState, tintClass } from "./glyphs";
+import { agentMark, dotClass, tintClass } from "./glyphs";
 import { WorktreeMark } from "./StateMark";
 import { ProcessIcon } from "./ProcessIcon";
 import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
@@ -332,7 +332,7 @@ export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string
       <div className="card-sub">{sub}{!w.exists && !archived && " · missing"}</div>
       {!archived && agents.length > 0 && (
         <div className="card-agents">
-          {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentStatus(effectiveState(a)))} />)}
+          {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentMark(a))} />)}
         </div>
       )}
       {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={flip && `${flip}:sub`} />}

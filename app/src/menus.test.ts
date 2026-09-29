@@ -15,7 +15,7 @@ const tabs = [
   { id: "t1", worktree_id: "w1", title: "one", position: 0, is_active: true, active_pane_id: "p1", layout: { type: "split", id: "s1", direction: "horizontal", ratio: 0.5, first: leaf("p1"), second: leaf("p2") } },
   { id: "t2", worktree_id: "w1", title: "two", position: 1, is_active: false, active_pane_id: "p3", layout: leaf("p3") },
 ] as unknown as Tab[];
-const pane = (id: string, tab_id: string, extra: Partial<Pane> = {}) => ({ id, tab_id, worktree_id: "w1", title: id, cwd: `/src/aogashima/${id}`, agent: null, kind: "terminal", url: null, ...extra }) as unknown as Pane;
+const pane = (id: string, tab_id: string, extra: Partial<Pane> = {}) => ({ id, tab_id, worktree_id: "w1", title: id, cwd: `/src/aogashima/${id}`, agent: null, kind: "terminal", url: null, keep_awake: false, ...extra }) as unknown as Pane;
 
 const base = getState();
 const state = {
@@ -61,14 +61,21 @@ describe("tab menu", () => {
 describe("pane menu", () => {
   it("has the PRD items, send to other tabs, and copy for cwd and session id", () => {
     const menu = paneMenu("p1", state);
-    expect(labels(menu)).toEqual(["split right", "split down", "zoom", "equalize", "rotate", "swap with", "—", "send to", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
+    expect(labels(menu)).toEqual(["split right", "split down", "zoom", "equalize", "rotate", "swap with", "—", "send to", "—", "keep awake", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
     expect(labels(entry(menu, "send to").submenu!)).toEqual(["two"]);
     expect(labels(entry(menu, "copy").submenu!)).toEqual(["cwd", "session id"]);
   });
 
+  it("offers wake for a sleeping agent, and keep awake as a check for every agent pane", () => {
+    const asleep = { ...state, agents: { p1: { pane_id: "p1", state: "idle", sleep: "asleep" } } } as unknown as State;
+    expect(labels(paneMenu("p1", asleep)).slice(9, 12)).toEqual(["wake", "keep awake", "—"]);
+    expect(entry(paneMenu("p1", state), "keep awake").checked).toBe(false);
+    expect(labels(paneMenu("p2", state))).not.toContain("keep awake");
+  });
+
   it("offers no split, no send to, and no split command when a tab holds one pane", () => {
     const tabsOnly = { ...state, config: { ...state.config, max_panes_per_tab: 1 } } as unknown as State;
-    expect(labels(paneMenu("p1", tabsOnly))).toEqual(["zoom", "equalize", "rotate", "swap with", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
+    expect(labels(paneMenu("p1", tabsOnly))).toEqual(["zoom", "equalize", "rotate", "swap with", "—", "keep awake", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
     expect(labels(tidySeparators(paneMenu("p3", tabsOnly)))).toEqual(["rename pane...", "copy", "—", "kill process tree", "close"]);
     expect(labels(spawnMenu("w1", tabsOnly))).toEqual(["terminal", "browser", "claude", "codex", "pi"]);
     expect(labels(worktreeMenu(worktree, tabsOnly))).not.toContain("split right");

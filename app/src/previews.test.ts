@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activityStatus } from "./activityKinds";
-import { agentStatus, agentTitle, dotClass, effectiveState, GLYPH, STATUS_LABEL, subagentStatus } from "./glyphs";
+import { agentMark, agentStatus, agentTitle, dotClass, effectiveState, GLYPH, STATUS_LABEL, subagentStatus } from "./glyphs";
 import type { AgentPresence } from "./types";
 import { durationLabel, gitLines } from "./previewModel";
 import type { GitSummary } from "./types";
@@ -8,7 +8,7 @@ import type { GitSummary } from "./types";
 describe("status glyphs", () => {
   it("gives every status its own glyph", () => {
     expect(new Set(Object.values(GLYPH)).size).toBe(Object.keys(GLYPH).length);
-    expect(GLYPH).toEqual({ working: "●", needs: "◉", idle: "○", done: "■", complete: "✓", failed: "×", unknown: "?" });
+    expect(GLYPH).toEqual({ working: "●", needs: "◉", idle: "○", done: "■", complete: "✓", failed: "×", unknown: "?", sleeping: "z", "sleeping-done": "Z" });
   });
 
   it("gives each agent state its own mark: done is not complete, dead is failed", () => {
@@ -39,6 +39,17 @@ describe("status glyphs", () => {
     expect(title("unknown")).toBe("no signal · run `tomo integrations install`");
     expect(title("working", true)).toBe("working · 3 min (estimated from CPU)");
     expect(title("unknown", true)).toBe("no signal · run `tomo integrations install`");
+    const asleep = (state: AgentPresence["state"], sleep: AgentPresence["sleep"]) => agentTitle({ state, updated_at_ms: now - 3 * 60_000, estimated: false, sleep }, now);
+    expect(asleep("idle", "asleep")).toBe("sleeping · idle 3 min · a key wakes it");
+    expect(asleep("done", "asleep")).toBe("sleeping · done 3 min · a key wakes it");
+    expect(asleep("done", "waking")).toBe("waking");
+  });
+
+  it("draws a sleeping agent with the sleep icon: gray after idle, green after done", () => {
+    expect(dotClass(agentMark({ state: "idle", sleep: "asleep" }))).toBe("state state-sleeping");
+    expect(dotClass(agentMark({ state: "done", sleep: "asleep" }))).toBe("state state-sleeping state-sleeping-done");
+    expect(agentMark({ state: "done" })).toBe("done");
+    expect(STATUS_LABEL[agentMark({ state: "idle", sleep: "asleep" }) ?? "unknown"]).toBe("sleeping");
   });
 
   it("maps agents and activity onto the same vocabulary", () => {

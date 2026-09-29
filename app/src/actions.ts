@@ -459,6 +459,15 @@ export function killPaneTree(paneId: Id): void {
   rpc("pane_kill_tree", { pane_id: paneId }).catch(failToast("Kill failed"));
 }
 
+/** Resumes the sleeping agent of a pane. See docs/sleeping-agents.md. */
+export function wakePane(paneId: Id): void {
+  rpc("pane_wake", { pane_id: paneId }).catch(failToast("Wake failed"));
+}
+
+export function setKeepAwake(paneId: Id, keep: boolean): void {
+  rpc("pane_keep_awake", { pane_id: paneId, keep }).catch(failToast("Keep awake failed"));
+}
+
 export function splitPaneById(paneId: Id, direction: SplitDirection): void {
   rpcParsed("pane_split", paneResultSchema, { pane_id: paneId, direction, command: null })
     .then((r) => window.setTimeout(() => focusPane(r.pane.id), 50))
