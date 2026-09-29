@@ -25,6 +25,8 @@ const ACTIVITY_ROWS: usize = 2_000;
 const SESSIONS_PER_WORKTREE: usize = 200;
 /// A long content scan sends what it has at this interval.
 const STREAM_EVERY_MS: u64 = 50;
+/// A scan copies each pane three times (snapshot, plain text, lowercase), so few threads keep the peak memory low.
+const SCAN_THREADS: usize = 4;
 const SNIPPET_BEFORE: usize = 40;
 const SNIPPET_AFTER: usize = 100;
 
@@ -538,9 +540,10 @@ async fn terminal(daemon: Arc<Daemon>, s: Arc<Search>) {
     let d = daemon.clone();
     let _ = tokio::task::spawn_blocking(move || {
         let needle = s.query.to_ascii_lowercase();
+        let chunk = panes.len().div_ceil(SCAN_THREADS).max(1);
         let per_pane: Vec<(Vec<(usize, String)>, usize)> = std::thread::scope(|scope| {
-            let running: Vec<_> = panes.iter().map(|p| scope.spawn(|| pane_matches(&p.bytes, &needle, s.limit))).collect();
-            running.into_iter().map(|h| h.join().unwrap_or_default()).collect()
+            let running: Vec<_> = panes.chunks(chunk).map(|group| scope.spawn(|| group.iter().map(|p| pane_matches(&p.bytes, &needle, s.limit)).collect::<Vec<_>>())).collect();
+            running.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
         });
         let total = per_pane.iter().map(|(_, count)| count).sum();
         let hits = panes
