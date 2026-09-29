@@ -20,6 +20,7 @@ pub static PROVIDER: Provider = Provider {
     installed,
     gap: super::no_gap,
     sessions,
+    transcript_text,
 };
 
 /// Claude Code keeps `~/.claude/projects/<encoded cwd>/<session id>.jsonl`.
@@ -39,6 +40,67 @@ fn text_of(content: &Value) -> Option<String> {
         Value::Array(parts) => parts.iter().find_map(|p| (p.get("type")?.as_str()? == "text").then(|| p.get("text")?.as_str().map(str::to_string))?),
         _ => None,
     }
+}
+
+#[derive(serde::Deserialize)]
+struct Line {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    message: Option<Message>,
+}
+
+#[derive(serde::Deserialize)]
+struct Message {
+    content: Option<Content>,
+}
+
+/// A string, or a list of parts. Not `#[serde(untagged)]`: that copies the whole value, tool output included, before it picks a variant.
+enum Content {
+    Text(String),
+    Parts(Vec<Part>),
+}
+
+impl<'de> serde::Deserialize<'de> for Content {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct Visit;
+        impl<'de> serde::de::Visitor<'de> for Visit {
+            type Value = Content;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a string or a list of parts")
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Content, E> {
+                Ok(Content::Text(v.to_string()))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Content, A::Error> {
+                let parts = std::iter::from_fn(|| seq.next_element::<Part>().transpose()).collect::<Result<_, _>>()?;
+                Ok(Content::Parts(parts))
+            }
+        }
+        d.deserialize_any(Visit)
+    }
+}
+
+/// A content part. Only `type` and `text` are read, so serde skips the large `input` and `content` of tool parts without a copy.
+#[derive(serde::Deserialize)]
+struct Part {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    text: Option<String>,
+}
+
+fn transcript_text(line: &str) -> Option<String> {
+    if !line.contains("\"type\":\"user\"") && !line.contains("\"type\":\"assistant\"") {
+        return None;
+    }
+    let parsed: Line = serde_json::from_str(line).ok()?;
+    if !matches!(parsed.kind.as_deref(), Some("user" | "assistant")) {
+        return None;
+    }
+    let text = match parsed.message?.content? {
+        Content::Text(t) => t,
+        Content::Parts(parts) => parts.into_iter().filter(|p| p.kind.as_deref() == Some("text")).filter_map(|p| p.text).collect::<Vec<_>>().join("\n"),
+    };
+    super::is_prompt(&text).then_some(text)
 }
 
 /// Parses one session file. `None` when it holds no user turn.
