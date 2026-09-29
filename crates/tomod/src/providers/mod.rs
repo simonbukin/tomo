@@ -36,6 +36,9 @@ pub struct Provider {
     pub installed: fn(home: &Path) -> bool,
     pub gap: fn(home: &Path) -> Option<Gap>,
     pub sessions: fn(home: &Path, cwd: &Path) -> Vec<AgentSession>,
+    /// The message text of one line of a session file: what the user or the agent wrote, without tool calls,
+    /// tool output, or thinking. `None` for every other line.
+    pub transcript_text: fn(line: &str) -> Option<String>,
 }
 
 /// What an installed provider still needs before Tomo sees its lifecycle events.
@@ -54,6 +57,10 @@ pub fn no_launch_file(_launch_dir: &Path, _tomo_bin: &Path) -> Result<()> {
 
 pub fn no_sessions(_home: &Path, _cwd: &Path) -> Vec<AgentSession> {
     Vec::new()
+}
+
+pub fn no_transcript(_line: &str) -> Option<String> {
+    None
 }
 
 pub fn provider(kind: AgentKind) -> &'static Provider {
@@ -232,7 +239,7 @@ fn read_head(path: &Path) -> Vec<String> {
     std::io::BufReader::new(f).lines().map_while(Result::ok).take(MAX_SCAN_LINES).collect()
 }
 
-fn jsonl_files(dir: &Path, depth: usize) -> Vec<PathBuf> {
+pub(crate) fn jsonl_files(dir: &Path, depth: usize) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     entries
         .flatten()
