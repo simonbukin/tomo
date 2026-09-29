@@ -83,30 +83,20 @@ impl Index {
 
     #[cfg(test)]
     pub fn stats(&self) -> IndexStats {
-        let files = lock(&self.files);
-        let transcripts = lock(&self.transcripts);
-        let (messages, text_bytes) = transcripts.values().map(|t| {
-            let t = lock(t);
-            (t.messages.len(), t.messages.iter().map(|m| m.text.len() + m.lower.len()).sum::<usize>())
-        }).fold((0, 0), |(a, b), (c, d)| (a + c, b + d));
-        IndexStats {
-            file_paths: files.values().map(|c| c.value.len()).sum(),
-            file_bytes: files.values().flat_map(|c| c.value.iter()).map(|n| n.text.len() + n.lower.len()).sum(),
-            sessions: lock(&self.sessions).values().map(|c| c.value.len()).sum(),
-            transcripts: transcripts.len(),
-            messages,
-            text_bytes,
-        }
+        let (messages, text_bytes) = lock(&self.transcripts)
+            .values()
+            .map(|t| {
+                let t = lock(t);
+                (t.messages.len(), t.messages.iter().map(|m| m.text.len() + m.lower.len()).sum::<usize>())
+            })
+            .fold((0, 0), |(a, b), (c, d)| (a + c, b + d));
+        IndexStats { messages, text_bytes }
     }
 }
 
 #[cfg(test)]
 #[derive(Debug)]
 pub struct IndexStats {
-    pub file_paths: usize,
-    pub file_bytes: usize,
-    pub sessions: usize,
-    pub transcripts: usize,
     pub messages: usize,
     pub text_bytes: usize,
 }
