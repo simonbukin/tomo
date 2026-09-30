@@ -1,9 +1,9 @@
 /* Shared primitives from app/src/components/ui. Product surfaces style on top of these. */
 
 /* ---- buttons: a button is a cell. Secondary is plain, primary is inverted, destructive is the danger color. */
-button, .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--u); background: transparent; border: 0; border-radius: 0; padding: 0 var(--inset); cursor: default; line-height: 16px; white-space: nowrap; color: inherit; font-weight: 600; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+button, .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--u); background: transparent; border: 0; border-radius: 0; padding: 0 var(--inset); cursor: pointer; line-height: 16px; white-space: nowrap; color: inherit; font-weight: 600; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 button:hover, .btn:hover { background: var(--bg-2); }
-button:disabled, .btn:disabled, .btn[data-disabled] { opacity: 0.45; }
+button:disabled, .btn:disabled, .btn[data-disabled] { opacity: 0.45; cursor: default; }
 button.primary, .btn-default { background: var(--fg); color: var(--bg); }
 button.primary:hover, .btn-default:hover { background: color-mix(in srgb, var(--fg) 88%, var(--bg)); }
 .btn-subtle { background: var(--bg-1); color: var(--fg); }
@@ -44,11 +44,11 @@ select { appearance: none; padding-right: 30px; background-image: url("data:imag
 
 /* ---- menu: 28 px rows, the highlighted row inverted */
 .menu-popup { min-width: 196px; max-width: 336px; max-height: var(--available-height); overflow-y: auto; background: var(--bg-2); box-shadow: var(--shadow-pop); padding: 0; font-size: var(--fs-2); outline: none; }
-.menu-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 10px; height: var(--u); padding: 0 var(--inset); color: var(--fg); cursor: default; outline: none; user-select: none; }
+.menu-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 10px; height: var(--u); padding: 0 var(--inset); color: var(--fg); cursor: pointer; outline: none; user-select: none; }
 .menu-popup:has(.menu-check) .menu-item { grid-template-columns: 12px minmax(0, 1fr) auto auto; }
 .menu-popup:has(.menu-check) .menu-label { grid-column: 2; }
 .menu-item[data-highlighted] { background: var(--fg); color: var(--bg); }
-.menu-item[data-disabled] { opacity: 0.4; }
+.menu-item[data-disabled] { opacity: 0.4; cursor: default; }
 .menu-item.menu-danger { color: var(--danger); }
 .menu-item.menu-danger[data-highlighted] { background: var(--danger); color: var(--bg); }
 .menu-check { display: inline-flex; align-items: center; justify-content: center; width: 12px; color: inherit; }
@@ -73,10 +73,10 @@ select { appearance: none; padding-right: 30px; background-image: url("data:imag
 .popover pre { margin: 0; font-family: var(--mono); font-size: var(--fs-1); white-space: pre-wrap; word-break: break-word; user-select: text; }
 
 /* ---- select */
-.select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; width: 100%; height: var(--u); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); padding: 0 10px 0 var(--inset); font-size: var(--fs-2); font-weight: 500; line-height: 16px; color: var(--fg); cursor: default; }
+.select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; width: 100%; height: var(--u); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); padding: 0 10px 0 var(--inset); font-size: var(--fs-2); font-weight: 500; line-height: 16px; color: var(--fg); cursor: pointer; }
 .select-trigger:hover { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .select-trigger[data-popup-open] { box-shadow: inset 0 0 0 1px var(--fg); }
-.select-trigger[data-disabled] { opacity: 0.45; }
+.select-trigger[data-disabled] { opacity: 0.45; cursor: default; }
 .select-md { font-size: var(--fs-2); }
 .select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .select-value[data-placeholder] { color: var(--fg-3); }
@@ -84,9 +84,9 @@ select { appearance: none; padding-right: 30px; background-image: url("data:imag
 .select-icon .icon { width: 12px; height: 12px; }
 .select-popup { min-width: var(--anchor-width); background: var(--bg-2); box-shadow: var(--shadow-pop); padding: 0; font-size: var(--fs-2); outline: none; }
 .select-list { max-height: min(336px, var(--available-height)); overflow-y: auto; }
-.select-item { display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; column-gap: 10px; height: var(--u); padding: 0 var(--inset); color: var(--fg); cursor: default; outline: none; }
+.select-item { display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; column-gap: 10px; height: var(--u); padding: 0 var(--inset); color: var(--fg); cursor: pointer; outline: none; }
 .select-item[data-highlighted] { background: var(--fg); color: var(--bg); }
-.select-item[data-disabled] { opacity: 0.4; }
+.select-item[data-disabled] { opacity: 0.4; cursor: default; }
 .select-check { display: inline-flex; grid-column: 1; }
 .select-check .icon { width: 12px; height: 12px; }
 .select-item-text { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -95,7 +95,7 @@ select { appearance: none; padding-right: 30px; background-image: url("data:imag
 .combobox-input { width: 100%; }
 .combobox-popup { min-width: var(--anchor-width); max-width: var(--anchor-width); background: var(--bg-2); box-shadow: var(--shadow-pop); padding: 0; font-size: var(--fs-2); outline: none; z-index: var(--z-dialog); }
 .combobox-list { max-height: min(252px, var(--available-height)); overflow-y: auto; }
-.combobox-item { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); height: var(--u); padding: 0 var(--inset); color: var(--fg); cursor: default; outline: none; }
+.combobox-item { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); height: var(--u); padding: 0 var(--inset); color: var(--fg); cursor: pointer; outline: none; }
 .combobox-item[data-highlighted] { background: var(--fg); color: var(--bg); }
 .combobox-item[data-highlighted] .combobox-item-detail { color: inherit; opacity: 0.7; }
 .combobox-item-text { font-family: var(--mono); font-size: var(--fs-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -126,6 +126,7 @@ select { appearance: none; padding-right: 30px; background-image: url("data:imag
 .dialog-row .detail { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog-row .state { align-self: center; }
 .hook-row { cursor: pointer; }
+label:has(> input[type="checkbox"]), input[type="checkbox"] { cursor: pointer; }
 .hook-out { grid-column: 1 / -1; margin: 0 0 var(--sp-2); padding: var(--sp-2); background: var(--bg-1); border: 0; font-family: var(--mono); font-size: var(--fs-0); white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow: auto; color: var(--fg-1); user-select: text; }
 
 /* ---- separator */

@@ -70,7 +70,7 @@ g:hover > .town-dot { opacity: 0.8; }
 /* ---- unlock ceremony: small corner reveal for common towns, a card for rare and better */
 @keyframes reveal-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes reveal-ring { from { transform: scale(0.4); opacity: 0.7; } to { transform: scale(2.4); opacity: 0; } }
-.town-reveal { position: fixed; z-index: var(--z-float); background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); font-size: var(--fs-1); color: var(--fg-1); animation: reveal-in var(--dur-reveal) var(--ease-out) both; }
+.town-reveal { position: fixed; z-index: var(--z-float); background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); font-size: var(--fs-1); color: var(--fg-1); animation: reveal-in var(--dur-reveal) var(--ease-out) both; cursor: pointer; }
 .town-reveal-small { right: var(--sp-4); bottom: var(--sp-4); display: flex; align-items: center; gap: var(--sp-2); max-width: min(420px, calc(100vw - 32px)); padding: var(--sp-2) var(--sp-3); cursor: default; }
 .town-reveal-small strong { font-weight: 500; color: var(--fg); }
 .town-reveal-large { top: 16vh; left: 50%; translate: -50% 0; width: 280px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--sp-4) var(--sp-4) var(--sp-3); text-align: center; animation-duration: calc(var(--dur-reveal) * 1.6); }
