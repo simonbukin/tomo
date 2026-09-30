@@ -249,9 +249,9 @@ attention list.
 `useAgentSeen` in `app/src/agentSeen.ts` calls `agent_seen` when an agent
 pane has focus in a focused, visible window. When the turn ends while you
 look, it waits 1.5 s first, so the done mark is visible. A sidebar row, a Home card, and a Home list row each grow one unit
-for each live subagent, up to three lines, indented under the name. Past
-three, the last line counts the rest (`+2 more`). All three use
-`SubagentList` and `SUBAGENT_LINES` from `app/src/WorktreePreview.tsx`.
+for each live subagent, indented under the name. They show every subagent,
+with no count of the rest. All three use `SubagentList` from
+`app/src/WorktreePreview.tsx`.
 
 `agentStatus` maps agent states onto it. `activityStatus` in
 `app/src/activityKinds.ts` maps activity kinds onto it through the kind
@@ -423,8 +423,8 @@ list after every render. An item that
 moves slides from where it was. A new item opens from its top edge, and a removed
 item (an archived worktree, a finished subagent) stays where it was and shuts,
 in step with the items that slide to make or close its space. A new item that takes
-the exact place of a removed item (`+2 more` for the third subagent line) replaces it
-at once, so the two lines never show on top of each other. It uses `--dur-open`
+the exact place of a removed item replaces it at once, so the two lines never
+show on top of each other. It uses `--dur-open`
 and `--ease-out`, and it stops while a drag runs. Home does not animate the render
 where the scope, the view, the grouping, or the search mode changes, because that
 render shows a different page and not the same list. The board has no motion, because
