@@ -7,29 +7,23 @@ import { EventRow, fetchActivity } from "./Activity";
 import { openWorktree, setMetadata } from "./actions";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, type MenuItem } from "./components/ui";
 import { homeEmpty } from "./emptyStates";
-import { RowError } from "./RowError";
 import { EmptyState } from "./states";
 import { openMenu } from "./MenuHost";
 import { filterWorktrees, groupWorktrees, movedTags, sortWorktrees, worktreeStatus } from "./homeQuery";
 import { ALL, greeting, repoSummaries, scopeKind, scopeTitle, scopeWorktrees, statusLine, tally } from "./homeScope";
 import { durationLabel } from "./previewModel";
 import { repoMenu, worktreeMenu } from "./menus";
-import { Signals } from "./Signals";
-import { agentMark, dotClass, tintClass } from "./glyphs";
+import { dotClass } from "./glyphs";
 import { WorktreeMark } from "./StateMark";
-import { ProcessIcon } from "./ProcessIcon";
-import { agentsOf, queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
+import { queryContext, repoName, setState, setUi, useStore, visibleRepos } from "./store";
 import { RepoAvatar } from "./Sidebar";
-import { SubagentList } from "./WorktreePreview";
+import { WorktreeLines, WorktreeLinks } from "./WorktreeLines";
 import { tagPrefill } from "./lenses";
 import type { Filter, FilterKind, HomeOptions, Worktree, WorktreePrefill } from "./types";
 import { useGlide } from "./glide";
 import { useFlip } from "./useFlip";
 
 const SCOPE_EVENTS = 8;
-
-/** A card draws its agents as tinted provider icons, so the signal list leaves them out. */
-const AGENT_SIGNALS = ["agent"] as const;
 
 const LENS_TABS: readonly { group: HomeOptions["group"]; label: string }[] = [
   { group: "none", label: "All" },
@@ -270,14 +264,15 @@ function Row({ w }: { w: Worktree }) {
       <span className="muted">{busy ? "archiving..." : archived ? "archived" : ""}</span>
       <span className="branch">{branch}{g?.dirty ? " *" : ""}{!w.exists && !archived ? " · missing" : ""}</span>
       <span className="agents">
-        <RowError worktreeId={w.id} />
-        {!archived && <Signals worktreeId={w.id} className="signals" />}
+        <WorktreeLinks w={w} />
         {w.metadata.tags.length > 0 && <span className="tag">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>}
       </span>
       <span className="runtime">
         {g && (g.insertions > 0 || g.deletions > 0) && <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>}
       </span>
-      {!archived && <SubagentList worktreeId={w.id} flip={`${flip}:sub`} />}
+      <span className="wt-list-lines">
+        <WorktreeLines w={w} />
+      </span>
     </div>
   );
 }
@@ -297,7 +292,6 @@ function BoardColumn({ groupKey, droppable, children }: { groupKey: string; drop
  * A card with a `flip` key moves with `useFlip` instead of its own entrance.
  */
 export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string; flip?: string }) {
-  const agents = useStore((s) => agentsOf(s, w.id));
   const repo = useStore((s) => repoName(s, w.repo_id));
   const attention = useStore((s) => worktreeStatus(w, queryContext(s)) === "needs");
   const mark = useStore((s) => branchMark(s, w));
@@ -321,6 +315,9 @@ export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string
       <div className="card-title">
         <WorktreeMark w={w} />
         <span className="name">{w.name}{w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}</span>
+        <span className="card-links">
+          <WorktreeLinks w={w} />
+        </span>
       </div>
       {branch && (
         <div className="card-branch" title={mark ? `${branch} — ${mark.text}` : branch}>
@@ -330,15 +327,10 @@ export function WorktreeCard({ w, column, flip }: { w: Worktree; column?: string
         </div>
       )}
       <div className="card-sub">{sub}{!w.exists && !archived && " · missing"}</div>
-      {!archived && agents.length > 0 && (
-        <div className="card-agents">
-          {agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={13} className={tintClass(agentMark(a))} />)}
-        </div>
-      )}
-      {!archived && <SubagentList worktreeId={w.id} flip={flip && `${flip}:sub`} />}
+      <div className="card-lines">
+        <WorktreeLines w={w} />
+      </div>
       {w.metadata.tags.length > 0 && <div className="card-tags">{w.metadata.tags.map((t) => <span key={t} className="tag-chip">#{t}</span>)}</div>}
-      {!archived && <Signals worktreeId={w.id} className="card-signals" omit={AGENT_SIGNALS} />}
-      <RowError worktreeId={w.id} />
       {g && (g.insertions > 0 || g.deletions > 0) && (
         <div className="card-foot">
           <span><span className="ins">+{g.insertions}</span> <span className="del">−{g.deletions}</span></span>
