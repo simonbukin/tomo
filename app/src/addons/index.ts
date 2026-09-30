@@ -1,4 +1,3 @@
-import type { AddonSignal } from "../activityModel";
 import { mergeApps, type AppRow } from "../appsModel";
 import type { State } from "../store";
 import type { Id, Worktree } from "../types";
@@ -24,8 +23,6 @@ export const worktreeNameField = () => builtins.find((a) => a.worktreeNameField)
 export const repoAvatar = () => builtins.find((a) => a.repoAvatar)?.repoAvatar ?? null;
 
 export const inspectorSections = (): InspectorSection[] => builtins.flatMap((a) => a.inspectorSections ?? []);
-
-export const addonSignals = (s: State, worktreeId: Id): AddonSignal[] => builtins.flatMap((a) => a.worktreeSignals?.(s, worktreeId) ?? []);
 
 export const worktreeLinks = (s: State, w: Worktree): WorktreeLink[] => builtins.flatMap((a) => a.worktreeLinks?.(s, w) ?? []);
 

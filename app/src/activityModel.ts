@@ -1,5 +1,4 @@
-import { effectiveState } from "./glyphs";
-import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem } from "./types";
+import type { ActivityEvent, AgentPresence, AttentionItem } from "./types";
 
 /**
  * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
@@ -59,27 +58,6 @@ export function mergeActivity(existing: ActivityEvent[], incoming: ActivityEvent
     .filter((e) => !seen.has(e.id) && seen.add(e.id))
     .sort((a, b) => b.occurred_at_ms - a.occurred_at_ms)
     .slice(0, cap);
-}
-
-export type Signal =
-  | { kind: "attention"; text: string }
-  | { kind: "crash"; text: string }
-  | { kind: "agent"; agent: AgentKind; state: AgentState }
-  | { kind: "warn"; bytes: number }
-  | AddonSignal;
-
-/**
- * A signal from an addon. `className` styles the line, `dot` is the class of its state dot, and `glyph` stands for the dot in plain text.
- * A signal with `beforeWarn` comes after the agents and before the memory warning; the others come last.
- */
-export type AddonSignal = { kind: "addon"; text: string; glyph: string; className: string; dot: string; beforeWarn?: boolean };
-
-export interface SignalInput {
-  attention: AttentionItem[];
-  agents: AgentPresence[];
-  rssBytes: number | null;
-  warnBytes: number;
-  addon: readonly AddonSignal[];
 }
 
 /** The short row text of a crash: "storybook exited with code 1" becomes "storybook exited 1". */
