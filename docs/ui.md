@@ -25,30 +25,54 @@ Tomo, not like a component library.
 - Use Popover for small anchored UI. Use Dialog only when the user must
   finish a task before they continue.
 
-## NOW cards
+## Worktree rows and the hover card
 
-A worktree row or card shows signals, not a status dump. `signalsFor` in
-`app/src/Signals.tsx` calls `nowSignals` in `app/src/activityModel.ts` and
-keeps at most three, in this order:
+A sidebar row is a minimal card. It shows enough to act on, and it cuts
+nothing off: its text wraps and it has no ellipsis. The hover card on the row
+shows everything. Both use the rules in `app/src/rowModel.ts` (pure
+functions) and the line components in `app/src/WorktreeLines.tsx`.
 
-1. needs attention: an open checkpoint (`◉ review requested`), then a
-   waiting agent. A waiting agent is its own agent line in amber
-   (`● Claude needs input`), never a second item. A waiting attention item
-   counts only while its agent still waits; the daemon resolves it when the
-   agent moves on
-2. crash: an unresolved `crash` attention item (`× Storybook crashed`)
-3. active agents (`● Claude`, with the process icon)
-4. addon signals with `beforeWarn` from the `worktreeSignals` slot
-5. memory over `resource_warning_bytes` (`⚠ 4.8 GB`)
-6. the other addon signals from the `worktreeSignals` slot, in `builtins`
-   order
+The row has three columns: the 9px mark at x=14, the text at x=32, and the
+links, right-aligned 12px in. Every height is a multiple of 4:
 
-A healthy quiet worktree shows at most `Claude ●`. The dots
-and colors are the shared status vocabulary from `base.css` and
-`app/src/signals.css`. No new colors,
-no cards inside cards. The list row keeps its grid and puts the signals in
-the `agents` column. The board card shows name, the repo, the
-signals, then `+12 −4` when the diff is not empty.
+1. The name line (20px): the row mark, the name, the main star, and at the
+   right the links that addons give, such as the pull request (`#412`) and
+   the Linear issue (`ENG-12`). The icon of a link has the color of its
+   state.
+2. The branch line (16px, mono): the whole branch, then `*` for changes and
+   `!2` in red for conflicts. Ahead and behind are only in the hover card.
+3. Groups of 20px lines, 4px between the groups, in this order:
+   - problems: an archive in progress, an operation that failed (archive,
+     restore, rename; a click dismisses it), memory over
+     `resource_warning_bytes`, a checkpoint that asks for a review, and a
+     folder that is not on disk.
+   - agents: one line for each agent that has something to say, then every
+     subagent of it one level in (its 6px mark at x=32, its task at x=48).
+     An idle or sleeping agent has no line, because the row mark says it.
+     The line shows the kind (`claude`) and only the words that the mark
+     cannot say: the question when it needs you, the exit code when it
+     died, `no signal`, and `waking`.
+   - apps: a running app and its port (`web  :3003`), or a crash of an
+     Action (`Storybook  exited -1`, red). Addons give these lines.
+
+The row mark shows the first problem. If there is no problem, it shows the
+lead agent (see "Status vocabulary"). A worktree with no agent shows the
+mark of its first app. Tags are not on the row.
+
+The hover card is 420px wide and uses the same grid and lines. The head has
+the mark, the name, the last activity at the right, and the path. Then come
+sections with a 1px rule between them: problems, agents (with the session,
+the state in words, and the run time; each subagent with its kind and its
+age), apps (the address and the uptime, or the crash and its time), git (the
+branch, the upstream with ahead and behind, the changes, the conflicts),
+links (the title, the state, and the facts of each link), and a last block
+with the tags and the age of the worktree.
+
+A Home card and a Home list row keep their own layout. Their agent, subagent,
+and app lines are the same line groups as the sidebar row
+(`WorktreeLines`), and their links are the same links (`WorktreeLinks`). The
+board card shows the name, the repo, the lines, then `+12 −4` when the diff
+is not empty.
 
 ## Activity view
 
@@ -87,11 +111,10 @@ so a branch name from a pull request works with one paste.
 
 - The main worktree of a repo shows a star and always sorts first, in
   every sort mode.
-- Every worktree row has the same height: two lines, 42 px. The first line
-  holds the status dot, the name, the star, and the row menu. The second
-  line holds the archive mark, the branch, the tags, and then the signals. Neither
-  line wraps. Each part cuts with an ellipsis, and the signals keep their
-  width before the branch does.
+- A worktree row is as tall as its lines. A quiet row is 52 px: the name
+  line and the branch line. Its text wraps and never cuts with an ellipsis.
+  See "Worktree rows and the hover card". The row menu shows on hover, over
+  the links.
 - Drag a worktree row or a repo header to reorder it. The first drop
   switches the sidebar to `manual` sort and keeps the order that was on
   screen for everything else. The order lives in UI state
@@ -209,7 +232,7 @@ its region, so you can see the preview and the region together.
 A live mark is always a square. Motion and fill tell the states apart, then
 color. The mark means one thing on every surface: the sidebar row, the Home
 card and row, the rail, tabs, the pane legend, the hover card, and a
-subagent line (a smaller matrix). [agent-states.md](agent-states.md) is the source of these rules.
+subagent line (the same mark at 6px). [agent-states.md](agent-states.md) is the source of these rules.
 
 | Mark | Status | Meaning | Tooltip |
 |------|--------|---------|---------|
@@ -224,10 +247,13 @@ subagent line (a smaller matrix). [agent-states.md](agent-states.md) is the sour
 | grey, all cells twinkle | archiving | Tomo checkpoints and removes the worktree | `archiving` |
 | no mark | none | no agent |  |
 
-The mark is a 3×3 matrix of whole-pixel cells: 2px cells with 1px gaps at
-8px, and no gaps at the 6px subagent size. Color says what, motion says busy,
-and the pattern tells the still states apart. When the state changes, the
-same element keeps its cells, which fade to the new pattern. With
+The mark is one 9px SVG with a 3×3 grid of 3px cells. The lit cells are one
+path, so lit neighbours make one solid block with no seam at any zoom. The
+unlit cells are a second path at the ghost opacity. Working and archiving
+draw nine cells, each with its own twinkle period and phase. The 6px
+subagent mark is the same SVG, so each cell is 2px. Color says what, motion
+says busy, and the pattern tells the still states apart. A span around the
+SVG holds the `state` class, the `data-mark` attribute, and the tooltip. With
 `prefers-reduced-motion`, nothing twinkles or beats. A state that the CPU fallback estimated
 (`AgentPresence.estimated`) looks the same, and its tooltip ends with
 `(estimated from CPU)`. `complete` (the green ring) is for work that
@@ -240,20 +266,19 @@ running subagent as working. `worktreeLead` in `app/src/homeQuery.ts` picks
 the agent whose mark is the worktree mark, first match wins: needs you, dead
 and not seen, working, done, dead and seen, idle, no signal, sleeping after
 done, sleeping. An awake agent always wins over a sleeping one. Only agents
-count. `agentMark` in `glyphs.ts` gives the mark of one agent. A crash of an Action is a row signal (`storybook exited 1`) and a red
-square on its own Action button, never the worktree mark. It stays in the
+count. `agentMark` in `glyphs.ts` gives the mark of one agent. A crash of an Action is an app line (`storybook  exited 1`) and a red
+square on its own Action button, never the mark of the lead agent. It stays in the
 attention list.
 
 `useAgentSeen` in `app/src/agentSeen.ts` calls `agent_seen` when an agent
 pane has focus in a focused, visible window. When the turn ends while you
-look, it waits 1.5 s first, so the done mark is visible. A sidebar row, a Home card, and a Home list row each grow one unit
-for each live subagent, indented under the name. They show every subagent,
-with no count of the rest. All three use `SubagentList` from
-`app/src/WorktreePreview.tsx`.
+look, it waits 1.5 s first, so the done mark is visible. A sidebar row, a Home card, and a Home list row each grow one 20px line
+for each subagent, one level in under its agent. They show every subagent,
+with no count of the rest.
 
 `agentStatus` maps agent states onto it. `activityStatus` in
 `app/src/activityKinds.ts` maps activity kinds onto it through the kind
-registry (see [activity.md](activity.md)). Dense rows (sidebar, Home, tabs, checkpoint banner, signals) draw the
+registry (see [activity.md](activity.md)). Dense rows (sidebar, Home, tabs, checkpoint banner) draw the
 square `.state` mark from `StateMark` or `dotClass(status)`. Text surfaces (Activity rows,
 palette hints) print `GLYPH[status]`. Do not add a glyph
 or a status color for one feature.
@@ -441,9 +466,10 @@ no bounce. `styles/interaction.css` applies the tokens.
   `No activity yet.` or `Nothing needs you.` The copy lives in `emptyStates.ts`.
 - **Error.** Show the error on the object that failed. A dialog shows
   `InlineError` above its buttons. A failed archive or restore
-  puts `× archive failed` on the worktree row in the sidebar, on Home, and in
-  the worktree header (`RowError`, `setRowError` in the store). Hover shows
-  the message, a click dismisses it, and the next success clears it. A toast
+  puts an `archive failed` problem line with the message on the worktree row
+  in the sidebar and on Home, and `× archive failed` in the worktree header
+  (`RowError`, `setRowError` in the store). A click dismisses it, and the
+  next success clears it. A toast
   can also show, but never alone.
 
 ## Focus, hit targets, and scroll
@@ -622,8 +648,7 @@ styles/
   sidebar.css   left navigation and the minimal rails
   home.css      list rows and board
   terminal.css  splits and panes
-  ../signals.css          the NOW signal line, beside Signals.tsx
-  ../WorktreeRow.css      the sidebar worktree row, beside Sidebar.tsx
+  ../WorktreeRow.css      the worktree row and its lines, beside Sidebar.tsx and WorktreeLines.tsx
   ../browser/browser.css  browser pane toolbar and host box
   ../editor/editor.css    editor pane notice bar, compare view, error body
   palette.css   command palette

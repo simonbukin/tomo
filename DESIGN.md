@@ -48,9 +48,9 @@ Slab is neutral ink on a neutral ground. Color carries status only.
   text. `--accent` is the same value as `--fg`; there is no brand hue.
 - **Semantic state** is one vocabulary for the whole app: `--working`,
   `--waiting`, `--danger`, `--success`, plus the soft tints `--waiting-soft`
-  and `--danger-soft`. The live mark of an agent or a worktree is a 3×3 dot
-  matrix: color says what, motion says busy, and a pattern tells each still
-  state apart. Other markers (git, checks, pull requests) are small squares:
+  and `--danger-soft`. The live mark of an agent or a worktree is one 9px
+  SVG with a 3×3 grid of cells: color says what, motion says busy, and a
+  pattern tells each still state apart. Lit neighbours make one solid block. Other markers (git, checks, pull requests) are small squares:
   filled for a live state, hollow for a quiet one. See `styles/base.css` and
   `app/src/glyphs.ts`.
 - Do not invent a feature status color. If a feature needs a new state, add it
@@ -102,9 +102,11 @@ Tomo is compact and information-rich. Do not add whitespace to look modern.
 
 - Space inside a cell is `--sp-1` 4, `--sp-2` 8, `--sp-3` 12, `--sp-4` 16,
   `--sp-5` 24. Space between cells is a rule, not a gap.
-- The sidebar worktree row is a fixed two units for three lines, whatever it
-  holds.
-- A line never wraps in a dense row. It cuts with an ellipsis.
+- The sidebar worktree row is a minimal card: a 20px name line, a 16px
+  branch line, then groups of 20px lines with 4px between the groups. Every
+  height is a multiple of 4.
+- The text of a worktree row wraps. It never cuts with an ellipsis. The
+  hover card holds what the row leaves out.
 - Too many tabs shrink from 140 px to 72 px, then the tab row scrolls.
 
 ## Motion

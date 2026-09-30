@@ -74,7 +74,8 @@ client replaces this one file with a socket or another transport.
 | `types.ts` | The wire types again, and the view types (`UiState`, `Filter`, `HomeOptions`). |
 | `appearance.ts` | The defaults and the check of per-window view settings. |
 | `order.ts` | Manual order and main worktrees first. |
-| `activityModel.ts` | The "needs me" rule (`needsMeItem`, `needsMeItems`), `nowSignals`, activity merge. |
+| `activityModel.ts` | The "needs me" rule (`needsMeItem`, `needsMeItems`), activity merge. |
+| `rowModel.ts` | The lines of a worktree row and its hover card: which lines show, their order, and their words. |
 | `homeQuery.ts` | Worktree filter, search, sort, and group. |
 | `layoutModel.ts` | Leaf ids, tab reorder, pane move preview, drop regions. |
 | `uiState.ts` | `sanitizeUi`: the check of the saved UI state blob. |
@@ -104,7 +105,7 @@ live without them.
 | Event fold | `applySnapshot` and `applyFrame` in `store.ts` | Start from `subscribe`, then apply each event. `tabs_changed` replaces the tabs of one worktree and drops the panes and agents that left its layouts. `headless_client.py` `fold` is a copy in about 40 lines. |
 | "Needs me" | `needsMeItem` in `activityModel.ts` | Copy the rule. An unresolved item that is not `waiting` needs a person. A `waiting` item needs a person while it is not viewed and its agent still waits. `Store::activity_list` in the daemon has the same rule for `needs_me`. |
 | Sort, filter, group | `homeQuery.ts`, `order.ts` | Copy them, or use the pure modules. The manual order lives in the UI state blob. |
-| Signals | `nowSignals` (pure), `signalsFor` in `Signals.tsx` (store and addon slots) | Copy the priority order and the cap of three. Addon signals come from GUI addon slots. |
+| Row lines | `rowGroups` and `leadLine` in `rowModel.ts` (pure), `useRowInput` in `WorktreeLines.tsx` (store and addon slots) | Copy the groups and their order: problems, agents, apps. Links and app lines come from GUI addon slots. |
 | Zoom | `State.zoomed` in `store.ts` | `pane_zoom` only sends a `zoom_request` event. The daemon does not keep zoom. |
 | Focus | `focus_request` event, `State.focusRequest` | Each client decides what focus means. |
 | UI state | `ui_state_get`, `ui_state_set`: one JSON value in the `kv` table | The daemon does not check it. `sanitizeUi` checks it on load. There is one blob for all clients. A second client must not write it, or it replaces the GUI view state. |
