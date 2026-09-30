@@ -1,4 +1,3 @@
-import type { AddonSignal } from "../activityModel";
 import { mergeApps, type AppRow } from "../appsModel";
 import type { State } from "../store";
 import type { Id, Worktree } from "../types";
@@ -32,8 +31,6 @@ export const repoAvatar = () => builtins.find((a) => a.repoAvatar)?.repoAvatar ?
 
 export const inspectorSections = (): InspectorSection[] => builtins.flatMap((a) => a.inspectorSections ?? []);
 
-export const addonSignals = (s: State, worktreeId: Id): AddonSignal[] => builtins.flatMap((a) => a.worktreeSignals?.(s, worktreeId) ?? []);
-
 export const worktreeLinks = (s: State, w: Worktree): WorktreeLink[] => builtins.flatMap((a) => a.worktreeLinks?.(s, w) ?? []);
 
 /** The app lines of a worktree: the apps that run, then the ones that crashed. */
@@ -41,10 +38,6 @@ export const appLines = (s: State, worktreeId: Id): AppLine[] => {
   const all = builtins.flatMap((a) => a.appLines?.(s, worktreeId) ?? []);
   return [...all.filter((l) => !l.bad), ...all.filter((l) => l.bad)];
 };
-
-export const signalLine =(className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Line ?? null;
-
-export const signalDetail = (className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Detail ?? null;
 
 export const appUrl = (s: State, worktreeId: Id): string | null => builtins.reduce<string | null>((url, a) => url ?? a.appUrl?.(s, worktreeId) ?? null, null);
 

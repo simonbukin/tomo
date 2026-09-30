@@ -1,5 +1,4 @@
-import { effectiveState } from "./glyphs";
-import type { ActivityEvent, AgentKind, AgentPresence, AgentState, AttentionItem } from "./types";
+import type { ActivityEvent, AgentPresence, AttentionItem } from "./types";
 
 /**
  * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
@@ -61,43 +60,8 @@ export function mergeActivity(existing: ActivityEvent[], incoming: ActivityEvent
     .slice(0, cap);
 }
 
-export type Signal =
-  | { kind: "attention"; text: string }
-  | { kind: "crash"; text: string }
-  | { kind: "agent"; agent: AgentKind; state: AgentState }
-  | { kind: "warn"; bytes: number }
-  | AddonSignal;
-
-/**
- * A signal from an addon. `className` styles the line, `dot` is the class of its state dot, and `glyph` stands for the dot in plain text.
- * A signal with `beforeWarn` comes after the agents and before the memory warning; the others come last.
- */
-export type AddonSignal = { kind: "addon"; text: string; glyph: string; className: string; dot: string; beforeWarn?: boolean };
-
-export interface SignalInput {
-  attention: AttentionItem[];
-  agents: AgentPresence[];
-  rssBytes: number | null;
-  warnBytes: number;
-  addon: readonly AddonSignal[];
-}
-
 /** The short row text of a crash: "storybook exited with code 1" becomes "storybook exited 1". */
 export const crashText = (message: string): string => message.replace(/ exited with code (-?\d+)$/, " exited $1");
-
-/** The few things worth a glance on a NOW card, in priority order, at most three. */
-export function nowSignals(input: SignalInput): Signal[] {
-  const live = input.agents.filter((a) => a.state !== "exited").map((a) => ({ kind: a.kind, state: effectiveState(a) }));
-  const open = input.attention.filter((a) => needsMeItem(a, input.agents));
-  const checkpoint: Signal[] = open.some((a) => a.kind === "checkpoint") ? [{ kind: "attention", text: "review requested" }] : [];
-  const waiting: Signal[] = live.filter((a) => a.state === "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
-  const crash: Signal[] = open.filter((a) => a.kind === "crash").map((a) => ({ kind: "crash", text: crashText(a.message) }));
-  const agents: Signal[] = live.filter((a) => a.state !== "waiting").map((a) => ({ kind: "agent", agent: a.kind, state: a.state }));
-  const warn: Signal[] = input.rssBytes != null && input.rssBytes >= input.warnBytes ? [{ kind: "warn", bytes: input.rssBytes }] : [];
-  const early = input.addon.filter((a) => a.beforeWarn);
-  const late = input.addon.filter((a) => !a.beforeWarn);
-  return [...checkpoint, ...waiting, ...crash, ...agents, ...early, ...warn, ...late].slice(0, 3);
-}
 
 export const SPARK_WIDTH = 10;
 

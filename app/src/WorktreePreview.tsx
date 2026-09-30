@@ -1,56 +1,14 @@
 import { Star } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
-import type { Signal } from "./activityModel";
 import { worktreeLinks } from "./addons";
 import type { WorktreeLink } from "./addons/types";
-import { agentStatus, GLYPH, subagentStatus } from "./glyphs";
 import { durationLabel } from "./previewModel";
 import { aboutDetails, gitDetails, homePath, hoverAgentLines, hoverAppLines, problemLines, type Detail, type Line } from "./rowModel";
-import { StateMark, WorktreeMark } from "./StateMark";
-import { agentsOf, formatBytes, useStore } from "./store";
-import { KIND_LABEL, type Id, type Subagent, type Worktree } from "./types";
+import { WorktreeMark } from "./StateMark";
+import { useStore } from "./store";
+import type { Worktree } from "./types";
 import { LineView, useRowInput } from "./WorktreeLines";
 import "./styles/previews.css";
-
-export function signalText(signal: Signal): string {
-  switch (signal.kind) {
-    case "attention":
-      return `${GLYPH.needs} ${signal.text}`;
-    case "crash":
-      return `${GLYPH.failed} ${signal.text}`;
-    case "agent":
-      return signal.state === "waiting" ? `${GLYPH.needs} ${KIND_LABEL[signal.agent]} needs input` : `${GLYPH[agentStatus(signal.state) ?? "unknown"]} ${KIND_LABEL[signal.agent]}`;
-    case "warn":
-      return `⚠ ${formatBytes(signal.bytes)}`;
-    case "addon":
-      return [signal.glyph, signal.text].filter(Boolean).join(" ");
-  }
-}
-
-const ORDER: Record<Subagent["state"], number> = { waiting: 0, dead: 1, working: 2, done: 3, unknown: 4, idle: 5, exited: 6 };
-
-/** The live subagents of every agent in a worktree, most urgent first, then oldest first. */
-export function subagentsOf(agents: { subagents?: Subagent[] }[]): Subagent[] {
-  return agents.flatMap((a) => a.subagents ?? []).sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.started_at_ms - b.started_at_ms);
-}
-
-/** Every subagent, indented under its worktree, one line each. With `flip`, each line is a `useFlip` item keyed under it. */
-export function SubagentList({ worktreeId, flip }: { worktreeId: Id; flip?: string }) {
-  const all = useStore((s) => subagentsOf(agentsOf(s, worktreeId)));
-  if (!all.length) return null;
-  return (
-    <ul className="subagents" aria-label="subagents">
-      {all.map((sub, i) => (
-        <li key={sub.id ?? `launch-${i}`} data-flip={flip && `${flip}:${sub.id ?? `launch-${i}`}`} className={`subagent is-${sub.state}`}>
-          <StateMark mark={subagentStatus(sub.state)} small />
-          <span className="subagent-label">{sub.label}</span>
-          <span className="subagent-desc">{sub.description}</span>
-          <span className="subagent-age">{durationLabel(sub.started_at_ms)}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function Details({ rows }: { rows: Detail[] }) {
   return (

@@ -38,7 +38,6 @@
 
 /* ---- main worktree and manual order */
 .wt-main-star { width: 10px; height: 10px; flex: none; color: var(--fg-2); fill: currentColor; margin-left: 5px; vertical-align: -1px; }
-.signal-waiting-note { color: var(--waiting); font-size: var(--fs-0); }
 .repo-group.is-dragging { position: relative; z-index: 2; background: var(--bg-2); box-shadow: var(--shadow-pop); cursor: grabbing; }
 .wt-row[aria-roledescription="sortable"]:focus-visible, .repo-head[aria-roledescription="sortable"]:focus-visible { outline-offset: -2px; }
 

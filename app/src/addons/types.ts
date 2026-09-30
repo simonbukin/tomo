@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, CSSProperties } from "react";
 import type { Action } from "../actions";
-import type { AddonSignal } from "../activityModel";
 import type { AppRow } from "../appsModel";
 import type { MenuItem } from "../components/ui";
 import type { BranchTone, Mark, Status } from "../glyphs";
@@ -145,10 +144,6 @@ export interface Addon {
   views?: readonly GlobalView[];
   commands?: readonly Action[];
   inspectorSections?: readonly InspectorSection[];
-  /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
-  worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
-  /** Draws each NOW signal of this `className` instead of the plain line. `Detail` draws it in the worktree hover card instead of its text. Both read the store and start no work. */
-  signalLine?: { className: string; Line: ComponentType<{ worktreeId: Id }>; Detail?: ComponentType<{ worktreeId: Id }> };
   /** Links on the name line of a worktree row and in its hover card, in `builtins` order. They read the store and start no work. */
   worktreeLinks?: (s: State, w: Worktree) => readonly WorktreeLink[];
   /** Lines in the apps group of a worktree row and its hover card, in `builtins` order. They read the store and start no work. */
