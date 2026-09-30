@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, nowSignals, truncate, type SignalInput } from "./activityModel";
+import { dayLabel, groupByDay, mergeActivity, needsMeItem, needsMeItems, truncate } from "./activityModel";
 import type { ActivityEvent, AgentPresence, AttentionItem } from "./types";
 
 const attention = (extra: Partial<AttentionItem>): AttentionItem => ({ id: "a", worktree_id: "w", pane_id: null, level: "attention", message: "m", created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null, ...extra });
 const agent = (state: AgentPresence["state"], kind: AgentPresence["kind"] = "claude"): AgentPresence => ({ pane_id: `p-${kind}`, worktree_id: "w", kind, state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null , estimated: false, seen: false});
 const event = (id: string, occurred_at_ms: number): ActivityEvent => ({ id, kind: "agent_started", occurred_at_ms, worktree_id: "w", pane_id: null, agent_kind: "claude", title: "t", detail: null, payload: null, attention_id: null });
-const quiet: SignalInput = { attention: [], agents: [], rssBytes: null, warnBytes: 1000, addon: [] };
 
 describe("needsMeItems", () => {
   it("keeps unresolved checkpoints and crashes even after a view, drops viewed waiting items", () => {
@@ -58,52 +57,6 @@ describe("mergeActivity", () => {
   it("dedupes by id, sorts newest first, and caps", () => {
     const merged = mergeActivity([event("a", 1), event("b", 2)], [event("b", 2), event("c", 3)], 2);
     expect(merged.map((e) => e.id)).toEqual(["c", "b"]);
-  });
-});
-
-describe("nowSignals", () => {
-  it("shows nothing for a quiet worktree", () => {
-    expect(nowSignals(quiet)).toEqual([]);
-  });
-  it("puts an addon signal with beforeWarn after the agents and before the memory warning", () => {
-    const live = { kind: "addon", text: "App :3000", glyph: "", className: "signal-live", dot: "", beforeWarn: true } as const;
-    const note = { kind: "addon", text: "note", glyph: "✓", className: "signal-note", dot: "state-ok" } as const;
-    expect(nowSignals({ ...quiet, agents: [agent("working")], addon: [note, live] })).toEqual([{ kind: "agent", agent: "claude", state: "working" }, live, note]);
-    expect(nowSignals({ ...quiet, agents: [agent("working")], rssBytes: 1000, addon: [note, live] })).toEqual([{ kind: "agent", agent: "claude", state: "working" }, live, { kind: "warn", bytes: 1000 }]);
-  });
-  it("puts a checkpoint first, then the waiting agent itself, then a crash, and caps at three", () => {
-    const out = nowSignals({
-      ...quiet,
-      agents: [agent("working", "codex"), agent("waiting")],
-      attention: [attention({ id: "cp", kind: "checkpoint" }), attention({ id: "cr", kind: "crash", message: "Storybook crashed" })],
-      rssBytes: 5000,
-    });
-    expect(out).toEqual([
-      { kind: "attention", text: "review requested" },
-      { kind: "agent", agent: "claude", state: "waiting" },
-      { kind: "crash", text: "Storybook crashed" },
-    ]);
-  });
-  it("shortens the crash of an Action to its name and exit code", () => {
-    const out = nowSignals({ ...quiet, attention: [attention({ id: "cr", kind: "crash", message: "storybook exited with code 1" })] });
-    expect(out).toEqual([{ kind: "crash", text: "storybook exited 1" }]);
-  });
-  it("shows a waiting agent once, as the agent line, not as a separate item", () => {
-    expect(nowSignals({ ...quiet, agents: [agent("waiting")], attention: [attention({ pane_id: "p-claude" })] })).toEqual([{ kind: "agent", agent: "claude", state: "waiting" }]);
-  });
-  it("drops a stale waiting item once the agent is no longer waiting", () => {
-    const stale = attention({ pane_id: "p-claude" });
-    expect(needsMeItem(stale, [agent("working")])).toBe(false);
-    expect(needsMeItem(stale, [agent("waiting")])).toBe(true);
-    expect(nowSignals({ ...quiet, agents: [agent("working")], attention: [stale] })).toEqual([{ kind: "agent", agent: "claude", state: "working" }]);
-  });
-  it("warns on memory only at the threshold, and puts addon signals last", () => {
-    expect(nowSignals({ ...quiet, rssBytes: 999 })).toEqual([]);
-    expect(nowSignals({ ...quiet, rssBytes: 1000 })).toEqual([{ kind: "warn", bytes: 1000 }]);
-    const note = { kind: "addon", text: "note", glyph: "✓", className: "signal-note", dot: "state-ok" } as const;
-    expect(nowSignals({ ...quiet, rssBytes: 1000, addon: [note] })).toEqual([{ kind: "warn", bytes: 1000 }, note]);
-    expect(nowSignals({ ...quiet, agents: [agent("working"), agent("idle", "codex")], rssBytes: 1000, addon: [note] })).toHaveLength(3);
-    expect(nowSignals({ ...quiet, agents: [agent("working"), agent("idle", "codex")], rssBytes: 1000, addon: [note] })).not.toContainEqual(note);
   });
 });
 

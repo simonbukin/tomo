@@ -32,7 +32,6 @@ export const appLines = (s: State, worktreeId: Id): AppLine[] => {
   return [...all.filter((l) => !l.bad), ...all.filter((l) => l.bad)];
 };
 
-export const signalLine =(className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Line ?? null;
 
 export const appUrl = (s: State, worktreeId: Id): string | null => builtins.reduce<string | null>((url, a) => url ?? a.appUrl?.(s, worktreeId) ?? null, null);
 

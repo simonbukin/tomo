@@ -1,12 +1,16 @@
+import { DndContext } from "@dnd-kit/core";
+import { SortableContext } from "@dnd-kit/sortable";
 import { useEffect, useState } from "react";
 import { getState, setState, setUi } from "../store";
 import { defaultUi } from "../uiState";
 import { Home, WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
-import { Sidebar } from "../Sidebar";
+import { Sidebar, WorktreeRow } from "../Sidebar";
+import { WorktreePreview } from "../WorktreePreview";
+import { BOARD_REPO, BOARD_WARN_BYTES, rowBoard } from "./rowBoard";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
-import type { AgentPresence, AgentState, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
+import type { AgentPresence, AgentState, Config, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -108,17 +112,50 @@ const SCENES: Scene[] = [
  * fixture is all a part needs to render on its own, with no daemon and no window chrome.
  */
 function seed(): void {
+  const board = rowBoard(Date.now());
   const worktrees = SCENES.map((s) => s.worktree);
-  const agents = SCENES.flatMap((s) => s.agents ?? []);
+  const agents = [...SCENES.flatMap((s) => s.agents ?? []), ...board.agents];
+  const panes = board.panes;
   setState({
     ...getState(),
     loaded: true,
     connected: true,
-    repos: [REPO],
-    worktrees,
+    config: { ...getState().config, resource_warning_bytes: BOARD_WARN_BYTES } as Config,
+    repos: [REPO, BOARD_REPO],
+    worktrees: [...worktrees, ...board.worktrees],
     agents: Object.fromEntries(agents.map((a) => [a.pane_id, a])),
-    ui: { ...defaultUi, view: "home", activeWorktreeId: worktrees[0].id },
+    attention: board.attention,
+    panes: Object.fromEntries(panes.map((p) => [p.id, p])),
+    rowErrors: board.rowErrors,
+    resources: Object.fromEntries(Object.entries(board.rssBytes).map(([id, rss]) => [id, { worktree_id: id, rss_bytes: rss, cpu_percent: 0, process_count: 1 }])),
+    ui: { ...defaultUi, view: "home", activeWorktreeId: worktrees[0].id, collapsedRepos: [BOARD_REPO.id] },
   });
+}
+
+/** The rows of the approved Sidebar board, one column in each theme's own panel, and the hover cards beside their rows. */
+function RowBoard() {
+  const [board] = useState(() => rowBoard(Date.now()));
+  const byId = (id: string) => getState().worktrees.find((w) => w.id === id)!;
+  const row = (id: string) => <WorktreeRow key={id} w={byId(id)} active={id === board.active} />;
+  return (
+    <DndContext>
+      <SortableContext items={[]}>
+        <h2 className="gallery-head">worktree rows</h2>
+        <div className="gallery-rows" data-board="rows">{board.worktrees.map((w) => row(w.id))}</div>
+        <h2 className="gallery-head">worktree hover cards</h2>
+        <div className="gallery-pairs" data-board="hovers">
+          {board.hovers.map((id) => (
+            <div key={id} className="gallery-pair">
+              <div className="gallery-rows">{row(id)}</div>
+              <div className="popover preview-card">
+                <WorktreePreview w={byId(id)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
 }
 
 const nowMs = Date.now();
@@ -169,6 +206,7 @@ export function Gallery() {
   const shown = SCENES.find((s) => s.worktree.id === inspector) ?? SCENES[0];
   return (
     <div className="gallery">
+      <RowBoard />
       <h2 className="gallery-head">worktree card</h2>
       <div className="gallery-grid">
         {SCENES.map((s) => (
