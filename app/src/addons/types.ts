@@ -1,10 +1,9 @@
 import type { LucideIcon } from "lucide-react";
-import type { ComponentType } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import type { Action } from "../actions";
-import type { AddonSignal } from "../activityModel";
 import type { AppRow } from "../appsModel";
 import type { MenuItem } from "../components/ui";
-import type { BranchTone, Status } from "../glyphs";
+import type { BranchTone, Mark, Status } from "../glyphs";
 import type { PaletteEntry } from "../paletteModel";
 import type { RailMarker } from "../sections";
 import type { State } from "../store";
@@ -102,6 +101,39 @@ export interface SearchGroup {
   entries: (s: State) => PaletteEntry[];
 }
 
+/** A link at the right of the name line of a worktree row, such as a pull request. The hover card shows it in full. */
+export interface WorktreeLink {
+  /** Unique across every addon. */
+  id: string;
+  /** The hover card label, such as `PR`. */
+  label: string;
+  icon: ComponentType<{ className?: string; style?: CSSProperties }>;
+  /** A CSS color for the icon: the state of the linked item. */
+  color: string | undefined;
+  /** The short text beside the icon, such as `#412`. */
+  text: string;
+  title: string;
+  /** Facts after the title in the hover card, such as `open` or `2 checks failing`. A `bad` fact is red. */
+  facts: readonly { text: string; bad?: boolean }[];
+}
+
+/** A line in the apps group of a worktree row and its hover card: an app that runs, or one that crashed. */
+export interface AppLine {
+  /** Unique across every addon. */
+  id: string;
+  mark: Mark;
+  label: string;
+  /** The short text on the row, such as `:3003` or `exited -1`. */
+  detail: string;
+  /** The hover card text instead of `detail`, such as the whole address. */
+  full?: string;
+  bad?: boolean;
+  /** The hover card shows `up 22 min` from this time. */
+  upSinceMs?: number;
+  /** The hover card shows `2 min ago` from this time. */
+  atMs?: number;
+}
+
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */
 export interface Addon {
   id: string;
@@ -112,10 +144,10 @@ export interface Addon {
   views?: readonly GlobalView[];
   commands?: readonly Action[];
   inspectorSections?: readonly InspectorSection[];
-  /** NOW signals of a worktree. They read the store, start no work, and come after the core signals. A card shows three at most. */
-  worktreeSignals?: (s: State, worktreeId: Id) => readonly AddonSignal[];
-  /** Draws each NOW signal of this `className` instead of the plain line. `Detail` draws it in the worktree hover card instead of its text. Both read the store and start no work. */
-  signalLine?: { className: string; Line: ComponentType<{ worktreeId: Id }>; Detail?: ComponentType<{ worktreeId: Id }> };
+  /** Links on the name line of a worktree row and in its hover card, in `builtins` order. They read the store and start no work. */
+  worktreeLinks?: (s: State, w: Worktree) => readonly WorktreeLink[];
+  /** Lines in the apps group of a worktree row and its hover card, in `builtins` order. They read the store and start no work. */
+  appLines?: (s: State, worktreeId: Id) => readonly AppLine[];
   /** The small image before a repo name in the sidebar and on Home. The first addon that has one wins. */
   repoAvatar?: ComponentType<{ repo: Repo; size: number }>;
   /** A field in the create-worktree dialog. The first addon that has one wins, like the daemon's one worktree namer. */

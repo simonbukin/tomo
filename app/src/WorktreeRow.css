@@ -1,56 +1,62 @@
 /* Worktree row
  * Core navigation, the densest surface in Tomo. Plain CSS in the .wt- namespace.
- * The three grid rows and the fixed height of two units give every row one size, quiet or busy.
- * Every tone, typeface, and duration is a token, so [theme] restyles the row.
+ * Three columns: the 9px mark at x=14, the text at x=32, the links right-aligned 12px in.
+ * A 20px name line, a 16px branch line, then groups of 20px lines with 4px between groups.
+ * Text wraps; nothing is cut off. Every tone, typeface, and duration is a token, so [theme] restyles the row.
+ * The hover card (previews.css) uses the same line classes.
  */
 
 .wt-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
-  grid-template-rows: 18px 15px 15px;
-  grid-auto-rows: auto;
-  align-items: center;
-  column-gap: var(--sp-2);
-  min-height: var(--u2);
-  padding: 4px var(--sp-1) 4px var(--inset);
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  column-gap: 9px;
+  padding: 8px 12px 8px var(--inset);
+  font-size: var(--fs-2);
   box-shadow: inset 0 -1px 0 var(--line);
   cursor: pointer;
 }
+.wt-row > * { min-width: 0; }
 .wt-row:hover { background: var(--bg-2); }
-.wt-active, .wt-active:hover { background: var(--fg); color: var(--bg); }
+.wt-active, .wt-active:hover { background: var(--fg); color: var(--bg); box-shadow: inset 0 -1px 0 var(--fg); }
 .wt-selected, .wt-selected:hover { background: var(--surface-3); }
-.wt-archiving { opacity: 0.7; }
+.wt-archiving { opacity: 0.75; }
 .wt-archiving, .wt-archived { cursor: default; }
-.wt-dragging { position: relative; z-index: 2; background: var(--bg-2); box-shadow: var(--shadow-pop); cursor: grabbing; }
+.wt-dragging { z-index: 2; background: var(--bg-2); box-shadow: var(--shadow-pop); cursor: grabbing; }
 
-.wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
-.wt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 600; }
-.wt-active .wt-name, .wt-active .wt-branch, .wt-active .wt-tags, .wt-active .wt-state, .wt-active .wt-main-star { color: var(--bg); }
-.wt-missing .wt-name { color: var(--fg-3); text-decoration: line-through; }
-.wt-archived .wt-name { color: var(--fg-2); }
+.wt-mcell { grid-column: 1; display: flex; align-items: flex-start; padding-top: 5px; }
+.wt-name { grid-column: 2; display: flex; align-items: center; gap: 5px; min-height: 20px; line-height: 20px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+.wt-name .wt-main-star { width: 9px; height: 9px; margin: 0; color: var(--fg-3); }
+.wt-links { grid-column: 3; display: flex; align-items: center; gap: 10px; height: 20px; font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); line-height: 20px; color: var(--fg-2); white-space: nowrap; }
+.wt-links:empty { display: none; }
+.wt-link { display: inline-flex; align-items: center; gap: 4px; }
+.wt-link-icon { width: 12px; height: 12px; flex: none; }
+.wt-branch { grid-column: 2 / 4; font-family: var(--mono); font-weight: 400; font-size: var(--fs-1); line-height: 16px; color: var(--fg-2); overflow-wrap: anywhere; }
+.wt-flag { margin-left: 6px; color: var(--fg-3); }
+.wt-flag-bad { color: var(--danger); }
 
-.wt-meta { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.wt-meta .btn-icon { width: 24px; height: 24px; }
-.wt-active .wt-meta .btn-icon { color: var(--bg); }
-.wt-more { visibility: hidden; }
-.wt-row:hover .wt-more, .wt-more:focus-visible { visibility: visible; }
+.wt-row > .wt-more { position: absolute; top: 6px; right: 8px; width: 24px; height: 24px; visibility: hidden; background: var(--bg-2); }
+.wt-row:hover .wt-more, .wt-more:focus-visible, .wt-more[data-popup-open] { visibility: visible; }
+.wt-active .wt-more { background: var(--fg); color: var(--bg); }
+.wt-selected .wt-more { background: var(--surface-3); }
 
-.wt-sub { grid-column: 2 / 4; display: flex; align-items: center; min-width: 0; line-height: 15px; }
-.wt-branch { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-weight: 400; font-size: var(--fs-1); color: var(--fg-2); }
-.wt-state { font-family: var(--font-ui); color: var(--fg-2); }
-.wt-foot { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; line-height: 15px; padding-right: var(--sp-2); }
-.wt-agents { display: inline-flex; align-items: center; gap: var(--sp-1); flex: none; }
-.wt-signals { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-1); }
-.wt-tags { flex: 0 1 auto; color: var(--fg-3); font-family: var(--mono); font-weight: 400; font-size: var(--fs-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wt-tags:empty, .wt-agents:empty { display: none; }
+/* A group spans the row and repeats its first two columns, so a line mark sits under the row mark. */
+.wt-group { grid-column: 1 / 4; display: grid; grid-template-columns: 9px minmax(0, 1fr); column-gap: 9px; margin-top: 4px; }
+.wt-line { display: contents; }
+.wt-line-text { grid-column: 2; font-size: var(--fs-1); line-height: 20px; overflow-wrap: anywhere; color: var(--fg-1); }
+.wt-line-label { font-weight: 600; color: var(--fg); margin-right: 6px; }
+.wt-line-kind { font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); color: var(--fg-3); margin-right: 6px; }
+.wt-line-meta { grid-column: 3; font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); line-height: 20px; color: var(--fg-3); text-align: right; white-space: nowrap; }
+.wt-tone-warn { color: var(--waiting); }
+.wt-tone-bad { color: var(--danger); }
+.wt-tone-mute { color: var(--fg-2); }
+.wt-tone-ok { color: var(--working); }
+.wt-line-text[role="button"] { cursor: pointer; }
+/* A subagent is one level in: its 6px mark on the text edge, its task 16px further in. */
+.wt-line-sub .wt-line-text { display: grid; grid-template-columns: 6px minmax(0, 1fr); column-gap: 10px; }
+.wt-smc { display: flex; align-items: flex-start; padding-top: 7px; }
 
-/* Subagents: one unit per line, indented under the name behind a rule, so the row grows by whole units. */
-.wt-row .subagents { grid-column: 2 / 4; }
-.subagents { display: flex; flex-direction: column; margin: 0; padding: 0 0 0 var(--sp-2); list-style: none; box-shadow: inset 1px 0 0 var(--line-strong); }
-.subagent { display: grid; grid-template-columns: 8px auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); height: var(--u); padding-right: var(--sp-2); font-size: var(--fs-1); color: var(--fg-1); }
-.subagent-label { color: var(--fg); font-weight: 500; white-space: nowrap; }
-.subagent-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
-.subagent-age { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); font-variant-numeric: tabular-nums; }
-.subagent.is-exited .subagent-label, .subagent.is-exited .subagent-desc { color: var(--fg-3); }
-.wt-active .subagents { box-shadow: inset 1px 0 0 var(--bg); }
-.wt-active .subagent, .wt-active .subagent-label, .wt-active .subagent-desc, .wt-active .subagent-age { color: var(--bg); }
+.wt-active :is(.wt-name, .wt-branch, .wt-links, .wt-line-text, .wt-line-label, .wt-flag, .wt-main-star) { color: var(--bg); }
+.wt-active :is(.wt-branch, .wt-line-text) { opacity: 0.78; }
+.wt-missing .wt-name-text { text-decoration: line-through; color: var(--fg-3); }
+.wt-archived :is(.wt-name, .wt-branch) { color: var(--fg-3); }

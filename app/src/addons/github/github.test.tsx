@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PullRequest } from "../../generated";
-import type { ActivityEvent, AgentPresence, Frame, Repo, Worktree } from "../../types";
+import type { ActivityEvent, Frame, Repo, Worktree } from "../../types";
 
 const replies = vi.hoisted(() => ({}) as Record<string, unknown>);
 vi.mock("../../api", async (importOriginal) => (await import("../../test-api")).mockApi(await importOriginal<typeof import("../../api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null))));
@@ -10,8 +10,8 @@ const { rpc } = await import("../../api");
 const { applyFrame, getState, setState } = await import("../../store");
 const { RightSidebar } = await import("../../RightSidebar");
 const { RightRail } = await import("../../shell/RightRail");
-const { Signals, signalsFor } = await import("../../Signals");
-const { signalText } = await import("../../WorktreePreview");
+const { WorktreeLinks } = await import("../../WorktreeLines");
+const { WorktreePreview } = await import("../../WorktreePreview");
 const { RepoAvatar } = await import("../../Sidebar");
 const { defaultUi } = await import("../../uiState");
 
@@ -20,7 +20,6 @@ const pr = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 12, tit
 const prChanged = (value: PullRequest | null) => act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: value } } as Frame));
 const prCalls = () => vi.mocked(rpc).mock.calls.filter(([method]) => method === "pr_status");
 const section = () => document.querySelector('[data-section="git"]');
-const agent = (pane: string): AgentPresence => ({ pane_id: pane, worktree_id: "w1", kind: "claude", state: "working", session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null }) as AgentPresence;
 
 const initial = getState();
 beforeEach(() => setState({ ...initial, loaded: true, worktrees: [wt], prs: {}, ui: { ...defaultUi, view: "worktree", activeWorktreeId: "w1" } }));
@@ -101,19 +100,29 @@ describe("GitHub marks outside the inspector", () => {
     expect(screen.getByRole("button", { name: "Git, merged" })).toBeInTheDocument();
   });
 
-  it("shows a merged pull request or failed checks as the last NOW signal", () => {
-    prChanged(pr({ state: "merged" }));
-    const { container } = render(<Signals worktreeId="w1" />);
-    expect(container.querySelector(".signal-pr-merged")).toHaveTextContent("merged");
-    expect(container.querySelector(".signal-pr-merged .state.pr-merged")).not.toBeNull();
-    expect(signalsFor(getState(), "w1").map(signalText)).toEqual(["✓ merged"]);
+  it("puts the pull request on the name line, its icon in the color of its state", () => {
+    const icon = () => document.querySelector(".wt-link .wt-link-icon")!.getAttribute("style");
+    const { container } = render(<WorktreeLinks w={wt} />);
+    expect(container.textContent).toBe("");
+    prChanged(pr());
+    expect(container.textContent).toBe("#12");
+    expect(icon()).toContain("var(--working)");
+    prChanged(pr({ draft: true }));
+    expect(icon()).toContain("var(--fg-3)");
     prChanged(pr({ checks_failed: 2 }));
-    expect(container.querySelector(".signal-pr-failed .state.check-failed")).not.toBeNull();
-    expect(signalsFor(getState(), "w1").map(signalText)).toEqual(["× checks failed"]);
-    act(() => setState({ agents: { p1: agent("p1"), p2: agent("p2") } }));
-    expect(signalsFor(getState(), "w1").map(signalText)).toEqual(["● Claude", "● Claude", "× checks failed"]);
-    act(() => setState({ agents: { p1: agent("p1"), p2: agent("p2"), p3: agent("p3") } }));
-    expect(signalsFor(getState(), "w1").map(signalText)).toEqual(["● Claude", "● Claude", "● Claude"]);
+    expect(icon()).toContain("var(--danger)");
+    prChanged(pr({ state: "merged" }));
+    expect(icon()).toContain("rgb(138, 111, 209)");
+    prChanged(pr({ state: "closed" }));
+    expect(icon()).toContain("var(--danger)");
+  });
+
+  it("gives the hover card the title, the state, the checks, and the review", () => {
+    prChanged(pr({ checks_passed: 3, review_decision: "review_required" }));
+    render(<WorktreePreview w={wt} />);
+    expect(screen.getByText("PR").nextElementSibling).toHaveTextContent("#12 Add kobe · open · checks passing · review requested");
+    prChanged(pr({ checks_failed: 2 }));
+    expect(screen.getByText("2 checks failing")).toHaveClass("wt-tone-bad");
   });
 
   it("shows the owner avatar for a GitHub remote only", () => {

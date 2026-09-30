@@ -4,10 +4,9 @@ import type { RuntimeEndpoint } from "../../generated";
 import { openMenu } from "../../MenuHost";
 import { durationLabel } from "../../previewModel";
 import { useStore } from "../../store";
-import type { Id } from "../../types";
 import type { SourceMarkProps, TopbarProps } from "../types";
 import { endpointMenu, openIn } from "./commands";
-import { byRank, endpointLabel, endpointSummary, endpointUrl, httpEndpoints, ofSource, primaryEndpoint, servesPage } from "./model";
+import { byRank, endpointLabel, endpointSummary, endpointUrl, httpEndpoints, ofSource, servesPage } from "./model";
 import { endpointsOf } from "./state";
 
 export function RuntimePreview({ endpoint: e, label }: { endpoint: RuntimeEndpoint; label: string }) {
@@ -57,20 +56,6 @@ export function EndpointMark({ worktreeId, source }: SourceMarkProps) {
     <HoverCard content={<RuntimePreview endpoint={endpoint} label={endpointLabel(endpoint)} />}>
       <span className="action-live">
         <ArrowUpRight className="icon" />
-      </span>
-    </HoverCard>
-  );
-}
-
-/** The NOW signal line: the first HTTP endpoint, with an arrow and a hover preview. */
-export function RuntimeSignal({ worktreeId }: { worktreeId: Id }) {
-  const endpoint = useStore((s) => primaryEndpoint(s, worktreeId));
-  if (!endpoint) return null;
-  const label = endpointLabel(endpoint);
-  return (
-    <HoverCard content={<RuntimePreview endpoint={endpoint} label={label} />}>
-      <span className="signal signal-runtime">
-        {label} <ArrowUpRight className="icon" /> :{endpoint.port}
       </span>
     </HoverCard>
   );

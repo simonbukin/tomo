@@ -108,7 +108,8 @@ returns carries the same list in `endpoints`.
 ## In the GUI
 
 The addon draws the runtime button of the worktree top bar, the endpoint
-menu, the palette entries, the NOW signal of the first HTTP endpoint, and
+menu, the palette entries, an app line for each HTTP endpoint on the worktree
+row (`web  :3003`, with the address and the uptime in the hover card), and
 the endpoints that no pane source owns in the overflow menu. It gives the
 checkpoint banner and the Activity rows their "Open App" link through the
 `appUrl` slot.

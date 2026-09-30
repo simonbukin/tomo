@@ -1,9 +1,10 @@
-import type { AddonSignal } from "../../activityModel";
+import { GitPullRequest } from "lucide-react";
+import type { PullRequest } from "../../generated";
 import { GLYPH, type BranchTone } from "../../glyphs";
 import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
 import type { Id, Worktree } from "../../types";
-import type { SearchGroup } from "../types";
+import type { SearchGroup, WorktreeLink } from "../types";
 import { prOf } from "./state";
 
 const openWorktree = (id: Id) => (): void => void import("../../actions").then((a) => a.openWorktree(id));
@@ -46,9 +47,37 @@ export function prBranchMark(s: State, w: Worktree): { tone: BranchTone; text: s
   return { tone: "open", text: `#${pr.number} open` };
 }
 
-export function prSignals(s: State, worktreeId: Id): AddonSignal[] {
-  const pr = prOf(s, worktreeId);
-  if (pr?.state === "merged") return [{ kind: "addon", text: "merged", glyph: GLYPH.complete, className: "signal-pr-merged", dot: "pr-merged" }];
-  if (pr && pr.checks_failed > 0) return [{ kind: "addon", text: "checks failed", glyph: GLYPH.failed, className: "signal-pr-failed", dot: "check-failed" }];
-  return [];
+/** GitHub's own purple for a merged pull request. The status palette has no purple, and gray would read as a draft. */
+const MERGED = "#8a6fd1";
+
+type PrTone = "open" | "draft" | "merged" | "closed" | "failing";
+
+const PR_COLOR: Record<PrTone, string> = { open: "var(--working)", draft: "var(--fg-3)", merged: MERGED, closed: "var(--danger)", failing: "var(--danger)" };
+
+function prTone(pr: PullRequest): PrTone {
+  if (pr.state === "merged") return "merged";
+  if (pr.state === "closed") return "closed";
+  if (pr.checks_failed > 0) return "failing";
+  return pr.draft ? "draft" : "open";
+}
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+
+function checksFact(pr: PullRequest): { text: string; bad?: boolean } | null {
+  if (pr.checks_failed > 0) return { text: `${plural(pr.checks_failed, "check")} failing`, bad: true };
+  if (pr.checks_pending > 0) return { text: `${plural(pr.checks_pending, "check")} running` };
+  return pr.checks_passed > 0 ? { text: "checks passing" } : null;
+}
+
+const REVIEW: Record<string, string> = { approved: "approved", changes_requested: "changes requested", review_required: "review requested" };
+
+export function prFacts(pr: PullRequest): { text: string; bad?: boolean }[] {
+  const state = pr.state === "open" && pr.draft ? "draft" : pr.state;
+  const review = pr.review_decision ? (REVIEW[pr.review_decision] ?? pr.review_decision.replace(/_/g, " ")) : null;
+  return [{ text: state }, checksFact(pr), review ? { text: review } : null].filter((f) => f !== null);
+}
+
+export function prLinks(s: State, w: Worktree): WorktreeLink[] {
+  const pr = prOf(s, w.id);
+  return pr ? [{ id: "github-pr", label: "PR", icon: GitPullRequest, color: PR_COLOR[prTone(pr)], text: `#${pr.number}`, title: pr.title, facts: prFacts(pr) }] : [];
 }

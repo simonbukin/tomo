@@ -1,7 +1,7 @@
 import { siLinear } from "simple-icons";
 import { useStore } from "../../store";
 import type { LinearIssue } from "../../generated";
-import type { Id, Worktree } from "../../types";
+import type { Worktree } from "../../types";
 import { openIssue, stateTint } from "./model";
 import { linearIssueOf } from "./state";
 
@@ -14,24 +14,6 @@ export function LinearIcon({ issue, size = 11 }: { issue: LinearIssue; size?: nu
 }
 
 const people = (issue: LinearIssue): string => [issue.priority, issue.assignee ?? "unassigned"].join(" · ");
-
-export function LinearSignal({ worktreeId }: { worktreeId: Id }) {
-  const issue = useStore((s) => linearIssueOf(s, worktreeId));
-  if (!issue) return null;
-  return <span className="signal signal-linear"><LinearIcon issue={issue} />{issue.identifier} {issue.state.name}</span>;
-}
-
-export function LinearPreviewDetail({ worktreeId }: { worktreeId: Id }) {
-  const issue = useStore((s) => linearIssueOf(s, worktreeId));
-  if (!issue) return null;
-  return (
-    <>
-      <div className="wt-preview-mark"><LinearIcon issue={issue} />{issue.identifier}<span className="muted">{issue.state.name}</span></div>
-      <div title={issue.title}>{issue.title}</div>
-      <div className="muted">{people(issue)}</div>
-    </>
-  );
-}
 
 export function LinearDetail({ worktree: w }: { worktree: Worktree }) {
   const issue = useStore((s) => linearIssueOf(s, w.id));

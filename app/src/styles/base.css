@@ -64,7 +64,6 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .state-sleeping-done { background: var(--working); }
 .state-complete { box-shadow: inset 0 0 0 1px var(--working); }
 .state-dirty { background: var(--fg-3); box-shadow: none; }
-.state-selected { background: var(--fg); box-shadow: none; }
 .state-archiving { background: var(--fg-3); box-shadow: none; animation: pulse 1.2s ease-in-out infinite; }
 .state-full, .state-ok, .pr-open, .check-passed { background: var(--working); box-shadow: none; }
 .state-partial, .state-warning, .check-pending { background: var(--waiting); box-shadow: none; }
@@ -72,33 +71,26 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .state-unavailable { box-shadow: inset 0 0 0 1px var(--fg-3); }
 .state-fail, .state-error, .pr-closed, .check-failed { background: var(--danger); box-shadow: none; }
 
-/* ---- the live mark of an agent or a worktree: a 3×3 dot matrix (StateMark).
+/* ---- the live mark of an agent or a worktree: a 3×3 grid in one 9px SVG (StateMark).
  *   color   = what: green the agent's work, amber you, red broken, gray quiet or Tomo's own work
  *   motion  = busy: only working and archiving move (a twinkle); needs you beats in unison, which reads as a call
  *   pattern = which: every still state has its own shape, so no two states differ by color alone
- * Cells and gaps are whole pixels: 8px is 2px cells with 1px gaps; the 6px subagent size is 2px cells with none.
- * Each cell twinkles on its own period and phase; the periods share no small ratio, so the pattern never repeats. */
-.state.mx { --mx-c: var(--fg-3); --mx-off: 0.15; display: inline-grid; grid-template-columns: repeat(3, 2px); grid-auto-rows: 2px; gap: 1px; background: none; box-shadow: none; rotate: 0deg; }
-.state.mx.state-small { gap: 0; }
-.mx i { display: block; background: var(--mx-c); opacity: var(--mx-off); transition: opacity 250ms var(--ease-out), background-color 360ms var(--ease-out); }
-.mx i:nth-child(1) { --tw: 1.00; --td: 0.13; } .mx i:nth-child(2) { --tw: 1.37; --td: 0.71; } .mx i:nth-child(3) { --tw: 0.83; --td: 0.42; }
-.mx i:nth-child(4) { --tw: 1.19; --td: 0.94; } .mx i:nth-child(5) { --tw: 1.61; --td: 0.27; } .mx i:nth-child(6) { --tw: 0.91; --td: 0.58; }
-.mx i:nth-child(7) { --tw: 1.29; --td: 0.05; } .mx i:nth-child(8) { --tw: 0.77; --td: 0.66; } .mx i:nth-child(9) { --tw: 1.07; --td: 0.39; }
-.mx:is([data-mark="working"], [data-mark="done"], [data-mark="complete"], [data-mark="sleeping-done"]) { --mx-c: var(--working); }
-.mx[data-mark="needs"] { --mx-c: var(--waiting); }
-.mx[data-mark="failed"] { --mx-c: var(--danger); }
-.mx:is([data-mark="idle"], [data-mark="unknown"], [data-mark="sleeping"], [data-mark="archiving"]) { --mx-c: var(--fg-2); }
-.mx[data-mark="none"] i { opacity: 0; }
-.mx[data-mark="done"] i { opacity: 1; }
-.mx[data-mark="complete"] i:not(:nth-child(5)) { opacity: 1; }
-.mx[data-mark="needs"] i:is(:nth-child(2), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(8)) { opacity: 1; animation: mx-beat 2.4s ease-in-out infinite; }
-.mx[data-mark="idle"] i:nth-child(5) { opacity: 1; }
-.mx[data-mark="failed"] i:is(:nth-child(1), :nth-child(3), :nth-child(5), :nth-child(7), :nth-child(9)) { opacity: 1; }
-.mx[data-mark="unknown"] i { opacity: 0.07; }
-.mx[data-mark="unknown"] i:is(:nth-child(1), :nth-child(3), :nth-child(7), :nth-child(9)) { opacity: 0.6; }
-.mx:is([data-mark="sleeping"], [data-mark="sleeping-done"]) i:not(:nth-child(4), :nth-child(6)) { opacity: 1; }
-.mx:is([data-mark="working"], [data-mark="archiving"]) i { animation: mx-twinkle calc(1.2s * var(--tw)) ease-in-out infinite; animation-delay: calc(-2.4s * var(--td)); }
-.mx.state-selected i { background: var(--fg); opacity: 1; animation: none; }
+ * The lit cells are one path, so lit neighbours make one solid block; the unlit cells are a ghost of the same color.
+ * The 6px subagent size is the same SVG, so each cell is 2px. */
+.state.mark { --mk: var(--fg-3); --mk-ghost: 0.17; width: 9px; height: 9px; background: none; box-shadow: none; rotate: 0deg; overflow: visible; }
+.state.mark.state-small { width: 6px; height: 6px; }
+.mark > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.mark .lit, .mark .tw { fill: var(--mk); }
+.mark .off { fill: var(--mk); opacity: var(--mk-ghost); }
+.mark:is([data-mark="working"], [data-mark="done"], [data-mark="complete"], [data-mark="sleeping-done"]) { --mk: var(--working); }
+.mark[data-mark="needs"] { --mk: var(--waiting); }
+.mark[data-mark="failed"] { --mk: var(--danger); }
+.mark:is([data-mark="idle"], [data-mark="unknown"], [data-mark="sleeping"], [data-mark="archiving"]) { --mk: var(--fg-2); }
+.mark[data-mark="needs"] .lit { animation: mark-beat 2.4s ease-in-out infinite; }
+.mark .tw { animation: mark-twinkle calc(1.2s * var(--tw)) ease-in-out infinite; animation-delay: calc(-2.4s * var(--td)); }
+:root[data-theme="dark"] .mark { --mk-ghost: 0.13; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mark { --mk-ghost: 0.13; } }
+@media (prefers-reduced-motion: reduce) { .mark .lit, .mark .tw { animation: none; } }
 .pr-merged { background: var(--fg-2); box-shadow: none; }
 
 /* An icon tinted by status. Two classes, so a tint beats the plain color of the icon. */
@@ -124,8 +116,8 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @keyframes turn { 0% { transform: rotate(0deg); } 50%, 100% { transform: rotate(90deg); } }
-@keyframes mx-twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-@keyframes mx-beat { 0%, 30%, 100% { opacity: 1; } 7%, 21% { opacity: 0.35; } 14% { opacity: 0.9; } }
+@keyframes mark-twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+@keyframes mark-beat { 0%, 30%, 100% { opacity: 1; } 7%, 21% { opacity: 0.4; } 14% { opacity: 0.95; } }
 .rise { animation: rise var(--dur-open) var(--ease-out) backwards; }
 .fade-in { animation: fade var(--dur-fast) var(--ease-out) backwards; }
 .no-anim * { transition: none !important; }

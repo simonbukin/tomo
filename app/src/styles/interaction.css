@@ -13,7 +13,6 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .menu-popup[data-ending-style], .popover[data-ending-style], .select-popup[data-ending-style], .dialog[data-ending-style], .dialog-backdrop[data-ending-style], .tip[data-ending-style] { transition-duration: var(--dur-hover); transition-timing-function: var(--ease-in); }
 .board-col { transition: outline-color var(--dur-hover) var(--ease-out), background-color var(--dur-hover) var(--ease-out); }
 .board-col-over { background: color-mix(in srgb, var(--accent) 5%, transparent); }
-.signal-attention { animation: rise var(--dur-open) var(--ease-out) both; }
 
 /* ---- focus: the ring itself is in base.css; here is what each surface does with it */
 .wt-row:focus-visible, .wt-list-row:focus-visible, .town-row:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }

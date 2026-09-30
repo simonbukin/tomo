@@ -7,7 +7,8 @@ the rail, tabs, and the hover card.
 
 ## The marks
 
-The mark is a 3×3 dot matrix. Three channels each do one job:
+The mark is one 9px SVG with a 3×3 grid of cells. The lit cells are one path,
+so lit neighbours make one solid block. Three channels each do one job:
 
 - **Color says what:** green is the agent's work, amber is you, red is broken,
   and gray is quiet or Tomo's own work.
@@ -88,8 +89,8 @@ Rules:
 ## Subagents
 
 A subagent is `working` from its start to its stop. Its own marks use the
-same matrix at the 6px size, with no gaps between the cells: working,
-done (green, still), needs you, and dead.
+same SVG at the 6px size: working, done (green, still), needs you, and
+dead. A row shows every subagent one level in under its agent.
 
 - `SubagentStart` adds it, `SubagentStop` marks it done.
 - A finished turn of the parent keeps a subagent that still runs (a
