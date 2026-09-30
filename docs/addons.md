@@ -314,14 +314,14 @@ GitHub, Usage, Actions, Runtime, and Agentation need:
 | `commands` | `allActions()` in `actions.ts` (palette, shortcuts, menus, shortcut reference) | towns |
 | `worktreeNameField` | `CreateWorktree` in `Dialogs.tsx`; it reports the `name_hint` | towns |
 | `inspectorSections` (id, label, icon, component, rail marker) | `RightSidebar.tsx` after the `git` section, the buttons and markers in `shell/RightRail.tsx`, the section ids for `sanitizeUi` in `store.ts` | github |
-| `worktreeSignals` (a store selector that returns `AddonSignal[]`) | `signalsFor` in `Signals.tsx`, after the core signals; `nowSignals` keeps the cap of three | github |
+| `worktreeLinks(s, w)` (a store selector that returns `WorktreeLink[]`: id, label, icon, color, text, title, facts) | `WorktreeLinks` in `WorktreeLines.tsx` on the name line of a sidebar row and a Home card, and the links section of `WorktreePreview.tsx` | github, linear |
+| `appLines(s, worktreeId)` (a store selector that returns `AppLine[]`: id, mark, label, detail, full, bad, upSinceMs, atMs) | the apps group of a row in `rowModel.ts` and the apps section of `WorktreePreview.tsx`; `appLines()` in `addons/index.ts` puts the running apps before the crashes | runtime, actions |
 | `repoAvatar` (the first addon that has one wins) | `RepoAvatar` in `Sidebar.tsx`, which the sidebar and Home render | github |
 | `mount` | `App.tsx`, once for the session (the unlock ceremony) | towns |
 | `bottomItem` | `shell/BottomStrip.tsx`, inside `.bottom-items` at the start of the middle section, before the status slot | usage |
 | `diagnosticsSection` | `DiagnosticsReport` in `shell/Diagnostics.tsx`, after the core sections and before the compact actions | usage |
 | `topbar.buttons`, `topbar.marks` | `HeaderControls` in `WorktreeHeader.tsx`: `buttons` before the editor button, `marks` after it and before the runtime and overflow buttons | actions |
 | `worktreeMenu(w, s)` | `overflowMenu` in `menus.ts`, first, with a separator after a list that is not empty | actions |
-| `signalLine { className, Line, Detail? }` | `SignalLine` in `Signals.tsx`, for an addon signal of that class; `Detail` in `WorktreePreview.tsx`, in place of the plain signal text | runtime (`Detail`: linear) |
 | `sourceMark` | the control of a pane source that another addon draws: the Action button in `addons/actions/Topbar.tsx`, through `sourceMarks()` | runtime |
 | `sourceMenu(worktreeId, source, s)` | the menu of a running pane source: `runningActionItems` in `addons/actions/commands.ts`, through `sourceMenu()`; `first` before "focus logs", `last` after the separator | runtime |
 | `appUrl(s, worktreeId)` | `CheckpointBanner` in `WorktreeHeader.tsx` and `appUrl` in `activityKinds.ts` (the first addon that returns a URL wins) | runtime |
@@ -1074,12 +1074,30 @@ They are expected.
 
 ## Add a UI contribution
 
+### Row slots result
+
+The worktree row redesign (a minimal row, and a hover card with the rest)
+removed the NOW signal line. Two data slots replace `worktreeSignals` and
+`signalLine`:
+
+- `worktreeLinks` gives the links on the name line: GitHub the pull request
+  (open green, draft gray, merged purple, closed or failed checks red),
+  Linear the issue in the color of its state. The hover card shows the
+  title and the facts of each link.
+- `appLines` gives the lines of the apps group: Runtime a line for each HTTP
+  port (`web  :3003`, and the address and the uptime in the hover card),
+  Actions a line for each crash that nobody resolved (`Storybook  exited -1`).
+
+Both slots return data, not components, so the rules in `rowModel.ts` stay
+pure and testable. A row with no addon, as on `main`, has no links and no
+app lines. The addon parts are in their own commits.
+
 Use an existing slot. Add a new slot only when an extraction needs it. Do not
 add a slot "for later". Add the slot to the `Addon` type, then render it at
 one site from `builtins`.
 
 Slots that exist, in the order of `app/src/addons/types.ts` (21): `views`,
-`commands`, `inspectorSections`, `worktreeSignals`, `signalLine`,
+`commands`, `inspectorSections`, `worktreeLinks`, `appLines`,
 `repoAvatar`, `worktreeNameField`, `topbar`, `browserToolbar`,
 `worktreeMenu`, `sourceMark`, `sourceMenu`, `appUrl`, `paletteEntries`,
 `shortcuts`, `paneSource`, `mount`, `bottomItem`, `diagnosticsSection`,
@@ -1091,7 +1109,7 @@ Slots that later milestones will need (from the map):
 | Slot | First user | Current hard-coded site |
 |---|---|---|
 | inspector section | **done**: `inspectorSections` (milestone 2) | none |
-| worktree signal | **done**: `worktreeSignals` (milestone 2), with `signalLine` for a signal that draws itself (milestone 4) | none |
+| worktree signal | **done**: `worktreeSignals` (milestone 2) and `signalLine` (milestone 4). The row redesign replaced both with `worktreeLinks` and `appLines` (see "Row slots result") | none |
 | pane renderer | **not built** (milestone 6: the switch is shorter; see "Milestone 6 result: Browser") | `Layout.tsx` keeps the switch |
 | browser toolbar item | **done**: `browserToolbar` (milestone 7) | none |
 | activity row view | **done**: `app/src/addons/activity.ts`, not an `Addon` slot (see "Activity kind seam result") | none |
