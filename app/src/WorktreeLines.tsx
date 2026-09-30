@@ -1,7 +1,7 @@
 import { appLines, worktreeLinks } from "./addons";
 import { cx } from "./components/ui";
-import { rowGroups, type Line, type RowGroups, type RowInput } from "./rowModel";
-import { StateMark } from "./StateMark";
+import { leadLine, rowGroups, type Line, type RowGroups, type RowInput } from "./rowModel";
+import { StateMark, WorktreeMark } from "./StateMark";
 import { agentsOf, setRowError, useStore } from "./store";
 import type { Worktree } from "./types";
 
@@ -69,6 +69,13 @@ export function LineGroups({ w, groups, only }: { w: Worktree; groups: RowGroups
       {groups[g].map((line) => <LineView key={line.key} line={line} dismiss={line.key === "row-error" ? () => setRowError(w.id, null) : undefined} />)}
     </span>
   ));
+}
+
+/** The mark of a row: a problem first, then the lead agent, then an app. An archived row has none. */
+export function RowMark({ w, input, groups }: { w: Worktree; input: RowInput; groups: RowGroups }) {
+  if (w.archived_at_ms) return null;
+  const lead = leadLine(groups, input.agents.length > 0);
+  return lead ? <StateMark mark={lead.mark} title={lead.title ?? lead.label} /> : <WorktreeMark w={w} />;
 }
 
 /** The lines of a worktree, for a surface that keeps its own outer layout, such as a Home card. */

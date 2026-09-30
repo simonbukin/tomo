@@ -35,7 +35,7 @@
 .wt-flag { margin-left: 6px; color: var(--fg-3); }
 .wt-flag-bad { color: var(--danger); }
 
-.wt-more { position: absolute; top: 6px; right: 8px; width: 24px; height: 24px; visibility: hidden; background: var(--bg-2); }
+.wt-row > .wt-more { position: absolute; top: 6px; right: 8px; width: 24px; height: 24px; visibility: hidden; background: var(--bg-2); }
 .wt-row:hover .wt-more, .wt-more:focus-visible, .wt-more[data-popup-open] { visibility: visible; }
 .wt-active .wt-more { background: var(--fg); color: var(--bg); }
 .wt-selected .wt-more { background: var(--surface-3); }
