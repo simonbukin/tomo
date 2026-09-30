@@ -10,7 +10,7 @@ import { linear } from "./linear";
 import { runtime } from "./runtime";
 import { towns } from "./towns";
 import type { RailMarker } from "../sections";
-import type { Addon, BrowserToolbarProps, GlobalView, InspectorSection, SourceKey, SourceMenu } from "./types";
+import type { Addon, AppLine, BrowserToolbarProps, GlobalView, InspectorSection, SourceKey, SourceMenu, WorktreeLink } from "./types";
 import { usage } from "./usage";
 
 /** The composition root of the GUI: every built-in addon, in render order. Core client files reach addons only through this module. */
@@ -34,7 +34,15 @@ export const inspectorSections = (): InspectorSection[] => builtins.flatMap((a) 
 
 export const addonSignals = (s: State, worktreeId: Id): AddonSignal[] => builtins.flatMap((a) => a.worktreeSignals?.(s, worktreeId) ?? []);
 
-export const signalLine = (className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Line ?? null;
+export const worktreeLinks = (s: State, w: Worktree): WorktreeLink[] => builtins.flatMap((a) => a.worktreeLinks?.(s, w) ?? []);
+
+/** The app lines of a worktree: the apps that run, then the ones that crashed. */
+export const appLines = (s: State, worktreeId: Id): AppLine[] => {
+  const all = builtins.flatMap((a) => a.appLines?.(s, worktreeId) ?? []);
+  return [...all.filter((l) => !l.bad), ...all.filter((l) => l.bad)];
+};
+
+export const signalLine =(className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Line ?? null;
 
 export const signalDetail = (className: string) => builtins.find((a) => a.signalLine?.className === className)?.signalLine?.Detail ?? null;
 
