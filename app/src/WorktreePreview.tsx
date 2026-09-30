@@ -1,12 +1,15 @@
+import { Star } from "lucide-react";
+import { Fragment, type ReactNode } from "react";
 import type { Signal } from "./activityModel";
-import { agentMark, agentStatus, GLYPH, STATUS_LABEL, subagentStatus } from "./glyphs";
-import { AgentMark, StateMark } from "./StateMark";
-import { durationLabel, gitLines } from "./previewModel";
-import { ProcessIcon } from "./ProcessIcon";
-import { signalDetail } from "./addons";
-import { signalsFor } from "./Signals";
+import { worktreeLinks } from "./addons";
+import type { WorktreeLink } from "./addons/types";
+import { agentStatus, GLYPH, subagentStatus } from "./glyphs";
+import { durationLabel } from "./previewModel";
+import { aboutDetails, gitDetails, homePath, hoverAgentLines, hoverAppLines, problemLines, type Detail, type Line } from "./rowModel";
+import { StateMark, WorktreeMark } from "./StateMark";
 import { agentsOf, formatBytes, useStore } from "./store";
 import { KIND_LABEL, type Id, type Subagent, type Worktree } from "./types";
+import { LineView, useRowInput } from "./WorktreeLines";
 import "./styles/previews.css";
 
 export function signalText(signal: Signal): string {
@@ -49,41 +52,98 @@ export function SubagentList({ worktreeId, flip }: { worktreeId: Id; flip?: stri
   );
 }
 
-function SignalDetail({ worktreeId, signal }: { worktreeId: Id; signal: Signal }) {
-  const Detail = signal.kind === "addon" ? signalDetail(signal.className) : null;
-  return Detail ? <Detail worktreeId={worktreeId} /> : <div>{signalText(signal)}</div>;
+function Details({ rows }: { rows: Detail[] }) {
+  return (
+    <div className="wt-hover-kv">
+      {rows.map((r) => (
+        <Fragment key={r.key}>
+          <span className="wt-hover-k">{r.key}</span>
+          <span className={r.mono ? "wt-hover-v mono" : "wt-hover-v"}>
+            {r.facts.map((f, i) => (
+              <Fragment key={i}>
+                {i > 0 && " "}
+                <span className={f.tone && `wt-tone-${f.tone}`}>{f.text}</span>
+              </Fragment>
+            ))}
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <div className="wt-hover-sec">
+      {title && <div className="wt-hover-title">{title}</div>}
+      {children}
+    </div>
+  );
+}
+
+function Lines({ lines }: { lines: Line[] }) {
+  return (
+    <div className="wt-hover-lines">
+      {lines.map((line, i) => (
+        <span key={line.key} className={!line.sub && i > 0 ? "wt-hover-line wt-hover-gap" : "wt-hover-line"}>
+          <LineView line={line} meta />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function LinkFacts({ link }: { link: WorktreeLink }) {
+  const Icon = link.icon;
+  return (
+    <>
+      <Icon className="wt-link-icon" style={{ color: link.color }} /> {link.text} {link.title}
+      {link.facts.map((f) => (
+        <Fragment key={f.text}>
+          <span className="wt-tone-mute"> · </span>
+          <span className={f.bad ? "wt-tone-bad" : "wt-tone-mute"}>{f.text}</span>
+        </Fragment>
+      ))}
+    </>
+  );
 }
 
 /** Everything the client knows about one worktree, for the hover card on a sidebar row or a rail square. */
 export function WorktreePreview({ w }: { w: Worktree }) {
-  const agents = useStore((s) => agentsOf(s, w.id));
-  const signals = useStore((s) => signalsFor(s, w.id)).filter((sig) => sig.kind !== "agent");
-  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "no branch");
+  const input = useRowInput(w);
+  const links = useStore((s) => worktreeLinks(s, w));
+  const now = Date.now();
+  const problems = problemLines(input);
+  const agents = hoverAgentLines(input, now);
+  const apps = hoverAppLines(input.apps, now);
   return (
-    <div className="preview wt-preview">
-      <div className="preview-head">{w.name}</div>
-      <div className="mono muted">{branch}</div>
-      {w.git && gitLines(w.git).map((line) => <div key={line} className="muted">{line}</div>)}
-      {agents.length > 0 && (
-        <div className="wt-preview-block">
-          {agents.map((a) => (
-            <div key={a.pane_id} className="wt-preview-agent">
-              <AgentMark agent={a} />
-              <ProcessIcon agent={a.kind} size={11} />
-              <span>{KIND_LABEL[a.kind]}</span>
-              <span className="muted">{STATUS_LABEL[agentMark(a) ?? "unknown"]}</span>
-              <span className="faint">{durationLabel(a.updated_at_ms)}</span>
-            </div>
-          ))}
-          <SubagentList worktreeId={w.id} />
-        </div>
+    <div className="wt-hover">
+      <div className="wt-hover-head">
+        <span className="wt-mcell">{w.archived_at_ms ? null : <WorktreeMark w={w} />}</span>
+        <span className="wt-hover-name">
+          {w.name}
+          {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
+        </span>
+        <span className="wt-hover-when">{w.last_active_ms != null ? `${durationLabel(w.last_active_ms, now)} ago` : ""}</span>
+        <span className="wt-hover-path">{homePath(w.path)}</span>
+      </div>
+      {problems.length > 0 && <Section title="problems"><Lines lines={problems} /></Section>}
+      {agents.length > 0 && <Section title="agents"><Lines lines={agents} /></Section>}
+      {apps.length > 0 && <Section title="apps"><Lines lines={apps} /></Section>}
+      <Section title="git"><Details rows={gitDetails(w)} /></Section>
+      {links.length > 0 && (
+        <Section title="links">
+          <div className="wt-hover-kv">
+            {links.map((l) => (
+              <Fragment key={l.id}>
+                <span className="wt-hover-k">{l.label}</span>
+                <span className="wt-hover-v"><LinkFacts link={l} /></span>
+              </Fragment>
+            ))}
+          </div>
+        </Section>
       )}
-      {signals.length > 0 && (
-        <div className="wt-preview-block">
-          {signals.map((signal, i) => <SignalDetail key={i} worktreeId={w.id} signal={signal} />)}
-        </div>
-      )}
-      {w.last_active_ms != null && <div className="faint">active {durationLabel(w.last_active_ms)} ago</div>}
+      <Section><Details rows={aboutDetails(w, now)} /></Section>
     </div>
   );
 }
