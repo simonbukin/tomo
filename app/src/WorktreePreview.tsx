@@ -3,11 +3,10 @@ import { Fragment, type ReactNode } from "react";
 import { worktreeLinks } from "./addons";
 import type { WorktreeLink } from "./addons/types";
 import { durationLabel } from "./previewModel";
-import { aboutDetails, gitDetails, homePath, hoverAgentLines, hoverAppLines, problemLines, type Detail, type Line } from "./rowModel";
-import { WorktreeMark } from "./StateMark";
+import { aboutDetails, gitDetails, homePath, hoverAgentLines, hoverAppLines, problemLines, rowGroups, type Detail, type Line } from "./rowModel";
 import { useStore } from "./store";
 import type { Worktree } from "./types";
-import { LineView, useRowInput } from "./WorktreeLines";
+import { LineView, RowMark, useRowInput } from "./WorktreeLines";
 import "./styles/previews.css";
 
 function Details({ rows }: { rows: Detail[] }) {
@@ -16,7 +15,7 @@ function Details({ rows }: { rows: Detail[] }) {
       {rows.map((r) => (
         <Fragment key={r.key}>
           <span className="wt-hover-k">{r.key}</span>
-          <span className={r.mono ? "wt-hover-v mono" : "wt-hover-v"}>
+          <span className="wt-hover-v">
             {r.facts.map((f, i) => (
               <Fragment key={i}>
                 {i > 0 && " "}
@@ -77,7 +76,7 @@ export function WorktreePreview({ w }: { w: Worktree }) {
   return (
     <div className="wt-hover">
       <div className="wt-hover-head">
-        <span className="wt-mcell">{w.archived_at_ms ? null : <WorktreeMark w={w} />}</span>
+        <span className="wt-mcell"><RowMark w={w} input={input} groups={rowGroups(input)} /></span>
         <span className="wt-hover-name">
           {w.name}
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}

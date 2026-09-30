@@ -28,5 +28,4 @@
 .wt-hover-kv { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 9px; padding-left: 18px; }
 .wt-hover-k { font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); line-height: 20px; color: var(--fg-3); }
 .wt-hover-v { font-size: var(--fs-1); line-height: 20px; color: var(--fg-1); overflow-wrap: anywhere; }
-.wt-hover-v.mono { font-size: var(--fs-1); }
 .wt-hover-v .wt-link-icon { width: 12px; height: 12px; vertical-align: -2px; }

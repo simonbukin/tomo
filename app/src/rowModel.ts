@@ -113,6 +113,12 @@ export const appLinesOf = (input: RowInput): Line[] =>
 
 export const rowGroups = (input: RowInput): RowGroups => ({ problems: problemLines(input), agents: agentLines(input), apps: appLinesOf(input) });
 
+/**
+ * The line whose mark the row mark shows instead of the lead agent: a problem outranks every agent, and an app shows
+ * only on a worktree with no agent. Null keeps the mark of the lead agent.
+ */
+export const leadLine = (groups: RowGroups, hasAgent: boolean): Line | null => groups.problems[0] ?? (hasAgent ? null : (groups.apps[0] ?? null));
+
 /** A session id as the hover card shows it: `a5a5…12cc`. */
 export const shortSession = (ref: string): string => (ref.length > 10 ? `${ref.slice(0, 4)}…${ref.slice(-4)}` : ref);
 
@@ -169,7 +175,6 @@ export type Fact = { text: string; tone?: Tone | "ok" };
 export interface Detail {
   key: string;
   facts: Fact[];
-  mono?: boolean;
 }
 
 const files = (n: number) => `${n} ${n === 1 ? "file" : "files"}`;
@@ -177,7 +182,7 @@ const files = (n: number) => `${n} ${n === 1 ? "file" : "files"}`;
 /** The git section of the hover card: the branch, how it stands with its upstream, the changes, and the conflicts. */
 export function gitDetails(w: Worktree): Detail[] {
   const g = w.git;
-  const branch: Detail = { key: "branch", facts: [{ text: w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "no branch") }], mono: true };
+  const branch: Detail = { key: "branch", facts: [{ text: w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "no branch") }] };
   if (!g) return [branch];
   const ahead = g.ahead ?? 0;
   const behind = g.behind ?? 0;

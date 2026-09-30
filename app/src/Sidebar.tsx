@@ -8,7 +8,6 @@ import { LENSES, LENS_LABEL, lensGroups, type LensGroup } from "./lenses";
 import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dotClass } from "./glyphs";
-import { WorktreeMark } from "./StateMark";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
 import { openWorktree, runAction, toggleRepoCollapsed } from "./actions";
@@ -21,7 +20,7 @@ import { clearSelection, getState, needsMe, queryContext, setSelection, setState
 import type { Id, Repo, SidebarSort, Worktree } from "./types";
 import { useGlide } from "./glide";
 import { WorktreePreview } from "./WorktreePreview";
-import { LineGroups, useRowInput, WorktreeLinks } from "./WorktreeLines";
+import { LineGroups, RowMark, useRowInput, WorktreeLinks } from "./WorktreeLines";
 import { branchFlags, branchText, rowGroups } from "./rowModel";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
@@ -227,7 +226,8 @@ function selectRow(e: React.MouseEvent, w: Worktree, siblings: Worktree[]): bool
 export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId }: { w: Worktree; active: boolean; siblings?: Worktree[]; sortable?: boolean; sortId?: string }) {
   const drag = useSortable({ id: sortId ?? w.id, data: { kind: "worktree", id: w.id, repoId: w.repo_id } satisfies DragData, disabled: !sortable || w.is_main || !!w.archived_at_ms });
   const selected = useStore((s) => s.selection.has(w.id));
-  const groups = rowGroups(useRowInput(w));
+  const input = useRowInput(w);
+  const groups = rowGroups(input);
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
   return (
@@ -245,7 +245,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
         }}
       >
-        <span className="wt-mcell">{archived ? null : <WorktreeMark w={w} />}</span>
+        <span className="wt-mcell"><RowMark w={w} input={input} groups={groups} /></span>
         <span className="wt-name">
           <span className="wt-name-text">{w.name}</span>
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
