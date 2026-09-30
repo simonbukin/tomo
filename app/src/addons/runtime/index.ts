@@ -1,9 +1,9 @@
 import type { Addon } from "../types";
-import { apps } from "./apps";
+import { appLines, apps } from "./apps";
 import { looseItems, paletteEntries, sourceItems } from "./commands";
-import { appUrl, runtimeSignals, SIGNAL_CLASS } from "./model";
+import { appUrl } from "./model";
 import { applyRuntimeFrame, replaceEndpoints } from "./state";
-import { EndpointMark, RuntimePopover, RuntimeSignal } from "./Views";
+import { EndpointMark, RuntimePopover } from "./Views";
 
 export const runtime: Addon = {
   id: "runtime",
@@ -12,8 +12,7 @@ export const runtime: Addon = {
   topbar: { marks: RuntimePopover },
   worktreeMenu: looseItems,
   paletteEntries,
-  worktreeSignals: runtimeSignals,
-  signalLine: { className: SIGNAL_CLASS, Line: RuntimeSignal },
+  appLines,
   sourceMark: EndpointMark,
   sourceMenu: sourceItems,
   appUrl,

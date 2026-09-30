@@ -1,6 +1,6 @@
 import type { Addon } from "../types";
 import { GitHubAvatar } from "./Avatar";
-import { prBranchMark, prMarker, prSignals, searchSources } from "./model";
+import { prBranchMark, prLinks, prMarker, searchSources } from "./model";
 import { PrDetail } from "./PrSection";
 import { applyGitHubFrame } from "./state";
 
@@ -11,7 +11,7 @@ export const github: Addon = {
   gitDetail: PrDetail,
   gitMarker: prMarker,
   branchMark: prBranchMark,
-  worktreeSignals: prSignals,
+  worktreeLinks: prLinks,
   repoAvatar: GitHubAvatar,
   searchSources,
   onFrame: applyGitHubFrame,
