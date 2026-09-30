@@ -49,9 +49,8 @@
 .subagents { display: flex; flex-direction: column; margin: 0; padding: 0 0 0 var(--sp-2); list-style: none; box-shadow: inset 1px 0 0 var(--line-strong); }
 .subagent { display: grid; grid-template-columns: 8px auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); height: var(--u); padding-right: var(--sp-2); font-size: var(--fs-1); color: var(--fg-1); }
 .subagent-label { color: var(--fg); font-weight: 500; white-space: nowrap; }
-.subagent-desc, .subagent-more { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
+.subagent-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
 .subagent-age { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); font-variant-numeric: tabular-nums; }
 .subagent.is-exited .subagent-label, .subagent.is-exited .subagent-desc { color: var(--fg-3); }
-.subagent-more { display: block; line-height: var(--u); }
 .wt-active .subagents { box-shadow: inset 1px 0 0 var(--bg); }
 .wt-active .subagent, .wt-active .subagent-label, .wt-active .subagent-desc, .wt-active .subagent-age { color: var(--bg); }

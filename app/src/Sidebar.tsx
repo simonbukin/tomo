@@ -23,7 +23,7 @@ import { useShortcuts } from "./shortcuts";
 import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { Id, Repo, SidebarSort, Worktree } from "./types";
 import { useGlide } from "./glide";
-import { SUBAGENT_LINES, SubagentList, WorktreePreview } from "./WorktreePreview";
+import { SubagentList, WorktreePreview } from "./WorktreePreview";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
@@ -277,7 +277,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
           <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
         </span>
-        {!archived && <SubagentList worktreeId={w.id} limit={SUBAGENT_LINES} flip={`sub:${w.id}`} />}
+        {!archived && <SubagentList worktreeId={w.id} flip={`sub:${w.id}`} />}
       </div>
     </HoverCard>
   );

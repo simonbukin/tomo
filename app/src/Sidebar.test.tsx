@@ -159,11 +159,11 @@ describe("subagents in the row", () => {
     expect(lines[1].querySelector(".state")).toHaveAttribute("title", "done");
   });
 
-  it("caps the row at three lines and counts the rest", () => {
+  it("shows every subagent on its own line, with no count of the rest", () => {
     const row = renderRow(worktree(), [withSubs(["a", "b", "c", "d", "e"].map((id, i) => sub(id, "working", i)))]);
     const lines = [...row.querySelectorAll(".subagent")];
-    expect(lines).toHaveLength(3);
-    expect(lines[2]).toHaveTextContent("+3 more");
+    expect(lines).toHaveLength(5);
+    expect(row).not.toHaveTextContent(/more/);
   });
 
   it("hides the subagents of an archived worktree", () => {
