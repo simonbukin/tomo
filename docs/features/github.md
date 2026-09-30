@@ -10,7 +10,7 @@ pull requests. Log in with `gh auth login` first.
 |---|---|
 | Right inspector, section `pull request` | number, title (a click opens the URL), state, draft, review decision, check counts, and the merge state when it is not `mergeable`. `refresh` asks again. |
 | Right rail, `Pull request` button | `×` for failed checks, else `✓` for a merged pull request |
-| NOW signals (Home, sidebar, left rail preview) | `merged`, else `checks failed`, after the core signals. A card shows three signals at most. |
+| Name line link (sidebar row, Home) | the pull request icon and `#412`. The icon is green when open, gray as a draft, purple when merged, red when closed or when a check fails. The hover card adds the title, the state, the checks, and the review. |
 | Repo avatar (sidebar, Home) | the image of the owner, for an `origin` remote on `github.com` |
 | Worktree tags | one reserved tag that shows the pull request; see "Tags" below |
 | Activity | one `pr_merged` event when an answer shows a merged pull request and the cached answer did not |
@@ -65,9 +65,9 @@ pull request is not cached, so the next call runs `gh` again.
 | `tomo pr` | once, when the user runs it |
 
 The inspector section mounts only while the right inspector is open on a
-worktree whose directory exists. The rail marker, the NOW signals, and the
-town history read cached data only. They start no work. So Home shows a
-pull request signal only for a worktree whose pull request the session
+worktree whose directory exists. The rail marker, the row link, and the
+town history read cached data only. They start no work. So a row shows a
+pull request link only for a worktree whose pull request the session
 already knows. The repo avatar loads its image from `github.com` in the
 webview when a repo row renders.
 
@@ -95,7 +95,7 @@ GitHub is an addon. Core does not import it. See [../addons.md](../addons.md).
 crates/tomo-proto/src/addons/github.rs   PullRequest, PrStatusResult, GitHubActivity
 crates/tomod/src/addons/github/mod.rs    gh pr view, the cache, pr_status, known_pr
 crates/tomod/src/addons/github/model.rs  parse, answer, freshness, change and merge rules, known_pr
-app/src/addons/github/index.ts           the Addon value: inspector section, signals, repo avatar, frame reducer
+app/src/addons/github/index.ts           the Addon value: inspector section, row link, repo avatar, frame reducer
 app/src/addons/github/                   PrSection.tsx, Avatar.tsx, model.ts, state.ts, activity.ts, github.test.tsx
 ```
 
@@ -103,7 +103,7 @@ GitHub joins Core and the other addons at these points only:
 
 - `dispatch.rs`: the `pr_status` arm, `is_slow`, and `town_pr`, which gives
   Towns the pull request through `github::known_pr`.
-- The GUI slots `inspectorSections`, `worktreeSignals`, `repoAvatar`, and
+- The GUI slots `inspectorSections`, `worktreeLinks`, `repoAvatar`, and
   `onFrame`.
 - The `prs` key on the client `State`, which `state.ts` declares through
   module augmentation.
@@ -120,7 +120,8 @@ The `.pr-*` and `.check-*` classes stay in `styles/base.css` and
 - `crates/tomod/src/addons/github/model.rs`: the parse, every `gh` outcome,
   freshness, the change and merge rules, the merge event, and `known_pr`.
 - `app/src/addons/github/github.test.tsx`: the section and its 120 s poll,
-  the rail marker, the NOW signal, the repo avatar, and the owner parse.
+  the rail marker, the row link and its hover card facts, the repo avatar,
+  and the owner parse.
 - `scripts/torture/github.sh`: a fake `gh` answers from files. The script
   checks the parse, the cache, `pr_changed`, `pr_merged`, the town history,
   `tomo pr`, and the `Repo` shape. It stops if the daemon does not run the

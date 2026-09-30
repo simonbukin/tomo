@@ -9,7 +9,7 @@ The addon is read-only. It sends only GraphQL queries. It never changes an
 issue, a comment, or a state in Linear.
 
 Linear is an addon (see [addons.md](addons.md)). If you remove it, the issue
-signal, the issue rows in the git section, the palette entry, `tomo linear`,
+link, the issue rows in the git section, the palette entry, `tomo linear`,
 `linear_get`, `linear_login`, `linear_logout`, and `linear_changed` go away.
 
 ## Where the code lives
@@ -21,7 +21,7 @@ signal, the issue rows in the git section, the palette entry, `tomo linear`,
 | branch parse, query, answer parse, poll rule | `crates/tomod/src/addons/linear/model.rs` |
 | Keychain, `curl`, the last answer, the poll | `crates/tomod/src/addons/linear/mod.rs` |
 | CLI | `Cmd::Linear` in `crates/tomo-cli/src/main.rs`, `print::linear_*` |
-| GUI | `app/src/addons/linear/`: `state.ts`, `model.ts` (signal, tint, palette), `Views.tsx` (icon, signal line, hover card lines, git rows), `index.ts` |
+| GUI | `app/src/addons/linear/`: `state.ts`, `model.ts` (the row link, tint, palette), `Glyph.tsx` (the mark), `Views.tsx` (icon, git rows), `index.ts` |
 
 ## The key
 
@@ -77,11 +77,11 @@ use Linear, so a missing key is not a problem.
 
 ## Display
 
-- The signal line on a card and a sidebar row shows the Linear mark, the
-  identifier, and the state name. The line has no hover card of its own.
-- The worktree hover card of a sidebar row or a rail square shows the
-  identifier, the state name with its tinted mark, the title, the priority,
-  and the assignee. The addon fills `signalLine.Detail` for this.
+- The name line of a sidebar row and a Home card shows the Linear mark in
+  the color of the issue state, and the identifier (`ENG-12`). The addon
+  gives it through the `worktreeLinks` slot.
+- The links section of the worktree hover card shows the identifier, the
+  title, the state name, and the assignee.
 - The mark has the team's colour for the state, mixed 70% with `--fg`. A pale
   colour such as `#e2e2e2` then still reads on a light theme.
 - The git section of the inspector shows the identifier and the title, which
@@ -90,9 +90,4 @@ use Linear, so a missing key is not a problem.
 
 ## Known limits
 
-- A card shows at most three signals. The issue is the last addon signal,
-  so an urgent signal such as "checks failed" or a memory warning keeps its
-  place. The omit of agent signals happens after the cut, so a worktree with
-  live agents and other signals can show no issue on its card or row. The
-  inspector still shows it.
 - One query returns at most 250 issues.
