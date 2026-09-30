@@ -64,7 +64,6 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .state-sleeping-done { background: var(--working); }
 .state-complete { box-shadow: inset 0 0 0 1px var(--working); }
 .state-dirty { background: var(--fg-3); box-shadow: none; }
-.state-selected { background: var(--fg); box-shadow: none; }
 .state-archiving { background: var(--fg-3); box-shadow: none; animation: pulse 1.2s ease-in-out infinite; }
 .state-full, .state-ok, .pr-open, .check-passed { background: var(--working); box-shadow: none; }
 .state-partial, .state-warning, .check-pending { background: var(--waiting); box-shadow: none; }
@@ -80,6 +79,7 @@ svg.icon { width: 14px; height: 14px; flex: none; }
  * The 6px subagent size is the same SVG, so each cell is 2px. */
 .state.mark { --mk: var(--fg-3); --mk-ghost: 0.17; width: 9px; height: 9px; background: none; box-shadow: none; rotate: 0deg; overflow: visible; }
 .state.mark.state-small { width: 6px; height: 6px; }
+.mark > svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .mark .lit, .mark .tw { fill: var(--mk); }
 .mark .off { fill: var(--mk); opacity: var(--mk-ghost); }
 .mark:is([data-mark="working"], [data-mark="done"], [data-mark="complete"], [data-mark="sleeping-done"]) { --mk: var(--working); }
