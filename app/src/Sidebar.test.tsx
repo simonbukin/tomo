@@ -1,6 +1,6 @@
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentPresence, Worktree } from "./types";
 
@@ -8,7 +8,7 @@ vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof im
 
 const { WorktreeRow } = await import("./Sidebar");
 const { getState, setState } = await import("./store");
-const { WorktreePreview, subagentsOf } = await import("./WorktreePreview");
+const { WorktreePreview } = await import("./WorktreePreview");
 
 const nodeFsWithoutNodeTypes = "node:fs";
 const { readFileSync } = await import(/* @vite-ignore */ nodeFsWithoutNodeTypes);
@@ -65,44 +65,76 @@ function renderRow(w: Worktree, agents: AgentPresence[] = []) {
   ).container;
 }
 
-/** One slot for each part of the row. The fixed grid needs every one of them, whatever the row holds. */
-const SLOTS = ["wt-row", "wt-name-line", "wt-meta", "wt-sub", "wt-branch", "wt-foot", "wt-agents", "wt-signals", "wt-tags"] as const;
-const slotCounts = (c: HTMLElement) => SLOTS.map((slot) => c.querySelectorAll(`.${slot}`).length);
+const lineTexts = (c: HTMLElement, group: string) => [...c.querySelectorAll(`.wt-group-${group} .wt-line-text`)].map((l) => l.textContent);
 
-describe("worktree row height contract", () => {
-  const cases: [string, Worktree, AgentPresence[]][] = [
-    ["quiet", worktree({ branch: null, detached: true }), []],
-    ["loud", worktree({ is_main: true, git: { dirty: true } as unknown as Worktree["git"], metadata: { ...base.metadata, tags: ["lr", "ui", "exploring"] } }), [agent("p1", "waiting"), agent("p2", "working")]],
-    ["archived", worktree({ archived_at_ms: 1 }), [agent("p1", "working")]],
-    ["archiving", worktree({ archiving: true }), []],
-  ];
-
-  it.each(cases)("renders the same slots for a %s row", (_name, w, agents) => {
-    expect(slotCounts(renderRow(w, agents))).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
+describe("the worktree row", () => {
+  it("draws a quiet row as the name line and the branch line, with the mark first", () => {
+    const row = renderRow(worktree()).querySelector(".wt-row")!;
+    expect(row.firstElementChild?.querySelector(".state")).not.toBeNull();
+    expect(row.querySelector(".wt-name")).toHaveTextContent("kobe");
+    expect(row.querySelector(".wt-branch")).toHaveTextContent("feat/kobe");
+    expect(row.querySelectorAll(".wt-group")).toHaveLength(0);
   });
 
-  it.each(cases)("puts the status dot first on a %s row", (_name, w, agents) => {
-    const row = renderRow(w, agents).querySelector(".wt-row")!;
-    expect(row.firstElementChild?.className).toMatch(/\bstate\b/);
+  it("puts * and a red !2 after the branch, and no ahead or behind", () => {
+    const git = { dirty: true, conflicts: 2, ahead: 3, behind: 1 } as unknown as Worktree["git"];
+    const branch = renderRow(worktree({ git })).querySelector(".wt-branch")!;
+    expect(branch.textContent).toBe("feat/kobe*!2");
+    expect(branch.querySelector(".wt-flag-bad")).toHaveTextContent("!2");
+    expect(branch.textContent).not.toMatch(/[↑↓]/);
   });
 
-  it.each(cases)("keeps the signal area to one line on a %s row", (_name, w, agents) => {
-    const area = renderRow(w, agents).querySelector(".wt-signals")!;
-    expect(area.children.length).toBeLessThanOrEqual(1);
+  it("draws a line for a working agent but none for an idle one, and no state words", () => {
+    const row = renderRow(worktree(), [agent("p1", "working"), { ...agent("p2", "idle"), kind: "codex" }]);
+    expect(lineTexts(row, "agents")).toEqual(["claude"]);
+    expect(row).not.toHaveTextContent(/working|idle|done, not seen/);
   });
 
-  it("draws the agents under the branch, not beside it", () => {
-    const [, loud, agents] = cases[1];
-    const row = renderRow(loud, agents);
-    expect(row.querySelectorAll(".wt-agents .proc-icon")).toHaveLength(agents.length);
-    expect(row.querySelector(".wt-sub")!.contains(row.querySelector(".wt-agents"))).toBe(false);
-    expect(row.querySelector(".wt-foot")!.contains(row.querySelector(".wt-agents"))).toBe(true);
+  it("orders the groups problems, agents, apps", () => {
+    setState({ rowErrors: { w1: { op: "rename", message: "the name is taken" } } });
+    const row = renderRow(worktree({ exists: false }), [agent("p1", "dead")]);
+    expect([...row.querySelectorAll(".wt-group")].map((g) => g.className)).toEqual(["wt-group wt-group-problems", "wt-group wt-group-agents"]);
+    expect(lineTexts(row, "problems")).toEqual(["rename failedthe name is taken", "folder missingnot found on disk"]);
+    expect(lineTexts(row, "agents")).toEqual(["claudeexited"]);
   });
 
-  it("leaves the agents out of the signal line, which they used to share", () => {
-    const [, loud, agents] = cases[1];
-    const area = renderRow(loud, agents).querySelector(".wt-signals")!;
-    expect(area.querySelectorAll(".agent-line")).toHaveLength(0);
+  it("dismisses a failed operation on a click, and does not open the worktree", () => {
+    setState({ rowErrors: { w1: { op: "archive", message: "a pane still writes to the folder" } } });
+    const row = renderRow(worktree());
+    fireEvent.click(row.querySelector('.wt-group-problems [role="button"]')!);
+    expect(getState().rowErrors.w1).toBeUndefined();
+    expect(getState().ui.activeWorktreeId).toBeNull();
+  });
+
+  it("draws an archived row with no mark, no lines, and archived before the branch", () => {
+    const row = renderRow(worktree({ archived_at_ms: 1 }), [agent("p1", "working")]);
+    expect(row.querySelector(".wt-mcell .state")).toBeNull();
+    expect(row.querySelectorAll(".wt-group")).toHaveLength(0);
+    expect(row.querySelector(".wt-branch")).toHaveTextContent("archived · feat/kobe");
+  });
+
+  it("draws the archive in progress as a line with the gray twinkle", () => {
+    const row = renderRow(worktree({ archiving: true }));
+    expect(lineTexts(row, "problems")).toEqual(["archiving"]);
+    expect(row.querySelector(".wt-group-problems .state")).toHaveAttribute("data-mark", "archiving");
+  });
+});
+
+describe("nothing on the row is cut off", () => {
+  it("wraps the text of the row and never draws an ellipsis", () => {
+    expect(rowCss).not.toMatch(/text-overflow/);
+    expect(rowCss).toMatch(/\.wt-branch \{[^}]*overflow-wrap: anywhere/);
+    expect(rowCss).toMatch(/\.wt-line-text \{[^}]*overflow-wrap: anywhere/);
+    expect(rowCss).toMatch(/\.wt-name \{[^}]*overflow-wrap: anywhere/);
+  });
+
+  it("keeps a long branch and a long question whole in the DOM", () => {
+    const branch = "feat/checkout-with-a-rather-long-branch-name-that-goes-on-and-on";
+    const question = "allow Bash: pnpm test --filter auth --reporter verbose --run the-whole-suite?";
+    setState({ attention: [{ id: "a1", worktree_id: "w1", pane_id: "p1", level: "attention", message: question, created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null }] });
+    const row = renderRow(worktree({ branch }), [agent("p1", "waiting")]);
+    expect(row.querySelector(".wt-branch")!.textContent).toBe(branch);
+    expect(lineTexts(row, "agents")).toEqual([`claude${question}`]);
   });
 });
 
@@ -129,49 +161,27 @@ describe("the row CSS reads tokens only", () => {
   });
 });
 
-describe("worktree hover preview", () => {
-  it("lists the branch, the git state, each agent with its state, and the last activity", () => {
+describe("worktree hover card", () => {
+  it("shows every agent with its state in words, the git state, and the last activity", () => {
     const w = worktree({ git: { dirty: true, files_changed: 2, untracked: 0, conflicts: 0, insertions: 5, deletions: 1, ahead: 1, behind: 0, upstream: "origin/feat/kobe" } as Worktree["git"], last_active_ms: Date.now() });
     setState({ worktrees: [w], agents: { p1: agent("p1", "working"), p2: { ...agent("p2", "waiting"), kind: "codex" } } });
     const { container } = render(<WorktreePreview w={w} />);
-    expect(screen.getByText("feat/kobe")).toBeInTheDocument();
-    expect(screen.getByText("2 files changed")).toBeInTheDocument();
-    const agents = [...container.querySelectorAll(".wt-preview-agent")].map((row) => row.textContent);
-    expect(agents).toEqual([expect.stringContaining("Claudeworking"), expect.stringContaining("Codexneeds you")]);
-    expect(screen.getByText(/^active/)).toBeInTheDocument();
-  });
-});
-
-describe("subagents in the row", () => {
-  const sub = (id: string, state: AgentPresence["state"], started: number) => ({ id, label: "Explore", description: `task ${id}`, state, started_at_ms: started , updated_at_ms: started });
-  const withSubs = (subs: ReturnType<typeof sub>[]): AgentPresence => ({ ...agent("p1", "working"), subagents: subs });
-
-  it("draws nothing for an agent without subagents, so a quiet row keeps its two units", () => {
-    expect(renderRow(worktree(), [agent("p1", "working")]).querySelector(".subagents")).toBeNull();
+    expect(screen.getAllByText("feat/kobe")).toHaveLength(1);
+    expect(screen.getByText("2 files")).toBeInTheDocument();
+    expect(screen.getByText("↑1 ↓0")).toBeInTheDocument();
+    const agents = [...container.querySelectorAll(".wt-hover-line")].map((row) => row.querySelector(".wt-line-text")!.textContent);
+    expect(agents).toEqual(["claudeworking", "codexneeds you"]);
+    expect(container.querySelector(".wt-hover-when")!.textContent).toMatch(/ago$/);
+    expect([...container.querySelectorAll(".wt-hover-title")].map((t) => t.textContent)).toEqual(["agents", "git"]);
   });
 
-  it("nests one line per subagent under the row, each with its own state mark", () => {
-    const row = renderRow(worktree(), [withSubs([sub("a", "working", 1), sub("b", "exited", 2)])]);
-    const lines = [...row.querySelectorAll(".wt-row .subagents .subagent")];
-    expect(lines.map((l) => l.querySelector(".subagent-desc")!.textContent)).toEqual(["task a", "task b"]);
-    expect(lines[0].querySelector(".state")).toHaveAttribute("data-mark", "working");
-    expect(lines[1].querySelector(".state")).toHaveAttribute("data-mark", "done");
-    expect(lines[1].querySelector(".state")).toHaveAttribute("title", "done");
-  });
-
-  it("shows every subagent on its own line, with no count of the rest", () => {
-    const row = renderRow(worktree(), [withSubs(["a", "b", "c", "d", "e"].map((id, i) => sub(id, "working", i)))]);
-    const lines = [...row.querySelectorAll(".subagent")];
-    expect(lines).toHaveLength(5);
-    expect(row).not.toHaveTextContent(/more/);
-  });
-
-  it("hides the subagents of an archived worktree", () => {
-    expect(renderRow(worktree({ archived_at_ms: 1 }), [withSubs([sub("a", "working", 1)])]).querySelector(".subagents")).toBeNull();
-  });
-
-  it("orders the subagents that need you first, then the oldest", () => {
-    const order = subagentsOf([withSubs([sub("done", "exited", 0), sub("late", "working", 9), sub("early", "working", 1)]), withSubs([sub("asks", "waiting", 5)])]).map((s) => s.id);
-    expect(order).toEqual(["asks", "early", "late", "done"]);
+  it("puts each subagent one level in, with its kind, its task, and its age", () => {
+    const withSubs = { ...agent("p1", "working"), subagents: [{ id: "a", label: "Explore", description: "find every eslint-disable", state: "exited" as const, started_at_ms: 0, updated_at_ms: 0 }] };
+    setState({ agents: { p1: withSubs } });
+    const { container } = render(<WorktreePreview w={worktree()} />);
+    const sub = container.querySelector(".wt-line-sub")!;
+    expect(sub.querySelector(".state-small")).toHaveAttribute("data-mark", "done");
+    expect(sub.querySelector(".wt-line-text")!.textContent).toBe("Explorefind every eslint-disable");
+    expect(sub.querySelector(".wt-line-meta")!.textContent).toMatch(/ d$/);
   });
 });

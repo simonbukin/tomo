@@ -11,8 +11,8 @@ vi.mock("../../api", async (importOriginal) => ({ ...(await importOriginal<typeo
 const { WorktreeHeader, CheckpointBanner } = await import("../../WorktreeHeader");
 const { overflowMenu } = await import("../../menus");
 const { paletteEntries, worktreeChildren } = await import("../../Palette");
-const { Signals, signalsFor } = await import("../../Signals");
-const { signalText } = await import("../../WorktreePreview");
+const { WorktreeLines } = await import("../../WorktreeLines");
+const { WorktreePreview } = await import("../../WorktreePreview");
 const { activityView } = await import("../../activityKinds");
 const store = await import("../../store");
 const { byRank, endpointSummary, primaryEndpoint, servesPage } = await import("./model");
@@ -73,18 +73,18 @@ describe("runtime header popover", () => {
   });
 });
 
-describe("runtime NOW signal", () => {
-  it("shows the first HTTP endpoint with an arrow, before the memory warning", () => {
+describe("runtime app lines", () => {
+  it("gives a line for each HTTP port, with the port on the row and the address and uptime in the hover card", () => {
+    act(() => store.setState({ worktrees: [worktree] }));
     changed([db, app]);
-    expect(signalsFor(store.getState(), "w1").map(signalText)).toEqual(["node :3000"]);
-    act(() => store.setState({ resources: { w1: { worktree_id: "w1", rss_bytes: 5000, cpu_percent: 0, process_count: 1 } } as never }));
-    expect(signalsFor(store.getState(), "w1").map(signalText)).toEqual(["node :3000", "⚠ 5 KB"]);
-    render(<Signals worktreeId="w1" />);
-    const line = document.querySelector(".signal-runtime")!;
-    expect(line.textContent).toBe("node  :3000");
-    expect(line.querySelector("svg")).not.toBeNull();
+    const { container } = render(<WorktreeLines w={worktree} />);
+    expect([...container.querySelectorAll(".wt-group-apps .wt-line-text")].map((l) => l.textContent)).toEqual(["node:3000"]);
+    cleanup();
+    render(<WorktreePreview w={worktree} />);
+    const line = document.querySelector(".wt-hover-line .wt-line-text")!.closest(".wt-hover-line")!;
+    expect(line.textContent).toMatch(/^nodehttp:\/\/localhost:3000up \d+ d$/);
     changed([db]);
-    expect(signalsFor(store.getState(), "w1").map(signalText)).toEqual(["⚠ 5 KB"]);
+    expect(document.querySelector(".wt-hover-line")).toBeNull();
   });
 });
 

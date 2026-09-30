@@ -112,6 +112,10 @@
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); }
 .gallery-cell { margin: 0; display: grid; gap: var(--sp-1); }
 .gallery-caption { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); }
+.gallery-rows { width: 300px; flex: none; background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
+.gallery-pairs { display: flex; flex-direction: column; gap: 40px; }
+.gallery-pair { display: flex; gap: 10px; align-items: flex-start; }
+.gallery-pair .popover { position: static; }
 .gallery-picker { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: var(--sp-3); }
 .gallery-shells { display: flex; gap: var(--sp-4); align-items: start; }
 .gallery-shell { --right-col: 0px; width: 560px; height: 1260px; border: 1px solid var(--line); overflow: hidden; }

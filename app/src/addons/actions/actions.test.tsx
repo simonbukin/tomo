@@ -144,3 +144,18 @@ describe("actions crash toast", () => {
     expect(rpcCalls()).toEqual([["action_restart", { worktree_id: "w1", action_id: "serve" }]]);
   });
 });
+
+describe("actions app lines", () => {
+  const crash = (over: Partial<AttentionItem>): AttentionItem => ({ id: "c1", worktree_id: "w1", pane_id: "p9", level: "attention", message: "Storybook exited with code -1", created_at_ms: 5, viewed_at_ms: null, kind: "crash", url: null, agent_kind: null, resolved_at_ms: null, ...over });
+
+  it("gives a red app line for each crash that nobody resolved, with the name and the exit code", async () => {
+    const { crashLines } = await import("./lines");
+    const s = { ...store.getState(), attention: [crash({}), crash({ id: "c2", resolved_at_ms: 9 }), crash({ id: "c3", worktree_id: "w2" }), crash({ id: "c4", kind: "checkpoint" })] };
+    expect(crashLines(s, "w1")).toEqual([{ id: "c1", mark: "failed", label: "Storybook", detail: "exited -1", bad: true, atMs: 5 }]);
+  });
+
+  it("keeps a crash message of another shape whole", async () => {
+    const { crashLine } = await import("./lines");
+    expect(crashLine(crash({ message: "Storybook died" }))).toMatchObject({ label: "Storybook died", detail: "crashed" });
+  });
+});
