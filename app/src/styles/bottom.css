@@ -29,7 +29,7 @@
 .bottom-status { justify-content: center; white-space: nowrap; }
 .bottom-metrics { justify-content: flex-end; }
 
-.bottom-item { display: inline-flex; align-items: center; gap: 6px; height: var(--u); padding: 0 var(--sp-2); border: 0; background: transparent; color: var(--fg-2); font: inherit; white-space: nowrap; cursor: default; }
+.bottom-item { display: inline-flex; align-items: center; gap: 6px; height: var(--u); padding: 0 var(--sp-2); border: 0; background: transparent; color: var(--fg-2); font: inherit; white-space: nowrap; cursor: pointer; }
 .bottom-item:hover, .bottom-item[data-popup-open] { background: var(--bg-2); color: var(--fg-1); }
 .bottom-item .num, .bottom-pop .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 

@@ -63,7 +63,7 @@
 
 /* ---- list rows */
 .wt-list { display: flex; flex-direction: column; }
-.wt-list-row { display: grid; grid-template-columns: 14px minmax(140px, 1.4fr) minmax(90px, 0.8fr) minmax(80px, 0.7fr) minmax(120px, 1.6fr) minmax(90px, 1fr) 190px; grid-template-rows: var(--u); align-items: center; column-gap: var(--sp-3); padding: 0 var(--inset); background: var(--bg); box-shadow: inset 0 -1px 0 var(--line); font-size: var(--fs-1); color: var(--fg-1); transition: background-color var(--dur-fast) var(--ease-out); }
+.wt-list-row { display: grid; grid-template-columns: 14px minmax(140px, 1.4fr) minmax(90px, 0.8fr) minmax(80px, 0.7fr) minmax(120px, 1.6fr) minmax(90px, 1fr) 190px; grid-template-rows: var(--u); align-items: center; column-gap: var(--sp-3); padding: 0 var(--inset); background: var(--bg); box-shadow: inset 0 -1px 0 var(--line); font-size: var(--fs-1); color: var(--fg-1); transition: background-color var(--dur-fast) var(--ease-out); cursor: pointer; }
 .wt-list-row:hover { background: var(--bg-1); }
 .wt-list-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt-list-row .name { color: var(--fg); font-weight: 600; font-size: var(--fs-2); }
@@ -81,11 +81,12 @@
 .board-col-over { background: var(--bg-1); box-shadow: inset 0 0 0 2px var(--fg); }
 .board-cards { display: flex; flex-direction: column; gap: 0; min-height: var(--u2); }
 .board-cards > .card { box-shadow: inset -1px -1px 0 var(--line); }
-.card { position: relative; display: flex; flex-direction: column; gap: 1px; padding: var(--sp-2) var(--inset) var(--sp-3); background: var(--bg); transition: background-color var(--dur-fast) var(--ease-out); }
+.card { position: relative; display: flex; flex-direction: column; gap: 1px; padding: var(--sp-2) var(--inset) var(--sp-3); background: var(--bg); transition: background-color var(--dur-fast) var(--ease-out); cursor: pointer; }
 .card:hover { background: var(--bg-1); }
 .card-attention::after { content: ""; position: absolute; inset: 0 0 0 0; box-shadow: inset 2px 0 0 var(--waiting); pointer-events: none; }
 .card-missing, .card-archived { opacity: 0.55; }
 .card-archiving { opacity: 0.7; cursor: default; }
+.card-archived, .wt-list-row:is(.row-archived, .row-archiving) { cursor: default; }
 .card-dragging { opacity: 0.4; }
 .card-overlay { width: 280px; box-shadow: var(--shadow-pop); cursor: grabbing; }
 .card-title { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); height: 20px; font-weight: 600; font-size: var(--fs-2); }

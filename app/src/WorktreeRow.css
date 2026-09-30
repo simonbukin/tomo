@@ -14,11 +14,13 @@
   min-height: var(--u2);
   padding: 4px var(--sp-1) 4px var(--inset);
   box-shadow: inset 0 -1px 0 var(--line);
+  cursor: pointer;
 }
 .wt-row:hover { background: var(--bg-2); }
 .wt-active, .wt-active:hover { background: var(--fg); color: var(--bg); }
 .wt-selected, .wt-selected:hover { background: var(--surface-3); }
 .wt-archiving { opacity: 0.7; }
+.wt-archiving, .wt-archived { cursor: default; }
 .wt-dragging { position: relative; z-index: 2; background: var(--bg-2); box-shadow: var(--shadow-pop); cursor: grabbing; }
 
 .wt-name-line { display: inline-flex; align-items: center; min-width: 0; line-height: 18px; }
