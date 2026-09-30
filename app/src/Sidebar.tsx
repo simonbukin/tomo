@@ -1,4 +1,3 @@
-import { ProcessIcon } from "./ProcessIcon";
 import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, Star, type LucideIcon } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -8,9 +7,7 @@ import { addonApps, addonViews, repoAvatar } from "./addons";
 import { LENSES, LENS_LABEL, lensGroups, type LensGroup } from "./lenses";
 import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RowError } from "./RowError";
-import { Signals } from "./Signals";
-import { agentMark, dotClass, tintClass } from "./glyphs";
+import { dotClass } from "./glyphs";
 import { WorktreeMark } from "./StateMark";
 import { useFlip } from "./useFlip";
 import { SidebarHead } from "./shell/TopStrip";
@@ -20,10 +17,12 @@ import { openMenu } from "./MenuHost";
 import { needsAttention } from "./homeQuery";
 import { bulkMenu, repoMenu, worktreeMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
-import { agentsOf, clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
+import { clearSelection, getState, needsMe, queryContext, setSelection, setState, setUi, useStore, visibleRepos } from "./store";
 import type { Id, Repo, SidebarSort, Worktree } from "./types";
 import { useGlide } from "./glide";
-import { SubagentList, WorktreePreview } from "./WorktreePreview";
+import { WorktreePreview } from "./WorktreePreview";
+import { LineGroups, useRowInput, WorktreeLinks } from "./WorktreeLines";
+import { branchFlags, branchText, rowGroups } from "./rowModel";
 
 const SORTS: SidebarSort[] = ["name", "recent", "created", "attention", "manual"];
 
@@ -153,9 +152,6 @@ function Destination({ id, label, icon: Icon, count = 0, current, shortcut }: { 
 
 type DragData = { kind: "repo"; id: Id } | { kind: "worktree"; id: Id; repoId: Id };
 
-/** A row draws its agents as tinted provider icons, so the signal list leaves them out. */
-const AGENT_SIGNALS = ["agent"] as const;
-
 const repoKey = (id: Id) => `repo:${id}`;
 
 const openRepoHome = (repoId: Id) => setUi({ view: "home", home: { ...getState().ui.home, scope: { kind: "repo", repoId } } });
@@ -231,10 +227,9 @@ function selectRow(e: React.MouseEvent, w: Worktree, siblings: Worktree[]): bool
 export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId }: { w: Worktree; active: boolean; siblings?: Worktree[]; sortable?: boolean; sortId?: string }) {
   const drag = useSortable({ id: sortId ?? w.id, data: { kind: "worktree", id: w.id, repoId: w.repo_id } satisfies DragData, disabled: !sortable || w.is_main || !!w.archived_at_ms });
   const selected = useStore((s) => s.selection.has(w.id));
-  const agents = useStore((s) => agentsOf(s, w.id));
+  const groups = rowGroups(useRowInput(w));
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
-  const branch = w.detached ? `detached ${w.head.slice(0, 7)}` : (w.branch ?? "");
   return (
     <HoverCard side="right" content={<WorktreePreview w={w} />}>
       <div
@@ -250,34 +245,23 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
           openMenu(e, sel.size > 1 && sel.has(w.id) ? bulkMenu([...sel]) : worktreeMenu(w));
         }}
       >
-        <WorktreeMark w={w} className={selected ? "state-selected" : undefined} />
-        <span className="wt-name-line">
-          <span className="wt-name">{w.name}</span>
+        <span className="wt-mcell">{archived ? null : <WorktreeMark w={w} />}</span>
+        <span className="wt-name">
+          <span className="wt-name-text">{w.name}</span>
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
         </span>
-        <span className="wt-meta">
-          <RowError worktreeId={w.id} />
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
-            <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
-          </DropdownMenu>
+        <span className="wt-links">
+          <WorktreeLinks w={w} />
         </span>
-        <span className="wt-sub">
-          <span className="wt-branch" title={w.path}>
-            {busy ? <span className="wt-state">archiving...</span> : archived ? "archived" : null}
-            {(busy || archived) && " "}
-            {branch}
-            {w.git?.dirty ? " *" : ""}
-          </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<IconButton label="More" className="wt-more" onClick={(e) => e.stopPropagation()} />}><Ellipsis className="icon" /></DropdownMenuTrigger>
+          <DropdownMenuContent align="end"><MenuItems items={() => worktreeMenu(w)} /></DropdownMenuContent>
+        </DropdownMenu>
+        <span className="wt-branch" title={w.path}>
+          {branchText(w)}
+          {branchFlags(w).map((f) => <span key={f.text} className={f.bad ? "wt-flag wt-flag-bad" : "wt-flag"}>{f.text}</span>)}
         </span>
-        <span className="wt-foot">
-          <span className="wt-agents">
-            {archived ? null : agents.map((a) => <ProcessIcon key={a.pane_id} agent={a.kind} size={12} className={tintClass(agentMark(a))} />)}
-          </span>
-          <span className="wt-signals">{archived ? null : <Signals worktreeId={w.id} omit={AGENT_SIGNALS} />}</span>
-          <span className="wt-tags">{w.metadata.tags.map((t) => `#${t}`).join(" ")}</span>
-        </span>
-        {!archived && <SubagentList worktreeId={w.id} flip={`sub:${w.id}`} />}
+        <LineGroups w={w} groups={groups} />
       </div>
     </HoverCard>
   );
