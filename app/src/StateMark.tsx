@@ -46,15 +46,15 @@ function Cells({ mark }: { mark: Mark }) {
 /**
  * The one live mark: a 3×3 grid in one 9px SVG. Color says what, motion says busy, and the pattern tells the still
  * states apart (see `.mark` in base.css). The lit cells are one path, so neighbours join with no seam at any zoom.
- * `small` is the 6px size of a subagent line.
+ * `small` is the 6px size of a subagent line. The span holds the tooltip, so the text of a line stays the text.
  */
 export function StateMark({ mark, title, small, className, hidden }: { mark: Mark; title?: string; small?: boolean; className?: string; hidden?: boolean }) {
-  const tip = markTitle(mark, title);
   return (
-    <svg className={cx("state mark", small && "state-small", className)} viewBox="0 0 9 9" data-mark={mark ?? "none"} role={tip && !hidden ? "img" : undefined} aria-hidden={hidden || !tip || undefined}>
-      {tip && <title>{tip}</title>}
-      <Cells mark={mark} />
-    </svg>
+    <span className={cx("state mark", small && "state-small", className)} data-mark={mark ?? "none"} title={markTitle(mark, title)} aria-hidden={hidden || undefined}>
+      <svg viewBox="0 0 9 9" aria-hidden>
+        <Cells mark={mark} />
+      </svg>
+    </span>
   );
 }
 
