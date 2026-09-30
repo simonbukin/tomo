@@ -70,7 +70,9 @@
 .wt-list-row .branch { font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); }
 .wt-list-row .agents { display: inline-flex; gap: var(--sp-3); }
 .wt-list-row .runtime { display: inline-flex; gap: var(--sp-3); color: var(--fg-2); font-variant-numeric: tabular-nums; justify-content: flex-end; }
-.wt-list-row .subagents { grid-column: 2 / -1; }
+.wt-list-row > .wt-list-lines { grid-column: 2 / -1; overflow: visible; white-space: normal; }
+.wt-list-lines:empty { display: none; }
+.wt-list-lines .wt-group { margin: 0 0 4px; }
 .wt-list-row.row-attention .name { color: var(--waiting); }
 .wt-list-row.row-missing, .wt-list-row.row-archived { opacity: 0.55; }
 .wt-list-row.row-archiving { opacity: 0.7; }
@@ -96,12 +98,11 @@
 .card-branch .icon { flex: none; width: 12px; height: 12px; }
 .card-branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-dirty { flex: none; color: var(--fg-3); }
-.card-agents { display: flex; align-items: center; gap: var(--sp-2); padding-left: 22px; margin-top: 3px; }
-.card .subagents { margin: 3px 0 0 22px; }
+.card-links { display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); color: var(--fg-2); white-space: nowrap; }
+.card-lines .wt-group { grid-template-columns: 14px minmax(0, 1fr); column-gap: var(--sp-2); margin-top: 3px; }
 .card-tags { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 22px; margin-top: 4px; }
 .tag-chip { padding: 0 6px; box-shadow: inset 0 0 0 1px var(--line); color: var(--fg-2); font-family: var(--mono); font-size: var(--fs-0); line-height: 18px; }
 .card-sub.tags { font-size: var(--fs-1); }
-.card-signals { padding-left: 22px; display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); margin-top: 3px; }
 .card-foot { padding-left: 22px; display: flex; align-items: center; gap: var(--sp-3); margin-top: 3px; font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); min-height: 16px; font-variant-numeric: tabular-nums; }
 .card-foot .right { margin-left: auto; display: inline-flex; gap: var(--sp-3); }
 
