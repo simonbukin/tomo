@@ -1,8 +1,9 @@
-import type { CSSProperties } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { cx } from "./components/ui";
 import { agentMark, agentTitle, markTitle, type Mark } from "./glyphs";
 import { worktreeLead } from "./homeQuery";
 import { queryContext, useStore } from "./store";
+import { opacities, seedField, stepField, type Field } from "./twinkle";
 import type { AgentPresence, Worktree } from "./types";
 
 type StillMark = Exclude<Mark, null | "working" | "archiving">;
@@ -21,18 +22,45 @@ export const LIT: Record<StillMark, readonly number[]> = {
 
 const ALL = LIT.done;
 
-/** Each cell twinkles on its own period and phase. The periods share no small ratio, so the pattern never repeats. */
-const TWINKLE: readonly [number, number][] = [[1, 0.13], [1.37, 0.71], [0.83, 0.42], [1.19, 0.94], [1.61, 0.27], [0.91, 0.58], [1.29, 0.05], [0.77, 0.66], [1.07, 0.39]];
-
 const x = (cell: number) => (cell % 3) * 3;
 const y = (cell: number) => Math.floor(cell / 3) * 3;
 
 export const cellsPath = (cells: readonly number[]): string => cells.map((c) => `M${x(c)} ${y(c)}h3v3h-3z`).join("");
 
+const holdsStill = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+function Twinkle() {
+  const group = useRef<SVGGElement>(null);
+  useLayoutEffect(() => {
+    if (holdsStill()) return;
+    const cells = [...group.current!.children] as SVGElement[];
+    const paint = (f: Field) => opacities(f).forEach((o, c) => cells[c].style.setProperty("opacity", o.toFixed(3)));
+    let field = seedField(Math.random);
+    let last = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      field = stepField(field, (now - last) / 1000, Math.random);
+      last = now;
+      paint(field);
+      frame = requestAnimationFrame(tick);
+    };
+    paint(field);
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <g ref={group}>
+      {ALL.map((c) => (
+        <rect key={c} className="tw" x={x(c)} y={y(c)} width={3} height={3} />
+      ))}
+    </g>
+  );
+}
+
 function Cells({ mark }: { mark: Mark }) {
   if (mark === null) return null;
   if (mark === "working" || mark === "archiving")
-    return TWINKLE.map(([tw, td], c) => <rect key={c} className="tw" x={x(c)} y={y(c)} width={3} height={3} style={{ "--tw": tw, "--td": td } as CSSProperties} />);
+    return <Twinkle />;
   const lit = LIT[mark];
   const off = ALL.filter((c) => !lit.includes(c));
   return (
