@@ -1,15 +1,16 @@
 import type { ActivityEvent, AgentPresence, AttentionItem } from "./types";
 
 /**
- * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
- * unviewed, and an agent in its pane must still wait: once the agent moves on, the user already answered it.
+ * The one "Needs me" rule. An item needs a person when it is unresolved. A checkpoint needs one until it is
+ * resolved. A crash needs one until it is viewed: the row still shows it until it is resolved. A waiting item
+ * also must be unviewed, and an agent in its pane must still wait: once the agent moves on, the user answered it.
  * `Store::activity_list` in the daemon applies the same rule to `tomo activity --needs-me`.
  */
 export function needsMeItem(a: AttentionItem, agents: AgentPresence[]): boolean {
   if (a.resolved_at_ms != null) return false;
-  if (a.kind !== "waiting") return true;
+  if (a.kind === "checkpoint") return true;
   if (a.viewed_at_ms != null) return false;
-  return agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
+  return a.kind === "crash" || agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
 }
 
 /** Unresolved items, least recently viewed first, so `next_attention` cycles through them. */

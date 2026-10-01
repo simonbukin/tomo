@@ -27,8 +27,16 @@ export interface Action {
   group?: CommandGroup;
 }
 
+/** The row and the header show a crash for as long as it is open, so a person who opens the worktree has seen it. */
+function viewCrashes(worktreeId: Id): void {
+  getState()
+    .attention.filter((a) => a.worktree_id === worktreeId && a.kind === "crash" && a.viewed_at_ms == null && a.resolved_at_ms == null)
+    .forEach((a) => void rpc("attention_view", { id: a.id }).catch(failQuietly("attention_view")));
+}
+
 export async function openWorktree(worktreeId: Id): Promise<void> {
   setUi({ view: "worktree", activeWorktreeId: worktreeId });
+  viewCrashes(worktreeId);
   try {
     const r = await rpcParsed("worktree_open", worktreeOpenedSchema, { worktree_id: worktreeId });
     const tab = r.tabs.find((t) => t.is_active) ?? r.tabs[0];

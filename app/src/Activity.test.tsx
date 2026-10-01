@@ -141,10 +141,11 @@ describe("Activity view", () => {
     await click("archived", "Restore");
     await click("action_crashed", "Logs");
     const calls = vi.mocked(rpc).mock.calls.filter(([method]) => method !== "activity_list");
-    expect(calls.slice(0, 4)).toEqual([
+    expect(calls.slice(0, 5)).toEqual([
       ["action_restart", { worktree_id: "w1", action_id: "serve" }],
       ["checkpoint_resolve", { id: "att-chk" }],
       ["worktree_restore", { worktree_id: "w1" }],
+      ["attention_view", { id: "att-crash" }],
       ["worktree_open", { worktree_id: "w1" }],
     ]);
   });

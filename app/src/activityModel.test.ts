@@ -7,17 +7,19 @@ const agent = (state: AgentPresence["state"], kind: AgentPresence["kind"] = "cla
 const event = (id: string, occurred_at_ms: number): ActivityEvent => ({ id, kind: "agent_started", occurred_at_ms, worktree_id: "w", pane_id: null, agent_kind: "claude", title: "t", detail: null, payload: null, attention_id: null });
 
 describe("needsMeItems", () => {
-  it("keeps unresolved checkpoints and crashes even after a view, drops viewed waiting items", () => {
+  it("keeps unresolved checkpoints even after a view, drops viewed waiting items and viewed crashes", () => {
     const list = [
       attention({ id: "viewed-wait", viewed_at_ms: 5 }),
       attention({ id: "wait", pane_id: "p-claude" }),
       attention({ id: "cp", kind: "checkpoint", viewed_at_ms: 9 }),
       attention({ id: "done", kind: "crash", resolved_at_ms: 3 }),
+      attention({ id: "seen-crash", kind: "crash", viewed_at_ms: 4 }),
+      attention({ id: "crash", kind: "crash" }),
     ];
-    expect(needsMeItems(list, [agent("waiting")]).map((a) => a.id)).toEqual(["wait", "cp"]);
+    expect(needsMeItems(list, [agent("waiting")]).map((a) => a.id)).toEqual(["wait", "crash", "cp"]);
   });
   it("puts the least recently viewed item first so next_attention cycles", () => {
-    const list = [attention({ id: "b", kind: "crash", viewed_at_ms: 20 }), attention({ id: "a", kind: "checkpoint", viewed_at_ms: 10 })];
+    const list = [attention({ id: "b", kind: "checkpoint", viewed_at_ms: 20 }), attention({ id: "a", kind: "checkpoint", viewed_at_ms: 10 })];
     expect(needsMeItems(list, []).map((a) => a.id)).toEqual(["a", "b"]);
   });
 });
@@ -32,7 +34,8 @@ describe("needsMeItem cases", () => {
     ["waiting, resolved", onPane({ resolved_at_ms: 2 }), [agent("waiting")], false],
     ["checkpoint, viewed, agent working", onPane({ kind: "checkpoint", viewed_at_ms: 2 }), [agent("working")], true],
     ["checkpoint, resolved", onPane({ kind: "checkpoint", resolved_at_ms: 2 }), [], false],
-    ["crash, viewed, no agent", onPane({ kind: "crash", viewed_at_ms: 2 }), [], true],
+    ["crash, open, no agent", onPane({ kind: "crash" }), [], true],
+    ["crash, viewed, no agent", onPane({ kind: "crash", viewed_at_ms: 2 }), [], false],
     ["crash, resolved", onPane({ kind: "crash", resolved_at_ms: 2 }), [], false],
   ];
   it.each(cases)("%s", (_, item, agents, expected) => {
