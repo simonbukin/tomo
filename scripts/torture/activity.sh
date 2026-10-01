@@ -54,6 +54,10 @@ $T attention list --json | jq_ "import sys; sys.exit(0 if any(a['id']=='$CK' and
 # 5. crash, stop, exit, tags, archive
 $T action run crash "$WT" >/dev/null
 wait_for "has_kind action_crashed" 10 && [ "$(field action_crashed detail)" = "exit code 2" ] && check 0 "exit 2 records ActionCrashed" || check 1 "crashed" "$(kinds)"
+CR=$(field action_crashed attention_id)
+kinds --needs-me | grep -qw action_crashed && check 0 "a crash nobody viewed needs me" || check 1 "open crash" "$(kinds --needs-me)"
+$RPC call attention_view "{\"id\":\"$CR\"}" >/dev/null
+kinds --needs-me | grep -qw action_crashed && check 1 "viewed crash" "$(kinds --needs-me)" || check 0 "a viewed crash no longer needs me"
 $T action stop serve "$WT" >/dev/null
 wait_for "has_kind action_stopped" 4 && check 0 "action stop records ActionStopped" || check 1 "stopped" "$(kinds)"
 $RPC send "$A" 'quit\r'
@@ -75,11 +79,11 @@ sys.exit(0 if ts == sorted(ts, reverse=True) and kinds == allowed and all(e['wor
 [ "$(act)" = "$(act)" ] && check 0 "two reads give the same order" || check 1 "stable order"
 [ "$(kinds --limit 2 | wc -w | tr -d ' ')" = 2 ] && [ "$(kinds --worktree "$WT")" = "$(kinds)" ] && check 0 "--limit and --worktree filter" || check 1 "filters" "$(kinds --limit 2)"
 $T activity | grep -Eq '^[0-9]{2}:[0-9]{2}  Crashy crashed · exit code 2$' && check 0 "text output is HH:MM  title · detail" || check 1 "text output" "$($T activity | head -3)"
-[ "$(kinds --needs-me)" = "action_crashed checkpoint_created" ] && check 0 "--needs-me lists only the crash and the checkpoint" || check 1 "needs-me" "$(kinds --needs-me)"
+[ "$(kinds --needs-me)" = "checkpoint_created" ] && check 0 "--needs-me lists only the checkpoint" || check 1 "needs-me" "$(kinds --needs-me)"
 
 # 7. resolve
 $T checkpoint resolve "$CK" >/dev/null && check 0 "checkpoint resolve succeeds" || check 1 "resolve"
-[ "$(kinds --needs-me)" = "action_crashed" ] && [ "$(kinds | cut -d' ' -f1)" = checkpoint_resolved ] && check 0 "resolve leaves needs-me and adds CheckpointResolved on top" || check 1 "after resolve" "$(kinds --needs-me) / $(kinds | cut -d' ' -f1)"
+[ "$(kinds --needs-me)" = "" ] && [ "$(kinds | cut -d' ' -f1)" = checkpoint_resolved ] && check 0 "resolve empties needs-me and adds CheckpointResolved on top" || check 1 "after resolve" "$(kinds --needs-me) / $(kinds | cut -d' ' -f1)"
 [ "$(field checkpoint_resolved attention_id)" = "$CK" ] && check 0 "CheckpointResolved points at the same item" || check 1 "resolved id"
 $T attention list --json | jq_ "import sys; sys.exit(0 if not any(a['id']=='$CK' for a in d) else 1)" && check 0 "resolved checkpoint leaves the attention list" || check 1 "attention after resolve"
 $T checkpoint resolve "$CK" >/dev/null && [ "$(kinds | grep -o checkpoint_resolved | wc -l | tr -d ' ')" = 1 ] && check 0 "resolving twice is idempotent" || check 1 "double resolve"

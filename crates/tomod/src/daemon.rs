@@ -1047,6 +1047,7 @@ impl Daemon {
         if inner.agents.remove(pane_id).is_some_and(|a| a.state == AgentState::Waiting) {
             Self::resolve_waiting(inner, pane_id);
         }
+        Self::resolve_crashes(inner, pane_id);
         Self::emit(inner, Event::AgentRemoved { pane_id: pane_id.to_string() });
         let _ = inner.store.pane_delete(pane_id);
         let tab_id = pane.row.tab_id.clone();
@@ -1345,6 +1346,9 @@ impl Daemon {
             }
         }
         self.end_orphan_holders(&inner);
+        if let Err(e) = inner.store.attention_resolve_orphans(now_ms()) {
+            tracing::warn!("resolve attention of closed panes: {e}");
+        }
         let empty_tabs: Vec<Id> =
             inner.tabs.values().filter(|t| layout::pane_ids(&t.layout).iter().all(|p| !inner.panes.contains_key(p))).map(|t| t.id.clone()).collect();
         for id in empty_tabs {
@@ -1490,6 +1494,12 @@ impl Daemon {
         let agent = AgentPresence { subagents: next, ..cur.clone() };
         inner.agents.insert(pane_id.to_string(), agent.clone());
         Self::emit(inner, Event::AgentChanged { agent });
+    }
+
+    pub(crate) fn resolve_crashes(inner: &mut Inner, pane_id: &str) {
+        for id in inner.store.attention_resolve_crashes(pane_id, now_ms()).unwrap_or_default() {
+            Self::emit(inner, Event::AttentionResolved { id });
+        }
     }
 
     fn resolve_waiting(inner: &mut Inner, pane_id: &str) {

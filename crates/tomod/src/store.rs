@@ -575,7 +575,8 @@ impl Store {
             "SELECT id, kind, occurred_at_ms, worktree_id, pane_id, agent_kind, title, detail, payload, attention_id FROM activity
              WHERE (?1 IS NULL OR occurred_at_ms < ?1) AND (?2 IS NULL OR worktree_id = ?2)
                AND (?3 = 0 OR attention_id IN (SELECT id FROM attention WHERE resolved_at_ms IS NULL
-                    AND (COALESCE(kind, 'waiting') != 'waiting' OR (viewed_at_ms IS NULL AND pane_id IN (SELECT value FROM json_each(?5))))))
+                    AND (kind = 'checkpoint' OR (kind = 'crash' AND viewed_at_ms IS NULL)
+                         OR (viewed_at_ms IS NULL AND pane_id IN (SELECT value FROM json_each(?5))))))
              ORDER BY occurred_at_ms DESC, rowid DESC LIMIT ?4",
         )?;
         let waiting = serde_json::to_string(waiting_panes)?;
@@ -614,6 +615,28 @@ impl Store {
             pane_id,
             now_ms,
         )
+    }
+
+    /// Resolves the open crash items of a pane and returns their ids: the pane closed, or its Action runs again.
+    pub fn attention_resolve_crashes(&self, pane_id: &str, now_ms: u64) -> Result<Vec<Id>> {
+        self.changed_ids(
+            "UPDATE attention SET resolved_at_ms = ?2, viewed_at_ms = COALESCE(viewed_at_ms, ?2)
+             WHERE pane_id = ?1 AND kind = 'crash' AND resolved_at_ms IS NULL RETURNING id",
+            pane_id,
+            now_ms,
+        )
+    }
+
+    /// Resolves the open waiting and crash items whose pane no longer exists, and returns their ids. Nothing can
+    /// answer or restart such an item, so it would need a person for ever. A checkpoint stays: it is about the worktree.
+    pub fn attention_resolve_orphans(&self, now_ms: u64) -> Result<Vec<Id>> {
+        let mut st = self.conn.prepare(
+            "UPDATE attention SET resolved_at_ms = ?1, viewed_at_ms = COALESCE(viewed_at_ms, ?1)
+             WHERE resolved_at_ms IS NULL AND COALESCE(kind, 'waiting') IN ('waiting', 'crash') AND pane_id IS NOT NULL
+               AND pane_id NOT IN (SELECT id FROM panes) RETURNING id",
+        )?;
+        let rows = st.query_map(params![now_ms as i64], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     pub fn attention_clear(&self) -> Result<()> {
@@ -858,7 +881,8 @@ mod tests {
             ("waiting-resolved", AttentionKind::Waiting, None, Some(2), waits, false),
             ("checkpoint-viewed-agent-working", AttentionKind::Checkpoint, Some(2), None, works, true),
             ("checkpoint-resolved", AttentionKind::Checkpoint, None, Some(2), None, false),
-            ("crash-viewed-no-agent", AttentionKind::Crash, Some(2), None, None, true),
+            ("crash-open-no-agent", AttentionKind::Crash, None, None, None, true),
+            ("crash-viewed-no-agent", AttentionKind::Crash, Some(2), None, None, false),
             ("crash-resolved", AttentionKind::Crash, None, Some(2), None, false),
         ];
         for (i, (id, attention_kind, viewed, resolved, _, _)) in cases.iter().enumerate() {
@@ -898,6 +922,44 @@ mod tests {
         viewed.sort();
         assert_eq!(viewed, vec!["chk", "crash"]);
         assert!(s.attention_view_pane("p", 8).unwrap().is_empty());
+    }
+
+    #[test]
+    fn crashes_resolve_with_their_pane_and_orphans_resolve_at_start() {
+        let s = Store::open_in_memory().unwrap();
+        let live = PaneRow {
+            id: "live".into(),
+            tab_id: "t".into(),
+            worktree_id: "w".into(),
+            user_title: None,
+            cwd: PathBuf::from("/tmp"),
+            cols: 1,
+            rows: 1,
+            agent_kind: None,
+            session_ref: None,
+            created_at_ms: 1,
+            kind: PaneKind::Terminal,
+            url: None,
+            editor: None,
+            sleep: None,
+            keep_awake: false,
+        };
+        s.pane_upsert(&live).unwrap();
+        let on = |id: &str, pane: &str, kind| AttentionItem { pane_id: Some(pane.into()), ..item(id, kind) };
+        s.attention_insert(&on("crash", "live", AttentionKind::Crash)).unwrap();
+        s.attention_insert(&on("live-chk", "live", AttentionKind::Checkpoint)).unwrap();
+        s.attention_insert(&on("gone-crash", "gone", AttentionKind::Crash)).unwrap();
+        s.attention_insert(&on("gone-wait", "gone", AttentionKind::Waiting)).unwrap();
+        s.attention_insert(&on("gone-chk", "gone", AttentionKind::Checkpoint)).unwrap();
+        s.attention_insert(&item("no-pane", AttentionKind::Crash)).unwrap();
+        let mut orphans = s.attention_resolve_orphans(5).unwrap();
+        orphans.sort();
+        assert_eq!(orphans, vec!["gone-crash", "gone-wait"]);
+        assert_eq!(s.attention_resolve_crashes("live", 6).unwrap(), vec!["crash"]);
+        assert!(s.attention_resolve_crashes("live", 7).unwrap().is_empty());
+        let mut open: Vec<String> = s.attention_list().unwrap().into_iter().map(|a| a.id).collect();
+        open.sort();
+        assert_eq!(open, vec!["gone-chk", "live-chk", "no-pane"]);
     }
 
     #[test]
