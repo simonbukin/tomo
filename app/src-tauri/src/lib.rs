@@ -217,6 +217,13 @@ async fn save_pasteboard_png(path: &std::path::Path, pasteboard: Option<&str>) -
     saved && std::fs::metadata(path).is_ok_and(|m| m.len() > 0)
 }
 
+/// Opens `path` in Finder when it is a folder, and returns whether it did. A terminal link to a folder opens there;
+/// a link to a file goes on to a pane.
+#[tauri::command]
+async fn open_folder(path: String) -> bool {
+    std::fs::metadata(&path).is_ok_and(|m| m.is_dir()) && tokio::process::Command::new("open").arg(&path).status().await.is_ok_and(|s| s.success())
+}
+
 /// Saves the image on the clipboard as a new PNG file and returns its path, or None when the clipboard holds no image.
 /// A terminal agent attaches an image from a pasted path, the same way it does for a dropped file.
 #[tauri::command]
@@ -291,6 +298,7 @@ pub fn run() {
             rpc,
             daemon_connected,
             clipboard_image,
+            open_folder,
             splash_ready,
             browser::browser_create,
             browser::browser_set_bounds,

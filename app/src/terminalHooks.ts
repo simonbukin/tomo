@@ -57,9 +57,10 @@ function openInPane(link: FileLink, worktreeId: Id): void {
   void openFile(worktreeId, link.path, link.line ? { line: link.line, col: link.col } : null);
 }
 
-/** A file that Tomo can show opens in a pane; any other file opens in the external editor. */
-function openLink(link: TermLink, paneId: Id): void {
+/** A folder opens in Finder, a file that Tomo can show opens in a pane, and any other file opens in the external editor. */
+async function openLink(link: TermLink, paneId: Id): Promise<void> {
   if (link.kind === "url") return openEndpoint(link.url, getState().panes[paneId]?.worktree_id);
+  if (await invoke<boolean>("open_folder", { path: link.path }).catch(() => false)) return;
   const worktreeId = tomoWorktree(link, paneId);
   if (worktreeId) openInPane(link, worktreeId);
   else void openInExternalEditor(link);
@@ -155,7 +156,7 @@ export function registerTerminalLinks(term: Terminal, paneId: Id, host: HTMLElem
             text: text.slice(link.start, link.end),
             decorations: { underline: meta, pointerCursor: meta },
             activate: (e: MouseEvent) => {
-              if (e.metaKey) openLink(link, paneId);
+              if (e.metaKey) void openLink(link, paneId);
             },
             hover: () => {
               hovered = { link, range };
