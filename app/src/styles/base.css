@@ -73,7 +73,7 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 
 /* ---- the live mark of an agent or a worktree: a 3×3 grid in one 9px SVG (StateMark).
  *   color   = what: green the agent's work, amber you, red broken, gray quiet or Tomo's own work
- *   motion  = busy: only working and archiving move (a twinkle); needs you beats in unison, which reads as a call
+ *   motion  = busy: only working and archiving move (a live twinkle from twinkle.ts); needs you beats in unison, which reads as a call
  *   pattern = which: every still state has its own shape, so no two states differ by color alone
  * The lit cells are one path, so lit neighbours make one solid block; the unlit cells are a ghost of the same color.
  * The 6px subagent size is the same SVG, so each cell is 2px. */
@@ -87,10 +87,9 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 .mark[data-mark="failed"] { --mk: var(--danger); }
 .mark:is([data-mark="idle"], [data-mark="unknown"], [data-mark="sleeping"], [data-mark="archiving"]) { --mk: var(--fg-2); }
 .mark[data-mark="needs"] .lit { animation: mark-beat 2.4s ease-in-out infinite; }
-.mark .tw { animation: mark-twinkle calc(1.2s * var(--tw)) ease-in-out infinite; animation-delay: calc(-2.4s * var(--td)); }
 :root[data-theme="dark"] .mark { --mk-ghost: 0.13; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mark { --mk-ghost: 0.13; } }
-@media (prefers-reduced-motion: reduce) { .mark .lit, .mark .tw { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mark .lit { animation: none; } }
 .pr-merged { background: var(--fg-2); box-shadow: none; }
 
 /* An icon tinted by status. Two classes, so a tint beats the plain color of the icon. */
@@ -115,7 +114,6 @@ svg.icon { width: 14px; height: 14px; flex: none; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @keyframes turn { 0% { transform: rotate(0deg); } 50%, 100% { transform: rotate(90deg); } }
-@keyframes mark-twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
 @keyframes mark-beat { 0%, 30%, 100% { opacity: 1; } 7%, 21% { opacity: 0.4; } 14% { opacity: 0.95; } }
 .rise { animation: rise var(--dur-open) var(--ease-out) backwards; }
 .fade-in { animation: fade var(--dur-fast) var(--ease-out) backwards; }
