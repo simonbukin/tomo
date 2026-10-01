@@ -12,8 +12,9 @@ so lit neighbours make one solid block. Three channels each do one job:
 
 - **Color says what:** green is the agent's work, amber is you, red is broken,
   and gray is quiet or Tomo's own work.
-- **Motion says busy:** only working and archiving move. Their cells twinkle,
-  each on its own period, so the pattern never repeats. Needs you beats in
+- **Motion says busy:** only working and archiving move. Their cells twinkle
+  live: sparks land on random cells at random times, warm their neighbours,
+  and fade. Each mark runs its own field, so the pattern never repeats. Needs you beats in
   unison, which reads as a call, not as work.
 - **Pattern says which:** every still state has its own shape, so no two
   states differ by color alone.

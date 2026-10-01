@@ -251,7 +251,8 @@ subagent line (the same mark at 6px). [agent-states.md](agent-states.md) is the 
 The mark is one 9px SVG with a 3×3 grid of 3px cells. The lit cells are one
 path, so lit neighbours make one solid block with no seam at any zoom. The
 unlit cells are a second path at the ghost opacity. Working and archiving
-draw nine cells, each with its own twinkle period and phase. The 6px
+draw nine cells with a live twinkle from `app/src/twinkle.ts`: sparks land
+on random cells at random times, warm their neighbours, and fade. The 6px
 subagent mark is the same SVG, so each cell is 2px. Color says what, motion
 says busy, and the pattern tells the still states apart. A span around the
 SVG holds the `state` class, the `data-mark` attribute, and the tooltip. With
