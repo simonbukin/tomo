@@ -1,5 +1,6 @@
 mod agentation;
 mod browser;
+mod viewer;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -280,6 +281,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .register_asynchronous_uri_scheme_protocol(viewer::SCHEME, |ctx, request, responder| {
+            let webview = ctx.webview_label().to_string();
+            std::thread::spawn(move || responder.respond(viewer::serve(&webview, &request)));
+        })
         .manage(link)
         .manage(agentation::AnnotatePanes::default())
         .invoke_handler(tauri::generate_handler![

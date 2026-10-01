@@ -28,3 +28,12 @@
 .editor-compare-body .cm-merge-a .cm-changedLineGutter, .editor-compare-body .cm-deletedLineGutter { background: var(--danger); }
 .editor-compare-body .cm-merge-b .cm-changedLineGutter { background: var(--working); }
 .editor-compare-body .cm-mergeViewEditor + .cm-mergeViewEditor { box-shadow: inset 1px 0 0 var(--line); }
+
+.viewer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: auto; background: var(--bg); }
+.viewer video, .viewer img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer audio { width: min(480px, 90%); }
+.viewer-image { cursor: zoom-in; background: repeating-conic-gradient(var(--bg-2) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; }
+.viewer-image.viewer-actual { cursor: zoom-out; align-items: safe center; justify-content: safe center; }
+.viewer-image.viewer-actual img { max-width: none; max-height: none; }
+.viewer-size { position: absolute; right: var(--sp-2); bottom: var(--sp-2); padding: 0 var(--sp-1); font-family: var(--mono); font-size: var(--fs-1); color: var(--fg-2); background: var(--bg); }
+.viewer-pdf { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }

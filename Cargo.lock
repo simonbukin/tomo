@@ -5766,6 +5766,7 @@ name = "tomo-app"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "percent-encoding",
  "serde_json",
  "tauri",
  "tauri-build",

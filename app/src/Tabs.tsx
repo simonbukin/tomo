@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SortableContext } from "@dnd-kit/sortable";
-import { FileText, Globe, Plus, X } from "lucide-react";
+import { Globe, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rpc, rpcParsed } from "./api";
 import { activateTab, closeTab, renameTab } from "./actions";
@@ -15,8 +15,15 @@ import { mostUrgent } from "./homeQuery";
 import { AgentMark, StateMark } from "./StateMark";
 import { HOOK_SOURCE, hookStatus, hookTitle } from "./glyphs";
 import { useAnyDirty } from "./editor/sessions";
+import { VIEW_ICONS } from "./editor/FileViewer";
+import { fileView } from "./editor/fileView";
 import {failQuietly, paneIds, useStore} from "./store";
 import type { AgentPresence, Id, Pane, Tab } from "./types";
+
+function EditorIcon({ path }: { path: string }) {
+  const Icon = VIEW_ICONS[fileView(path)];
+  return <Icon className="icon proc-icon" size={11} aria-label="File" />;
+}
 
 const TAIL_LINES = 8;
 
@@ -108,7 +115,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       {lead?.kind === "browser" ? (
         <Globe className="icon proc-icon" size={11} aria-label="Browser" />
       ) : lead?.kind === "editor" ? (
-        <FileText className="icon proc-icon" size={11} aria-label="Editor" />
+        <EditorIcon path={lead.editor?.path ?? ""} />
       ) : (
         <ProcessIcon agent={lead?.agent?.kind} cmd={lead?.process_cmd} size={11} />
       )}

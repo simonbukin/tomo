@@ -10,6 +10,8 @@ import { candidatePaths, findLinks, type TermLink } from "./links";
 import type { MenuItem } from "./components/ui";
 import { openMenu } from "./MenuHost";
 import { openFile, worktreeRelative } from "./editor/editor";
+import { isViewable } from "./editor/fileView";
+import { editorName } from "./menus";
 import {failQuietly, failToast, getState} from "./store";
 import { focusTerminal } from "./terminals";
 import type { Id } from "./types";
@@ -41,21 +43,24 @@ type FileLink = Extract<TermLink, { kind: "file" }>;
 
 const openInExternalEditor = (link: FileLink) => rpc("open_location", { path: link.path, line: link.line, col: link.col }).catch(failToast("Could not open the file"));
 
-/** The worktree of the pane when the file is inside it: only such a file opens in an editor pane. */
-function editorWorktree(link: FileLink, paneId: Id): Id | null {
+/**
+ * The worktree of the pane when Tomo can show the file: any image, video, audio file, or PDF, and a text file
+ * inside the worktree. The editor edits files of its worktree only, so other text files open in the external editor.
+ */
+function tomoWorktree(link: FileLink, paneId: Id): Id | null {
   const pane = getState().panes[paneId];
   const root = getState().worktrees.find((w) => w.id === pane?.worktree_id)?.path;
-  return pane && root && worktreeRelative(root, link.path) !== null ? pane.worktree_id : null;
+  return pane && root && (isViewable(link.path) || worktreeRelative(root, link.path) !== null) ? pane.worktree_id : null;
 }
 
 function openInPane(link: FileLink, worktreeId: Id): void {
   void openFile(worktreeId, link.path, link.line ? { line: link.line, col: link.col } : null);
 }
 
-/** A file inside the worktree opens in an editor pane; any other file opens in the external editor. */
+/** A file that Tomo can show opens in a pane; any other file opens in the external editor. */
 function openLink(link: TermLink, paneId: Id): void {
   if (link.kind === "url") return openEndpoint(link.url, getState().panes[paneId]?.worktree_id);
-  const worktreeId = editorWorktree(link, paneId);
+  const worktreeId = tomoWorktree(link, paneId);
   if (worktreeId) openInPane(link, worktreeId);
   else void openInExternalEditor(link);
 }
@@ -71,10 +76,10 @@ function linkMenu(link: TermLink, paneId: Id): MenuItem[] {
       { label: "copy link", run: () => void copy(link.url) },
     ];
   }
-  const worktreeId = editorWorktree(link, paneId);
+  const worktreeId = tomoWorktree(link, paneId);
   return [
-    ...(worktreeId ? [{ label: "open in pane", run: () => openInPane(link, worktreeId) }] : []),
-    { label: "open in editor", run: () => void openInExternalEditor(link) },
+    ...(worktreeId ? [{ label: "open in Tomo", run: () => openInPane(link, worktreeId) }] : []),
+    { label: `open in ${editorName(getState().config?.editor_command)}`, run: () => void openInExternalEditor(link) },
     { label: "reveal in finder", run: () => void revealItemInDir(link.path).catch(failToast("Could not reveal the file")) },
     { separator: true },
     { label: "copy path", run: () => void copy(link.path) },

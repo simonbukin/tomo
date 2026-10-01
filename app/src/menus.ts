@@ -1,12 +1,15 @@
 import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setKeepAwake, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom, wakePane } from "./actions";
 import { browserCommand, openBrowser } from "./browser/browser";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { rpc } from "./api";
 import { openFile } from "./editor/editor";
+import { absolutePath } from "./editor/fileView";
 import { builtins } from "./addons";
 import { moveTab, sendPaneToTab } from "./commands/discovery";
 import { pinTab } from "./commands/panes";
 import type { MenuItem } from "./components/ui";
 import { chordFor, effectiveBindings } from "./shortcuts";
-import { activeTab, clearSelection, getState, paneIds, setState, splitsAllowed, type State } from "./store";
+import { activeTab, clearSelection, failToast, getState, paneIds, setState, splitsAllowed, type State } from "./store";
 import type { Id, Pane, Repo, Tab, Worktree } from "./types";
 
 const sep: MenuItem = { separator: true };
@@ -24,6 +27,17 @@ function copyMenu(entries: CopyEntry[]): MenuItem {
 export function editorName(command: string[] | undefined): string {
   const bin = (command ?? []).filter((arg) => !arg.startsWith("-") && !arg.includes("{")).pop();
   return bin?.split("/").pop() || "editor";
+}
+
+/** Opens the file of a pane in the external editor. A file outside the worktree has an absolute stored path. */
+export function openPaneFileExternally(worktreeId: Id, stored: string): void {
+  if (stored.startsWith("/")) void rpc("open_location", { path: stored, line: null, col: null }).catch(failToast("Could not open the file"));
+  else openExternalFor(worktreeId, "editor", stored);
+}
+
+function revealPaneFile(worktreeId: Id, stored: string): void {
+  if (stored.startsWith("/")) void revealItemInDir(stored).catch(failToast("Could not reveal the file"));
+  else openExternalFor(worktreeId, "finder", stored);
 }
 
 export function toggledTag(tags: string[], tag: string): string[] {
@@ -264,11 +278,11 @@ export function editorMenu(paneId: Id, s: State = getState()): MenuItem[] {
   return [
     { label: "save", shortcut: key("editor_save"), run: () => void import("./editor/cm").then((m) => m.save(paneId)) },
     sep,
-    { label: `open in ${editorName(s.config?.editor_command)}`, disabled: !pane, run: () => openExternalFor(pane!.worktree_id, "editor", rel) },
-    { label: "reveal in finder", disabled: !pane, run: () => openExternalFor(pane!.worktree_id, "finder", rel) },
+    { label: `open in ${editorName(s.config?.editor_command)}`, disabled: !pane, run: () => openPaneFileExternally(pane!.worktree_id, rel) },
+    { label: "reveal in finder", disabled: !pane, run: () => revealPaneFile(pane!.worktree_id, rel) },
     copyMenu([
-      ["Path", root && rel ? `${root}/${rel}` : null],
-      ["Relative path", rel, "relative path"],
+      ["Path", root && rel ? absolutePath(root, rel) : null],
+      ["Relative path", rel.startsWith("/") ? null : rel, "relative path"],
     ]),
     sep,
     sendToItem(s, pane),
@@ -280,8 +294,8 @@ export function editorMenu(paneId: Id, s: State = getState()): MenuItem[] {
 export function fileMenu(w: Worktree, relPath: string): MenuItem[] {
   const abs = relPath ? `${w.path}/${relPath}` : w.path;
   return [
-    ...(relPath ? [{ label: "open in pane", run: () => void openFile(w.id, relPath) }] : []),
-    { label: "open in editor", run: () => openExternalFor(w.id, "editor", relPath) },
+    ...(relPath ? [{ label: "open in Tomo", run: () => void openFile(w.id, relPath) }] : []),
+    { label: `open in ${editorName(getState().config?.editor_command)}`, run: () => openExternalFor(w.id, "editor", relPath) },
     { label: "reveal in finder", run: () => openExternalFor(w.id, "finder", relPath) },
     sep,
     { label: "copy path", run: () => copyText(abs) },
