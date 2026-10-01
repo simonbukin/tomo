@@ -99,12 +99,15 @@ Lists only the events whose attention item needs me. An attention item
 needs me when both of these are true:
 
 1. `resolved_at_ms` is null.
-2. The item is not a `waiting` item, or it is a `waiting` item with
-   `viewed_at_ms` null and an agent in its pane that is still `waiting`.
+2. The item is a `checkpoint`, or a `crash` with `viewed_at_ms` null, or a
+   `waiting` item with `viewed_at_ms` null and an agent in its pane that is
+   still `waiting`.
 
-A checkpoint or crash stays in the list until someone resolves it, also
-after a view. A waiting agent leaves the list when its pane is focused or
-the agent moves on.
+A checkpoint stays in the list until someone resolves it, also after a view.
+A crash leaves the list when someone views it: focusing its pane, or opening
+its worktree, because the row and the Action button show the crash until it
+resolves. A waiting agent leaves the list when its pane is focused or the
+agent moves on.
 
 This is the one definition. The daemon applies it in `Store::activity_list`
 (SQL; `ActivityList` passes the panes where an agent waits). The GUI applies
@@ -124,8 +127,13 @@ leaves `waiting` for any other state, the daemon resolves every open
 monitor, a process exit, and a pane close. The daemon sets `resolved_at_ms`,
 sets `viewed_at_ms` if it is null, and emits `attention_resolved` for each
 item. A daemon restart also resolves the `waiting` items of the agent panes
-that it restores, because the old prompt is gone. Checkpoint and crash items
-never resolve automatically.
+that it restores, because the old prompt is gone. Checkpoint items never
+resolve automatically.
+
+A crash item resolves when its pane closes, and when the same Action runs
+again in a new pane. When the daemon starts, it resolves every open
+`waiting` or `crash` item whose pane no longer exists, because nothing can
+answer or restart it.
 
 Focusing a pane marks its unviewed items viewed and emits `attention_viewed`
 for each one. `attention_view` emits `attention_viewed` only when the item

@@ -104,7 +104,7 @@ live without them.
 | Part | Where | What a second client does |
 |---|---|---|
 | Event fold | `applySnapshot` and `applyFrame` in `store.ts` | Start from `subscribe`, then apply each event. `tabs_changed` replaces the tabs of one worktree and drops the panes and agents that left its layouts. `headless_client.py` `fold` is a copy in about 40 lines. |
-| "Needs me" | `needsMeItem` in `activityModel.ts` | Copy the rule. An unresolved item that is not `waiting` needs a person. A `waiting` item needs a person while it is not viewed and its agent still waits. `Store::activity_list` in the daemon has the same rule for `needs_me`. |
+| "Needs me" | `needsMeItem` in `activityModel.ts` | Copy the rule. An unresolved checkpoint needs a person. An unresolved crash needs a person while it is not viewed. A `waiting` item needs a person while it is not viewed and its agent still waits. `Store::activity_list` in the daemon has the same rule for `needs_me`. |
 | Sort, filter, group | `homeQuery.ts`, `order.ts` | Copy them, or use the pure modules. The manual order lives in the UI state blob. |
 | Row lines | `rowGroups` and `leadLine` in `rowModel.ts` (pure), `useRowInput` in `WorktreeLines.tsx` (store and addon slots) | Copy the groups and their order: problems, agents, apps. Links and app lines come from GUI addon slots. |
 | Zoom | `State.zoomed` in `store.ts` | `pane_zoom` only sends a `zoom_request` event. The daemon does not keep zoom. |
