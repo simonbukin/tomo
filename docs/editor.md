@@ -62,6 +62,12 @@ Every call resolves the path with `resolve` in `editor_pane.rs`:
 A symlink inside the worktree that points inside the worktree is allowed.
 The editor then reads and writes the target, and the link stays.
 
+`editor_open` and the watch use `locate`, not `resolve`. `locate` also
+finds an existing file outside the worktree by its absolute path, so that a
+pane can view an image or a video that an agent saved in `/tmp`. The pane
+stores the real absolute path. `fs_read` and `fs_write` still refuse that
+path, so the editor never reads or writes text outside the worktree.
+
 ### Limits
 
 | Case | Error |
@@ -73,7 +79,33 @@ The editor then reads and writes the target, and the link stays.
 | The path leaves the worktree | `bad_request`: `<path> is outside the worktree` |
 
 The pane shows a read error in its body with `Try again` and
-`Open in external editor`.
+`Open in zed` (the program of `editor_command`).
+
+## Viewer
+
+A pane picks its view by the file extension (`fileView` in
+`app/src/editor/fileView.ts`):
+
+| View | Extensions | Element |
+|------|------------|---------|
+| image | png jpg jpeg gif webp avif heic heif jxl svg bmp ico tif tiff | `<img>`; a click toggles fit and actual size; the corner shows the pixel size |
+| video | mp4 m4v mov webm | `<video controls>` |
+| audio | mp3 m4a aac wav flac ogg oga opus | `<audio controls>` |
+| pdf | pdf | `<iframe>` (WebKit draws it with PDFKit) |
+| text | everything else | CodeMirror |
+
+A viewer does not read through the daemon. The Tauri host serves the file
+on the `tomo-file://localhost/<encoded absolute path>` scheme
+(`app/src-tauri/src/viewer.rs`):
+
+- Only the `main` webview may read. A page in a browser pane gets `403`.
+- Only the extensions above are served. Any other file gets `403`.
+- A `Range` request gets `206` with at most 4 MB, so a long video seeks at
+  once. A range after the end of the file gets `416`.
+
+When the watch reports `file_changed` for the file, the view loads it again.
+A format that macOS cannot play, such as mkv, opens as text and shows the
+binary error.
 
 ## Versions and conflicts
 
@@ -189,12 +221,14 @@ not change the tab. See [keyboard.md](keyboard.md).
 
 ## Entry points
 
-- Terminal Cmd-click on `path`, `path:line`, or `path:line:col` inside the
-  worktree opens it in an editor pane at that place. A path outside the
-  worktree opens in `editor_command`. The right-click menu has
-  `open in pane` and `open in editor`.
+- Terminal Cmd-click on `path`, `path:line`, or `path:line:col` opens it in
+  Tomo: a text file inside the worktree in an editor pane at that place, and
+  an image, a video, an audio file, or a PDF anywhere in a viewer. Only a
+  text file outside the worktree opens in `editor_command`. The right-click
+  menu has `open in Tomo` and `open in zed` (the program of
+  `editor_command`).
 - The Files section of the inspector: a click on a file opens it in a pane.
-  The file menu has `open in pane` and `open in editor`.
+  The file menu has `open in Tomo` and `open in zed`.
 - The palette: `Open file...` (Cmd+P) lists the files of `fs_recent`,
   newest change first, and matches the path.
 - A second open of a file that a pane already shows focuses that pane and
