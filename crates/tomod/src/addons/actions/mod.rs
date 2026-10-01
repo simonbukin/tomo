@@ -51,6 +51,16 @@ fn source_of(action: &ActionDef) -> PaneSource {
     PaneSource { kind: ACTION_SOURCE_KIND.into(), id: action.id.clone(), label: action.label.clone() }
 }
 
+/// The panes of earlier runs of an Action that have ended. A new run answers their crash.
+fn earlier_panes(inner: &Inner, worktree_id: &str, action_id: &str) -> Vec<Id> {
+    inner
+        .panes
+        .values()
+        .filter(|p| p.row.worktree_id == worktree_id && p.source.as_ref().is_some_and(|s| s.kind == ACTION_SOURCE_KIND && s.id == action_id))
+        .map(|p| p.row.id.clone())
+        .collect()
+}
+
 fn running_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id> {
     inner
         .panes
@@ -225,6 +235,7 @@ fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Act
                 let pane = Daemon::pane_view(&inner, &pane_id);
                 return Ok(ActionRunResult { action, pane, reused: true });
             }
+            earlier_panes(&inner, worktree_id, action_id).iter().for_each(|p| Daemon::resolve_crashes(&mut inner, p));
             let argv = [inner.config.shell.clone(), "-lc".into(), action.command.clone()];
             let (_, pane_id) = daemon.spawn_in_worktree(
                 &mut inner,

@@ -106,7 +106,9 @@ wait_for "[ \"\$(events action.crashed \"e['action']['id']=='crash' and e['pane'
 $T attention list --json | jq_ "import sys; sys.exit(0 if any(a['kind']=='crash' and a['pane_id']=='$C' and a['message']=='Crashy exited with code 1' and a['level']=='attention' and a['agent_kind'] is None for a in d) else 1)" && check 0 "attention item has kind crash and the exit message" || check 1 "crash attention" "$($T attention list)"
 [ "$(activity_of "$WT" action_crashed crash payload)" != none ] && $T activity --json --worktree "$WT" | jq_ "import sys; m=[e for e in d if e['kind']=='action_crashed']; sys.exit(0 if m and m[0]['payload']['exit_code']==1 and m[0]['payload']['pane_id']=='$C' and m[0]['attention_id'] else 1)" && check 0 "activity ActionCrashed carries exit_code, pane_id, and the attention id" || check 1 "crash activity" "$($T activity --json --worktree "$WT" | head -30)"
 wait_for "[ \"\$(ep $WT crash port)\" = none ]" 50 && check 0 "crashed server's endpoint is removed" || check 1 "crash removal"
+crash_of() { $T attention list --json | jq_ "print(' '.join(a['id'] for a in d if a['kind']=='crash' and a['pane_id']=='$1'))"; }
 $T pane close "$C" --force >/dev/null 2>&1
+[ -z "$(crash_of "$C")" ] && check 0 "closing the crashed pane resolves its crash" || check 1 "close resolves crash" "$($T attention list)"
 
 # 7. a stop is a stop, not a crash
 $T action stop serve "$WT" >/dev/null; sleep 0.5
@@ -119,10 +121,23 @@ run "$WT" ok >/dev/null
 wait_for "[ \"\$(activity_of $WT action_completed ok title)\" = 'ok completed' ]" 10 && check 0 "exit 0 records ActionCompleted" || check 1 "completed activity" "$($T activity --worktree "$WT")"
 $T attention list --json | jq_ "import sys; sys.exit(0 if not any(a['kind']=='crash' and a['message'].startswith('ok ') for a in d) else 1)" && check 0 "a completed action raises no attention" || check 1 "completed attention"
 
-# 9. crash items resolve like checkpoints
-CID=$($T attention list --json | jq_ "print([a['id'] for a in d if a['kind']=='crash'][0])")
+# 9. a new run of the Action resolves the last crash; crash items resolve like checkpoints
+C2=$(run "$WT" crash)
+wait_for "[ \"\$(pane_exit $WT $C2)\" = 1 ] && [ -n \"\$(crash_of $C2)\" ]" 16 && check 0 "a second crash raises its own item" || check 1 "second crash" "$($T attention list)"
+C3=$(run "$WT" crash)
+wait_for "[ -z \"\$(crash_of $C2)\" ]" 4 && check 0 "a new run of the Action resolves the crash of the run before" || check 1 "rerun resolves crash" "$($T attention list)"
+wait_for "[ -n \"\$(crash_of $C3)\" ]" 16
+CID=$(crash_of "$C3")
 $T checkpoint resolve "$CID" --json | jq_ "import sys; sys.exit(0 if d['resolved_at_ms'] else 1)" && check 0 "checkpoint resolve closes a crash item" || check 1 "resolve crash"
 $T attention list --json | jq_ "import sys; sys.exit(0 if not any(a['id']=='$CID' for a in d) else 1)" && check 0 "resolved crash leaves the attention list" || check 1 "resolved list"
+
+# 10. a crash item whose pane is gone, as an older daemon left them, resolves when the daemon starts
+C4=$(run "$WT" crash)
+wait_for "[ -n \"\$(crash_of $C4)\" ]" 16
+$T daemon stop --kill-panes >/dev/null; sleep 1
+python3 -c "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('DELETE FROM panes WHERE id=?', (sys.argv[2],)); c.commit()" "$TOMO_DATA_DIR/tomo.sqlite3" "$C4"
+until $T daemon status >/dev/null 2>&1; do $T daemon start >/dev/null 2>&1; sleep 0.5; done
+[ -z "$(crash_of "$C4")" ] && check 0 "a daemon start resolves the crash of a pane that is gone" || check 1 "orphan crash" "$($T attention list)"
 
 daemon_stop
 summary

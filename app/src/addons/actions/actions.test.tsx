@@ -75,6 +75,17 @@ describe("actions topbar", () => {
     expect(screen.getByRole("button", { name: "Lint" }).querySelector(".state")).toBeNull();
   });
 
+  it("keeps the crash on the button after a view, until the crash is resolved", () => {
+    const crash = { id: "c1", worktree_id: "w1", pane_id: "p1", kind: "crash", level: "attention", message: "Serve exited with code 1", created_at_ms: 1, viewed_at_ms: 2, resolved_at_ms: null } as unknown as AttentionItem;
+    store.setState({ panes: { p1: { ...servePane, live: false, exit_code: 1 } }, attention: [crash] });
+    const { unmount } = render(<WorktreeHeader worktree={worktree} />);
+    expect(screen.getByRole("button", { name: "Serve" }).querySelector('[data-mark="failed"]')).not.toBeNull();
+    unmount();
+    store.setState({ attention: [{ ...crash, resolved_at_ms: 3 }] });
+    render(<WorktreeHeader worktree={worktree} />);
+    expect(screen.getByRole("button", { name: "Serve" }).querySelector('[data-mark="failed"]')).toBeNull();
+  });
+
   it("runs an action on click and offers focus, restart, and stop on a right click of a running one", async () => {
     render(<WorktreeHeader worktree={worktree} />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Lint" }));
