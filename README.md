@@ -4,8 +4,8 @@
 
 Tomo keeps everything (worktrees, terminals, agents and so on) organized. The rest is up to you!
 
-> **You are on `simon-main`: my own Tomo.** It is the base plus my six addons
-> (Towns, GitHub, Usage, Actions, Runtime, Agentation) and my config in
+> **You are on `simon-main`: my own Tomo.** It is `main` plus four more addons
+> (Towns, Linear, Usage, Agentation) and my config in
 > `personal/config.toml`. `scripts/install.sh --with-config` installs that
 > config and keeps a backup of yours. Want a clean start? Use `main`.
 
@@ -13,39 +13,40 @@ Tomo keeps everything (worktrees, terminals, agents and so on) organized. The re
 
 - **Worktrees first**: every worktree of a repo in one sidebar, with its terminals, agents, and tags.
 - **Terminals that survive**: each pane runs in its own process, so a daemon or app restart keeps your shells and agents.
-- **Agent state tracking**: hooks from Claude Code, Codex, and Pi show working, done, needs you, idle, or dead for each agent and worktree.
-- **Subagents**: each live subagent shows under its agent.
+- **Agent state tracking**: Claude Code, Codex, Pi, and OpenCode report working, done, needs you (with the question), idle, or dead for each agent and worktree.
+- **Subagents**: each subagent shows under its agent, with its task.
 - **Resume after a restart**: agent sessions come back, including a turn that the restart cut off.
 - **Sleeping agents**: an agent idle for an hour ends and leaves a scrollable snapshot; a key resumes the same session.
 - **Code editor**: a CodeMirror 6 pane for quick edits, opened from the palette or a file path in a terminal.
 - **Search everything**: `⌘K` finds worktrees, files, terminal scrollback, and agent sessions as you type.
-- **Terminal links**: `⌘`-click a file path or a URL in any terminal.
+- **Terminal links**: `⌘`-click a file path, a folder, or a URL in any terminal.
+- **Viewer**: images, video, audio, and PDFs open in a pane, and reload when they change.
 - **Paste and drop**: paste an image or drop a file on a terminal, and the agent gets its path.
 - **Main stays current**: each repo's main worktree fast-forwards to its upstream on its own.
 - **Archive**: checkpoint, close, and remove a worktree in one step, and keep its branch.
 - **Pinned tabs**: pin a tab as a small icon that stays first.
 - **Attention**: `⌘⇧A` jumps to the next agent that needs you.
 - **Hooks and a CLI**: run your commands on Tomo events, and drive all of Tomo from `tomo` with `--json`.
+- **Actions**: named commands for each repo in `.tomo.toml`, one button each; a button finds the server that its script already runs.
+- **Runtime**: the ports that pane processes listen on, named after the package script that started them.
+- **GitHub**: the pull request of each branch through `gh`, on the worktree row and in `⌘K` search.
 - **Addons**: add state, commands, and a place in the window through a few seams.
 
 ## My stuff
 
-Only on `simon-main`: my addons and my config.
+Only on `simon-main`: four more addons and my config.
 
-- **Linear**: the issue that a branch names, in its state color, in the worktree hover and in `⌘K` search. Read only.
-- **GitHub**: the pull request of each branch through `gh`, as a tag on the worktree and in `⌘K` search.
+- **Linear**: the issue that a branch names, in its state color, on the worktree row, in the hover card, and in `⌘K` search. Read only.
 - **Usage**: how much of each provider's allowance is used, in the bottom strip.
-- **Actions**: named commands for each repo in `.tomo.toml`, one button each, marked when one crashes.
-- **Runtime**: the ports that pane processes listen on, with the pane that owns each one.
 - **Agentation**: notes on a browser page go straight into a live agent pane.
 - **Towns**: each new worktree gets the name of a Japanese town, and Tomo keeps the towns you unlocked.
-- **My config**: tabs only with no splits, the slab-dark theme, and a setup hook that copies the `.env` files and runs `pnpm install` in a new acme worktree.
+- **My config**: tabs only with no splits, the slab-dark theme, and a setup hook that copies the `.env` files and runs `pnpm install` in a new worktree.
 
 ## This repo
 
 - **`main`** is the base: a clean, flat copy for you to install, use, and take
-  apart. It has the core, the window, and the addon seams, with no addons and
-  no opinions of mine in it. All yours to mess with!
+  apart. It has the core, the window, the addon seams, and three addons
+  (Actions, Runtime, and GitHub), with no opinions of mine in it. All yours to mess with!
 - **[`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main)** is my
   own Tomo config. I regularly update this with my own opinions, themes, and addons.
   You can use it as reference or for inspiration!

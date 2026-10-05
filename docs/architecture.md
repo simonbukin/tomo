@@ -294,7 +294,8 @@ Actions, hooks, and adapters inherit the new `PATH`.
 ## Addons
 
 An addon is an optional opinion in its own source folder. Core never
-imports it. Six addons exist:
+imports it. Seven addons exist. `main` ships Actions, Runtime, and GitHub;
+`simon-main` adds Towns, Linear, Usage, and Agentation:
 
 - Towns
   - `crates/tomo-proto/src/addons/towns.rs`: wire types
@@ -304,6 +305,10 @@ imports it. Six addons exist:
   - `crates/tomo-proto/src/addons/github.rs`: wire types
   - `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` call, the pull request cache
   - `app/src/addons/github/`: the pull request inspector section, the NOW signal, the repo avatar
+- Linear
+  - `crates/tomo-proto/src/addons/linear.rs`: wire types
+  - `crates/tomod/src/addons/linear/`: the Linear API poll, the issue of each branch, the Keychain key
+  - `app/src/addons/linear/`: the issue link on the row, the hover card facts, the search group
 - Usage
   - `crates/tomo-proto/src/addons/usage.rs`: wire types
   - `crates/tomod/src/addons/usage/`: provider adapters, the last result, the poll, `usage_get`
