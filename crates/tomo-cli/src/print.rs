@@ -73,7 +73,7 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
         println!("{}  {} / {}{}  {}{}{}", w.id, repo, w.name, tags, branch, dirty, missing);
         println!("    {}", w.path.display());
         for a in agents.iter().filter(|a| a.worktree_id == w.id) {
-            println!("    {} {:<7} {:?}", a.state.glyph(), a.kind.label(), a.state);
+            println!("    {} {:<8} {:?}", a.state.glyph(), a.kind.label(), a.state);
         }
     }
 }
@@ -121,7 +121,7 @@ pub fn agents(agents: &[AgentPresence], json: bool) {
     }
     for a in agents {
         println!(
-            "{} {:<7} {:<8} pane {}  wt {}  session {}",
+            "{} {:<8} {:<8} pane {}  wt {}  session {}",
             a.state.glyph(),
             a.kind.label(),
             format!("{:?}", a.state).to_lowercase(),
@@ -347,7 +347,7 @@ pub fn integration_status(list: &[IntegrationStatus], json: bool) {
             (true, false) => "lifecycle only",
             (false, false) => "process heuristic",
         };
-        println!("{:<7} {:<16} {}{}", s.kind.label(), level, caps, s.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default());
+        println!("{:<8} {:<16} {}{}", s.kind.label(), level, caps, s.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default());
     }
 }
 
@@ -460,7 +460,7 @@ pub fn sessions(list: &[AgentSession], json: bool) {
     }
     for s in list {
         let age = age(s.updated_at_ms);
-        println!("{:<7} {:<38} {:>3} turns  {:<8} {}", s.kind.label().to_lowercase(), s.id, s.turns, age, s.title.as_deref().unwrap_or("-"));
+        println!("{:<8} {:<38} {:>3} turns  {:<8} {}", s.kind.label().to_lowercase(), s.id, s.turns, age, s.title.as_deref().unwrap_or("-"));
     }
 }
 
