@@ -64,6 +64,7 @@ export function worktreeMenu(w: Worktree, s: State = getState()): MenuItem[] {
     { label: "new claude", disabled: !live, run: () => spawnAgent("claude", w.id) },
     { label: "new codex", disabled: !live, run: () => spawnAgent("codex", w.id) },
     { label: "new pi", disabled: !live, run: () => spawnAgent("pi", w.id) },
+    { label: "new opencode", disabled: !live, run: () => spawnAgent("opencode", w.id) },
     sep,
     ...worktreeDetailItems(w, s),
   ];
@@ -175,7 +176,7 @@ export function isLastPane(paneId: Id, s: State = getState()): boolean {
   return tabs.length <= 1 && tabs.every((t) => paneIds(t.layout).length <= 1);
 }
 
-const SPAWN_AGENTS = ["claude", "codex", "pi"] as const;
+const SPAWN_AGENTS = ["claude", "codex", "pi", "opencode"] as const;
 
 /** New tabs first, then splits of the focused pane in the current tab. */
 export function spawnMenu(worktreeId: Id, s: State = getState()): MenuItem[] {

@@ -33,7 +33,7 @@ const state = {
 
 describe("worktree menu", () => {
   it("follows the PRD order", () => {
-    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "—", "tags", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
+    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "new opencode", "—", "tags", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
   });
 
   it("copies path, branch, and worktree id, and skips a missing branch", () => {
@@ -77,7 +77,7 @@ describe("pane menu", () => {
     const tabsOnly = { ...state, config: { ...state.config, max_panes_per_tab: 1 } } as unknown as State;
     expect(labels(paneMenu("p1", tabsOnly))).toEqual(["zoom", "equalize", "rotate", "swap with", "—", "keep awake", "—", "rename pane...", "copy", "—", "kill process tree", "close"]);
     expect(labels(tidySeparators(paneMenu("p3", tabsOnly)))).toEqual(["rename pane...", "copy", "—", "kill process tree", "close"]);
-    expect(labels(spawnMenu("w1", tabsOnly))).toEqual(["terminal", "browser", "claude", "codex", "pi"]);
+    expect(labels(spawnMenu("w1", tabsOnly))).toEqual(["terminal", "browser", "claude", "codex", "pi", "opencode"]);
     expect(labels(worktreeMenu(worktree, tabsOnly))).not.toContain("split right");
     const setOf = (s: State) => {
       setState(s);

@@ -28,7 +28,7 @@ export const MENU_BAR_LAYOUT: { text: string; items: LayoutItem[] }[] = [
   { text: "View", items: ["palette", SEP, "home", "activity", "agents", "apps", ...addonViews().map((v) => v.id), "toggle_board", SEP, "toggle_left_sidebar", "toggle_right_sidebar", SEP, "zoom_in", "zoom_out", "zoom_reset", SEP, p("Minimize"), p("Fullscreen")] },
   { text: "Workspace", items: ["next_worktree", "prev_worktree", SEP, "next_tab", "prev_tab", "move_tab_left", "move_tab_right", "rename_tab", SEP, "open_editor", "reveal_finder", "copy_path", SEP, "refresh", "archive_worktree"] },
   { text: "Pane", items: ["new_terminal", "split_vertical", SEP, "zoom_pane", "equalize_panes", "rotate_split", SEP, "focus_left", "focus_right", "focus_up", "focus_down", SEP, "kill_pane_tree", "close_pane"] },
-  { text: "Agent", items: ["spawn_claude", "spawn_codex", "spawn_pi", SEP, "next_attention", "clear_attention", SEP, "integrations", "hook_log"] },
+  { text: "Agent", items: ["spawn_claude", "spawn_codex", "spawn_pi", "spawn_opencode", SEP, "next_attention", "clear_attention", SEP, "integrations", "hook_log"] },
   { text: "Help", items: ["keyboard_shortcuts", "config_check"] },
 ];
 

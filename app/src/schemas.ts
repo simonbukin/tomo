@@ -28,7 +28,7 @@ export const actionSetSchema = z.object({
 
 export const activityKindSchema = z.string();
 
-export const agentKindSchema = z.union([z.literal("claude"), z.literal("codex"), z.literal("pi")]);
+export const agentKindSchema = z.union([z.literal("claude"), z.literal("codex"), z.literal("pi"), z.literal("opencode")]);
 
 export const activityQuerySchema = z.object({
     limit: z.number().nullable(),
@@ -364,7 +364,8 @@ export const integrationStatusSchema = z.object({
 export const integrationsSchema = z.object({
     claude_hooks: z.boolean(),
     codex_hooks: z.boolean(),
-    pi_extension: z.boolean()
+    pi_extension: z.boolean(),
+    opencode_plugin: z.boolean().optional()
 });
 
 export const splitDirectionSchema = z.union([z.literal("horizontal"), z.literal("vertical")]);

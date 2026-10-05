@@ -135,4 +135,4 @@ export interface HomeOptions {
 
 export type Frame = { seq: number; event: string; data?: unknown };
 
-export const KIND_LABEL: Record<AgentKind, string> = { claude: "Claude", codex: "Codex", pi: "Pi" };
+export const KIND_LABEL: Record<AgentKind, string> = { claude: "Claude", codex: "Codex", pi: "Pi", opencode: "OpenCode" };

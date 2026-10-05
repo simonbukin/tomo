@@ -12,6 +12,7 @@ import {
   siNextdotjs,
   siNodedotjs,
   siNpm,
+  siOpencode,
   siPnpm,
   siPython,
   siRuby,
@@ -53,7 +54,7 @@ const BY_COMMAND: [RegExp, Brand][] = [
   [/\bbash\b|\bsh\b/, siGnubash],
 ];
 
-const BY_AGENT: Record<AgentKind, Brand | null> = { claude: siClaude ?? siAnthropic, codex: null, pi: null };
+const BY_AGENT: Record<AgentKind, Brand | null> = { claude: siClaude ?? siAnthropic, codex: null, pi: null, opencode: siOpencode };
 
 export function brandFor(agent: AgentKind | null | undefined, cmd: string | null | undefined): Brand | null {
   if (agent) return BY_AGENT[agent];
