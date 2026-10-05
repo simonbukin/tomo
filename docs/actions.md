@@ -70,6 +70,18 @@ still live, starts nothing. Tomo focuses the live pane and reports
 `reused`. This makes a topbar button a "show me the dev server" button on
 the second click.
 
+**Adopted runs.** An action whose command runs a package script, such as
+`pnpm storybook:dev` or `pnpm --filter=@acme/web run app`, also counts as
+running when another pane of the worktree already runs that script, for
+example a server that an agent started. Tomo reads the script from the
+`npm_lifecycle_event` and `npm_package_name` variables that pnpm, npm, yarn,
+and bun give the processes of a script. The last runner call of the command
+counts, and `--filter` or `--workspace` must name the same package. The
+set lists such panes in `ActionSet.adopted` (action id to pane id). A run of
+an adopted action focuses that pane and reports `reused`. A stop does not
+touch it, because the pane belongs to someone else; the right-click menu
+offers only `show its pane`.
+
 **Stop** kills every process in the pane and closes the pane. **Restart**
 is a stop followed by a run. A stop of an action that does not run is not
 an error.

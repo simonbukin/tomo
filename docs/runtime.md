@@ -49,7 +49,7 @@ source, not the Actions addon. The endpoint carries:
 | `pane_id`        | The pane that owns the process                          |
 | `source`         | The pane source (`kind`, `id`, `label`), when it has one |
 | `action_id`      | The source id, when an Action started the pane          |
-| `label`          | The source label, when the pane has a source            |
+| `label`          | The source label, when the pane has a source; else the package and the script that started the process (`web app` for the `app` script of `@acme/web`), when a package script started it |
 | `pid`, `process` | The listening process and its name                      |
 | `host`, `port`   | From `lsof`; `*`, `0.0.0.0`, `::`, `[::]` become `localhost` |
 | `protocol`       | `http` or `tcp`; see below                              |
