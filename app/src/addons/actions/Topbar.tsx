@@ -9,10 +9,14 @@ import {failQuietly, useStore} from "../../store";
 import { sourceMarks } from "../index";
 import type { TopbarProps } from "../types";
 import { StateMark } from "../../StateMark";
-import { crashedActions, runningActionIds, runningActionItems, runWorktreeAction, SOURCE_KIND } from "./commands";
+import { adoptedActionItems, crashedActions, runningActionIds, runningActionItems, runWorktreeAction, SOURCE_KIND } from "./commands";
 import { putActionSet, useActionSet } from "./state";
 
-/** The `show = "topbar"` actions. A running one has a dot and a right-click menu. */
+/**
+ * The `show = "topbar"` actions. A running one has a dot and a right-click menu. An Action whose package script
+ * already runs in another pane, for example a dev server that an agent started, counts as running: a click shows
+ * that pane, and the menu cannot stop it, because the pane is not the Action's.
+ */
 export function ActionButtons({ worktree: w }: TopbarProps) {
   const set = useActionSet(w.id);
   useEffect(() => {
@@ -25,12 +29,14 @@ export function ActionButtons({ worktree: w }: TopbarProps) {
   const crashed = useStore((s) => crashedActions(s, w.id));
   const topbar = (set?.actions ?? []).filter((a) => a.show === "topbar");
   return topbar.map((a) => {
-    const live = running.includes(a.id);
+    const adopted = !running.includes(a.id) && !!set?.adopted?.[a.id];
+    const live = running.includes(a.id) || adopted;
     const crash = live ? undefined : crashed[a.id];
+    const state = adopted ? "running in another pane" : "running (right-click for more)";
     const hint = [a.command, crash, a.shortcut ? describeBinding(a.shortcut) : null, set?.from_repo ? "from the repository" : null].filter(Boolean).join(" · ");
     return (
-      <Tooltip key={a.id} content={live ? `${hint} · running (right-click for more)` : hint}>
-        <Button variant="ghost" size="sm" className="action-btn" onClick={() => runWorktreeAction(w.id, a.id)} onContextMenu={(e) => live && openMenu(e, runningActionItems(w.id, a.id))}>
+      <Tooltip key={a.id} content={live ? `${hint} · ${state}` : hint}>
+        <Button variant="ghost" size="sm" className="action-btn" onClick={() => runWorktreeAction(w.id, a.id)} onContextMenu={(e) => live && openMenu(e, adopted ? adoptedActionItems(w.id, a.id) : runningActionItems(w.id, a.id))}>
           {(live || crash) && <StateMark mark={live ? "working" : "failed"} hidden />}
           {a.label}
           {sourceMarks().map(({ id, Mark }) => (

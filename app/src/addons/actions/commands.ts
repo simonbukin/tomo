@@ -55,6 +55,9 @@ export function runningActionItems(worktreeId: Id, actionId: string, s: State = 
   ];
 }
 
+/** The menu of an Action that runs in a pane it did not start: only showing that pane. */
+export const adoptedActionItems = (worktreeId: Id, actionId: string): MenuItem[] => [{ label: "show its pane", run: () => runWorktreeAction(worktreeId, actionId) }];
+
 /** The open crash of each Action in a worktree, as the short row text, by action id. */
 export function crashedActions(s: State, worktreeId: Id): Record<string, string> {
   return Object.fromEntries(

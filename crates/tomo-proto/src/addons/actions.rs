@@ -2,6 +2,7 @@
 
 use crate::{ActivityKinds, Id, Pane};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -39,6 +40,11 @@ pub struct ActionSet {
     /// True when the set comes from the repository file, because the worktree has none.
     #[serde(default)]
     pub from_repo: bool,
+    /// The Actions whose package script already runs in a pane that the Action did not start, by action id: the
+    /// pane id. A run of such an Action shows that pane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub adopted: Option<BTreeMap<String, Id>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

@@ -533,6 +533,7 @@ mod tests {
                 .collect(),
             error: error.map(String::from),
             from_repo,
+            adopted: None,
         }
     }
 

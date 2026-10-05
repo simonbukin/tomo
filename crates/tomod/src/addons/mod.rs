@@ -40,7 +40,7 @@ pub fn seams() -> Seams {
         worktree_rebound: vec![towns::rebind],
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
-        process_polled: vec![runtime::scan],
+        process_polled: vec![runtime::scan, actions::adopt],
         hook_events: [actions::HOOK_EVENTS, runtime::HOOK_EVENTS, agentation::HOOK_EVENTS].concat(),
     }
 }

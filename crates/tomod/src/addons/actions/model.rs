@@ -115,9 +115,79 @@ pub fn load(worktree: &Path, repo: Option<&Path>) -> (Vec<ActionDef>, Option<Str
     }
 }
 
+/// The package script that an Action's command runs, and the package when the command names one.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ScriptRun {
+    pub package: Option<String>,
+    pub script: String,
+}
+
+const RUNNERS: [&str; 4] = ["pnpm", "npm", "yarn", "bun"];
+const NOT_A_SCRIPT: [&str; 8] = ["exec", "dlx", "x", "install", "i", "add", "ci", "create"];
+const TAKES_A_VALUE: [&str; 4] = ["-C", "--dir", "--prefix", "--cwd"];
+
+/// `pnpm --filter=@acme/web run app` runs `app` of `@acme/web`, and `pnpm storybook:dev` runs `storybook:dev`. The last
+/// runner call counts, because the lines before it often prepare the run.
+pub fn script_run(command: &str) -> Option<ScriptRun> {
+    command.lines().rev().find_map(|line| {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let at = words.iter().rposition(|w| RUNNERS.contains(&w.rsplit('/').next().unwrap_or(w)))?;
+        let mut package = None;
+        let mut rest = words[at + 1..].iter();
+        while let Some(&word) = rest.next() {
+            match word {
+                "run" | "run-script" => {}
+                "--filter" | "-F" | "--workspace" => package = rest.next().map(|p| p.to_string()),
+                w if TAKES_A_VALUE.contains(&w) => {
+                    rest.next();
+                }
+                w if w.starts_with("--filter=") || w.starts_with("--workspace=") => package = w.split_once('=').map(|(_, p)| p.to_string()),
+                w if w.starts_with('-') => {}
+                w if NOT_A_SCRIPT.contains(&w) => return None,
+                w => return Some(ScriptRun { package, script: w.trim_matches(['"', '\'']).to_string() }),
+            }
+        }
+        None
+    })
+}
+
+impl ScriptRun {
+    /// True for a process that this run started: the same script, of the named package when the command names one.
+    pub fn started(&self, script: Option<&str>, package: Option<&str>) -> bool {
+        script == Some(self.script.as_str()) && self.package.as_deref().is_none_or(|want| package == Some(want))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_package_script_of_a_command() {
+        let run = |c: &str| script_run(c).map(|r| (r.package, r.script));
+        let s = |p: Option<&str>, x: &str| Some((p.map(str::to_string), x.to_string()));
+        assert_eq!(run("pnpm storybook:dev"), s(None, "storybook:dev"));
+        assert_eq!(run("pnpm --filter=@acme/web run seed -- up\nPORT=3 pnpm --filter=@acme/web run app"), s(Some("@acme/web"), "app"));
+        assert_eq!(run("npm run dev --workspace web"), s(None, "dev"));
+        assert_eq!(run("npm --workspace web run dev"), s(Some("web"), "dev"));
+        assert_eq!(run("cd app && yarn -F web start"), s(Some("web"), "start"));
+        assert_eq!(run("pnpm -C apps/web dev"), s(None, "dev"));
+        assert_eq!(run("/opt/homebrew/bin/bun run serve"), s(None, "serve"));
+        assert_eq!(run("pnpm exec vite"), None);
+        assert_eq!(run("cargo run"), None);
+        assert_eq!(run("pnpm"), None);
+    }
+
+    #[test]
+    fn a_run_knows_the_processes_it_started() {
+        let filtered = ScriptRun { package: Some("@acme/web".into()), script: "app".into() };
+        assert!(filtered.started(Some("app"), Some("@acme/web")));
+        assert!(!filtered.started(Some("app"), Some("@acme/docs")));
+        assert!(!filtered.started(Some("dev"), Some("@acme/web")));
+        let any = ScriptRun { package: None, script: "storybook:dev".into() };
+        assert!(any.started(Some("storybook:dev"), Some("acme")));
+        assert!(!any.started(None, None));
+    }
     use std::path::PathBuf;
 
     fn temp(name: &str) -> PathBuf {

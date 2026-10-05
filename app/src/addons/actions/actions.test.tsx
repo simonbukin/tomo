@@ -67,6 +67,15 @@ describe("actions topbar", () => {
     expect(screen.getByRole("button", { name: "Lint" }).querySelector('[data-mark="working"]')).toBeNull();
   });
 
+  it("marks an action that runs in another pane as running, and offers only to show that pane", () => {
+    store.applyFrame({ event: "actions_changed", data: { set: { ...set, adopted: { lint: "agent-pane" } } } } as unknown as Frame);
+    render(<WorktreeHeader worktree={worktree} />);
+    const lint = screen.getByRole("button", { name: "Lint" });
+    expect(lint.querySelector('[data-mark="working"]')).not.toBeNull();
+    fireEvent.contextMenu(lint);
+    expect(labels(store.getState().menu!.items)).toEqual(["show its pane"]);
+  });
+
   it("marks a crashed action on its own button, with the exit in the tooltip", () => {
     const crash = { id: "c1", worktree_id: "w1", pane_id: "p1", kind: "crash", level: "attention", message: "Serve exited with code 1", created_at_ms: 1, viewed_at_ms: null, resolved_at_ms: null } as unknown as AttentionItem;
     store.setState({ panes: { p1: { ...servePane, live: false, exit_code: 1 } }, attention: [crash] });

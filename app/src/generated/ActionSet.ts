@@ -8,4 +8,9 @@ export type ActionSet = { worktree_id: string, actions: Array<ActionDef>, error:
 /**
  * True when the set comes from the repository file, because the worktree has none.
  */
-from_repo: boolean, };
+from_repo: boolean, 
+/**
+ * The Actions whose package script already runs in a pane that the Action did not start, by action id: the
+ * pane id. A run of such an Action shows that pane.
+ */
+adopted?: { [key in string]: string }, };

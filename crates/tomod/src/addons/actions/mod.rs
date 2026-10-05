@@ -51,6 +51,48 @@ fn source_of(action: &ActionDef) -> PaneSource {
     PaneSource { kind: ACTION_SOURCE_KIND.into(), id: action.id.clone(), label: action.label.clone() }
 }
 
+/// The pane that already runs the package script of an Action, which the Action did not start.
+fn adopted_pane(inner: &Inner, worktree_id: &str, action_id: &str) -> Option<Id> {
+    let pane_id = sets(inner).get(worktree_id)?.adopted.as_ref()?.get(action_id)?;
+    inner.panes.contains_key(pane_id).then(|| pane_id.clone())
+}
+
+/// The `process_polled` seam. An Action counts as running when a pane of its worktree already runs its package
+/// script, for example a dev server that an agent started, so a click shows that pane and starts no second copy.
+pub fn adopt(daemon: &Arc<Daemon>) {
+    let mut inner = daemon.lock();
+    let owned: Vec<ProcessInfo> = crate::monitor::classify_all(&inner).into_iter().filter(|p| p.ownership == Ownership::Owned).collect();
+    let rows: BTreeMap<u32, &crate::procs::ProcRow> = inner.proc_rows.iter().filter(|r| r.script.is_some()).map(|r| (r.pid, r)).collect();
+    let started_by = |pane_id: &str, action_id: &str| inner.panes.get(pane_id).and_then(|p| p.source.as_ref()).is_some_and(|s| s.kind == ACTION_SOURCE_KIND && s.id == action_id);
+    let found: Vec<(Id, Option<BTreeMap<String, Id>>)> = sets(&inner)
+        .values()
+        .map(|set| {
+            let adopted: BTreeMap<String, Id> = set
+                .actions
+                .iter()
+                .filter(|a| a.mode == ActionMode::Pane)
+                .filter_map(|a| {
+                    let run = model::script_run(&a.command)?;
+                    let pane_id = owned.iter().find_map(|p| {
+                        let pane_id = p.pane_id.as_deref().filter(|_| p.worktree_id.as_deref() == Some(set.worktree_id.as_str()))?;
+                        let row = rows.get(&p.pid)?;
+                        (run.started(row.script.as_deref(), row.package.as_deref()) && !started_by(pane_id, &a.id)).then(|| pane_id.to_string())
+                    })?;
+                    Some((a.id.clone(), pane_id))
+                })
+                .collect();
+            (set.worktree_id.clone(), Some(adopted).filter(|m| !m.is_empty()))
+        })
+        .filter(|(worktree_id, adopted)| sets(&inner).get(worktree_id).is_some_and(|s| &s.adopted != adopted))
+        .collect();
+    for (worktree_id, adopted) in found {
+        let Some(set) = addons::state_mut(&mut inner).actions.get_mut(&worktree_id) else { continue };
+        set.adopted = adopted;
+        let set = set.clone();
+        Daemon::emit(&mut inner, Event::ActionsChanged { set });
+    }
+}
+
 /// The panes of earlier runs of an Action that have ended. A new run answers their crash.
 fn earlier_panes(inner: &Inner, worktree_id: &str, action_id: &str) -> Vec<Id> {
     inner
@@ -114,7 +156,7 @@ fn reload(daemon: &Arc<Daemon>) {
         .map(|(worktree_id, path, repo)| {
             let (actions, error, from_repo) = model::load(&path, repo.as_deref());
             let source = if from_repo { repo.unwrap_or(path) } else { path };
-            (ActionSet { worktree_id, actions, error, from_repo }, source.join(model::FILE_NAME))
+            (ActionSet { worktree_id, actions, error, from_repo, adopted: None }, source.join(model::FILE_NAME))
         })
         .collect();
     let mut inner = daemon.lock();
@@ -122,7 +164,8 @@ fn reload(daemon: &Arc<Daemon>) {
         let sets = &mut addons::state_mut(&mut inner).actions;
         let live: HashSet<Id> = loaded.iter().map(|(s, _)| s.worktree_id.clone()).collect();
         sets.retain(|id, _| live.contains(id));
-        let changed: Vec<(ActionSet, PathBuf)> = loaded.into_iter().filter(|(set, _)| sets.get(&set.worktree_id) != Some(set)).collect();
+        let loaded = loaded.into_iter().map(|(set, path)| (ActionSet { adopted: sets.get(&set.worktree_id).and_then(|s| s.adopted.clone()), ..set }, path));
+        let changed: Vec<(ActionSet, PathBuf)> = loaded.filter(|(set, _)| sets.get(&set.worktree_id) != Some(set)).collect();
         sets.extend(changed.iter().map(|(s, _)| (s.worktree_id.clone(), s.clone())));
         changed
     };
@@ -187,7 +230,7 @@ pub fn list(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcError> {
         }
         sets(&inner).get(&worktree_id).cloned()
     };
-    ok(set.unwrap_or(ActionSet { worktree_id, actions: vec![], error: None, from_repo: false }))
+    ok(set.unwrap_or(ActionSet { worktree_id, actions: vec![], error: None, from_repo: false, adopted: None }))
 }
 
 pub fn run(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Value, RpcError> {
@@ -230,7 +273,7 @@ fn start(daemon: &Arc<Daemon>, worktree_id: &str, action_id: &str) -> Result<Act
             None
         }
         ActionMode::Pane => {
-            if let Some(pane_id) = running_pane(&inner, worktree_id, action_id) {
+            if let Some(pane_id) = running_pane(&inner, worktree_id, action_id).or_else(|| adopted_pane(&inner, worktree_id, action_id)) {
                 Daemon::focus_pane(&mut inner, &pane_id);
                 let pane = Daemon::pane_view(&inner, &pane_id);
                 return Ok(ActionRunResult { action, pane, reused: true });

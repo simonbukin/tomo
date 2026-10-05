@@ -22,7 +22,8 @@ export const actionSetSchema = z.object({
     worktree_id: z.string(),
     actions: z.array(actionDefSchema),
     error: z.string().nullable(),
-    from_repo: z.boolean()
+    from_repo: z.boolean(),
+    adopted: z.any().optional()
 });
 
 export const activityKindSchema = z.string();
