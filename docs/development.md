@@ -61,8 +61,9 @@ scripts/install.sh         release build and install
   Linear, Usage, and Agentation), and a personal config. It is a worked example.
 
 Changes flow one way: from `main` into `simon-main`, never back. `simon-main`
-reverts the commit that removed the four addons, so a merge from `main` never
-removes them. A change to a composition root can conflict; keep both sides.
+merged the `main` commit that left the four addons out, and it kept its own
+files in that merge. So a later merge from `main` never removes them. A change
+to a composition root can conflict; keep both sides.
 
 Put each change where its code lives:
 
