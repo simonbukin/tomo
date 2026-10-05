@@ -42,7 +42,7 @@ pub fn integrations(i: &Integrations, json: bool) {
         return emit_json(i);
     }
     let mark = |b: bool| if b { "installed" } else { "not installed" };
-    println!("hooks    claude {}  codex {}  pi {}", mark(i.claude_hooks), mark(i.codex_hooks), mark(i.pi_extension));
+    println!("hooks    claude {}  codex {}  pi {}  opencode {}", mark(i.claude_hooks), mark(i.codex_hooks), mark(i.pi_extension), mark(i.opencode_plugin.unwrap_or(false)));
 }
 
 pub fn repos(repos: &[Repo], json: bool) {

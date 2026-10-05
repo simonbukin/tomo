@@ -55,6 +55,13 @@ pub fn classify_all(inner: &Inner) -> Vec<ProcessInfo> {
 
 const FULL_CWD_REFRESH_MS: u64 = 20_000;
 
+/// Reads the process table again now, outside the tick: for a caller that cannot wait for the next poll.
+pub fn refresh_rows(inner: &mut Inner) {
+    let roots: Vec<u32> = inner.panes.values().filter(|p| p.exit_code.is_none()).filter_map(|p| p.pty.as_ref().map(|x| x.pid)).collect();
+    inner.proc_rows = inner.procs.refresh(&roots, false);
+    inner.proc_rows_at_ms = now_ms();
+}
+
 pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
     let roots: Vec<u32> = inner.panes.values().filter(|p| p.exit_code.is_none()).filter_map(|p| p.pty.as_ref().map(|x| x.pid)).collect();
     let full = force_full || now_ms().saturating_sub(inner.last_full_poll_ms) >= FULL_CWD_REFRESH_MS;
@@ -120,7 +127,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                 let (busy, state) = fallback(prev, subtree_cpu > BUSY_CPU_PERCENT, now);
                 inner.busy.insert(pane_id.clone(), busy);
                 let report = AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: None, authority: Authority::Heuristic, at_ms: now };
-                Daemon::apply_report(inner, &report, Some(pid));
+                Daemon::apply_report(inner, &report, Some(pid), None);
             }
             None => {
                 inner.busy.remove(&pane_id);
@@ -135,7 +142,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                     });
                 if let Some((kind, state)) = ended {
                     let report = AgentReport { pane_id: pane_id.clone(), kind, state: Some(state), session_ref: None, authority: Authority::Lifecycle, at_ms: now };
-                    Daemon::apply_report(inner, &report, None);
+                    Daemon::apply_report(inner, &report, None, None);
                 }
             }
         }

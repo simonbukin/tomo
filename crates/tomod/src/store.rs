@@ -214,6 +214,7 @@ fn agent_kind_str(k: AgentKind) -> &'static str {
         AgentKind::Claude => "claude",
         AgentKind::Codex => "codex",
         AgentKind::Pi => "pi",
+        AgentKind::OpenCode => "opencode",
     }
 }
 

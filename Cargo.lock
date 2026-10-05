@@ -5820,6 +5820,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "sysinfo",
  "tokio",
  "toml 1.1.6+spec-1.1.0",

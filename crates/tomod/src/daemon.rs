@@ -1426,7 +1426,13 @@ impl Daemon {
 
     // -------------------------------------------------------------- agents
 
-    pub fn apply_report(inner: &mut Inner, report: &AgentReport, pid: Option<u32>) {
+    /// True while a process in the pane's tree is an agent of `kind`.
+    fn pane_runs(inner: &Inner, pane_id: &str, kind: AgentKind) -> bool {
+        crate::monitor::classify_all(inner).iter().any(|p| p.pane_id.as_deref() == Some(pane_id) && providers::detect(&p.name, &p.cmd) == Some(kind))
+    }
+
+    /// Folds one report into the presence. `question` is what the agent asks, when it starts to wait.
+    pub fn apply_report(inner: &mut Inner, report: &AgentReport, pid: Option<u32>, question: Option<&str>) {
         let Some(worktree_id) = inner.panes.get(&report.pane_id).map(|p| p.row.worktree_id.clone()) else { return };
         let pid = pid.or_else(|| inner.agents.get(&report.pane_id).and_then(|a| a.pid));
         let previous = inner.agents.get(&report.pane_id).map(|a| a.state);
@@ -1453,8 +1459,8 @@ impl Daemon {
             inner.hook_queue.push(ev);
         }
         if next.state == AgentState::Waiting && previous != Some(AgentState::Waiting) {
-            let attention_id =
-                Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, format!("{} is waiting for you", next.kind.label()));
+            let message = question.map_or_else(|| format!("{} is waiting for you", next.kind.label()), str::to_string);
+            let attention_id = Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, message);
             let repeat =
                 Self::recorded_recently(inner, CoreActivity::AgentWaiting, activity::WAITING_REPEAT_MS, |a| a.pane_id.as_deref() == Some(&report.pane_id));
             if !repeat {
@@ -2562,12 +2568,19 @@ impl Daemon {
                 if !inner.panes.contains_key(&pane_id) || !crate::sleep::hook_counts(&inner, &pane_id, at_ms) {
                     return Ok(Value::Null);
                 }
+                if providers::provider(kind).hooks_need_process && !Self::pane_runs(&inner, &pane_id, kind) {
+                    crate::monitor::refresh_rows(&mut inner);
+                    if !Self::pane_runs(&inner, &pane_id, kind) {
+                        return Ok(Value::Null);
+                    }
+                }
                 let busy = inner.agents.get(&pane_id).is_some_and(|a| matches!(a.state, AgentState::Working | AgentState::Waiting));
                 let state = outcome.state.filter(|_| !outcome.only_if_busy || busy);
                 Self::apply_report(
                     &mut inner,
                     &AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
                     None,
+                    outcome.question.as_deref(),
                 );
                 Self::apply_subagents(&mut inner, &pane_id, outcome.subagent.as_ref(), at_ms);
                 crate::sleep::woke(self, &mut inner, &pane_id);
@@ -2578,7 +2591,7 @@ impl Daemon {
                 if !inner.panes.contains_key(&report.pane_id) {
                     return Err(err(ErrorCode::NotFound, "pane not found"));
                 }
-                Self::apply_report(&mut inner, &report, None);
+                Self::apply_report(&mut inner, &report, None, None);
                 ok(inner.agents.get(&report.pane_id).cloned())
             }
 

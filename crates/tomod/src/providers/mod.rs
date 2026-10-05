@@ -10,6 +10,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod opencode;
 pub mod pi;
 
 use anyhow::{Context, Result};
@@ -28,6 +29,9 @@ pub struct Provider {
     pub resume_env: &'static [(&'static str, &'static str)],
     /// The provider sends an event when a session ends normally. Then a process that ends without one is dead.
     pub reports_end: bool,
+    /// A hook counts only while the pane runs the provider's process. Codex can run a session in a shared server
+    /// that keeps the environment, and so the pane, of whichever terminal started it.
+    pub hooks_need_process: bool,
     pub hook_outcome: fn(&Value) -> HookOutcome,
     pub detects: fn(&Program) -> bool,
     pub nested_env: &'static [&'static str],
@@ -39,6 +43,8 @@ pub struct Provider {
     /// The message text of one line of a session file: what the user or the agent wrote, without tool calls,
     /// tool output, or thinking. `None` for every other line.
     pub transcript_text: fn(line: &str) -> Option<String>,
+    /// The message text of one whole session, for a provider that keeps its sessions in a database, not in a file.
+    pub transcript_messages: Option<fn(home: &Path, session: &AgentSession) -> Vec<String>>,
     /// Child programs of the agent that a sleep may end, because they hold no work.
     pub sleep_safe_children: &'static [&'static str],
     /// Whether the provider saved the session, so a resume can find it. Claude saves no file before the first turn.
@@ -59,16 +65,8 @@ pub fn no_launch_file(_launch_dir: &Path, _tomo_bin: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn no_sessions(_home: &Path, _cwd: &Path) -> Vec<AgentSession> {
-    Vec::new()
-}
-
 pub fn no_transcript(_line: &str) -> Option<String> {
     None
-}
-
-pub fn always_saved(_home: &Path, _session_ref: &str) -> bool {
-    true
 }
 
 /// The resume line after a sleep. It names no model: a Claude session file drops the `[1m]` of a 1M-context
@@ -82,10 +80,11 @@ pub fn provider(kind: AgentKind) -> &'static Provider {
         AgentKind::Claude => &claude::PROVIDER,
         AgentKind::Codex => &codex::PROVIDER,
         AgentKind::Pi => &pi::PROVIDER,
+        AgentKind::OpenCode => &opencode::PROVIDER,
     }
 }
 
-pub fn table() -> [&'static Provider; 3] {
+pub fn table() -> [&'static Provider; 4] {
     AgentKind::all().map(provider)
 }
 
@@ -122,6 +121,35 @@ pub struct HookOutcome {
     pub subagent: Option<SubagentEvent>,
     /// The state applies only to an agent that works or waits: it ends a turn that sent no stop event, such as an interrupt.
     pub only_if_busy: bool,
+    /// What the agent asks, when the event makes it wait: the question, or the command it wants to run.
+    pub question: Option<String>,
+}
+
+const QUESTION_CHARS: usize = 200;
+
+/// The question that a tool call puts to the user: the first question of an ask tool, the command of a shell tool,
+/// the file of an edit, or the tool name.
+pub fn ask_text(tool_name: &str, input: &Value) -> String {
+    let question = input.get("questions").and_then(|q| q.get(0)).and_then(|q| str_field(q, "question")).map(str::to_string);
+    let command = match input.get("command") {
+        Some(Value::String(c)) => Some(c.clone()),
+        Some(Value::Array(parts)) => Some(parts.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),
+        _ => None,
+    };
+    let file = ["file_path", "path", "filePath"].iter().find_map(|k| str_field(input, k));
+    let text = question
+        .or_else(|| command.map(|c| format!("{tool_name}: {c}")))
+        .or_else(|| file.map(|f| format!("{tool_name} {f}")))
+        .unwrap_or_else(|| format!("use {tool_name}"));
+    clip_question(&text)
+}
+
+pub fn clip_question(text: &str) -> String {
+    let one_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    match one_line.char_indices().nth(QUESTION_CHARS) {
+        Some((cut, _)) => format!("{}…", &one_line[..cut]),
+        None => one_line,
+    }
 }
 
 pub struct SpawnPlan {
@@ -222,6 +250,7 @@ pub fn installed() -> Integrations {
         claude_hooks: (claude::PROVIDER.installed)(&home),
         codex_hooks: (codex::PROVIDER.installed)(&home),
         pi_extension: (pi::PROVIDER.installed)(&home),
+        opencode_plugin: Some((opencode::PROVIDER.installed)(&home)),
     }
 }
 
@@ -487,13 +516,19 @@ mod tests {
         assert_eq!(quit.state, Some(AgentState::Exited));
     }
 
+    /// Codex's trust override depends on the hooks of this machine, so the plan tests leave it out.
+    fn without_trust(argv: Vec<String>) -> Vec<String> {
+        let at = argv.iter().position(|a| a == "-c" && argv.get(argv.iter().position(|b| b == a).unwrap() + 1).is_some_and(|v| v.starts_with("hooks.state=")));
+        argv.iter().enumerate().filter(|(i, _)| at.is_none_or(|c| *i != c && *i != c + 1)).map(|(_, a)| a.clone()).collect()
+    }
+
     #[test]
     fn spawn_plan_builds_resume_and_fresh_commands() {
         let fresh = agent_plan(AgentKind::Claude, "claude", &[], None, &[]);
         assert!(fresh.session_ref.is_some());
         assert!(fresh.argv.contains(&"--session-id".to_string()));
         let resumed = agent_plan(AgentKind::Codex, "codex", &[], Some("abc"), &[]);
-        assert_eq!(resumed.argv, vec!["codex", "resume", "abc"]);
+        assert_eq!(without_trust(resumed.argv), vec!["codex", "--no-daemon", "resume", "abc"]);
         assert_eq!(shell_line(&["a b".to_string(), "c'd".to_string()]), "'a b' 'c'\\''d'");
     }
 
@@ -521,12 +556,12 @@ mod tests {
     #[test]
     fn codex_spawn_plan_has_no_session_until_a_hook_reports_one() {
         let fresh = agent_plan(AgentKind::Codex, "codex", &["--full-auto"], None, &["-m", "o3"]);
-        assert_eq!(fresh.argv, ["codex", "--full-auto", "-m", "o3"]);
+        assert_eq!(without_trust(fresh.argv), ["codex", "--full-auto", "--no-daemon", "-m", "o3"]);
         assert_eq!(fresh.session_ref, None);
         let resumed = agent_plan(AgentKind::Codex, "codex", &["--full-auto"], Some("019a"), &["-m", "o3"]);
-        assert_eq!(resumed.argv, ["codex", "--full-auto", "resume", "019a", "-m", "o3"]);
+        assert_eq!(without_trust(resumed.argv), ["codex", "--full-auto", "--no-daemon", "resume", "019a", "-m", "o3"]);
         let last = agent_plan(AgentKind::Codex, "codex", &[], Some("--last"), &[]);
-        assert_eq!(last.argv, ["codex", "resume", "--last"]);
+        assert_eq!(without_trust(last.argv), ["codex", "--no-daemon", "resume", "--last"]);
         assert_eq!(last.session_ref.as_deref(), Some("--last"), "the restore fallback flag comes back as a session reference");
         assert_eq!(provider(AgentKind::Codex).resume_without_session, Some("--last"));
         assert_eq!(provider(AgentKind::Claude).resume_without_session, None);
@@ -545,7 +580,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_and_codex_share_one_hook_table() {
+    fn claude_hook_table() {
         use AgentState::*;
         let table = [
             ("SessionStart", Some(Idle)),
@@ -564,7 +599,7 @@ mod tests {
             ("Interrupt", None),
             ("", None),
         ];
-        for kind in [AgentKind::Claude, AgentKind::Codex] {
+        for kind in [AgentKind::Claude] {
             for (event, want) in table {
                 assert_eq!(state_of(kind, serde_json::json!({ "hook_event_name": event, "session_id": "s" })), want, "{kind:?} {event}");
             }
@@ -589,7 +624,7 @@ mod tests {
         let old_name = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Task", "tool_input": { "prompt": "x" } });
         assert_eq!(subagent_of(AgentKind::Claude, old_name), Some(SubagentEvent::Launch { label: "general-purpose".into(), description: None }));
         let start = serde_json::json!({ "hook_event_name": "SubagentStart", "agent_id": "a1", "agent_type": "Explore" });
-        assert_eq!(subagent_of(AgentKind::Claude, start), Some(SubagentEvent::Start { id: "a1".into(), label: "Explore".into() }));
+        assert_eq!(subagent_of(AgentKind::Claude, start), Some(SubagentEvent::Start { id: "a1".into(), label: "Explore".into(), description: None }));
         let stop = serde_json::json!({ "hook_event_name": "SubagentStop", "agent_id": "a1", "agent_type": "Explore" });
         assert_eq!(subagent_of(AgentKind::Claude, stop), Some(SubagentEvent::Stop { id: "a1".into() }));
         let inside = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Read", "agent_id": "a1" });
@@ -655,13 +690,14 @@ mod tests {
         let codex_events = sorted_keys(&codex_file);
         assert_eq!(
             codex_events,
-            ["PermissionRequest", "PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"],
-            "no SessionEnd: only the process monitor sees Codex exit"
+            ["Interrupt", "PermissionRequest", "PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "SubagentStart", "SubagentStop", "UserPromptSubmit"]
         );
+        assert_eq!(codex_file["Interrupt"][0]["hooks"][0]["timeout"], 3, "Codex allows an Interrupt hook 3 s at most");
         assert_eq!(codex_file["Stop"][0]["hooks"][0]["command"], "/usr/local/bin/tomo hook codex");
-        for event in claude_events.iter().filter(|e| *e != "Notification").chain(&codex_events) {
-            let o = hook_outcome(AgentKind::Claude, &serde_json::json!({ "hook_event_name": event, "agent_id": "a1" }));
-            assert!(o.state.is_some() || o.subagent.is_some(), "{event}");
+        let installed = claude_events.iter().filter(|e| *e != "Notification").map(|e| (AgentKind::Claude, e)).chain(codex_events.iter().map(|e| (AgentKind::Codex, e)));
+        for (kind, event) in installed {
+            let o = hook_outcome(kind, &serde_json::json!({ "hook_event_name": event, "agent_id": "a1" }));
+            assert!(o.state.is_some() || o.subagent.is_some(), "{kind:?} {event}");
         }
     }
 }

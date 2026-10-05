@@ -12,6 +12,7 @@ pub static PROVIDER: Provider = Provider {
     resume_without_session: None,
     resume_env: &[("CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "1"), ("CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS", "3600000")],
     reports_end: true,
+    hooks_need_process: false,
     hook_outcome,
     detects,
     nested_env: &["CLAUDECODE", "CLAUDE_CODE_*"],
@@ -21,6 +22,7 @@ pub static PROVIDER: Provider = Provider {
     gap: super::no_gap,
     sessions,
     transcript_text,
+    transcript_messages: None,
     sleep_safe_children: &["caffeinate"],
     session_saved,
 };
@@ -206,7 +208,14 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
         _ => None,
     };
     let only_if_busy = event == "Notification" && str_field(payload, "notification_type") == Some("idle_prompt");
-    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string), subagent: subagent_event(event, payload, state), only_if_busy }
+    let question = match event {
+        "PermissionRequest" => str_field(payload, "tool_name").map(|tool| super::ask_text(tool, payload.get("tool_input").unwrap_or(&Value::Null))),
+        "Notification" if state == Some(AgentState::Waiting) && str_field(payload, "notification_type") != Some("permission_prompt") => {
+            str_field(payload, "message").map(super::clip_question)
+        }
+        _ => None,
+    };
+    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string), subagent: subagent_event(event, payload, state), only_if_busy, question }
 }
 
 /// The tool that starts a subagent. Claude Code renamed `Task` to `Agent` and accepts both.
@@ -219,7 +228,7 @@ fn subagent_event(event: &str, payload: &Value, state: Option<AgentState>) -> Op
     let id = str_field(payload, "agent_id").map(str::to_string);
     let label = || str_field(payload, "agent_type").unwrap_or(DEFAULT_SUBAGENT).to_string();
     match (event, id) {
-        ("SubagentStart", Some(id)) => Some(SubagentEvent::Start { id, label: label() }),
+        ("SubagentStart", Some(id)) => Some(SubagentEvent::Start { id, label: label(), description: None }),
         ("SubagentStop", Some(id)) => Some(SubagentEvent::Stop { id }),
         (_, Some(id)) => state.filter(|s| matches!(s, AgentState::Working | AgentState::Waiting)).map(|state| SubagentEvent::Activity { id, state }),
         ("PreToolUse", None) if str_field(payload, "tool_name").is_some_and(|t| SUBAGENT_TOOLS.contains(&t)) => {

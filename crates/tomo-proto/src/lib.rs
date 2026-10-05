@@ -779,6 +779,10 @@ pub struct Integrations {
     pub claude_hooks: bool,
     pub codex_hooks: bool,
     pub pi_extension: bool,
+    /// Absent from a daemon older than OpenCode support.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub opencode_plugin: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1250,6 +1254,8 @@ pub enum AgentKind {
     Claude,
     Codex,
     Pi,
+    #[serde(rename = "opencode")]
+    OpenCode,
 }
 
 impl AgentKind {
@@ -1258,11 +1264,12 @@ impl AgentKind {
             AgentKind::Claude => "Claude",
             AgentKind::Codex => "Codex",
             AgentKind::Pi => "Pi",
+            AgentKind::OpenCode => "OpenCode",
         }
     }
 
-    pub fn all() -> [AgentKind; 3] {
-        [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi]
+    pub fn all() -> [AgentKind; 4] {
+        [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi, AgentKind::OpenCode]
     }
 }
 
@@ -1273,6 +1280,7 @@ impl std::str::FromStr for AgentKind {
             "claude" => Ok(AgentKind::Claude),
             "codex" => Ok(AgentKind::Codex),
             "pi" => Ok(AgentKind::Pi),
+            "opencode" => Ok(AgentKind::OpenCode),
             other => Err(format!("unknown agent kind: {other}")),
         }
     }

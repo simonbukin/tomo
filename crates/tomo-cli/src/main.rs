@@ -52,14 +52,14 @@ enum Cmd {
     Attention(AttentionCmd),
     #[command(about = "Receive an agent hook payload on stdin (used by hook configs)")]
     Hook {
-        #[arg(value_parser = ["claude", "codex", "pi"])]
+        #[arg(value_parser = ["claude", "codex", "pi", "opencode"])]
         agent: String,
     },
     #[command(subcommand, about = "Agent hook and extension installation")]
     Integrations(IntegrationsCmd),
     #[command(subcommand, about = "Japanese towns that name new worktrees")]
     Towns(TownsCmd),
-    #[command(about = "Claude and Codex sessions rooted at a worktree")]
+    #[command(about = "Agent sessions rooted at a worktree: Claude, Codex, Pi, and OpenCode")]
     Sessions {
         worktree: Option<String>,
         #[arg(long, default_value_t = 20)]
@@ -338,7 +338,7 @@ enum AgentCmd {
         worktree: Option<String>,
     },
     Spawn {
-        #[arg(value_parser = ["claude", "codex", "pi"])]
+        #[arg(value_parser = ["claude", "codex", "pi", "opencode"])]
         agent: String,
         #[arg(long)]
         worktree: Option<String>,
