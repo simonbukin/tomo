@@ -1,6 +1,6 @@
 #!/bin/bash
-# Provider torture: Claude, Codex, and Pi through scripts/fixtures/fake-provider. No model calls.
-# HOME points at a scratch directory next to the data dir, so ~/.claude, ~/.codex, and ~/.pi stay untouched.
+# Provider torture: Claude, Codex, Pi, and OpenCode through scripts/fixtures/fake-provider. No model calls.
+# HOME points at a scratch directory next to the data dir, so ~/.claude, ~/.codex, ~/.pi, and ~/.config stay untouched.
 set -u
 . "$(dirname "$0")/lib.sh"
 
@@ -12,10 +12,10 @@ rm -rf "$SCRATCH_HOME"; mkdir -p "$SCRATCH_HOME"; touch "$SCRATCH_HOME/.zshrc"
 export HOME="$SCRATCH_HOME"
 export GIT_AUTHOR_NAME=tomo GIT_AUTHOR_EMAIL=tomo@example.invalid GIT_COMMITTER_NAME=tomo GIT_COMMITTER_EMAIL=tomo@example.invalid
 
-CONFIG=$(for p in claude codex pi; do printf '[agents.%s]\ncommand = "%s"\nargs = ["%s", "%s"]\n' "$p" "$NODE" "$FAKE" "$p"; done)
-export CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli CODEX_THREAD_ID=parent ORCA_PANE=1 PI_CODING_AGENT=true CODEX_SANDBOX=seatbelt
+CONFIG=$(for p in claude codex pi opencode; do printf '[agents.%s]\ncommand = "%s"\nargs = ["%s", "%s"]\n' "$p" "$NODE" "$FAKE" "$p"; done)
+export CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli CODEX_THREAD_ID=parent ORCA_PANE=1 PI_CODING_AGENT=true CODEX_SANDBOX=seatbelt OPENCODE=1
 daemon_fresh "$CONFIG"
-unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_THREAD_ID ORCA_PANE PI_CODING_AGENT CODEX_SANDBOX
+unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_THREAD_ID ORCA_PANE PI_CODING_AGENT CODEX_SANDBOX OPENCODE
 R=$(new_repo); $T repo add "$R" >/dev/null
 WT=$(wt_id "$R")
 
@@ -30,18 +30,18 @@ poll() { $T ps --json >/dev/null; }
 waiting_item() { $T attention list --json | jq_ "import sys; sys.exit(0 if any(i['pane_id']=='$1' and i['kind']=='waiting' for i in d) else 1)"; }
 session_listed() { $RPC call session_list "{\"worktree_id\":\"$WT\",\"limit\":50}" | jq_ "import sys; sys.exit(0 if any(s['id']=='$1' for s in d) else 1)"; }
 level() { $T integrations status --json | jq_ "print([s['level'] for s in d if s['kind']=='$1'][0])"; }
-resume_flags() { case $1 in claude) echo "--resume $2" ;; codex) echo "resume $2" ;; pi) echo "--session $2" ;; esac; }
+resume_flags() { case $1 in claude) echo "--resume $2" ;; codex) echo "resume $2" ;; pi) echo "--session $2" ;; opencode) echo "--session $2" ;; esac; }
 
 # 0. a pane drops the markers of the agent that started tomod
 E=$($T pane create --worktree "$WT"); sleep 1.5
 $RPC send "$E" "env > $HOME/pane-env\r"
 wait_for "[ -s $HOME/pane-env ]" 20
-for v in CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_THREAD_ID ORCA_PANE PI_CODING_AGENT CODEX_SANDBOX; do
+for v in CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_THREAD_ID ORCA_PANE PI_CODING_AGENT CODEX_SANDBOX OPENCODE; do
   grep -q "^$v=" "$HOME/pane-env" && check 1 "pane env drops $v" || check 0 "pane env drops $v"
 done
 
 # 1. an agent started by hand, with no integration, is found by the process monitor
-for p in claude codex pi; do
+for p in claude codex pi opencode; do
   H=$($T pane create --worktree "$WT"); sleep 1.5
   $RPC send "$H" "$NODE $FAKE $p\r"
   wait_for "on_screen $H 'fake-provider $p session'" 20
@@ -59,25 +59,28 @@ done
 [ "$(level codex)" = process_only ] && check 0 "codex without hooks is process_only" || check 1 "codex level before install" "$(level codex)"
 $T integrations install >/dev/null
 grep -q 'hook claude' "$HOME/.claude/settings.json" && grep -q 'hook codex' "$HOME/.codex/hooks.json" && [ -f "$HOME/.pi/agent/extensions/tomo-status.ts" ] \
-  && check 0 "integrations install writes the three provider files" || check 1 "integrations install files"
+  && [ -f "$HOME/.config/opencode/plugins/tomo-status/tui.js" ] && check 0 "integrations install writes the four provider files" || check 1 "integrations install files"
 [ "$(level codex)" = partial ] && check 0 "installed but untrusted codex hooks are partial" || check 1 "codex level after install" "$(level codex)"
 
 U=$(spawn codex)
-wait_for "on_screen $U 'fake-provider codex session'" 20; sleep 1
-[ "$(agent_field "$U" state)" = unknown ] && [ "$(agent_field "$U" session_ref)" = None ] && check 0 "untrusted codex: no hook runs, so no state and no session" || check 1 "untrusted codex" "$(agent_field "$U" state) $(agent_field "$U" session_ref)"
-poll
-wait_for "[ \"\$(agent_field $U pid)\" != None ]" 6 && check 0 "untrusted codex: the process monitor still records it" || check 1 "untrusted codex pid"
+wait_for "on_screen $U 'fake-provider codex session'" 20
+screen "$U" | grep 'fake-provider codex session' | grep -qF -- '--no-daemon -c hooks.state={' && check 0 "a codex that Tomo starts runs in its pane and trusts Tomo's hooks for itself" || check 1 "codex launch flags" "$(screen "$U" | grep fake-provider | tail -1)"
+state_is "$U" idle 10 && [ "$(agent_field "$U" session_ref)" != None ] && check 0 "codex that Tomo starts reports before the hooks are trusted in config" || check 1 "self-trusted codex" "$(agent_field "$U" state) $(agent_field "$U" session_ref)"
 
 python3 -c "
-import json, sys
+import hashlib, json, sys
 d = sys.argv[1]; hooks = json.load(open(d + '/hooks.json'))['hooks']
 snake = lambda e: ''.join('_' + c.lower() if c.isupper() and i else c.lower() for i, c in enumerate(e))
-open(d + '/config.toml', 'w').write(''.join(f'\"{d}/hooks.json:{snake(e)}:{i}:0\" = \"trusted\"\n' for e, l in hooks.items() for i, x in enumerate(l) if 'hook codex' in json.dumps(x)))
+def trust(e, g):
+    h = g['hooks'][0]
+    body = json.dumps({'event_name': snake(e), 'hooks': [{'async': False, 'command': h['command'], 'timeout': h['timeout'], 'type': 'command'}]}, sort_keys=True, separators=(',', ':'))
+    return 'sha256:' + hashlib.sha256(body.encode()).hexdigest()
+open(d + '/config.toml', 'w').write(''.join(f'[hooks.state.\"{d}/hooks.json:{snake(e)}:{i}:0\"]\ntrusted_hash = \"{trust(e, g)}\"\n\n' for e, l in hooks.items() for i, g in enumerate(l) if 'hook codex' in json.dumps(g)))
 " "$HOME/.codex"
 [ "$(level codex)" = full ] && check 0 "trusted codex hooks are full" || check 1 "codex level after trust" "$(level codex)"
 
 # 3. spawn, lifecycle, session identity, attention, and process detection per provider
-for p in claude codex pi; do
+for p in claude codex pi opencode; do
   A=$(spawn "$p")
   state_is "$A" idle && check 0 "$p: agent_spawn reaches idle through the lifecycle hook" || check 1 "$p: spawn -> idle" "$(agent_field "$A" state)"
   [ "$(agent_field "$A" authority)" = lifecycle ] && check 0 "$p: authority is lifecycle" || check 1 "$p: authority" "$(agent_field "$A" authority)"
@@ -90,7 +93,7 @@ for p in claude codex pi; do
   if [ "$p" = pi ]; then
     S=$(agent_field "$A" session_ref)
     case "$S" in "$HOME"/.pi/agent/sessions/*.jsonl) [ -f "$S" ] && check 0 "pi: the session ref becomes the session file after the first message" || check 1 "pi: session file missing" "$S" ;; *) check 1 "pi: session file ref" "$S" ;; esac
-    session_listed "$(basename "$S" .jsonl | sed 's/.*_//')" && check 0 "session_list finds the pi session" || known "session_list reads no Pi sessions: features/sessions.rs covers Claude and Codex only"
+    session_listed "$(basename "$S" .jsonl | sed 's/.*_//')" && check 0 "session_list finds the pi session" || check 1 "pi: session_list" "$S"
   else
     session_listed "$S" && check 0 "session_list finds the $p session" || check 1 "$p: session_list" "$S"
   fi
@@ -117,7 +120,7 @@ $RPC send "$X" 'quit\r'; state_is "$X" exited 10
 
 # 4. a cold restart (the panes ended, as after a reboot) resumes each agent with its provider's resume command line
 daemon_restart_cold; sleep 8
-for p in claude codex pi; do
+for p in claude codex pi opencode; do
   eval "A=\$A_$p; S=\$S_$p"
   FLAGS=$(resume_flags "$p" "$S")
   [ "$(pane_field "$A" origin)" = resumed ] && check 0 "$p: the pane comes back as resumed" || check 1 "$p: origin" "$(pane_field "$A" origin)"
@@ -125,17 +128,14 @@ for p in claude codex pi; do
   state_is "$A" idle 10 && [ "$(agent_field "$A" session_ref)" = "$S" ] && check 0 "$p: the resumed agent reports the same session" || check 1 "$p: resumed session" "$(agent_field "$A" session_ref) vs $S"
 done
 
-wait_for "screen $U | grep 'fake-provider codex session' | grep -qF -- 'argv: resume --last'" 20 && check 0 "codex without a session ref resumes with 'resume --last'" || check 1 "codex --last" "$(screen "$U" | grep fake-provider | tail -1)"
-state_is "$U" idle 10
-[ "$(agent_field "$U" session_ref)" = "$S_codex" ] && known "two Codex panes in one worktree: 'resume --last' gives the untrusted pane the newest session, which belongs to the other pane" || check 1 "codex --last session" "$(agent_field "$U" session_ref) vs $S_codex"
 
 wait_for "on_screen $FRESH_claude 'No conversation found with session ID'" 20 && known "claude: a session with no message has no transcript, so '--resume' fails after restart" || check 1 "claude fresh resume" "$(screen "$FRESH_claude" | tail -2)"
-wait_for "on_screen $FRESH_pi 'No session found matching'" 20 && known "pi: a session with no message has no session file, so '--session <id>' fails after restart" || check 1 "pi fresh resume" "$(screen "$FRESH_pi" | tail -2)"
+state_is "$FRESH_pi" idle 20 && agent_line "$FRESH_pi" pi '--session-id' && check 0 "pi: a session with no message resumes with '--session-id', which creates it" || check 1 "pi fresh resume" "$(screen "$FRESH_pi" | tail -2)"
 [ "$(pane_field "$X" origin)" = resumed ] && known "claude: restore resumes an agent that had exited before the restart (reopen skips exited agents)" || check 0 "an exited claude is not resumed"
 [ "$(pane_field "$HAND_codex" origin)" = resumed ] && known "codex: a pane whose hand-started Codex had exited is resumed with 'resume --last' after restart" || check 0 "an exited hand-started codex is not resumed"
 
 # 5. reopen of a closed tab uses the same resume command line
-for p in claude codex pi; do
+for p in claude codex pi opencode; do
   eval "A=\$A_$p; S=\$S_$p"
   FLAGS=$(resume_flags "$p" "$S")
   $T tab close "$(pane_field "$A" tab_id)" --force >/dev/null
@@ -147,17 +147,11 @@ for p in claude codex pi; do
 done
 
 # 6. exit
-for p in claude codex pi; do
+for p in claude codex pi opencode; do
   eval "N=\$N_$p"
   poll; wait_for "[ \"\$(agent_field $N pid)\" != None ]" 6
   $RPC send "$N" 'quit\r'
-  if [ "$p" = codex ]; then
-    wait_for "on_screen $N bye" 10; sleep 1
-    [ "$(agent_field "$N" state)" = idle ] && check 0 "codex: no installed hook reports the exit" || check 1 "codex: state right after quit" "$(agent_field "$N" state)"
-    wait_for "poll; [ \"\$(agent_field $N state)\" = exited ]" 10 && check 0 "codex: the process monitor turns the exit into exited" || check 1 "codex: exit" "$(agent_field "$N" state)"
-  else
-    state_is "$N" exited 10 && [ "$(agent_field "$N" authority)" = lifecycle ] && check 0 "$p: the exit hook -> exited" || check 1 "$p: exit" "$(agent_field "$N" state)"
-  fi
+  state_is "$N" exited 10 && [ "$(agent_field "$N" authority)" = lifecycle ] && check 0 "$p: the exit hook -> exited" || check 1 "$p: exit" "$(agent_field "$N" state)"
 done
 
 daemon_stop
