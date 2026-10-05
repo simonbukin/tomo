@@ -1,7 +1,7 @@
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
 import { useEffect, useState } from "react";
-import { getState, setState, setUi } from "../store";
+import { applyFrame, getState, setState, setUi } from "../store";
 import { defaultUi } from "../uiState";
 import { Home, WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
@@ -10,7 +10,9 @@ import { WorktreePreview } from "../WorktreePreview";
 import { BOARD_REPO, BOARD_WARN_BYTES, rowBoard } from "./rowBoard";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
-import type { AgentPresence, AgentState, Config, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
+import { aPane } from "../test-fixtures";
+import { WorktreeHeader } from "../WorktreeHeader";
+import type { AgentPresence, AgentState, Config, Frame, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -71,6 +73,8 @@ interface Scene {
   name: string;
   worktree: Worktree;
   agents?: AgentPresence[];
+  /** An addon event such as `pr_changed`, so an addon state can be shown without naming the addon here. */
+  frame?: Frame;
 }
 
 const SCENES: Scene[] = [
@@ -86,6 +90,12 @@ const SCENES: Scene[] = [
   { name: "no signal", worktree: wt("silent"), agents: [agent("silent", "pi", "unknown")] },
   { name: "estimated from CPU", worktree: wt("guess"), agents: [{ ...agent("guess", "codex", "working"), estimated: true }] },
   { name: "done, subagent runs", worktree: wt("background"), agents: [{ ...agent("background", "claude", "done"), subagents: [sub("b1", "Explore", "working", "watch the build", 2), sub("b2", "Plan", "exited", "plan the fix", 4)] }] },
+  {
+    name: "action crashed",
+    worktree: wt("storybook"),
+    agents: [agent("storybook", "claude", "idle")],
+    frame: { seq: 6, event: "actions_changed", data: { set: { worktree_id: "storybook", actions: [{ id: "storybook", label: "storybook", command: "pnpm sample", mode: "pane", show: "topbar", shortcut: null }, { id: "serve", label: "serve", command: "pnpm dev", mode: "pane", show: "topbar", shortcut: null }], error: null, from_repo: false } } },
+  },
   {
     name: "subagents",
     worktree: wt("fanout"),
@@ -105,17 +115,23 @@ const SCENES: Scene[] = [
   { name: "archiving", worktree: wt("busy", { archiving: true }) },
   { name: "directory missing", worktree: wt("gone", { exists: false }) },
   { name: "main worktree", worktree: wt("tomo", { is_main: true }) },
+  { name: "pull request open", worktree: wt("pr-open"), frame: { seq: 1, event: "pr_changed", data: { worktree_id: "pr-open", pr: { number: 12, title: "Add the thing", url: "", state: "open", draft: false, review_decision: null, mergeable: "mergeable", checks_passed: 3, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 } } } },
+  { name: "checks failed", worktree: wt("pr-fail"), frame: { seq: 2, event: "pr_changed", data: { worktree_id: "pr-fail", pr: { number: 13, title: "Break the thing", url: "", state: "open", draft: false, review_decision: null, mergeable: "mergeable", checks_passed: 1, checks_failed: 2, checks_pending: 0, fetched_at_ms: 1 } } } },
+  { name: "checks running", worktree: wt("pr-run"), frame: { seq: 3, event: "pr_changed", data: { worktree_id: "pr-run", pr: { number: 14, title: "Try the thing", url: "", state: "open", draft: true, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 4, fetched_at_ms: 1 } } } },
+  { name: "merged", worktree: wt("pr-merged"), frame: { seq: 4, event: "pr_changed", data: { worktree_id: "pr-merged", pr: { number: 15, title: "Shipped the thing", url: "", state: "merged", draft: false, review_decision: "approved", mergeable: null, checks_passed: 5, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1 } } } },
 ];
 
 /**
  * Seeds the store from the scenes once. Every view reads one module-level store, so a
  * fixture is all a part needs to render on its own, with no daemon and no window chrome.
  */
+const CRASH = { id: "crash-storybook", worktree_id: "storybook", pane_id: "storybook-action", level: "attention", message: "storybook exited with code 1", created_at_ms: Date.now(), viewed_at_ms: null, kind: "crash", url: null, agent_kind: null, resolved_at_ms: null } as const;
+
 function seed(): void {
   const board = rowBoard(Date.now());
   const worktrees = SCENES.map((s) => s.worktree);
   const agents = [...SCENES.flatMap((s) => s.agents ?? []), ...board.agents];
-  const panes = board.panes;
+  const panes = [aPane({ id: CRASH.pane_id, worktree_id: "storybook", live: false, exit_code: 1, source: { kind: "action", id: "storybook", label: "storybook" } }), ...board.panes];
   setState({
     ...getState(),
     loaded: true,
@@ -124,12 +140,14 @@ function seed(): void {
     repos: [REPO, BOARD_REPO],
     worktrees: [...worktrees, ...board.worktrees],
     agents: Object.fromEntries(agents.map((a) => [a.pane_id, a])),
-    attention: board.attention,
+    attention: [CRASH, ...board.attention],
     panes: Object.fromEntries(panes.map((p) => [p.id, p])),
     rowErrors: board.rowErrors,
     resources: Object.fromEntries(Object.entries(board.rssBytes).map(([id, rss]) => [id, { worktree_id: id, rss_bytes: rss, cpu_percent: 0, process_count: 1 }])),
     ui: { ...defaultUi, view: "home", activeWorktreeId: worktrees[0].id, collapsedRepos: [BOARD_REPO.id] },
   });
+  SCENES.forEach((s) => s.frame && applyFrame(s.frame));
+  board.frames.forEach(applyFrame);
 }
 
 /** The rows of the approved Sidebar board, one column in each theme's own panel, and the hover cards beside their rows. */
@@ -215,6 +233,10 @@ export function Gallery() {
             <WorktreeCard w={s.worktree} />
           </figure>
         ))}
+      </div>
+      <h2 className="gallery-head">worktree header</h2>
+      <div className="app gallery-header">
+        <WorktreeHeader worktree={SCENES.find((sc) => sc.worktree.id === "storybook")!.worktree} />
       </div>
       <h2 className="gallery-head">sidebar</h2>
       <div className="gallery-picker">

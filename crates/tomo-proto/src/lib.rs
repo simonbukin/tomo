@@ -16,6 +16,14 @@ use ts_rs::TS;
 pub mod activity;
 pub use activity::*;
 
+pub mod addons {
+    pub mod actions;
+    pub mod github;
+    pub mod runtime;
+}
+pub use addons::actions::*;
+pub use addons::github::*;
+pub use addons::runtime::*;
 
 pub const PROTOCOL_VERSION: u32 = 3;
 
@@ -308,6 +316,9 @@ pub enum Call {
         #[serde(default)]
         limit: Option<usize>,
     },
+    PrStatus {
+        worktree_id: Id,
+    },
     FsList {
         worktree_id: Id,
         rel_path: String,
@@ -358,6 +369,10 @@ pub enum Call {
         #[serde(default)]
         limit: Option<usize>,
         /// The worktree on screen. Its files rank first among equal matches.
+        #[serde(default)]
+        worktree_id: Option<Id>,
+    },
+    RuntimeList {
         #[serde(default)]
         worktree_id: Option<Id>,
     },
@@ -413,6 +428,22 @@ pub enum Call {
         path: String,
         content: String,
         expected_version: Option<String>,
+    },
+
+    ActionList {
+        worktree_id: Id,
+    },
+    ActionRun {
+        worktree_id: Id,
+        action_id: String,
+    },
+    ActionStop {
+        worktree_id: Id,
+        action_id: String,
+    },
+    ActionRestart {
+        worktree_id: Id,
+        action_id: String,
     },
 }
 
@@ -498,6 +529,10 @@ pub enum ExternalTarget {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "event", content = "data", rename_all = "snake_case")]
 pub enum Event {
+    EndpointsChanged {
+        worktree_id: Id,
+        endpoints: Vec<RuntimeEndpoint>,
+    },
     ActivityAdded {
         event: ActivityEvent,
     },
@@ -561,8 +596,15 @@ pub enum Event {
         level: NoticeLevel,
         message: String,
     },
+    PrChanged {
+        worktree_id: Id,
+        pr: Option<PullRequest>,
+    },
     HookRan {
         run: HookRun,
+    },
+    ActionsChanged {
+        set: ActionSet,
     },
     ConfigChanged {
         config: Config,
@@ -636,7 +678,7 @@ pub enum NoticeLevel {
 pub struct Diagnostic {
     pub at_ms: u64,
     pub level: DiagnosticLevel,
-    /// Subsystem: `daemon`, `config`, `hooks`, `browser`, or `integrations`. An addon can add its own.
+    /// Subsystem: `daemon`, `config`, `usage`, `hooks`, `runtime`, `browser`, or `integrations`.
     pub source: String,
     pub message: String,
 }
@@ -697,6 +739,10 @@ pub struct Integrations {
     pub claude_hooks: bool,
     pub codex_hooks: bool,
     pub pi_extension: bool,
+    /// Absent from a daemon older than OpenCode support.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub opencode_plugin: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -858,7 +904,7 @@ fn default_sleep_after_minutes() -> u32 {
 pub struct NotificationSettings {
     /// Desktop notifications while Tomo is not focused.
     pub desktop: bool,
-    /// Sounds for rare moments only, such as a human checkpoint.
+    /// Sounds for rare moments only: a human checkpoint.
     pub sounds: bool,
 }
 
@@ -1168,6 +1214,8 @@ pub enum AgentKind {
     Claude,
     Codex,
     Pi,
+    #[serde(rename = "opencode")]
+    OpenCode,
 }
 
 impl AgentKind {
@@ -1176,11 +1224,12 @@ impl AgentKind {
             AgentKind::Claude => "Claude",
             AgentKind::Codex => "Codex",
             AgentKind::Pi => "Pi",
+            AgentKind::OpenCode => "OpenCode",
         }
     }
 
-    pub fn all() -> [AgentKind; 3] {
-        [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi]
+    pub fn all() -> [AgentKind; 4] {
+        [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi, AgentKind::OpenCode]
     }
 }
 
@@ -1191,6 +1240,7 @@ impl std::str::FromStr for AgentKind {
             "claude" => Ok(AgentKind::Claude),
             "codex" => Ok(AgentKind::Codex),
             "pi" => Ok(AgentKind::Pi),
+            "opencode" => Ok(AgentKind::OpenCode),
             other => Err(format!("unknown agent kind: {other}")),
         }
     }
@@ -1436,6 +1486,10 @@ pub struct CoreSnapshot {
 pub struct Snapshot {
     #[serde(flatten)]
     pub core: CoreSnapshot,
+    #[serde(default)]
+    pub actions: Vec<ActionSet>,
+    #[serde(default)]
+    pub endpoints: Vec<RuntimeEndpoint>,
 }
 
 /// Where `tomo hook` keeps an agent hook event when the daemon is down, one `Call::AgentHook` as JSON per line.
@@ -1521,6 +1575,7 @@ mod bindings {
         HookEvent::export_all(&cfg).unwrap();
         IntegrationStatus::export_all(&cfg).unwrap();
         ConfigIssue::export_all(&cfg).unwrap();
+        PrStatusResult::export_all(&cfg).unwrap();
         MainSync::export_all(&cfg).unwrap();
         FsEntry::export_all(&cfg).unwrap();
         FileText::export_all(&cfg).unwrap();
@@ -1545,7 +1600,12 @@ mod bindings {
         ActivityEvent::export_all(&cfg).unwrap();
         ActivityQuery::export_all(&cfg).unwrap();
         CoreActivity::export_all(&cfg).unwrap();
+        ActionActivity::export_all(&cfg).unwrap();
+        RuntimeActivity::export_all(&cfg).unwrap();
+        GitHubActivity::export_all(&cfg).unwrap();
         CheckpointSpec::export_all(&cfg).unwrap();
+        RuntimeEndpoint::export_all(&cfg).unwrap();
+        ActionRunResult::export_all(&cfg).unwrap();
         CheckpointMode::export_all(&cfg).unwrap();
         Diagnostic::export_all(&cfg).unwrap();
         DiagnosticLevel::export_all(&cfg).unwrap();
@@ -1598,3 +1658,23 @@ mod bindings {
     }
 }
 
+#[cfg(test)]
+mod addon_activity_kinds {
+    use super::*;
+
+    #[test]
+    fn addon_kinds_keep_their_stored_strings() {
+        let kinds: Vec<ActivityKind> = vec![
+            ActionActivity::Started.into(),
+            ActionActivity::Stopped.into(),
+            ActionActivity::Completed.into(),
+            ActionActivity::Crashed.into(),
+            RuntimeActivity::EndpointDiscovered.into(),
+            GitHubActivity::PrMerged.into(),
+        ];
+        assert_eq!(
+            kinds.iter().map(ActivityKind::as_str).collect::<Vec<_>>(),
+            ["action_started", "action_stopped", "action_completed", "action_crashed", "endpoint_discovered", "pr_merged"]
+        );
+    }
+}

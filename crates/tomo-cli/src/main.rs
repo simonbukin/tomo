@@ -52,12 +52,12 @@ enum Cmd {
     Attention(AttentionCmd),
     #[command(about = "Receive an agent hook payload on stdin (used by hook configs)")]
     Hook {
-        #[arg(value_parser = ["claude", "codex", "pi"])]
+        #[arg(value_parser = ["claude", "codex", "pi", "opencode"])]
         agent: String,
     },
     #[command(subcommand, about = "Agent hook and extension installation")]
     Integrations(IntegrationsCmd),
-    #[command(about = "Claude and Codex sessions rooted at a worktree")]
+    #[command(about = "Agent sessions rooted at a worktree: Claude, Codex, Pi, and OpenCode")]
     Sessions {
         worktree: Option<String>,
         #[arg(long, default_value_t = 20)]
@@ -65,10 +65,16 @@ enum Cmd {
     },
     #[command(about = "Kill an owned process tree by pid")]
     Kill { pid: u32 },
+    #[command(about = "Show the GitHub pull request for a worktree's branch (needs gh)")]
+    Pr { worktree: Option<String> },
     #[command(subcommand, about = "Configuration")]
     Config(ConfigCmd),
     #[command(subcommand, about = "Workflow hooks")]
     Hooks(HooksCmd),
+    #[command(subcommand, about = "Repo-defined actions from .tomo.toml")]
+    Action(ActionCmd),
+    #[command(about = "Ports that processes in Tomo panes listen on")]
+    Runtime { worktree: Option<String> },
     #[command(about = "History of meaningful events, newest first")]
     Activity {
         #[arg(long, default_value_t = 100)]
@@ -113,6 +119,14 @@ enum HooksCmd {
         #[arg(short = 'n', long, default_value_t = 20)]
         limit: usize,
     },
+}
+
+#[derive(Subcommand)]
+enum ActionCmd {
+    List { worktree: Option<String> },
+    Run { action: String, worktree: Option<String> },
+    Stop { action: String, worktree: Option<String> },
+    Restart { action: String, worktree: Option<String> },
 }
 
 #[derive(Subcommand)]
@@ -313,7 +327,7 @@ enum AgentCmd {
         worktree: Option<String>,
     },
     Spawn {
-        #[arg(value_parser = ["claude", "codex", "pi"])]
+        #[arg(value_parser = ["claude", "codex", "pi", "opencode"])]
         agent: String,
         #[arg(long)]
         worktree: Option<String>,
@@ -344,6 +358,8 @@ enum AttentionCmd {
     Next,
     Clear,
 }
+
+
 
 #[derive(Subcommand)]
 enum IntegrationsCmd {
@@ -531,6 +547,25 @@ async fn run() -> Result<()> {
             };
             let r: ArchiveResult = c.call(Call::WorktreeArchive { worktree_id: id, checkpoint }).await?;
             print::archive_result(&r, json);
+        }
+        Cmd::Action(ActionCmd::List { worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let set: ActionSet = c.call(Call::ActionList { worktree_id: id }).await?;
+            print::actions(&set, json);
+        }
+        Cmd::Action(ActionCmd::Run { action, worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let r: ActionRunResult = c.call(Call::ActionRun { worktree_id: id, action_id: action }).await?;
+            print::action_run(&r, json);
+        }
+        Cmd::Action(ActionCmd::Restart { action, worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let r: ActionRunResult = c.call(Call::ActionRestart { worktree_id: id, action_id: action }).await?;
+            print::action_run(&r, json);
+        }
+        Cmd::Action(ActionCmd::Stop { action, worktree }) => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let _: Value = c.call(Call::ActionStop { worktree_id: id, action_id: action }).await?;
         }
         Cmd::Worktree(WorktreeCmd::Restore { worktree }) => {
             let id = resolve_worktree_id(&c, Some(worktree)).await?;
@@ -737,8 +772,21 @@ async fn run() -> Result<()> {
             let i: Integrations = c.call(Call::IntegrationsInstall).await?;
             print::integrations(&i, json);
         }
+        Cmd::Pr { worktree } => {
+            let id = resolve_worktree_id(&c, worktree).await?;
+            let r: PrStatusResult = c.call(Call::PrStatus { worktree_id: id }).await?;
+            print::pr(&r, json);
+        }
         Cmd::Kill { pid } => {
             let _: Value = c.call(Call::ProcessKillTree { pid }).await?;
+        }
+        Cmd::Runtime { worktree } => {
+            let worktree_id = match worktree.or_else(|| std::env::var("TOMO_WORKTREE_ID").ok()) {
+                Some(w) => Some(resolve_worktree_id(&c, Some(w)).await?),
+                None => None,
+            };
+            let list: Vec<RuntimeEndpoint> = c.call(Call::RuntimeList { worktree_id }).await?;
+            print::runtime(&list, json);
         }
         Cmd::Activity { limit, needs_me, worktree } => {
             let worktree_id = match worktree {

@@ -44,6 +44,19 @@ pub fn resolve(root: &Path, path: &str) -> Result<(PathBuf, String), RpcError> {
     Ok((real, rel))
 }
 
+/// Like `resolve`, but an existing file outside the worktree is also found, by its absolute path, so that a pane
+/// can view it. Only reads and the watch use this: `fs_read` and `fs_write` stay inside the worktree.
+pub fn locate(root: &Path, path: &str) -> Result<(PathBuf, String), RpcError> {
+    match resolve(root, path) {
+        Err(e) if e.code == ErrorCode::BadRequest && Path::new(path).is_absolute() => match Path::new(path).canonicalize() {
+            Ok(real) if real.is_file() => Ok((real.clone(), real.to_string_lossy().into_owned())),
+            Ok(_) => Err(e),
+            Err(_) => Err(err(ErrorCode::NotFound, format!("{path} does not exist"))),
+        },
+        found => found,
+    }
+}
+
 /// Changes when the bytes change, and only then: a `touch` or an identical rewrite is not a conflict.
 pub fn version_of(bytes: &[u8]) -> String {
     let mut h = std::hash::DefaultHasher::new();
@@ -151,7 +164,7 @@ impl Daemon {
         tab_id: Option<Id>,
     ) -> Result<Value, RpcError> {
         let root = self.worktree_root(&worktree_id)?;
-        let (real, rel) = resolve(&root, &path)?;
+        let (real, rel) = locate(&root, &path)?;
         if real.is_dir() {
             return Err(err(ErrorCode::BadRequest, format!("{rel} is a folder")));
         }
@@ -212,7 +225,7 @@ fn editor_files(inner: &Inner) -> Vec<(PathBuf, Id, String)> {
 
 /// The real path of each open file. It reads the disk, so it runs outside the daemon lock.
 fn open_files(files: Vec<(PathBuf, Id, String)>) -> HashMap<PathBuf, (Id, String)> {
-    files.into_iter().filter_map(|(root, worktree_id, path)| Some((resolve(&root, &path).ok()?.0, (worktree_id, path)))).collect()
+    files.into_iter().filter_map(|(root, worktree_id, path)| Some((locate(&root, &path).ok()?.0, (worktree_id, path)))).collect()
 }
 
 /// Watches the folder of each open file and emits `file_changed` for the open files that change.
@@ -299,6 +312,18 @@ mod tests {
         assert_eq!(code(resolve(&wt, "dirlink/new")), ErrorCode::BadRequest);
         std::os::unix::fs::symlink(wt.join("src/a.rs"), wt.join("inner")).unwrap();
         assert_eq!(resolve(&wt, "inner").unwrap().1, "src/a.rs");
+    }
+
+    #[test]
+    fn an_outside_file_is_found_by_its_absolute_path_only() {
+        let t = tree("locate");
+        let wt = t.0.join("wt");
+        let secret = t.0.join("outside/secret").canonicalize().unwrap();
+        assert_eq!(locate(&wt, "src/a.rs").unwrap().1, "src/a.rs");
+        assert_eq!(locate(&wt, &secret.to_string_lossy()).unwrap(), (secret.clone(), secret.to_string_lossy().into_owned()));
+        assert_eq!(code(locate(&wt, "../outside/secret")), ErrorCode::BadRequest);
+        assert_eq!(code(locate(&wt, &t.0.join("outside").to_string_lossy())), ErrorCode::BadRequest);
+        assert_eq!(code(locate(&wt, &t.0.join("outside/missing").to_string_lossy())), ErrorCode::NotFound);
     }
 
     #[test]

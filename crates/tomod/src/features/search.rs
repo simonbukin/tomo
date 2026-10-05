@@ -220,6 +220,23 @@ impl Transcript {
         }
     }
 
+    /// Reads the whole session again from a provider that keeps it in a database.
+    pub fn replace(&mut self, texts: Vec<String>) {
+        self.messages = texts.into_iter().map(|text| Message { lower: text.to_ascii_lowercase(), text }).collect();
+    }
+
+    /// Brings the transcript of `session` up to date, from its file or from its provider's database.
+    pub fn update(&mut self, session: &AgentSession) -> std::io::Result<()> {
+        let provider = providers::provider(session.kind);
+        match (provider.transcript_messages, dirs::home_dir()) {
+            (Some(read), Some(home)) => {
+                self.replace(read(&home, session));
+                Ok(())
+            }
+            _ => self.refresh(&session.path, provider.transcript_text),
+        }
+    }
+
     /// A snippet of the newest message that holds the lowercase `needle`.
     pub fn newest_match(&self, needle: &str) -> Option<String> {
         self.messages.iter().rev().find_map(|m| m.lower.find(needle).map(|at| snippet(&m.text, at, needle.len())))
@@ -386,7 +403,7 @@ fn warm(daemon: &Arc<Daemon>) {
         let d2 = d.clone();
         let _ = tokio::task::spawn_blocking(move || {
             for s in all {
-                let _ = lock(&transcript(&d2.search, &s.path)).refresh(&s.path, providers::provider(s.kind).transcript_text);
+                let _ = lock(&transcript(&d2.search, &s.path)).update(&s);
             }
         })
         .await;
@@ -616,7 +633,7 @@ async fn sessions(daemon: Arc<Daemon>, s: Arc<Search>, content: bool) {
             }
             let t = transcript(&d.search, &session.path);
             let mut t = lock(&t);
-            let _ = t.refresh(&session.path, providers::provider(session.kind).transcript_text);
+            let _ = t.update(&session);
             let Some(snippet) = t.newest_match(&needle) else { continue };
             drop(t);
             match slot {

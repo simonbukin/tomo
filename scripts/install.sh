@@ -49,6 +49,6 @@ case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "add $BIN_DIR to your PATH so agents and hooks can find tomo" ;;
 esac
-echo "next: run 'tomo integrations install' to add hooks for Claude, Codex, and Pi"
+echo "next: run 'tomo integrations install' to add the integrations for Claude, Codex, Pi, and OpenCode"
 
 "$HOME/.local/bin/tomo" daemon stop >/dev/null 2>&1 && echo "== stopped the running daemon; the app or the next tomo call starts the new one" || true

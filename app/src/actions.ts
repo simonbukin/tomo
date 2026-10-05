@@ -27,8 +27,16 @@ export interface Action {
   group?: CommandGroup;
 }
 
+/** The row and the header show a crash for as long as it is open, so a person who opens the worktree has seen it. */
+function viewCrashes(worktreeId: Id): void {
+  getState()
+    .attention.filter((a) => a.worktree_id === worktreeId && a.kind === "crash" && a.viewed_at_ms == null && a.resolved_at_ms == null)
+    .forEach((a) => void rpc("attention_view", { id: a.id }).catch(failQuietly("attention_view")));
+}
+
 export async function openWorktree(worktreeId: Id): Promise<void> {
   setUi({ view: "worktree", activeWorktreeId: worktreeId });
+  viewCrashes(worktreeId);
   try {
     const r = await rpcParsed("worktree_open", worktreeOpenedSchema, { worktree_id: worktreeId });
     const tab = r.tabs.find((t) => t.is_active) ?? r.tabs[0];
@@ -552,6 +560,7 @@ export const actions: Action[] = [
   { id: "spawn_claude", label: "Start Claude here", run: () => spawnAgent("claude"), whenWorktree: true },
   { id: "spawn_codex", label: "Start Codex here", run: () => spawnAgent("codex"), whenWorktree: true },
   { id: "spawn_pi", label: "Start Pi here", run: () => spawnAgent("pi"), whenWorktree: true },
+  { id: "spawn_opencode", label: "Start OpenCode here", run: () => spawnAgent("opencode"), whenWorktree: true },
   { id: "add_repo", label: "Add repository...", run: () => setState({ dialog: { kind: "add-repo" } }) },
   { id: "create_worktree", label: "Create worktree...", run: () => setState({ dialog: { kind: "create-worktree", repoId: currentWorktree()?.repo_id } }) },
   { id: "refresh", label: "Refresh repositories and worktrees", run: () => rpc("worktree_refresh").then(() => undefined) },
@@ -625,6 +634,7 @@ const COMMAND_GROUPS: Record<string, CommandGroup> = {
   spawn_claude: "Agents",
   spawn_codex: "Agents",
   spawn_pi: "Agents",
+  spawn_opencode: "Agents",
   integrations: "Agents",
   clear_attention: "Agents",
   add_repo: "Worktrees",

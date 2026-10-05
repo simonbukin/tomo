@@ -3,9 +3,32 @@
 import { z } from "zod";
 import { type LayoutNode } from "./generated";
 
+export const actionActivitySchema = z.union([z.literal("action_started"), z.literal("action_stopped"), z.literal("action_completed"), z.literal("action_crashed")]);
+
+export const actionModeSchema = z.union([z.literal("pane"), z.literal("external")]);
+
+export const actionShowSchema = z.union([z.literal("topbar"), z.literal("menu")]);
+
+export const actionDefSchema = z.object({
+    id: z.string(),
+    label: z.string(),
+    command: z.string(),
+    mode: actionModeSchema,
+    show: actionShowSchema,
+    shortcut: z.string().nullable()
+});
+
+export const actionSetSchema = z.object({
+    worktree_id: z.string(),
+    actions: z.array(actionDefSchema),
+    error: z.string().nullable(),
+    from_repo: z.boolean(),
+    adopted: z.any().optional()
+});
+
 export const activityKindSchema = z.string();
 
-export const agentKindSchema = z.union([z.literal("claude"), z.literal("codex"), z.literal("pi")]);
+export const agentKindSchema = z.union([z.literal("claude"), z.literal("codex"), z.literal("pi"), z.literal("opencode")]);
 
 export const activityQuerySchema = z.object({
     limit: z.number().nullable(),
@@ -185,6 +208,20 @@ export const worktreeResourcesSchema = z.object({
 
 export const noticeLevelSchema = z.union([z.literal("info"), z.literal("warning"), z.literal("error")]);
 
+export const pullRequestSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    state: z.string(),
+    draft: z.boolean(),
+    review_decision: z.string().nullable(),
+    mergeable: z.string().nullable(),
+    checks_passed: z.number(),
+    checks_failed: z.number(),
+    checks_pending: z.number(),
+    fetched_at_ms: z.number()
+});
+
 export const hookRunSchema = z.object({
     event: z.string(),
     command: z.string(),
@@ -236,6 +273,8 @@ export const fsEntrySchema = z.object({
     size: z.number(),
     modified_ms: z.number()
 });
+
+export const gitHubActivitySchema = z.literal("pr_merged");
 
 export const gitSummarySchema = z.object({
     branch: z.string().nullable(),
@@ -297,7 +336,8 @@ export const integrationStatusSchema = z.object({
 export const integrationsSchema = z.object({
     claude_hooks: z.boolean(),
     codex_hooks: z.boolean(),
-    pi_extension: z.boolean()
+    pi_extension: z.boolean(),
+    opencode_plugin: z.boolean().optional()
 });
 
 export const splitDirectionSchema = z.union([z.literal("horizontal"), z.literal("vertical")]);
@@ -393,6 +433,12 @@ export const paneSnapshotSchema = z.object({
     data_base64: z.string()
 });
 
+export const prStatusResultSchema = z.object({
+    available: z.boolean(),
+    reason: z.string().nullable(),
+    pr: pullRequestSchema.nullable()
+});
+
 export const processInfoSchema = z.object({
     pid: z.number(),
     ppid: z.number().nullable(),
@@ -413,6 +459,10 @@ export const rpcErrorSchema = z.object({
     message: z.string()
 });
 
+export const runtimeActivitySchema = z.literal("endpoint_discovered");
+
+export const runtimeProtocolSchema = z.union([z.literal("http"), z.literal("https"), z.literal("tcp")]);
+
 export const searchTargetSchema = z.union([z.object({
         "kind": z.literal("file"),
         worktree_id: z.string(),
@@ -432,6 +482,23 @@ export const searchTargetSchema = z.union([z.object({
         worktree_id: z.string().nullable(),
         pane_id: z.string().nullable()
     })]);
+
+export const runtimeEndpointSchema = z.object({
+    id: z.string(),
+    worktree_id: z.string(),
+    pane_id: z.string().nullable(),
+    action_id: z.string().nullable(),
+    pid: z.number(),
+    process: z.string(),
+    protocol: runtimeProtocolSchema,
+    status: z.number().nullable(),
+    probing: z.boolean(),
+    host: z.string(),
+    port: z.number(),
+    label: z.string().nullable(),
+    discovered_at_ms: z.number(),
+    source: paneSourceSchema.nullable()
+});
 
 export const statusSchema = z.object({
     protocol: z.number(),
@@ -489,6 +556,12 @@ export const worktreeCreateSchema = z.object({
 export const worktreeOpenedSchema = z.object({
     worktree: worktreeSchema,
     tabs: z.array(tabSchema)
+});
+
+export const actionRunResultSchema = z.object({
+    action: actionDefSchema,
+    pane: paneSchema.nullable(),
+    reused: z.boolean()
 });
 
 export const hookDefSchema = z.object({
@@ -549,6 +622,8 @@ export const paneResultSchema = z.object({
 });
 
 export const snapshotSchema = z.object({
+    actions: z.array(actionSetSchema),
+    endpoints: z.array(runtimeEndpointSchema),
     status: statusSchema,
     config: configSchema,
     repos: z.array(repoSchema),
@@ -562,6 +637,12 @@ export const snapshotSchema = z.object({
 });
 
 export const eventSchema = z.union([z.object({
+        "event": z.literal("endpoints_changed"),
+        "data": z.object({
+            worktree_id: z.string(),
+            endpoints: z.array(runtimeEndpointSchema)
+        })
+    }), z.object({
         "event": z.literal("activity_added"),
         "data": z.object({
             event: activityEventSchema
@@ -662,9 +743,20 @@ export const eventSchema = z.union([z.object({
             message: z.string()
         })
     }), z.object({
+        "event": z.literal("pr_changed"),
+        "data": z.object({
+            worktree_id: z.string(),
+            pr: pullRequestSchema.nullable()
+        })
+    }), z.object({
         "event": z.literal("hook_ran"),
         "data": z.object({
             run: hookRunSchema
+        })
+    }), z.object({
+        "event": z.literal("actions_changed"),
+        "data": z.object({
+            set: actionSetSchema
         })
     }), z.object({
         "event": z.literal("config_changed"),

@@ -11,7 +11,8 @@ pub const MAX_SUBAGENTS: usize = 16;
 pub enum SubagentEvent {
     /// The parent asked for a subagent. The provider has not given it an id yet.
     Launch { label: String, description: Option<String> },
-    Start { id: String, label: String },
+    /// The subagent has an id. `description` is its task, when the provider gives it here and not at `Launch`.
+    Start { id: String, label: String, description: Option<String> },
     Stop { id: String },
     /// A hook fired inside the subagent.
     Activity { id: String, state: AgentState },
@@ -56,10 +57,20 @@ pub fn expire(list: &[Subagent], parent: AgentState, now: u64) -> Vec<Subagent> 
 pub fn apply(list: &[Subagent], event: &SubagentEvent, at_ms: u64) -> Vec<Subagent> {
     match event {
         SubagentEvent::Launch { label, description } => pushed(list, fresh(None, label.clone(), description.clone(), at_ms)),
-        SubagentEvent::Start { id, label } => match (position_of(list, id), unassigned_of(list, label)) {
+        SubagentEvent::Start { id, label, description } => match (position_of(list, id), unassigned_of(list, label)) {
             (Some(_), _) => list.to_vec(),
-            (None, Some(at)) => list.iter().enumerate().map(|(i, s)| if i == at { Subagent { id: Some(id.clone()), label: label.clone(), updated_at_ms: at_ms, ..s.clone() } } else { s.clone() }).collect(),
-            (None, None) => pushed(list, fresh(Some(id.clone()), label.clone(), None, at_ms)),
+            (None, Some(at)) => list
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    if i == at {
+                        Subagent { id: Some(id.clone()), label: label.clone(), description: description.clone().or_else(|| s.description.clone()), updated_at_ms: at_ms, ..s.clone() }
+                    } else {
+                        s.clone()
+                    }
+                })
+                .collect(),
+            (None, None) => pushed(list, fresh(Some(id.clone()), label.clone(), description.clone(), at_ms)),
         },
         SubagentEvent::Stop { id } => position_of(list, id).map_or_else(|| list.to_vec(), |at| with_state(list, at, AgentState::Exited, at_ms)),
         SubagentEvent::Activity { id, state } => match position_of(list, id) {
@@ -88,7 +99,7 @@ mod tests {
     }
 
     fn start(id: &str, label: &str) -> SubagentEvent {
-        SubagentEvent::Start { id: id.into(), label: label.into() }
+        SubagentEvent::Start { id: id.into(), label: label.into(), description: None }
     }
 
     fn run(events: &[SubagentEvent]) -> Vec<Subagent> {

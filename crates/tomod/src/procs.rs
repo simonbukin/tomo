@@ -12,13 +12,16 @@ pub struct ProcRow {
     pub name: String,
     /// Refreshed on every poll for pane shells only; `name` is fixed at first sight,
     /// so a shell that exec'd its command keeps the shell's name.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub exe: Option<PathBuf>,
     pub cmd: String,
     pub cwd: Option<PathBuf>,
     pub cpu_percent: f32,
     pub rss_bytes: u64,
     pub start_time_s: u64,
+    /// The package script that started the process: `npm_lifecycle_event`, which pnpm, npm, yarn, and bun set.
+    pub script: Option<String>,
+    /// The package of that script: `npm_package_name`.
+    pub package: Option<String>,
 }
 
 pub struct Root {
@@ -73,7 +76,8 @@ impl ProcMonitor {
             .with_cpu()
             .with_memory()
             .with_cwd(if full { UpdateKind::Always } else { UpdateKind::OnlyIfNotSet })
-            .with_cmd(UpdateKind::OnlyIfNotSet);
+            .with_cmd(UpdateKind::OnlyIfNotSet)
+            .with_environ(UpdateKind::OnlyIfNotSet);
         self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, cheap);
         if !roots.is_empty() {
             let pids: Vec<sysinfo::Pid> = roots.iter().map(|p| sysinfo::Pid::from_u32(*p)).collect();
@@ -96,13 +100,19 @@ impl ProcMonitor {
                 cpu_percent: p.cpu_usage(),
                 rss_bytes: p.memory(),
                 start_time_s: p.start_time(),
+                script: env_var(p, "npm_lifecycle_event"),
+                package: env_var(p, "npm_package_name"),
             })
             .collect()
     }
 }
 
+fn env_var(p: &sysinfo::Process, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
+    p.environ().iter().find_map(|e| e.to_str()?.strip_prefix(&prefix).filter(|v| !v.is_empty()).map(str::to_string))
+}
+
 /// The program a process runs now: the exe basename when refreshed, else the first-seen name.
-#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub fn program_name(row: &ProcRow) -> String {
     row.exe.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| row.name.clone())
 }
@@ -224,6 +234,8 @@ mod tests {
             cpu_percent: 1.0,
             rss_bytes: rss,
             start_time_s: 0,
+            script: None,
+            package: None,
         }
     }
 
@@ -261,6 +273,8 @@ mod tests {
             cpu_percent: 0.5,
             rss_bytes: rss,
             start_time_s: 0,
+            script: None,
+            package: None,
         }
     }
 

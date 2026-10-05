@@ -1,5 +1,6 @@
 import { aPane } from "../test-fixtures";
-import type { AgentPresence, AgentState, AttentionItem, GitSummary, Pane, Repo, Subagent, Worktree } from "../types";
+import type { RuntimeEndpoint } from "../generated";
+import type { AgentPresence, AgentState, AttentionItem, Frame, GitSummary, Pane, Repo, Subagent, Worktree } from "../types";
 
 export const BOARD_REPO: Repo = { id: "board", path: "/Users/you/tomo/worktrees", name: "board", exists: true, remote_url: null };
 
@@ -70,6 +71,7 @@ export interface Board {
   panes: Pane[];
   rowErrors: Record<string, { op: string; message: string }>;
   rssBytes: Record<string, number>;
+  frames: Frame[];
   /** The row that is open now, drawn inverted. */
   active: string;
   /** The worktrees of the Hover boards, in their order. */
@@ -132,6 +134,32 @@ export function rowBoard(now: number): Board {
     { id: "board-isahaya-crash", worktree_id: "board-isahaya", pane_id: "board-isahaya-storybook", level: "attention", message: "Storybook exited with code -1", created_at_ms: now - 2 * MIN, viewed_at_ms: null, kind: "crash", url: null, agent_kind: null, resolved_at_ms: null },
   ];
   const panes = [aPane({ id: "board-storybook-p0", worktree_id: "board-storybook", live: false, exit_code: 1 })];
+  const endpoint = (worktree: string, label: string, port: number, discovered: number): RuntimeEndpoint => ({
+    id: `board-${worktree}:${port}`,
+    worktree_id: `board-${worktree}`,
+    pane_id: `board-${worktree}-web`,
+    action_id: null,
+    pid: 100 + port,
+    process: "node",
+    protocol: "http",
+    status: 200,
+    probing: false,
+    host: "localhost",
+    port,
+    label,
+    discovered_at_ms: discovered,
+    source: null,
+  });
+  const pr = (worktree: string, number: number, title: string, patch: Record<string, unknown>): Frame =>
+    ({ seq: 0, event: "pr_changed", data: { worktree_id: `board-${worktree}`, pr: { number, title, url: "", state: "open", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, ...patch } } }) as Frame;
+  const frames: Frame[] = [
+    pr("isahaya", 412, "Lint burndown, part 2", { checks_passed: 6, review_decision: "review_required" }),
+    pr("kobe", 398, "Stop the login redirect loop", { draft: true }),
+    pr("tottori", 377, "New checkout", { checks_passed: 4, checks_failed: 2 }),
+    pr("otaru", 88, "Cmd-K search", { state: "merged", checks_passed: 5 }),
+    { seq: 0, event: "endpoints_changed", data: { worktree_id: "board-isahaya", endpoints: [endpoint("isahaya", "web", 3003, now - 22 * MIN)] } } as Frame,
+    { seq: 0, event: "endpoints_changed", data: { worktree_id: "board-hakodate", endpoints: [endpoint("hakodate", "docs", 4000, now - 30 * MIN)] } } as Frame,
+  ];
   return {
     worktrees,
     agents,
@@ -139,6 +167,7 @@ export function rowBoard(now: number): Board {
     panes,
     rowErrors: { "board-nara": { op: "archive", message: "a pane still writes to the folder" } },
     rssBytes: { "board-izu": 2.1 * GB },
+    frames,
     active: "board-otaru",
     hovers: ["board-isahaya", "board-kobe", "board-tottori", "board-otaru", "board-sapporo"],
   };

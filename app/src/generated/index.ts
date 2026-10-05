@@ -1,6 +1,12 @@
 // GENERATED FROM tomo-proto. DO NOT EDIT.
 // Run: TOMO_WRITE_TYPES=1 cargo test -p tomo-proto
 
+export * from "./ActionActivity";
+export * from "./ActionDef";
+export * from "./ActionMode";
+export * from "./ActionRunResult";
+export * from "./ActionSet";
+export * from "./ActionShow";
 export * from "./ActivityEvent";
 export * from "./ActivityKind";
 export * from "./ActivityQuery";
@@ -31,6 +37,7 @@ export * from "./Event";
 export * from "./FileText";
 export * from "./FileWritten";
 export * from "./FsEntry";
+export * from "./GitHubActivity";
 export * from "./GitSummary";
 export * from "./Hello";
 export * from "./HookAgent";
@@ -57,9 +64,14 @@ export * from "./PaneOrigin";
 export * from "./PaneResult";
 export * from "./PaneSnapshot";
 export * from "./PaneSource";
+export * from "./PrStatusResult";
 export * from "./ProcessInfo";
+export * from "./PullRequest";
 export * from "./Repo";
 export * from "./RpcError";
+export * from "./RuntimeActivity";
+export * from "./RuntimeEndpoint";
+export * from "./RuntimeProtocol";
 export * from "./SearchHit";
 export * from "./SearchSource";
 export * from "./SearchTarget";

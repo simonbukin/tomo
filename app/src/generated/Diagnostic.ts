@@ -9,6 +9,6 @@ import type { DiagnosticLevel } from "./DiagnosticLevel";
  */
 export type Diagnostic = { at_ms: number, level: DiagnosticLevel, 
 /**
- * Subsystem: `daemon`, `config`, `hooks`, `browser`, or `integrations`. An addon can add its own.
+ * Subsystem: `daemon`, `config`, `usage`, `hooks`, `runtime`, `browser`, or `integrations`.
  */
 source: string, message: string, };

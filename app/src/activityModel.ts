@@ -1,15 +1,16 @@
 import type { ActivityEvent, AgentPresence, AttentionItem } from "./types";
 
 /**
- * The one "Needs me" rule. An item needs a person when it is unresolved. A waiting item also must be
- * unviewed, and an agent in its pane must still wait: once the agent moves on, the user already answered it.
+ * The one "Needs me" rule. An item needs a person when it is unresolved. A checkpoint needs one until it is
+ * resolved. A crash needs one until it is viewed: the row still shows it until it is resolved. A waiting item
+ * also must be unviewed, and an agent in its pane must still wait: once the agent moves on, the user answered it.
  * `Store::activity_list` in the daemon applies the same rule to `tomo activity --needs-me`.
  */
 export function needsMeItem(a: AttentionItem, agents: AgentPresence[]): boolean {
   if (a.resolved_at_ms != null) return false;
-  if (a.kind !== "waiting") return true;
+  if (a.kind === "checkpoint") return true;
   if (a.viewed_at_ms != null) return false;
-  return agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
+  return a.kind === "crash" || agents.some((g) => g.pane_id === a.pane_id && g.state === "waiting");
 }
 
 /** Unresolved items, least recently viewed first, so `next_attention` cycles through them. */
@@ -62,6 +63,23 @@ export function mergeActivity(existing: ActivityEvent[], incoming: ActivityEvent
 
 /** The short row text of a crash: "storybook exited with code 1" becomes "storybook exited 1". */
 export const crashText = (message: string): string => message.replace(/ exited with code (-?\d+)$/, " exited $1");
+
+export const SPARK_WIDTH = 10;
+
+/** Filled and empty cells of a `[█████     ]` spark for a used fraction; null means no data. */
+export function sparkCells(fraction: number | null, width = SPARK_WIDTH): { filled: number; empty: number } {
+  if (fraction == null) return { filled: 0, empty: width };
+  const filled = Math.min(width, Math.max(0, Math.round(fraction * width)));
+  return { filled, empty: width - filled };
+}
+
+export function resetsIn(resetsAtMs: number | null, now = Date.now()): string | null {
+  if (resetsAtMs == null) return null;
+  const min = Math.max(0, Math.round((resetsAtMs - now) / 60_000));
+  if (min < 60) return `resets in ${min}m`;
+  if (min < 48 * 60) return `resets in ${Math.round(min / 60)}h`;
+  return `resets in ${Math.round(min / (24 * 60))}d`;
+}
 
 export function payloadOf(e: ActivityEvent): Record<string, unknown> {
   return e.payload && typeof e.payload === "object" ? (e.payload as Record<string, unknown>) : {};

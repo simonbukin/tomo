@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Pretends to be Claude Code, Codex, or Pi for the harness. No model calls.
-// usage: fake-provider claude|codex|pi [the provider's own flags]
+// Pretends to be Claude Code, Codex, Pi, or OpenCode for the harness. No model calls.
+// usage: fake-provider claude|codex|pi|opencode [the provider's own flags]
 // stdin: work N | wait | quit | child (start a child process) | ignore-term (ignore SIGTERM)
 //
 // Each flavor reads the same integration files as the real binary, sends the
@@ -95,7 +95,9 @@ function codex() {
   const hooks = readJson(path.join(codexHome, "hooks.json"))?.hooks
   const config = fs.existsSync(path.join(codexHome, "config.toml")) ? fs.readFileSync(path.join(codexHome, "config.toml"), "utf8") : ""
   const snake = (event) => event.replace(/[A-Z]/g, (c, i) => (i ? "_" : "") + c.toLowerCase())
-  const trusted = (event, i, j) => config.includes(`hooks.json:${snake(event)}:${i}:${j}"`)
+  // Trust comes from config.toml, or for one launch from `-c hooks.state={...}`, as in Codex.
+  const launchTrust = args.includes("-c") ? args[args.indexOf("-c") + 1] : ""
+  const trusted = (event, i, j) => config.includes(`hooks.json:${snake(event)}:${i}:${j}"`) || launchTrust.includes(`hooks.json:${snake(event)}:${i}:${j}"`)
   const resume = args.includes("resume") ? args[args.indexOf("resume") + 1] : undefined
   const rollouts = jsonlUnder(path.join(codexHome, "sessions")).map((file) => ({ file, meta: firstLine(file)?.payload, mtime: fs.statSync(file).mtimeMs }))
   const previous =
@@ -128,20 +130,26 @@ function codex() {
 async function pi() {
   const sessionDir = path.join(home, ".pi", "agent", "sessions", `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`)
   const arg = flag("--session")
+  const sessionId = flag("--session-id")
   const byPath = arg !== undefined && (arg.includes("/") || arg.endsWith(".jsonl"))
   const local = jsonlUnder(sessionDir)
-  const match = arg === undefined || byPath ? undefined : (local.find((f) => firstLine(f)?.id === arg) ?? local.find((f) => firstLine(f)?.id?.startsWith(arg)))
+  const match =
+    sessionId !== undefined
+      ? local.find((f) => firstLine(f)?.id === sessionId)
+      : arg === undefined || byPath
+        ? undefined
+        : (local.find((f) => firstLine(f)?.id === arg) ?? local.find((f) => firstLine(f)?.id?.startsWith(arg)))
   if (arg !== undefined && !byPath && !match) exitWith(`No session found matching '${arg}'`)
-  const file = byPath ? path.resolve(arg) : (match ?? path.join(sessionDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_${flag("--session-id") ?? crypto.randomUUID()}.jsonl`))
+  // `--session-id` opens the session with that id, or creates it.
+  const file = byPath ? path.resolve(arg) : (match ?? path.join(sessionDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_${sessionId ?? crypto.randomUUID()}.jsonl`))
   const id = firstLine(file)?.id ?? path.basename(file, ".jsonl").split("_").pop()
   const handlers = {}
   const api = { on: (event, handler) => (handlers[event] = [...(handlers[event] ?? []), handler]) }
-  const ctx = { sessionManager: { getSessionId: () => id, getSessionFile: () => file } }
+  let running = false
+  const ctx = { sessionManager: { getSessionId: () => id, getSessionFile: () => file }, isIdle: () => !running }
   const emit = (type, extra = {}) => Promise.all((handlers[type] ?? []).map((handler) => handler({ type, ...extra }, ctx)))
   const extension = flag("-e")
   if (extension) {
-    // The extension calls a bare require(), which Pi's loader provides.
-    globalThis.require = require
     process.emitWarning = () => {}
     const mod = await import(pathToFileURL(path.resolve(extension)).href)
     await mod.default(api)
@@ -155,22 +163,68 @@ async function pi() {
       prompting = false
       if (!fs.existsSync(file)) appendLine(file, { type: "session", version: 3, id, timestamp: new Date().toISOString(), cwd })
       appendLine(file, { type: "message", message: { role: "user", content: `work ${n}` } })
+      running = true
       await emit("agent_start")
       await sleep(n)
+      appendLine(file, { type: "message", message: { role: "assistant", content: [{ type: "text", text: "done" }] } })
       await emit("turn_end")
-      await emit("agent_end")
+      await emit("agent_end", { messages: [{ role: "assistant", stopReason: "stop" }] })
+      running = false
       await emit("agent_settled")
     },
     wait: async () => {
+      // A permission dialog comes from a tool call, inside a running turn.
       prompting = true
+      running = true
       await emit("ui_prompt_start", { reason: "ui_prompt", kind: "confirm", title: "Allow rm -rf build?" })
     },
     quit: () => emit("session_shutdown", { reason: "quit" }),
   }
 }
 
+// A newest-first id in OpenCode's shape: `ses_`, 12 hex digits of the inverted time, 14 base62 characters.
+const opencodeId = () => {
+  const time = (~(BigInt(Date.now()) * 4096n + 1n) & 0xffffffffffffn).toString(16).padStart(12, "0")
+  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  return `ses_${time}${Array.from(crypto.randomBytes(14), (b) => chars[b % 62]).join("")}`
+}
+
+async function opencode() {
+  const { DatabaseSync } = require("node:sqlite")
+  const dbFile = process.env.OPENCODE_DB ?? path.join(home, ".local", "share", "opencode", "opencode.db")
+  fs.mkdirSync(path.dirname(dbFile), { recursive: true })
+  const db = new DatabaseSync(dbFile)
+  db.exec(`CREATE TABLE IF NOT EXISTS session_v2 (id text PRIMARY KEY, parent_id text, directory text NOT NULL, title text, time_updated integer NOT NULL, time_archived integer);
+           CREATE TABLE IF NOT EXISTS session_message (id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL, data text NOT NULL)`)
+  // `--session` opens the session, or creates it with that id at the first prompt.
+  const id = flag("--session") ?? opencodeId()
+  const handlers = {}
+  const ctx = {
+    data: { on: (type, handler) => ((handlers[type] = [...(handlers[type] ?? []), handler]), () => {}), session: { get: () => undefined, root: (s) => s } },
+    ui: { router: { current: () => ({ type: "session", sessionID: id }) }, tabs: { list: () => [] } },
+  }
+  const plugin = path.join(home, ".config", "opencode", "plugins", "tomo-status", "tui.js")
+  if (fs.existsSync(plugin)) (await import(pathToFileURL(plugin).href)).default.setup(ctx)
+  const emit = (type, data) => (handlers[type] ?? []).forEach((handler) => handler({ type, data }))
+  let seq = 0
+  return {
+    id,
+    start: () => {},
+    work: async (n) => {
+      db.prepare("INSERT OR IGNORE INTO session_v2 VALUES (?, NULL, ?, ?, ?, NULL)").run(id, cwd, `work ${n}`, Date.now())
+      db.prepare("INSERT INTO session_message VALUES (?, ?, 'user', ?, ?)").run(crypto.randomUUID(), id, ++seq, JSON.stringify({ text: `work ${n}` }))
+      emit("session.execution.started", { sessionID: id })
+      await sleep(n)
+      db.prepare("INSERT INTO session_message VALUES (?, ?, 'assistant', ?, ?)").run(crypto.randomUUID(), id, ++seq, JSON.stringify({ content: [{ type: "text", text: "done" }] }))
+      emit("session.execution.succeeded", { sessionID: id })
+    },
+    wait: () => emit("permission.asked", { id: "per_1", sessionID: id, action: "bash", resources: ["rm -rf build"] }),
+    quit: () => {},
+  }
+}
+
 async function main() {
-  const agents = { claude, codex, pi }
+  const agents = { claude, codex, pi, opencode }
   if (!agents[flavor]) exitWith(`unknown flavor: ${flavor}`)
   const agent = await agents[flavor]()
   console.log(`fake-provider ${flavor} session ${agent.id} argv: ${args.join(" ")}`)

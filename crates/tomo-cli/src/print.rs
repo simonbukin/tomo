@@ -42,7 +42,7 @@ pub fn integrations(i: &Integrations, json: bool) {
         return emit_json(i);
     }
     let mark = |b: bool| if b { "installed" } else { "not installed" };
-    println!("hooks    claude {}  codex {}  pi {}", mark(i.claude_hooks), mark(i.codex_hooks), mark(i.pi_extension));
+    println!("hooks    claude {}  codex {}  pi {}  opencode {}", mark(i.claude_hooks), mark(i.codex_hooks), mark(i.pi_extension), mark(i.opencode_plugin.unwrap_or(false)));
 }
 
 pub fn repos(repos: &[Repo], json: bool) {
@@ -73,7 +73,7 @@ pub fn worktrees(ws: &[Worktree], repos: &[Repo], agents: &[AgentPresence], json
         println!("{}  {} / {}{}  {}{}{}", w.id, repo, w.name, tags, branch, dirty, missing);
         println!("    {}", w.path.display());
         for a in agents.iter().filter(|a| a.worktree_id == w.id) {
-            println!("    {} {:<7} {:?}", a.state.glyph(), a.kind.label(), a.state);
+            println!("    {} {:<8} {:?}", a.state.glyph(), a.kind.label(), a.state);
         }
     }
 }
@@ -121,7 +121,7 @@ pub fn agents(agents: &[AgentPresence], json: bool) {
     }
     for a in agents {
         println!(
-            "{} {:<7} {:<8} pane {}  wt {}  session {}",
+            "{} {:<8} {:<8} pane {}  wt {}  session {}",
             a.state.glyph(),
             a.kind.label(),
             format!("{:?}", a.state).to_lowercase(),
@@ -173,6 +173,7 @@ fn truncate(s: &str, n: usize) -> String {
     }
 }
 
+
 pub fn attention(items: &[AttentionItem], json: bool) {
     if json {
         return emit_json(&items);
@@ -196,6 +197,26 @@ pub fn attention_item(item: &AttentionItem, json: bool) {
         return emit_json(item);
     }
     attention(std::slice::from_ref(item), false);
+}
+
+pub fn runtime(list: &[RuntimeEndpoint], json: bool) {
+    if json {
+        return emit_json(&list);
+    }
+    if list.is_empty() {
+        println!("no listening ports in Tomo panes");
+    }
+    for e in list {
+        println!(
+            "{:<6} {:<9} {:<7} {:<16} {:<14} {}",
+            e.port,
+            e.summary(),
+            e.pid,
+            truncate(&e.process, 16),
+            e.action_id.as_deref().unwrap_or("-"),
+            e.pane_id.as_deref().unwrap_or("-")
+        );
+    }
 }
 
 pub fn activity(list: &[ActivityEvent], json: bool) {
@@ -231,6 +252,25 @@ fn clock(at_ms: u64, offset_s: i64) -> String {
     format!("{:02}:{:02}", of_day / 3600, (of_day % 3600) / 60)
 }
 
+pub fn pr(r: &PrStatusResult, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    match (&r.pr, &r.reason) {
+        (Some(pr), _) => {
+            let review = pr.review_decision.as_deref().unwrap_or("no review");
+            println!("#{} {}  {}{}  {}", pr.number, pr.title, pr.state, if pr.draft { " (draft)" } else { "" }, review);
+            println!("checks  {} passed  {} failed  {} pending", pr.checks_passed, pr.checks_failed, pr.checks_pending);
+            println!("{}", pr.url);
+        }
+        (None, Some(reason)) => println!("unavailable: {reason}"),
+        (None, None) => println!("no pull request for this branch"),
+    }
+}
+
+
+
+
 pub fn main_sync(r: &MainSync, json: bool) {
     if json {
         return emit_json(r);
@@ -242,6 +282,7 @@ pub fn main_sync(r: &MainSync, json: bool) {
         MainSync::Failed { message } => println!("sync failed: {message}"),
     }
 }
+
 
 pub fn integration_status(list: &[IntegrationStatus], json: bool) {
     if json {
@@ -260,7 +301,7 @@ pub fn integration_status(list: &[IntegrationStatus], json: bool) {
             (true, false) => "lifecycle only",
             (false, false) => "process heuristic",
         };
-        println!("{:<7} {:<16} {}{}", s.kind.label(), level, caps, s.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default());
+        println!("{:<8} {:<16} {}{}", s.kind.label(), level, caps, s.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default());
     }
 }
 
@@ -315,6 +356,55 @@ pub fn archive_result(r: &ArchiveResult, json: bool) {
     }
 }
 
+pub fn actions(set: &ActionSet, json: bool) {
+    if json {
+        return emit_json(set);
+    }
+    for line in action_lines(set) {
+        println!("{line}");
+    }
+}
+
+fn action_lines(set: &ActionSet) -> Vec<String> {
+    let mut lines: Vec<String> = set
+        .actions
+        .iter()
+        .map(|a| {
+            let mode = match a.mode {
+                ActionMode::Pane => "pane",
+                ActionMode::External => "external",
+            };
+            let show = match a.show {
+                ActionShow::Topbar => "topbar",
+                ActionShow::Menu => "menu",
+            };
+            format!("{:<14} {:<18} {:<9} {:<7} {}", a.id, a.label, mode, show, a.command)
+        })
+        .collect();
+    if !set.actions.is_empty() {
+        let source = if set.from_repo { "repository" } else { "worktree" };
+        lines.push(format!("from the {source} .tomo.toml"));
+    }
+    if let Some(e) = &set.error {
+        lines.push(format!("warning: {e}"));
+    }
+    if set.actions.is_empty() && set.error.is_none() {
+        lines.push("no actions; add [[actions]] to .tomo.toml in the worktree".into());
+    }
+    lines
+}
+
+pub fn action_run(r: &ActionRunResult, json: bool) {
+    if json {
+        return emit_json(r);
+    }
+    match (&r.pane, r.reused) {
+        (Some(p), true) => println!("{} already running in pane {}", r.action.label, p.id),
+        (Some(p), false) => println!("{} started in pane {}", r.action.label, p.id),
+        (None, _) => println!("{} launched", r.action.label),
+    }
+}
+
 pub fn sessions(list: &[AgentSession], json: bool) {
     if json {
         return emit_json(&list.to_vec());
@@ -324,7 +414,7 @@ pub fn sessions(list: &[AgentSession], json: bool) {
     }
     for s in list {
         let age = age(s.updated_at_ms);
-        println!("{:<7} {:<38} {:>3} turns  {:<8} {}", s.kind.label().to_lowercase(), s.id, s.turns, age, s.title.as_deref().unwrap_or("-"));
+        println!("{:<8} {:<38} {:>3} turns  {:<8} {}", s.kind.label().to_lowercase(), s.id, s.turns, age, s.title.as_deref().unwrap_or("-"));
     }
 }
 
@@ -339,3 +429,48 @@ fn age(at_ms: u64) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(from_repo: bool, actions: Vec<&str>, error: Option<&str>) -> ActionSet {
+        ActionSet {
+            worktree_id: "w1".into(),
+            actions: actions
+                .iter()
+                .map(|id| ActionDef {
+                    id: (*id).into(),
+                    label: (*id).into(),
+                    command: "true".into(),
+                    mode: ActionMode::Pane,
+                    show: ActionShow::Menu,
+                    shortcut: None,
+                })
+                .collect(),
+            error: error.map(String::from),
+            from_repo,
+            adopted: None,
+        }
+    }
+
+    #[test]
+    fn the_list_names_the_file_that_the_set_came_from() {
+        assert_eq!(action_lines(&set(true, vec!["serve"], None)).last().unwrap(), "from the repository .tomo.toml");
+        assert_eq!(action_lines(&set(false, vec!["serve"], None)).last().unwrap(), "from the worktree .tomo.toml");
+    }
+
+    #[test]
+    fn an_empty_set_names_no_file_and_a_bad_set_keeps_its_warning() {
+        assert_eq!(action_lines(&set(true, vec![], None)), vec!["no actions; add [[actions]] to .tomo.toml in the worktree"]);
+        assert_eq!(action_lines(&set(true, vec![], Some("/r/.tomo.toml: bad"))), vec!["warning: /r/.tomo.toml: bad"]);
+    }
+
+    #[test]
+    fn the_json_result_is_the_whole_set() {
+        let v = serde_json::to_value(set(true, vec!["serve"], Some("/r/.tomo.toml: bad"))).unwrap();
+        assert_eq!(v["from_repo"], true);
+        assert_eq!(v["error"], "/r/.tomo.toml: bad");
+        assert_eq!(v["worktree_id"], "w1");
+        assert_eq!(v["actions"][0]["id"], "serve");
+    }
+}

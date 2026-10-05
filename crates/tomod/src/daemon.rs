@@ -134,7 +134,6 @@ pub struct Inner {
     /// The repositories that `sync` works on now.
     pub main_syncing: HashSet<Id>,
     /// The in-memory state of the addons of this daemon, under the same lock as Core state. Core never looks inside; the composition root fills it.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub addons: Box<dyn std::any::Any + Send>,
 }
 
@@ -162,7 +161,6 @@ pub struct WorktreeFile {
     pub reload: fn(&Arc<Daemon>),
 }
 
-#[allow(dead_code, reason = "addon seam; the base ships no addons")]
 pub struct PaneExit {
     pub pane_id: Id,
     pub worktree_id: Id,
@@ -172,7 +170,7 @@ pub struct PaneExit {
     pub stop_intent: bool,
 }
 
-#[allow(dead_code, reason = "addon seam; the base ships no addons")]
+#[allow(dead_code, reason = "addon seam for the addons that main does not ship")]
 pub struct CreatedWorktree {
     pub id: Id,
     pub repo_id: Id,
@@ -701,7 +699,7 @@ impl Daemon {
 
     /// Types `text` into the live agent of a pane as one bracketed paste, then submits it. A sleeping agent wakes
     /// first and gets the text after its first hook event. Returns the agent and the pane for a hook.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
+    #[allow(dead_code, reason = "addon seam for the addons that main does not ship")]
     pub fn paste_to_agent(self: &Arc<Self>, inner: &mut Inner, pane_id: &str, text: &str) -> Result<(AgentPresence, HookPane), RpcError> {
         let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
         let agent =
@@ -730,7 +728,6 @@ impl Daemon {
         }
     }
 
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub(crate) fn focus_pane(inner: &mut Inner, pane_id: &str) {
         let Some((tab_id, worktree_id)) = inner.panes.get(pane_id).map(|p| (p.row.tab_id.clone(), p.row.worktree_id.clone())) else { return };
         let changed: Vec<TabRow> = inner
@@ -758,7 +755,6 @@ impl Daemon {
     }
 
     /// Ends a pane as a stop, not a crash: kills its process tree, keeps its scrollback, and removes it. The caller emits the tabs.
-    #[allow(dead_code, reason = "addon seam; the base ships no addons")]
     pub(crate) fn stop_pane(&self, inner: &mut Inner, pane_id: &str) {
         Self::set_stop_intent(inner, pane_id);
         if let Some(pid) = inner.panes.get(pane_id).and_then(|p| p.pty.as_ref()).map(|p| p.pid) {
@@ -1053,6 +1049,7 @@ impl Daemon {
         if inner.agents.remove(pane_id).is_some_and(|a| a.state == AgentState::Waiting) {
             Self::resolve_waiting(inner, pane_id);
         }
+        Self::resolve_crashes(inner, pane_id);
         Self::emit(inner, Event::AgentRemoved { pane_id: pane_id.to_string() });
         let _ = inner.store.pane_delete(pane_id);
         let tab_id = pane.row.tab_id.clone();
@@ -1351,6 +1348,9 @@ impl Daemon {
             }
         }
         self.end_orphan_holders(&inner);
+        if let Err(e) = inner.store.attention_resolve_orphans(now_ms()) {
+            tracing::warn!("resolve attention of closed panes: {e}");
+        }
         let empty_tabs: Vec<Id> =
             inner.tabs.values().filter(|t| layout::pane_ids(&t.layout).iter().all(|p| !inner.panes.contains_key(p))).map(|t| t.id.clone()).collect();
         for id in empty_tabs {
@@ -1428,7 +1428,13 @@ impl Daemon {
 
     // -------------------------------------------------------------- agents
 
-    pub fn apply_report(inner: &mut Inner, report: &AgentReport, pid: Option<u32>) {
+    /// True while a process in the pane's tree is an agent of `kind`.
+    fn pane_runs(inner: &Inner, pane_id: &str, kind: AgentKind) -> bool {
+        crate::monitor::classify_all(inner).iter().any(|p| p.pane_id.as_deref() == Some(pane_id) && providers::detect(&p.name, &p.cmd) == Some(kind))
+    }
+
+    /// Folds one report into the presence. `question` is what the agent asks, when it starts to wait.
+    pub fn apply_report(inner: &mut Inner, report: &AgentReport, pid: Option<u32>, question: Option<&str>) {
         let Some(worktree_id) = inner.panes.get(&report.pane_id).map(|p| p.row.worktree_id.clone()) else { return };
         let pid = pid.or_else(|| inner.agents.get(&report.pane_id).and_then(|a| a.pid));
         let previous = inner.agents.get(&report.pane_id).map(|a| a.state);
@@ -1455,8 +1461,8 @@ impl Daemon {
             inner.hook_queue.push(ev);
         }
         if next.state == AgentState::Waiting && previous != Some(AgentState::Waiting) {
-            let attention_id =
-                Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, format!("{} is waiting for you", next.kind.label()));
+            let message = question.map_or_else(|| format!("{} is waiting for you", next.kind.label()), str::to_string);
+            let attention_id = Self::add_attention(inner, &worktree_id, Some(&report.pane_id), AttentionLevel::Attention, message);
             let repeat =
                 Self::recorded_recently(inner, CoreActivity::AgentWaiting, activity::WAITING_REPEAT_MS, |a| a.pane_id.as_deref() == Some(&report.pane_id));
             if !repeat {
@@ -1496,6 +1502,12 @@ impl Daemon {
         let agent = AgentPresence { subagents: next, ..cur.clone() };
         inner.agents.insert(pane_id.to_string(), agent.clone());
         Self::emit(inner, Event::AgentChanged { agent });
+    }
+
+    pub(crate) fn resolve_crashes(inner: &mut Inner, pane_id: &str) {
+        for id in inner.store.attention_resolve_crashes(pane_id, now_ms()).unwrap_or_default() {
+            Self::emit(inner, Event::AttentionResolved { id });
+        }
     }
 
     fn resolve_waiting(inner: &mut Inner, pane_id: &str) {
@@ -2558,12 +2570,19 @@ impl Daemon {
                 if !inner.panes.contains_key(&pane_id) || !crate::sleep::hook_counts(&inner, &pane_id, at_ms) {
                     return Ok(Value::Null);
                 }
+                if providers::provider(kind).hooks_need_process && !Self::pane_runs(&inner, &pane_id, kind) {
+                    crate::monitor::refresh_rows(&mut inner);
+                    if !Self::pane_runs(&inner, &pane_id, kind) {
+                        return Ok(Value::Null);
+                    }
+                }
                 let busy = inner.agents.get(&pane_id).is_some_and(|a| matches!(a.state, AgentState::Working | AgentState::Waiting));
                 let state = outcome.state.filter(|_| !outcome.only_if_busy || busy);
                 Self::apply_report(
                     &mut inner,
                     &AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
                     None,
+                    outcome.question.as_deref(),
                 );
                 Self::apply_subagents(&mut inner, &pane_id, outcome.subagent.as_ref(), at_ms);
                 crate::sleep::woke(self, &mut inner, &pane_id);
@@ -2574,7 +2593,7 @@ impl Daemon {
                 if !inner.panes.contains_key(&report.pane_id) {
                     return Err(err(ErrorCode::NotFound, "pane not found"));
                 }
-                Self::apply_report(&mut inner, &report, None);
+                Self::apply_report(&mut inner, &report, None, None);
                 ok(inner.agents.get(&report.pane_id).cloned())
             }
 
@@ -2659,6 +2678,8 @@ impl Daemon {
                 self.lock().store.kv_set("ui_state", &state.to_string()).map_err(internal)?;
                 Ok(Value::Null)
             }
+            // The composition root answers every addon call before Core sees it.
+            _ => Err(err(ErrorCode::Unsupported, "no handler for this call")),
         }
     }
 }

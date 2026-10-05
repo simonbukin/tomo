@@ -9,6 +9,7 @@
     "allow-rpc",
     "allow-daemon-connected",
     "allow-clipboard-image",
+    "allow-open-folder",
     "allow-browser-create",
     "allow-browser-set-bounds",
     "allow-browser-set-visible",

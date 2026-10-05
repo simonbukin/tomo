@@ -26,8 +26,13 @@ $RPC send "$E" 'x' 2>&1 | grep -q bad_request && check 0 "pane_send on an editor
 # 2. containment
 for p in "../outside/secret" "src/../../outside/secret" "$OUT/secret"; do
   read_ "$p" | grep -q "outside the worktree" && check 0 "fs_read refuses $p" || check 1 "fs_read containment $p" "$(read_ "$p")"
+done
+for p in "../outside/secret" "src/../../outside/secret"; do
   $RPC call editor_open "{\"worktree_id\":\"$WT\",\"path\":\"$p\"}" 2>&1 | grep -q bad_request && check 0 "editor_open refuses $p" || check 1 "editor_open containment $p"
 done
+REAL_SECRET=$(cd "$OUT" && pwd -P)/secret
+$RPC call editor_open "{\"worktree_id\":\"$WT\",\"path\":\"$OUT/secret\"}" | jq_ "import sys; sys.exit(0 if d['pane']['editor']['path']=='$REAL_SECRET' else 1)" && check 0 "editor_open views an outside file by its real absolute path" || check 1 "editor_open outside file"
+$RPC call editor_open "{\"worktree_id\":\"$WT\",\"path\":\"$OUT\"}" 2>&1 | grep -q bad_request && check 0 "editor_open refuses an outside folder" || check 1 "editor_open outside folder"
 ln -s "$OUT/secret" "$R/leak"; ln -s "$OUT" "$R/leakdir"
 read_ leak | grep -q "outside the worktree" && check 0 "fs_read refuses a symlink that leaves the worktree" || check 1 "symlink file"
 write_ leakdir/new '"x"' null | grep -q "outside the worktree" && [ ! -e "$OUT/new" ] && check 0 "fs_write refuses a folder symlink that leaves the worktree" || check 1 "symlink dir"

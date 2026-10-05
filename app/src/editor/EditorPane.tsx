@@ -1,16 +1,18 @@
-import { Columns2, FileText, Rows2, X } from "lucide-react";
+import { Columns2, Rows2, X } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { closePane, focusPane, openExternalFor, splitPaneById } from "../actions";
+import { closePane, focusPane, splitPaneById } from "../actions";
 import { rpc } from "../api";
 import { Button, IconButton } from "../components/ui";
 import { PaneDropZone, usePaneDrag } from "../LayoutDnd";
 import { openMenu } from "../MenuHost";
-import { editorMenu, isLastPane } from "../menus";
+import { editorMenu, editorName, isLastPane, openPaneFileExternally } from "../menus";
 import { dotClass } from "../glyphs";
 import { useShortcuts } from "../shortcuts";
 import { failQuietly, failToast, splitsAllowed, useStore } from "../store";
 import type { Id } from "../types";
 import { editorPaneIds, preloadEditor } from "./editor";
+import { FileViewer, VIEW_ICONS } from "./FileViewer";
+import { absolutePath, fileView } from "./fileView";
 import { titleOf, type EditorDoc } from "./model";
 import { forgetSession, setComparing, useComparing, useEditorDoc } from "./sessions";
 
@@ -76,6 +78,7 @@ export function EditorPane({ paneId, active }: { paneId: Id; active: boolean }) 
   const zoomed = useStore((s) => !!pane && s.zoomed[pane.tab_id] === paneId);
   const fontFamily = useStore((s) => s.config?.font_family);
   const fontSize = useStore((s) => s.config?.font_size);
+  const externalEditor = useStore((s) => editorName(s.config?.editor_command));
   const splits = useStore(splitsAllowed);
   const lastPane = useStore(() => isLastPane(paneId));
   const doc = useEditorDoc(paneId);
@@ -86,12 +89,15 @@ export function EditorPane({ paneId, active }: { paneId: Id; active: boolean }) 
   const [attempt, setAttempt] = useState(0);
   const target = pane?.editor ?? null;
   const path = target?.path ?? "";
+  const view = fileView(path);
+  const fullPath = absolutePath(worktree?.path ?? "", path);
+  const ViewIcon = VIEW_ICONS[view];
   const title = pane?.user_title ?? titleOf(path, !!doc?.dirty);
   const drag = usePaneDrag(paneId, pane?.tab_id ?? "", title, splits);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !pane || !target) return;
+    if (!host || !pane || !target || view !== "text") return;
     let live = true;
     let unmount = () => {};
     cm()
@@ -121,17 +127,18 @@ export function EditorPane({ paneId, active }: { paneId: Id; active: boolean }) 
   }, [comparing, paneId, doc?.notice]);
 
   const loadError = doc?.error && !doc.base ? doc.error : null;
+  const takeFocus = () => !active && rpc("pane_focus", { pane_id: paneId }).catch(failQuietly("pane_focus"));
   return (
     <div className="pane-wrap">
       <div className={`pane pane-editor${active ? " pane-active" : ""}`}>
         <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, editorMenu(paneId))}>
           <span className={splits ? "chip pane-grip" : "chip"} ref={drag.ref} {...drag.props}>
             <span className="state state-none" />
-            <FileText className="icon proc-icon" aria-hidden />
+            <ViewIcon className="icon proc-icon" aria-hidden />
             <strong>{title}</strong>
             {zoomed && <span className="pane-note pane-zoomed">zoomed</span>}
           </span>
-          <span className="chip right" title={worktree ? `${worktree.path}/${path}` : path}>
+          <span className="chip right" title={fullPath}>
             <span>{path}</span>
             {splits && <IconButton label="Split right" shortcut={active ? shortcut("new_terminal") : undefined} onClick={() => splitPaneById(paneId, "horizontal")}><Columns2 className="icon" /></IconButton>}
             {splits && <IconButton label="Split down" shortcut={active ? shortcut("split_vertical") : undefined} onClick={() => splitPaneById(paneId, "vertical")}><Rows2 className="icon" /></IconButton>}
@@ -140,7 +147,9 @@ export function EditorPane({ paneId, active }: { paneId: Id; active: boolean }) 
         </div>
         {doc && <NoticeBar paneId={paneId} doc={doc} comparing={comparing} />}
         <div className="editor-body" style={{ "--editor-font": fontFamily, "--editor-size": fontSize ? `${fontSize}px` : undefined } as CSSProperties}>
-          <div className="editor-host" ref={hostRef} onMouseDown={() => !active && rpc("pane_focus", { pane_id: paneId }).catch(failQuietly("pane_focus"))} />
+          <div className="editor-host" ref={hostRef} onMouseDown={takeFocus}>
+            {view !== "text" && pane && <FileViewer view={view} worktreeId={pane.worktree_id} stored={path} path={fullPath} />}
+          </div>
           {comparing && (
             <div className="editor-compare">
               <div className="editor-compare-head">
@@ -155,7 +164,7 @@ export function EditorPane({ paneId, active }: { paneId: Id; active: boolean }) 
               <p>{loadError}</p>
               <div className="editor-error-actions">
                 <Button size="sm" onClick={() => setAttempt((n) => n + 1)}>Try again</Button>
-                {pane && <Button size="sm" onClick={() => openExternalFor(pane.worktree_id, "editor", path)}>Open in external editor</Button>}
+                {pane && <Button size="sm" onClick={() => openPaneFileExternally(pane.worktree_id, path)}>Open in {externalEditor}</Button>}
               </div>
             </div>
           )}

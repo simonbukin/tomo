@@ -9,6 +9,6 @@ export type NotificationSettings = {
  */
 desktop: boolean, 
 /**
- * Sounds for rare moments only, such as a human checkpoint.
+ * Sounds for rare moments only: a human checkpoint.
  */
 sounds: boolean, };

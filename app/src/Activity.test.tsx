@@ -2,8 +2,9 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rpc } from "./api";
-import { getState, setState } from "./store";
-import type { ActivityEvent, AgentPresence, AttentionItem, Pane, Worktree } from "./types";
+import type { ActionSet, RuntimeEndpoint } from "./generated";
+import { applyFrame, getState, setState } from "./store";
+import type { ActivityEvent, AgentPresence, AttentionItem, Frame, Pane, Worktree } from "./types";
 import { defaultUi } from "./uiState";
 
 vi.mock("./api", async (importOriginal) => {
@@ -18,6 +19,8 @@ const worktree = { id: "w1", name: "kobe", repo_id: "r1", path: "/src/kobe", bra
 const pane = { id: "p1", worktree_id: "w1", tab_id: "t1", live: true, source: { kind: "action", id: "serve", label: "Serve" } } as unknown as Pane;
 const agent = (state: AgentPresence["state"]) => ({ pane_id: "p1", worktree_id: "w1", kind: "claude", state, session_ref: null, authority: "lifecycle", updated_at_ms: 0, pid: null }) as AgentPresence;
 const attention = (id: string, kind: AttentionItem["kind"]): AttentionItem => ({ id, worktree_id: "w1", pane_id: "p1", level: "attention", message: id, created_at_ms: 1, viewed_at_ms: null, kind, url: null, agent_kind: null, resolved_at_ms: null });
+const serve: ActionSet = { worktree_id: "w1", actions: [{ id: "serve", label: "Serve", command: "sleep 30", mode: "pane", show: "topbar", shortcut: null }], error: null, from_repo: false };
+const endpoint: RuntimeEndpoint = { id: "e", worktree_id: "w1", pane_id: "p1", action_id: "serve", pid: 1, process: "node", protocol: "http", status: 200, probing: false, host: "localhost", port: 3000, label: null, discovered_at_ms: 0, source: pane.source };
 
 const claude = { agent_kind: "claude", pane_id: "p1" } as const;
 const EVENTS: [string, Partial<ActivityEvent>][] = [
@@ -52,10 +55,12 @@ beforeEach(() => {
     worktrees: [worktree],
     panes: { p1: pane },
     agents: { p1: agent("waiting") },
+    endpoints: { w1: [endpoint] },
     attention: [attention("att-wait", "waiting"), attention("att-chk", "checkpoint"), attention("att-crash", "crash")],
     activity: events,
     ui: { ...defaultUi, view: "activity", activeWorktreeId: "w1" },
   });
+  applyFrame({ event: "actions_changed", data: { set: serve } } as unknown as Frame);
 });
 afterEach(cleanup);
 
@@ -83,13 +88,13 @@ describe("Activity view", () => {
       ["agent_started", "working", "Claude · kobe", ["Go to Claude"]],
       ["agent_waiting", "needs", "Claude · kobe", ["Go to Claude", "Resolve"]],
       ["agent_exited", "idle", "Claude · kobe", ["Go to Claude"]],
-      ["checkpoint_created", "needs", "Claude · kobe", ["Go to Claude", "Resolve"]],
+      ["checkpoint_created", "needs", "Claude · kobe", ["Open App", "Go to Claude", "Resolve"]],
       ["checkpoint_resolved", "complete", "Claude · kobe", []],
-      ["action_started", null, "kobe", []],
-      ["action_stopped", null, "kobe", []],
-      ["action_completed", null, "kobe", []],
-      ["action_crashed", null, "kobe", ["Resolve"]],
-      ["endpoint_discovered", null, "kobe", []],
+      ["action_started", "working", "Serve · kobe", []],
+      ["action_stopped", "idle", "Serve · kobe", ["Restart"]],
+      ["action_completed", "complete", "Serve · kobe", []],
+      ["action_crashed", "failed", "Serve · kobe", ["Logs", "Restart", "Resolve"]],
+      ["endpoint_discovered", null, "Serve · kobe", ["Open App"]],
       ["annotations_sent", null, "Claude · kobe", ["Open App"]],
       ["state_changed", null, "You · kobe", []],
       ["tags_changed", null, "kobe", []],
@@ -131,12 +136,17 @@ describe("Activity view", () => {
     const user = userEvent.setup();
     await show();
     const click = (title: string, label: string) => user.click(rowOf(title).querySelector(`.activity-actions button:nth-child(${[...rowOf(title).querySelectorAll(".activity-actions button")].findIndex((b) => b.textContent === label) + 1})`)!);
+    await click("action_crashed", "Restart");
     await click("checkpoint_created", "Resolve");
     await click("archived", "Restore");
+    await click("action_crashed", "Logs");
     const calls = vi.mocked(rpc).mock.calls.filter(([method]) => method !== "activity_list");
-    expect(calls.slice(0, 2)).toEqual([
+    expect(calls.slice(0, 5)).toEqual([
+      ["action_restart", { worktree_id: "w1", action_id: "serve" }],
       ["checkpoint_resolve", { id: "att-chk" }],
       ["worktree_restore", { worktree_id: "w1" }],
+      ["attention_view", { id: "att-crash" }],
+      ["worktree_open", { worktree_id: "w1" }],
     ]);
   });
 });

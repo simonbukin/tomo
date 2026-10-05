@@ -30,7 +30,7 @@ export async function openFile(worktreeId: Id, path: string, at: Position | null
   const s = getState();
   const root = s.worktrees.find((w) => w.id === worktreeId)?.path ?? "";
   const rel = worktreeRelative(root, path);
-  const existing = Object.values(s.panes).find((p) => p.worktree_id === worktreeId && p.kind === "editor" && p.editor?.path === rel);
+  const existing = Object.values(s.panes).find((p) => p.worktree_id === worktreeId && p.kind === "editor" && p.editor?.path === (rel ?? path));
   const cm = import("./cm");
   try {
     const paneId = existing
