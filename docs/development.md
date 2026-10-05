@@ -62,13 +62,15 @@ scripts/install.sh         release build and install
 
 ## Branches
 
-- `main` is the base. It has Core, the client, and the addon seams, but no addons.
-- `simon-main` is the author's own Tomo: the base, six addons, and a personal
-  config. It is a worked example.
+- `main` is the base. It has Core, the client, the addon seams, and three
+  built-in addons: Actions, Runtime, and GitHub.
+- `simon-main` is the author's own Tomo: the base, four more addons (Towns,
+  Linear, Usage, and Agentation), and a personal config. It is a worked example.
 
 Changes flow one way: from `main` into `simon-main`, never back. `simon-main`
-reverts the commit that removed the addons, so a merge from `main` never
-removes them. A change to a composition root can conflict; keep both sides.
+merged the `main` commit that left the four addons out, and it kept its own
+files in that merge. So a later merge from `main` never removes them. A change
+to a composition root can conflict; keep both sides.
 
 Put each change where its code lives:
 
