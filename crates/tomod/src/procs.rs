@@ -18,6 +18,10 @@ pub struct ProcRow {
     pub cpu_percent: f32,
     pub rss_bytes: u64,
     pub start_time_s: u64,
+    /// The package script that started the process: `npm_lifecycle_event`, which pnpm, npm, yarn, and bun set.
+    pub script: Option<String>,
+    /// The package of that script: `npm_package_name`.
+    pub package: Option<String>,
 }
 
 pub struct Root {
@@ -72,7 +76,8 @@ impl ProcMonitor {
             .with_cpu()
             .with_memory()
             .with_cwd(if full { UpdateKind::Always } else { UpdateKind::OnlyIfNotSet })
-            .with_cmd(UpdateKind::OnlyIfNotSet);
+            .with_cmd(UpdateKind::OnlyIfNotSet)
+            .with_environ(UpdateKind::OnlyIfNotSet);
         self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, cheap);
         if !roots.is_empty() {
             let pids: Vec<sysinfo::Pid> = roots.iter().map(|p| sysinfo::Pid::from_u32(*p)).collect();
@@ -95,9 +100,16 @@ impl ProcMonitor {
                 cpu_percent: p.cpu_usage(),
                 rss_bytes: p.memory(),
                 start_time_s: p.start_time(),
+                script: env_var(p, "npm_lifecycle_event"),
+                package: env_var(p, "npm_package_name"),
             })
             .collect()
     }
+}
+
+fn env_var(p: &sysinfo::Process, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
+    p.environ().iter().find_map(|e| e.to_str()?.strip_prefix(&prefix).filter(|v| !v.is_empty()).map(str::to_string))
 }
 
 /// The program a process runs now: the exe basename when refreshed, else the first-seen name.
@@ -222,6 +234,8 @@ mod tests {
             cpu_percent: 1.0,
             rss_bytes: rss,
             start_time_s: 0,
+            script: None,
+            package: None,
         }
     }
 
@@ -259,6 +273,8 @@ mod tests {
             cpu_percent: 0.5,
             rss_bytes: rss,
             start_time_s: 0,
+            script: None,
+            package: None,
         }
     }
 
