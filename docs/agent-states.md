@@ -77,9 +77,9 @@ Rules:
    ends the turn.
 7. **An interrupt ends a turn.** Claude sends no `Stop` when you interrupt a
    turn or deny a permission. Its `idle_prompt` notification, about a minute
-   later, turns `working` or `needs you` into `idle`. A provider without such
-   an event can stay `working` until its next event; see its row in the
-   provider table.
+   later, turns `working` or `needs you` into `idle`. Codex (`Interrupt`), Pi
+   (the `aborted` outcome), and OpenCode (`interrupted`) report an interrupt at
+   once. See "Provider parity" in [agent-integrations.md](agent-integrations.md).
 8. **Exit codes.** Exit 0, exit 130, SIGINT, SIGHUP and SIGTERM are an end you
    asked for: the agent is gone. Another non-zero exit or another signal, with
    no stop intent, is `dead`. When the agent is not the pane's own process, Tomo

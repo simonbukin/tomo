@@ -253,7 +253,7 @@ from sleeping after the idle period; `--off` lets it sleep again.
 
 ```bash
 tomo agent list [--worktree W]
-tomo agent spawn <claude|codex|pi> [--worktree W] [--cwd DIR] [--split] [--resume REF] [-- <extra args>]
+tomo agent spawn <claude|codex|pi|opencode> [--worktree W] [--cwd DIR] [--split] [--resume REF] [-- <extra args>]
 ```
 
 `spawn` creates a pane in the worktree, starts a login shell, and types the
@@ -393,7 +393,7 @@ every worktree. A process outside every pane is never listed. See
 ### hook
 
 ```bash
-tomo hook <claude|codex|pi>
+tomo hook <claude|codex|pi|opencode>
 ```
 
 Reads a hook payload from stdin and forwards it. Exits silently without

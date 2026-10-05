@@ -102,12 +102,13 @@ or from a hook report, whichever arrives.
 | Agent  | Reference                                | Set at spawn                       | Resume command                      |
 |--------|------------------------------------------|------------------------------------|-------------------------------------|
 | Claude | session UUID                             | yes, Tomo generates it (`--session-id`) | `claude --settings <hooks> --resume <id>` |
-| Codex  | session UUID from the `SessionStart` hook | no                                 | `codex resume <id>`                 |
-| Pi     | session file path, or the session id     | yes, Tomo generates the id (`--session-id`) | `pi -e <extension> --session <ref>` |
+| Codex  | session UUID from the first hook          | no                                 | `codex --no-daemon -c <trust> resume <id>` |
+| Pi     | session file path, or the session id     | yes, Tomo generates the id (`--session-id`) | `pi -e <extension> --session-id <id>`, or `--session <file>` |
+| OpenCode | session id `ses_…`                     | yes, Tomo generates the id (`--session`) | `opencode --session <id>`           |
 
-Claude and Pi are resumable from the first prompt because Tomo chooses the id
-before launch. Codex becomes resumable once its `SessionStart` hook reports,
-which needs the user-level hooks from `tomo integrations install`.
+Claude, Pi, and OpenCode are resumable from the first prompt because Tomo
+chooses the id before launch. Codex becomes resumable once its first hook
+reports, which needs the user-level hooks from `tomo integrations install`.
 
 A resume can also set environment variables, from `resume_env` in the
 provider table (`crates/tomod/src/providers`). Claude sets
