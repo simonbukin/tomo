@@ -60,8 +60,8 @@ missing pane are pruned to the panes that exist.
 
 Tomo does not relaunch arbitrary commands. Only the shell and, for the three
 supported agents, the native resume command run without user action. A pane
-that an addon started comes back as a plain shell in its cwd with its label.
-The command does not run again.
+that ran an Action comes back as a plain shell in its cwd with the Action
+label. The Action command does not run again; start it from the Action bar.
 
 ### Workspace in the GUI
 
@@ -102,12 +102,13 @@ or from a hook report, whichever arrives.
 | Agent  | Reference                                | Set at spawn                       | Resume command                      |
 |--------|------------------------------------------|------------------------------------|-------------------------------------|
 | Claude | session UUID                             | yes, Tomo generates it (`--session-id`) | `claude --settings <hooks> --resume <id>` |
-| Codex  | session UUID from the `SessionStart` hook | no                                 | `codex resume <id>`                 |
-| Pi     | session file path, or the session id     | yes, Tomo generates the id (`--session-id`) | `pi -e <extension> --session <ref>` |
+| Codex  | session UUID from the first hook          | no                                 | `codex --no-daemon -c <trust> resume <id>` |
+| Pi     | session file path, or the session id     | yes, Tomo generates the id (`--session-id`) | `pi -e <extension> --session-id <id>`, or `--session <file>` |
+| OpenCode | session id `ses_…`                     | yes, Tomo generates the id (`--session`) | `opencode --session <id>`           |
 
-Claude and Pi are resumable from the first prompt because Tomo chooses the id
-before launch. Codex becomes resumable once its `SessionStart` hook reports,
-which needs the user-level hooks from `tomo integrations install`.
+Claude, Pi, and OpenCode are resumable from the first prompt because Tomo
+chooses the id before launch. Codex becomes resumable once its first hook
+reports, which needs the user-level hooks from `tomo integrations install`.
 
 A resume can also set environment variables, from `resume_env` in the
 provider table (`crates/tomod/src/providers`). Claude sets
@@ -214,7 +215,7 @@ its ratios, the active pane, and for each pane:
 | Agent          | A shell that runs the native resume command for the same session |
 | Agent without a session reference | A plain shell                                |
 | Browser        | A browser pane at the same URL                                  |
-| Started by an addon | A plain shell in its cwd with its label; the command does not run |
+| Action         | A plain shell in its cwd with the Action label; the command does not run |
 
 The stack does not survive a daemon restart. Archive closes panes without a
 record. `scripts/torture/continuity.sh` covers these cases.

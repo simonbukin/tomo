@@ -1,15 +1,20 @@
 # Addons
 
-An addon is an opinion that uses Core. This base ships with no addons. It
-keeps the seams, so that you can add your own.
+An addon is an opinion that uses Core. `main` ships three built-in addons:
 
-For six complete examples, see the
+- **Actions**: repo buttons from `.tomo.toml`. See [actions.md](actions.md).
+- **Runtime**: it finds the ports that your panes listen on. See [runtime.md](runtime.md).
+- **GitHub**: pull request status and tags. See [features/github.md](features/github.md).
+
+Each one is in `builtins` in `app/src/addons/index.ts` and in
+`crates/tomod/src/addons/mod.rs`. Each one touches only the roots that this
+page describes, so you can add your own addon the same way.
+
+More addons live on the
 [`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main) branch:
-Towns (a collection map that names worktrees), GitHub (pull request status and
-tags), Usage (Claude and Codex allowances), Actions (repo buttons from
-`.tomo.toml`), Runtime (it finds the ports that your panes listen on), and
-Agentation (browser annotations sent to an agent). Each one touches the same
-roots that this page describes. `git diff main...simon-main` shows all of it.
+Towns (a collection map that names worktrees), Linear (issue state from
+branch names), Usage (Claude and Codex allowances), and Agentation (browser
+annotations sent to an agent). `git diff main...simon-main` shows all of it.
 
 ## Three questions
 
@@ -59,17 +64,24 @@ Addon state lives in `addons::State`, under the same lock as Core state. Use
 
 ## GUI slots
 
-`Addon` in `app/src/addons/types.ts` lists every slot, with one comment each.
-The main ones:
+`Addon` in `app/src/addons/types.ts` lists every slot, with one comment each:
 
-- `views`: a whole view with its own sidebar entry, like Map.
+- `views`: a whole view with its own sidebar entry.
 - `inspectorSections`, `gitDetail`, `gitMarker`: the right inspector.
 - `worktreeLinks`, `appLines`, `branchMark`: links, app lines, and marks on worktree rows and cards.
+- `repoAvatar`: the image before a repo name.
+- `worktreeNameField`: a field in the create-worktree dialog.
 - `topbar`, `worktreeMenu`, `paletteEntries`, `commands`, `shortcuts`: actions.
 - `searchSources`: groups in the palette search. See [search.md](search.md).
+- `browserToolbar`: controls in the browser pane toolbar.
 - `bottomItem`, `diagnosticsSection`: the bottom strip and the diagnostics report.
 - `apps`, `appUrl`, `paneSource`, `sourceMark`, `sourceMenu`: running apps and panes that an addon starts. The Apps view shows only when an addon has `apps`.
 - `onSnapshot`, `onFrame`, `mount`: read daemon state and events.
+
+On `main`, no built-in addon fills `views`, `commands`, `inspectorSections`,
+`worktreeNameField`, `browserToolbar`, `bottomItem`, `diagnosticsSection`, or
+`mount`. They stay as extension points. On `main`, no addon fills the
+`worktree_namer` seam either, so a new worktree needs a branch or a path.
 
 ## A small first addon
 

@@ -82,9 +82,9 @@ tomo worktree metadata get [worktree]
 tomo worktree metadata set [worktree] [--name N] [--tags a,b] [--clear-name] [--clear-tags]
 ```
 
-`create` runs `git worktree add`. Without `--path` the directory is
-`<parent>/<branch>`, with each `/` in the branch changed to `-`, unless an
-addon names it through the `worktree_namer` seam. The parent is
+`create` runs `git worktree add`. It needs `--branch` or `--path`. Without
+`--path` Tomo names the directory after the branch, with each `/` changed to
+`-`: `<parent>/<branch>`, where the parent is
 `worktree_parent_dir` from the config, else `~/tomo/worktrees/<repo>`. The
 `<repo>` part is the directory name of the repository, not its path, so two
 repositories with the same directory name share one directory. Tomo makes the
@@ -92,9 +92,9 @@ directories that the path needs. A name that is already taken there fails in
 `git worktree add`, the same as any other path that exists. Only a new worktree
 follows this rule: a worktree that exists keeps its path, and `restore` only
 puts a worktree in the parent above when its own parent directory is gone.
-Without `--branch` the worktree gets the branch `<branch_prefix><worktree
+Without `--branch` the worktree gets the branch `<branch_prefix><directory
 name>`, and Tomo always creates it. `branch_prefix` is empty by default, so
-the branch is the worktree name alone; see
+the branch is the directory name alone; see
 [data-model.md](data-model.md). A branch that exists already fails in
 `git worktree add` with its own message.
 `--new` passes `-b`; `--from` gives the start point for a new
@@ -140,11 +140,49 @@ in the GUI.
 
 `metadata set --tags` replaces the whole tag list. Tags keep no leading `#`,
 and Tomo removes a tag that occurs two times. A tag change fires
-`worktree.tags_changed` with the previous tags.
+`worktree.tags_changed` with the previous tags. The GitHub addon owns six
+reserved tags; see [features/github.md](features/github.md).
 
 ```bash
 tomo worktree metadata set . --tags labor,ready
 ```
+
+### action
+
+```bash
+tomo action list [worktree]
+tomo action run <action> [worktree]
+tomo action stop <action> [worktree]
+tomo action restart <action> [worktree]
+```
+
+Actions come from `[[actions]]` in `<worktree>/.tomo.toml`, or from the
+repository file when the worktree has none. See [actions.md](actions.md).
+`list` prints one line per action with id, label, mode, show, and command,
+then one line that names the file the set came from; a malformed file adds
+a `warning:` line with the first problem:
+
+```text
+serve          Serve              pane      topbar  pnpm dev
+from the repository .tomo.toml
+```
+
+With `--json` the result is the whole `ActionSet`: `worktree_id`,
+`actions`, `error`, and `from_repo`. It was the `actions` array alone
+before, thus a client that reads the output must now read `.actions`.
+
+`run` starts the action, or focuses its pane when the same action already
+runs there:
+
+```text
+Storybook started in pane 5cac1495a647
+Storybook already running in pane 5cac1495a647
+Zed launched
+```
+
+`stop` kills the processes in the action's pane and closes it; nothing
+happens when the action does not run. `restart` is a stop followed by a
+run. An unknown action id is a not-found error that lists the known ids.
 
 ### tab
 
@@ -203,7 +241,7 @@ from sleeping after the idle period; `--off` lets it sleep again.
 
 ```bash
 tomo agent list [--worktree W]
-tomo agent spawn <claude|codex|pi> [--worktree W] [--cwd DIR] [--split] [--resume REF] [-- <extra args>]
+tomo agent spawn <claude|codex|pi|opencode> [--worktree W] [--cwd DIR] [--split] [--resume REF] [-- <extra args>]
 ```
 
 `spawn` creates a pane in the worktree, starts a login shell, and types the
@@ -241,6 +279,17 @@ tomo ps [--worktree W]
 Processes that Tomo owns (descendants of a pane shell) and processes it
 observes (cwd inside a worktree), grouped by worktree with a memory total.
 Owned processes are indented by depth. Observed ones are labeled.
+
+### pr
+
+```bash
+tomo pr [worktree]
+```
+
+Shows the GitHub pull request for the worktree's branch: number, title,
+state, draft flag, review decision, check counts, and URL. Needs the `gh`
+CLI logged in. The daemon caches the answer for one minute per worktree
+and the right panel shows the same data.
 
 ### kill
 
@@ -298,19 +347,30 @@ tomo activity [--limit N] [--needs-me] [--worktree W]
 The history of meaningful events, newest first, 100 by default:
 
 ```text
-14:02  Review the login form
+14:02  Storybook listens on 6006 · localhost:6006
 14:01  Claude is waiting for you
-13:58  Claude started
+13:58  Storybook started
 ```
 
 `--needs-me` keeps only the events whose attention item is still open.
 `--worktree` filters by worktree; without it every worktree is listed,
 also inside a pane. See [activity.md](activity.md).
 
+### runtime
+
+```bash
+tomo runtime [worktree]
+```
+
+Ports that processes inside Tomo panes listen on: `port protocol pid
+process action pane`. Without an argument it uses `TOMO_WORKTREE_ID`, else
+every worktree. A process outside every pane is never listed. See
+[runtime.md](runtime.md).
+
 ### hook
 
 ```bash
-tomo hook <claude|codex|pi>
+tomo hook <claude|codex|pi|opencode>
 ```
 
 Reads a hook payload from stdin and forwards it. Exits silently without

@@ -77,14 +77,14 @@ A row whose `layout` fails to parse is skipped on load.
 | `agent_kind`    | R        | `claude`, `codex`, `pi`, or NULL                         |
 | `session_ref`   | R        | Native session reference for resume                      |
 | `created_at_ms` | R        | Creation time                                            |
-| `action_id`     | none     | Not read or written. An old database keeps the column; a new database does not get it |
+| `action_id`     | none     | Not read or written since the Actions addon. An old database keeps the column; a new database does not get it |
 
 Nothing here records the running command. On restart a pane gets a shell,
 and only a known agent kind with a session reference gets a resume line.
 
-The pane source (`Pane.source`, for example the addon that started the
+The pane source (`Pane.source`, for example the Action that started the
 pane) is in memory only. A restored pane has no source, so the restored
-shell is never taken for the process that the addon started.
+shell is never taken for the running Action.
 
 ## attention
 
@@ -109,14 +109,14 @@ The daemon keeps the newest 200 viewed items.
 | Column           | Category | Meaning                                              |
 |------------------|----------|------------------------------------------------------|
 | `id`             | R        | Random id                                            |
-| `kind`           | R        | Kind string, e.g. `agent_waiting`; see [activity.md](activity.md). An unknown string reads back unchanged |
+| `kind`           | R        | Kind string, e.g. `action_crashed`; see [activity.md](activity.md). An unknown string reads back unchanged |
 | `occurred_at_ms` | R        | Event time; indexed, orders the list newest first    |
 | `worktree_id`    | R        | Worktree, or NULL for a hook with no worktree        |
 | `pane_id`        | R        | Pane, or NULL                                        |
 | `agent_kind`     | R        | `claude`, `codex`, `pi`, or NULL                     |
 | `title`          | R        | One line for a person                                |
 | `detail`         | R        | Optional second line                                 |
-| `payload`        | R        | JSON text; `checkpoint_created` holds `url` |
+| `payload`        | R        | JSON text; `action_crashed` holds `action_id`, `exit_code`, `pane_id` |
 | `attention_id`   | R        | The attention item the event opened or resolved      |
 
 The daemon keeps the newest 10 000 rows. It is a log for people, not a
@@ -188,19 +188,19 @@ commented copy when the file is missing.
 | `shell`               | `$SHELL`, else `/bin/zsh`                 | Started as a login shell (`-l`)         |
 | `editor_command`      | `["zed", "{path}"]`                       | `{path}` is replaced; appended if absent; falls back to `open` when the program is missing. For a Cmd-click on `path:line` in a terminal, `{path}` becomes `path:line:col`. To place the numbers yourself, use `{line}` and `{col}`, for example `["code", "-g", "{path}:{line}:{col}"]` |
 | `worktree_parent_dir` | unset (`~/tomo/worktrees/<repo>`)         | Where `worktree create` puts new trees. The override is flat: it gets no `<repo>` directory. It never moves a worktree that exists |
-| `branch_prefix`       | empty                                     | A create that names no branch gets `<branch_prefix><worktree name>`, for example `you/fix-login`. The daemon owns the rule and carries the prefix to a client on `Repo.branch_prefix`. The branch is always created; a name that a branch already has fails in `git worktree add` with its own message |
+| `branch_prefix`       | empty                                     | A create that names no branch gets `<branch_prefix><worktree name>`, for example `simon/aogashima`. The daemon owns the rule and carries the prefix to a client on `Repo.branch_prefix`. The branch is always created; a name that a branch already has fails in `git worktree add` with its own message |
 | `resource_warning_gb` | `2.0`                                     | Memory above which the sidebar shows a total |
 | `scrollback_lines`    | `10000`                                   | xterm scrollback                        |
 | `max_panes_per_tab`   | `4`                                       | A split or spawn into a tab that holds this many panes opens a new tab. `1` means tabs only: the window offers no split and no pane drag |
 | `sleep_after_minutes` | `60`                                      | An idle agent sleeps after this many minutes. `0` turns sleeping off. See [sleeping-agents.md](sleeping-agents.md) |
 | `[theme]`             | `name = "system"`, slab light and dark | Base theme, `light`/`dark` for system mode, and color overrides. See [theming.md](theming.md) |
-| `[terminal]`          | `font_family = "ui-monospace, Menlo, monospace"`, `font_size = 13` | Terminal font. The older top-level `font_family`, `font_size`, and `theme = "dark"` still work |
+| `[terminal]`          | `font_family = "CommitMono, Menlo, monospace"`, `font_size = 13` | Terminal font. The older top-level `font_family`, `font_size`, and `theme = "dark"` still work |
 | `[notifications]`     | `desktop = true`, `sounds = false`        | Desktop notifications and rare sounds   |
 | `[keybindings]`       | see below                                 | Overrides merge with the defaults       |
 | `[agents.<name>]`     | `command = "<name>"`, `args = []`         | Program used for `claude`, `codex`, `pi` |
 | `[[hooks]]`           | none                                      | `event`, `command`, optional `tag`, `mode` (`async`/`pane`), `timeout_s` (60). See [hooks.md](hooks.md) |
 | `[notifications] desktop` | `true`                                | A desktop notification for a new attention item while the Tomo window is not focused. See [ui.md](ui.md) |
-| `[notifications] sounds`  | `false`                               | A short chime for a human checkpoint, and for a rare moment that an addon marks |
+| `[notifications] sounds`  | `false`                               | A short chime for a human checkpoint |
 
 Default keybindings (`mod` is ⌘):
 
@@ -230,6 +230,13 @@ If the file still has it, Tomo ignores it and the check gives a warning with
 the key `states`. Malformed config never stops the daemon; it logs a warning and uses
 defaults. The daemon reloads the file when it changes and sends
 `config_changed`. `config_set` edits one key in place and keeps comments.
+
+## .tomo.toml
+
+`.tomo.toml` is not Tomo state. It belongs to the repository and holds
+`[[actions]]`. A worktree reads its own file, and the file at the repository
+root when it has none. The daemon reads it on discovery and on change and
+keeps the result only in memory. See [actions.md](actions.md).
 
 ## hooks.log
 

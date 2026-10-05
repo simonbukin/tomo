@@ -190,16 +190,16 @@ Change the rest when you have a reason.
 `styles/ui.css`). Neutral, dense, restrained. Shared tokens and standard
 primitives only.
 
-**Expressive addons** — an addon may break the density rules. The Towns addon
-on the [`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main)
-branch is the example. An addon may use a custom layout, stronger local
-color, SVG, custom motion, and an unusual type size where it earns it. It must keep accessibility, focus
+**Expressive addons** — Towns on the `simon-main` branch (`addons/towns/`,
+`towns.css`) is the example.
+An addon may use a custom layout, stronger local color, SVG, custom motion,
+and an unusual type size where it earns it. It must keep accessibility, focus
 behavior, the base typefaces unless it overrides them on purpose, and the
 semantic state meanings.
 
-**Ceremonial moments** — for example, the rare town unlock of the Towns addon
-on the `simon-main` branch, with its own local `--dur-reveal`. A ceremony may
-break the normal density and motion rules. Keep them rare, or they stop being a ceremony.
+**Ceremonial moments** — for example, a rare Town unlock in Towns on
+`simon-main` (`.town-reveal`, with its own local `--dur-reveal`). A ceremony
+may break the normal density and motion rules. Keep them rare, or they stop being a ceremony.
 
 ## Exemplars
 

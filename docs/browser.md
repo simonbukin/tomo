@@ -25,7 +25,9 @@ The CLI has `tomo browser open [worktree] [--url U]`.
 
 ## Worktree identity
 
-A browser pane belongs to exactly one worktree, like every pane.
+A browser pane belongs to exactly one worktree, like every pane. A
+`browserToolbar` item gets the `worktreeId` of its pane, so it can work
+with that worktree only.
 
 ## Child webview mechanics
 
@@ -120,9 +122,13 @@ these parts, and none of them can be proved without a window:
 Commands: `browser_create`, `browser_set_bounds`, `browser_set_visible`,
 `browser_navigate`, `browser_back`, `browser_forward`, `browser_reload`,
 `browser_close` (in `app/src-tauri/src/browser.rs`). The main window may
-call all of them.
+call all of them. A page may call no command.
 
-Browser offers three hooks, and names no addon:
+The toolbar is: back, forward, reload, url field, the `browserToolbar`
+items, and open-external.
+
+Browser offers three hooks, and names no addon. On `main`, no built-in
+addon fills them:
 
 - the `browserToolbar` slot: `BrowserPane` renders each item after the url
   field with `{ paneId, worktreeId, url, setCovering }`, and hides the page
@@ -132,15 +138,10 @@ Browser offers three hooks, and names no addon:
 - `BROWSER_CLOSED` in the same file: `browser_close` calls each entry with the
   app and the pane id.
 
-## Toolbar
+## What is persisted
 
-The toolbar is: back, forward, reload, url field, the `browserToolbar`
-items, and open-external. The toolbar never scrolls sideways: the buttons
-do not shrink, and the url field shrinks to 40 px.
-
-An addon can add toolbar items that send the page to an agent. For an
-example, see the Agentation addon on the
-[`simon-main`](https://github.com/simonbukin/tomo/tree/simon-main) branch.
+- The daemon stores the url of each browser pane (`Pane.url`), so a
+  daemon restart restores the last page.
 
 ## What is not persisted
 

@@ -11,7 +11,7 @@ answers the content, and its hits stream in while you type.
 |-------|--------|---------------------|------------|
 | Commands | tabs, panes, live agents, addon context items, every registry command | the store | runs it |
 | Worktrees | worktrees by name, repo, branch, or tag; repos | the store | opens the list of worktree actions (Cmd+Enter opens the worktree) |
-| Linear, Pull requests | addon items through the `searchSources` slot | the store | opens the worktree |
+| Pull requests | addon items through the `searchSources` slot | the store | opens the worktree |
 | Files | `git ls-files --cached --others --exclude-standard` of every live worktree | daemon | opens the file in an editor pane, at the line of `path:12` |
 | Sessions | Claude and Codex sessions rooted at a live worktree: the title, then the message text | daemon | focuses the pane of a live session, else resumes the session in a new tab |
 | Terminal | the scrollback of every terminal pane (1 MB each) | daemon | focuses the pane, and selects the newest match with the xterm search addon |
@@ -164,7 +164,7 @@ keeps.
   worktree.
 - Pi keeps no session store that Tomo reads, so Pi sessions are not found.
 - Pull requests show only for worktrees whose inspector asked for their
-  pull request (`pr_status`). Linear issues show for every linked branch.
+  pull request (`pr_status`).
 - The terminal find selects the match in a pane that is on screen. A pane
   in a tab that is not mounted mounts first; the find tries for about 1.5 s.
 - A terminal hit scrolls to the newest match of the query, which can be a

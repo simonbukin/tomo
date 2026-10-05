@@ -36,9 +36,8 @@ The row has three columns: the 9px mark at x=14, the text at x=32, and the
 links, right-aligned 12px in. Every height is a multiple of 4:
 
 1. The name line (20px): the row mark, the name, the main star, and at the
-   right the links that addons give, such as the pull request (`#412`) and
-   the Linear issue (`ENG-12`). The icon of a link has the color of its
-   state.
+   right the links that addons give, such as the pull request (`#412`). The
+   icon of a link has the color of its state.
 2. The branch line (16px, mono): the whole branch, then `*` for changes and
    `!2` in red for conflicts. Ahead and behind are only in the hover card.
 3. Groups of 20px lines, 4px between the groups, in this order:
@@ -76,14 +75,14 @@ is not empty.
 
 ## Activity view
 
-`app/src/Activity.tsx` is one of the views (`home`, `worktree`,
-`activity`, `agents`). The sidebar `History` button and the palette command
+`app/src/Activity.tsx` is one of the views (`home`, `worktree`, `activity`,
+`agents`, `apps`). The sidebar `History` button and the palette command
 `Activity` open it. The header holds `activity`, the filter
 (`All | Needs me | This worktree`). The list groups events by day (`today`, `yesterday`, `Mon 14 Sep`) with
 `.section-label` headings and 30 px rows: time, who (agent with process
-icon, `You`, or the worktree), title, detail, and text-button
-actions derived from the event kind (`Open App`, `Go to Claude`,
-`Resolve`, `Restore`). An addon kind view can add more.
+icon, action label, `You`, or the worktree), title, detail, and text-button
+actions derived from the event kind (`Open App`, `Go to Claude`, `Logs`,
+`Restart`, `Resolve`, `Restore`).
 
 The store loads 200 events with `activity_list` when the view opens,
 prepends `activity_added` events, and keeps at most 500 in memory. `load
@@ -292,6 +291,8 @@ data that the client already has:
 
 - agent signal: kind, state, short session id, time since the last state
   change
+- runtime signal and the endpoint arrow on an Action button: label,
+  host:port, process and pid, time since discovery
 - worktree header branch: ahead/behind, changed and untracked files,
   `+ins −del`, head, path
 
@@ -437,8 +438,7 @@ stay as names for the same values, so older CSS still reads.
 | `--press-scale` | 1 | nothing scales |
 | `--hit-min` | 28 px | the smallest clickable area |
 
-The focus ring is 2 px and lives in `base.css`. An addon that needs its own
-duration keeps it in its own CSS.
+The focus ring is 2 px and lives in `base.css`.
 
 Lists never jump. `app/src/useFlip.ts` checks the sidebar, the Home cards, and the Home
 list after every render. An item that
@@ -466,7 +466,7 @@ no bounce. `styles/interaction.css` applies the tokens.
   `No active worktrees.`, or `No worktrees match.`; Activity shows
   `No activity yet.` or `Nothing needs you.` The copy lives in `emptyStates.ts`.
 - **Error.** Show the error on the object that failed. A dialog shows
-  `InlineError` above its buttons. A failed archive or restore
+  `InlineError` above its buttons. A failed archive, restore, or Action run
   puts an `archive failed` problem line with the message on the worktree row
   in the sidebar and on Home, and `× archive failed` in the worktree header
   (`RowError`, `setRowError` in the store). A click dismisses it, and the
@@ -506,12 +506,12 @@ bottom strip (three sections on the same columns)
   a rail or 0, the traffic lights do not move and no workspace UI goes
   under them.
 - Top-middle: for a worktree, `WorktreeHeader` (name, branch, state on the
-  left; the `topbar` buttons of each addon, the editor button (`Zed` from
-  `editor_command`), the Finder button (`reveal_finder`), the `topbar`
-  marks of each addon, and the overflow menu on the right). The `+` menu
-  sits after the last tab. For Home, Activity, and the other views, a short
-  view title. Nothing else: metrics, daemon health, and Settings live in
-  the bottom strip. The checkpoint banner stays at the top of the middle column.
+  left; `topbar` Actions, the editor button (`Zed` from `editor_command`),
+  the Finder button (`reveal_finder`), runtime, and the overflow menu on
+  the right). The `+` menu sits after the
+  last tab. For Home, Activity, and the other global views, a short view
+  title. Nothing else: metrics, daemon health, and Settings live in the bottom
+  strip. The checkpoint banner stays at the top of the middle column.
 - Top-right: only the inspector control.
 - Zoom (Cmd `+`, `-`, `0`) shows `Zoom 110%` in the bottom status slot.
 
@@ -520,10 +520,11 @@ bottom strip (three sections on the same columns)
 `app/src/shell/BottomStrip.tsx` fills the fixed bottom row. Its three
 sections sit on the shell columns (`--left-col`, `--right-col`). A section
 is never narrower than its content. The middle section starts with
-`.bottom-items`: the `bottomItem` of each addon, in `builtins` order.
+`.bottom-items`: the `bottomItem` of each addon, in `builtins` order. On `main`, no
+built-in addon has a `bottomItem`.
 
 ```text
-?          + |      ✓ Copied branch   FPS 60  CPU 12%  MEM 8.4G  GPU 3% | ⚙ ● 0.1.3
+?          + | ✓ Copied branch   FPS 60  CPU 12%  MEM 8.4G  GPU 3% | ⚙ ● 0.1.3
 ```
 
 - Bottom-left: `?` runs `keyboard_shortcuts`. The `+` at the right edge of
@@ -533,8 +534,7 @@ is never narrower than its content. The middle section starts with
   rail, `+` is an `IconButton` with the tooltip `New repo`. When the left
   sidebar is closed on screen, the section is gone. The strip reads the mode
   on screen from `shellLayout`, not the saved mode.
-- Status slot: `StatusSlot` sits in the center, between the addon items
-  and the metrics.
+- Status slot: `StatusSlot` sits in the center between the addon items and the metrics.
 - System metrics: `CPU 12%  MEM 8.4G  GPU 3%` from the daemon call
   `system_stats` and the `system_stats` event (every 5 s while a client is
   subscribed). GPU shows only when the machine reports it. Whole percents
@@ -556,7 +556,7 @@ is never narrower than its content. The middle section starts with
 
 `HoverPopover` (`app/src/shell/HoverPopover.tsx`) joins a `PreviewCard` and
 a `Popover` on one trigger. The preview closes while the popover is open.
-The pure rules (thresholds, metric formatting, health
+The pure rules (headline bucket, thresholds, metric formatting, health
 labels, diagnostics merge) are in `app/src/shell/bottomModel.ts` with unit
 tests.
 
@@ -573,7 +573,7 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
 | Mode | Left | Right |
 |------|------|-------|
 | open | full tree, 180 to 480 px | inspector sections |
-| minimal | 48 px rail: Home, Activity with the attention count, Agents, Apps when an addon supplies apps, the addon views, one mark per worktree | one icon per inspector section |
+| minimal | 48 px rail: Home, Activity with the attention count, one mark per worktree | one icon per inspector section |
 | closed | column width 0 | column width 0 |
 
 - The sidebar control, the shortcut, the View menu, and the palette run
@@ -587,8 +587,9 @@ Each sidebar has three modes (`leftMode`, `rightMode` in UI state):
   accessible name says the state in words. The tooltip opens with no delay
   and shows the name, the branch, and the worktree signals, so a sweep over
   the rail reads at once.
-- The right rail shows `*` on git when the tree is dirty, or the
-  `gitMarker` of an addon, and `●` on processes when processes run. Each mark is a badge in the corner of the button
+- The right rail shows `*` on git when the tree is dirty, `×` on the pull
+  request when checks failed, `✓` when it merged, and `●` on processes
+  when processes run. Each mark is a badge in the corner of the button
   (`.rail-marker`), over the icon, so the rail stays one straight column
   of icons. A click opens the inspector at that section (`rightSection` in
   UI state).

@@ -14,6 +14,9 @@ crates/tomod/              daemon
   src/daemon.rs            state, the Core Call handler, Seams, tabs/panes, restore
   src/server.rs            socket accept loop, per-connection framing
   src/addons/mod.rs        the static addon list, State (per-daemon addon state), seams(), migrate(), start(), the dependency tests (composition root)
+  src/addons/github/       GitHub: pr_status, the gh call, the pull request cache, pr_merged
+  src/addons/actions/      repo Actions: .tomo.toml parser, calls, reload and pane exit seams
+  src/addons/runtime/      runtime endpoints: the lsof scan, endpoint rules, runtime_list, endpoint activity
   src/store.rs             SQLite schema and queries
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
@@ -42,6 +45,9 @@ app/                       Tauri client
   src/browser/             browser pane view, open-url calls, host call helpers, CSS
   src/addons/index.ts      the builtins list (composition root)
   src/addons/types.ts      the Addon type: the slots that addons fill
+  src/addons/github/       pull request inspector section, rail marker, NOW signal, repo avatar, prs state
+  src/addons/actions/      Action topbar buttons, menu items, palette entries, shortcuts, state
+  src/addons/runtime/      endpoint state, the header popover, source marks and menu items, NOW signal
 integrations/pi/           Pi extension source, embedded into tomod
 docs/                      this documentation
 scripts/install.sh         release build and install
@@ -49,20 +55,21 @@ scripts/install.sh         release build and install
 
 ## Branches
 
-- `main` is the base. It has Core, the client, and the addon seams, but no addons.
-- `simon-main` is the author's own Tomo: the base, six addons, and a personal
-  config. It is a worked example.
+- `main` is the base. It has Core, the client, the addon seams, and three
+  built-in addons: Actions, Runtime, and GitHub.
+- `simon-main` is the author's own Tomo: the base, four more addons (Towns,
+  Linear, Usage, and Agentation), and a personal config. It is a worked example.
 
 Changes flow one way: from `main` into `simon-main`, never back. `simon-main`
-reverts the commit that removed the addons, so a merge from `main` never
+reverts the commit that removed the four addons, so a merge from `main` never
 removes them. A change to a composition root can conflict; keep both sides.
 
 Put each change where its code lives:
 
 | The change touches | Branch from | Lands on |
 |---|---|---|
-| Core, the client, or the seams | `main` | `main`, then merge `main` into `simon-main` |
-| An addon or the personal config only | `simon-main` | `simon-main` |
+| Core, the client, the seams, or a built-in addon | `main` | `main`, then merge `main` into `simon-main` |
+| A `simon-main` addon or the personal config only | `simon-main` | `simon-main` |
 | Both | `main` for the core part | `main`, then the addon part on `simon-main` after the merge |
 
 A core fix gets a core test on `main`, even when an addon found the bug. A test
@@ -151,8 +158,7 @@ Logs: the daemon writes to stderr, which the app and the CLI redirect to
 6. **Hook event.** If the change is a workflow transition, build a
    `HookEvent` with `events::envelope` and push it to `inner.hook_queue`
    while you hold the lock; `Daemon::handle` flushes the queue after the
-   request. Add a Core event to `HOOK_EVENTS` in `tomo-proto`, or an addon event to
-   the addon's `hook_events` seam, and add it to
+   request. Add the name to `HOOK_EVENTS` in `tomo-proto` and to
    `docs/hooks.md`.
 5. **Docs.** Add the command to `docs/cli.md`.
 
@@ -197,9 +203,14 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Which hooks run for an event          | `events::matching_hooks`, `Daemon::dispatch` |
 | The only synchronous hook             | `Daemon::gate` (`worktree.before_archive`) |
 | How tags are cleaned                  | `normalized_metadata`, called in `MetadataSet` |
+| Which GitHub tag a pull request gets  | `addons::github::model::pr_tag` |
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Which addons exist and where they join Core | `addons::seams`, `addons::start`, `dispatch::handle`, `app/src/addons/index.ts` |
+| When `gh` runs, and when `pr_changed` and `pr_merged` fire | `addons::github::model::{fresh, update}` |
+| What `.tomo.toml` accepts             | `addons::actions::model::parse`         |
+| How an action runs, reuses, or stops  | `addons::actions::{run, stop, restart}` |
+| What an Action pane exit records      | `addons::actions::exited`, joined through `Seams::pane_exited` |
 | What started a pane                   | `PaneState.source`, set by the spawner |
 | Whether an archive commits or refuses | `Daemon::archive_checkpoint`            |
 
