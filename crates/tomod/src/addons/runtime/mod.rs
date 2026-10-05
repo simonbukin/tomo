@@ -15,7 +15,7 @@ use crate::daemon::{ok, Daemon, Inner};
 use crate::events;
 use crate::monitor;
 use crate::procs;
-use model::{is_shell, next_probe, normalise_host, probe, reconcile, Listener, Probe, Reconciled};
+use model::{is_shell, next_probe, normalise_host, probe, reconcile, script_label, Listener, Probe, Reconciled};
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -81,6 +81,8 @@ fn observe(inner: &Inner, listeners: &[Listener], now: u64) -> Vec<RuntimeEndpoi
             let pane_id = p.pane_id.clone()?;
             let worktree_id = p.worktree_id.clone()?;
             let source = inner.panes.get(&pane_id).and_then(|p| p.source.clone());
+            let row = inner.proc_rows.iter().find(|r| r.pid == l.pid);
+            let named = row.and_then(|r| script_label(r.package.as_deref(), r.script.as_deref()));
             Some(RuntimeEndpoint {
                 id: format!("{}:{}", l.pid, l.port),
                 worktree_id,
@@ -93,7 +95,7 @@ fn observe(inner: &Inner, listeners: &[Listener], now: u64) -> Vec<RuntimeEndpoi
                 probing: true,
                 host: normalise_host(&l.host),
                 port: l.port,
-                label: source.as_ref().map(|s| s.label.clone()),
+                label: source.as_ref().map(|s| s.label.clone()).or(named),
                 discovered_at_ms: now,
                 source,
             })

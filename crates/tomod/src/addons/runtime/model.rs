@@ -184,9 +184,25 @@ pub fn output_within(mut command: Command, deadline: Duration) -> std::io::Resul
     }
 }
 
+/// The name of a server that a package script started: `web app` for the `app` script of `@acme/web`. A source
+/// label wins; with no package script the client shows the program name.
+pub fn script_label(package: Option<&str>, script: Option<&str>) -> Option<String> {
+    let script = script?;
+    let short = package.map(|p| p.rsplit('/').next().unwrap_or(p)).filter(|p| !p.is_empty());
+    Some(short.map_or_else(|| script.to_string(), |p| format!("{p} {script}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_package_script_names_its_server() {
+        assert_eq!(script_label(Some("@acme/web"), Some("app")).as_deref(), Some("web app"));
+        assert_eq!(script_label(Some("acme"), Some("storybook:dev")).as_deref(), Some("acme storybook:dev"));
+        assert_eq!(script_label(None, Some("dev")).as_deref(), Some("dev"));
+        assert_eq!(script_label(Some("@acme/web"), None), None);
+    }
 
     fn ep(pid: u32, port: u16, wt: &str) -> RuntimeEndpoint {
         RuntimeEndpoint {
@@ -314,3 +330,4 @@ mod tests {
         assert_eq!(probe("[::1]", port).protocol, RuntimeProtocol::Http);
     }
 }
+
