@@ -56,7 +56,7 @@ case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "add $BIN_DIR to your PATH so agents and hooks can find tomo" ;;
 esac
-echo "next: run 'tomo integrations install' to add hooks for Claude, Codex, and Pi"
+echo "next: run 'tomo integrations install' to add the integrations for Claude, Codex, Pi, and OpenCode"
 
 if [ "$WITH_CONFIG" = 1 ]; then
   DATA_DIR="${TOMO_DATA_DIR:-$HOME/Library/Application Support/tomo}"
