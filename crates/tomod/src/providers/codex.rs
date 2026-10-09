@@ -1,4 +1,4 @@
-use super::{root_session, str_field, Gap, HookOutcome, Program, Provider};
+use super::{root_session, str_field, Check, Gap, HookOutcome, Program, Provider};
 use crate::agents::shell_quote;
 use crate::subagents::SubagentEvent;
 use anyhow::Result;
@@ -172,8 +172,12 @@ fn installed(home: &Path) -> bool {
     std::fs::read_to_string(hooks_file(home)).map(|t| t.contains("hook codex")).unwrap_or(false)
 }
 
-fn gap(home: &Path) -> Option<Gap> {
-    gap_from(&tomo_hooks(home), listed_by_codex(home).as_deref())
+fn gap(home: &Path, check: Check) -> Option<Gap> {
+    let listed = match check {
+        Check::Ask(codex) => listed_by_codex(home, codex),
+        Check::Files => None,
+    };
+    gap_from(&tomo_hooks(home), listed.as_deref())
 }
 
 fn gap_from(ours: &[TomoHook], listed: Option<&[Listed]>) -> Option<Gap> {
@@ -205,11 +209,11 @@ struct Listed {
 const LIST_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Asks `codex app-server` for its hooks (`hooks/list`). `trust_hash` copies Codex's algorithm, so this is the check
-/// that the copy still matches the installed Codex. `None` when Codex does not answer within `LIST_WAIT`.
-fn listed_by_codex(home: &Path) -> Option<Vec<Listed>> {
+/// that the copy still matches the installed Codex. `None` when Codex does not start or does not answer within `LIST_WAIT`.
+fn listed_by_codex(home: &Path, codex: &Path) -> Option<Vec<Listed>> {
     use std::io::{BufRead, Write};
     use std::process::{Command, Stdio};
-    let mut child = Command::new("codex")
+    let mut child = Command::new(codex)
         .arg("app-server")
         .env("CODEX_HOME", codex_home(home))
         .current_dir(home)
@@ -230,7 +234,7 @@ fn listed_by_codex(home: &Path) -> Option<Vec<Listed>> {
     std::thread::spawn(move || {
         let answer = stdout.into_iter().flat_map(|s| std::io::BufReader::new(s).lines().map_while(Result::ok)).find_map(|line| {
             let message = serde_json::from_str::<Value>(&line).ok()?;
-            (message.get("id") == Some(&json!(2))).then_some(message)
+            (message.get("id") == Some(&json!(2))).then_some(message.get("result")?.clone())
         });
         let _ = tx.send(answer);
     });
@@ -242,7 +246,7 @@ fn listed_by_codex(home: &Path) -> Option<Vec<Listed>> {
 }
 
 fn listed_from(answer: &Value) -> Vec<Listed> {
-    let hooks = answer.pointer("/result/data").and_then(Value::as_array).into_iter().flatten().flat_map(|d| d.get("hooks").and_then(Value::as_array).into_iter().flatten());
+    let hooks = answer.pointer("/data").and_then(Value::as_array).into_iter().flatten().flat_map(|d| d.get("hooks").and_then(Value::as_array).into_iter().flatten());
     hooks
         .filter(|h| h.get("command").and_then(Value::as_str).is_some_and(|c| c.contains("hook codex")))
         .filter_map(|h| {
@@ -431,21 +435,19 @@ mod tests {
 
     #[test]
     fn the_hooks_list_answer_gives_tomos_hooks_only() {
-        let answer = json!({ "id": 2, "result": { "data": [ { "hooks": [
+        let answer = json!({ "data": [ { "hooks": [
             { "key": "/h/hooks.json:stop:0:0", "command": "other", "currentHash": "sha256:a", "trustStatus": "trusted" },
             { "key": "/h/hooks.json:stop:1:0", "command": "'/bin/tomo' hook codex", "currentHash": "sha256:b", "trustStatus": "modified" },
             { "key": "/h/hooks.json:stop:2:0", "command": "/bin/tomo hook codex", "currentHash": "sha256:c", "trustStatus": "managed" },
-        ] } ] } });
+        ] } ] });
         assert_eq!(listed_from(&answer), [listed("/h/hooks.json:stop:1:0", "sha256:b", false), listed("/h/hooks.json:stop:2:0", "sha256:c", true)]);
     }
 
     #[test]
     fn the_installed_codex_agrees_with_tomos_keys_and_hashes() {
-        if crate::config::resolve_program("codex").is_none() {
-            return;
-        }
+        let Some(codex) = crate::config::resolve_program("codex") else { return };
         let home = codex_home_with("live", "");
-        let by_codex = listed_by_codex(&home).expect("codex app-server answers hooks/list");
+        let by_codex = listed_by_codex(&home, &codex).expect("codex app-server answers hooks/list");
         let ours = tomo_hooks(&home);
         assert_eq!(by_codex.len(), ours.len());
         assert!(gap_from(&ours, Some(&by_codex)).is_some_and(|g| g.reason.contains("press t")), "the keys and the hashes match: {by_codex:?}");

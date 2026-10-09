@@ -38,7 +38,7 @@ pub struct Provider {
     pub write_launch_file: fn(launch_dir: &Path, tomo_bin: &Path) -> Result<()>,
     pub install: fn(home: &Path, tomo_bin: &Path) -> Result<()>,
     pub installed: fn(home: &Path) -> bool,
-    pub gap: fn(home: &Path) -> Option<Gap>,
+    pub gap: fn(home: &Path, check: Check) -> Option<Gap>,
     pub sessions: fn(home: &Path, cwd: &Path) -> Vec<AgentSession>,
     /// The message text of one line of a session file: what the user or the agent wrote, without tool calls,
     /// tool output, or thinking. `None` for every other line.
@@ -59,7 +59,14 @@ pub struct Gap {
     pub reason: &'static str,
 }
 
-pub fn no_gap(_home: &Path) -> Option<Gap> {
+/// How far a health check goes. `Ask` runs the agent's own binary, which a reload of the config must not wait for.
+#[derive(Clone, Copy)]
+pub enum Check<'a> {
+    Files,
+    Ask(&'a Path),
+}
+
+pub fn no_gap(_home: &Path, _check: Check) -> Option<Gap> {
     None
 }
 
@@ -330,7 +337,8 @@ fn clip(text: &str) -> String {
     one_line.chars().take(120).collect()
 }
 
-pub fn status(config: &Config) -> Vec<IntegrationStatus> {
+/// `ask` lets a provider run its agent binary to check what the files alone cannot show.
+pub fn status(config: &Config, ask: bool) -> Vec<IntegrationStatus> {
     let home = dirs::home_dir().unwrap_or_default();
     table()
         .into_iter()
@@ -349,7 +357,8 @@ pub fn status(config: &Config) -> Vec<IntegrationStatus> {
                     reason: Some(format!("{command} not found on PATH")),
                 };
             }
-            match (p.gap)(&home) {
+            let check = binary.as_deref().filter(|_| ask).map_or(Check::Files, Check::Ask);
+            match (p.gap)(&home, check) {
                 None => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
                 Some(gap) => IntegrationStatus { kind, level: gap.level, binary, lifecycle: false, resume: true, reason: Some(gap.reason.to_string()) },
             }
