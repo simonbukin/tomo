@@ -25,6 +25,7 @@ pub static PROVIDER: Provider = Provider {
     transcript_messages: Some(transcript_messages),
     sleep_safe_children: &[],
     session_saved,
+    argv_session: super::no_argv_session,
 };
 
 fn detects(p: &Program) -> bool {

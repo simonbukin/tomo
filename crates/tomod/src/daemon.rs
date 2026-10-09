@@ -2442,6 +2442,8 @@ impl Daemon {
                 ok(providers::installed())
             }
             Call::IntegrationsStatus => {
+                let config = self.lock().config.clone();
+                let list = providers::status(&config);
                 let mut inner = self.lock();
                 providers::record_health(&mut inner, &list);
                 ok(list)

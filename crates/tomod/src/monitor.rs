@@ -120,9 +120,11 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
             .iter()
             .filter_map(|pid| by_pid.get(pid))
             .map(|&i| &inner.proc_rows[i])
-            .find_map(|r| crate::providers::detect(&r.name, &r.cmd).map(|k| (k, r.pid)));
+            .find_map(|r| crate::providers::detect(&r.name, &r.cmd).map(|k| (k, r.pid, r.cmd.as_str())));
         match agent_proc {
-            Some((kind, pid)) => {
+            Some((kind, pid, cmd)) => {
+                let known_session = inner.agents.get(&pane_id).is_some_and(|a| a.session_ref.is_some());
+                let session_ref = (!known_session).then(|| crate::providers::argv_session(kind, cmd)).flatten();
                 let subtree_cpu: f32 = std::iter::once(pid)
                     .chain(procs::descendants(&inner.proc_rows, pid))
                     .filter_map(|p| by_pid.get(&p))
@@ -131,7 +133,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                 let prev = inner.busy.get(&pane_id).copied().unwrap_or_default();
                 let (busy, state) = fallback(prev, subtree_cpu > BUSY_CPU_PERCENT, now);
                 inner.busy.insert(pane_id.clone(), busy);
-                let report = AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: None, authority: Authority::Heuristic, at_ms: now };
+                let report = AgentReport { pane_id: pane_id.clone(), kind, state, session_ref, authority: Authority::Heuristic, at_ms: now };
                 Daemon::apply_report(inner, &report, Some(pid), None);
             }
             None => {

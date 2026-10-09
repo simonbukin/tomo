@@ -819,6 +819,9 @@ async fn run() -> Result<()> {
 async fn hook(agent: &str) -> Result<()> {
     let Ok(pane_id) = std::env::var("TOMO_PANE_ID") else { return Ok(()) };
     let kind: AgentKind = agent.parse().map_err(|e: String| anyhow!(e))?;
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return Ok(());
+    }
     let mut input = String::new();
     std::io::Read::read_to_string(&mut std::io::stdin(), &mut input).context("read hook payload")?;
     let payload: Value = serde_json::from_str(input.trim()).unwrap_or(Value::Null);

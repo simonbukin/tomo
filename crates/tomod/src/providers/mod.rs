@@ -49,6 +49,8 @@ pub struct Provider {
     pub sleep_safe_children: &'static [&'static str],
     /// Whether the provider saved the session, so a resume can find it. Claude saves no file before the first turn.
     pub session_saved: fn(home: &Path, session_ref: &str) -> bool,
+    /// The session that the agent's command line resumes, for an agent with no hooks to report it.
+    pub argv_session: fn(cmd: &str) -> Option<String>,
 }
 
 /// What an installed provider still needs before Tomo sees its lifecycle events.
@@ -58,6 +60,10 @@ pub struct Gap {
 }
 
 pub fn no_gap(_home: &Path) -> Option<Gap> {
+    None
+}
+
+pub fn no_argv_session(_cmd: &str) -> Option<String> {
     None
 }
 
@@ -103,6 +109,10 @@ fn basename(program: &str) -> &str {
 pub fn detect(name: &str, cmd: &str) -> Option<AgentKind> {
     let program = Program { name: basename(name), argv0: basename(cmd.split_whitespace().next().unwrap_or("")), cmd };
     table().into_iter().find(|p| (p.detects)(&program)).map(|p| p.kind)
+}
+
+pub fn argv_session(kind: AgentKind, cmd: &str) -> Option<String> {
+    (provider(kind).argv_session)(cmd)
 }
 
 /// True for a variable that marks the process as a child of an agent. A name
@@ -172,6 +182,12 @@ pub fn hook_outcome(kind: AgentKind, payload: &Value) -> HookOutcome {
 
 fn str_field<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty())
+}
+
+/// The session of the pane, from a hook payload. An event from inside a subagent does not set it, so a subagent id
+/// can never take the place of the root session that a resume needs.
+fn root_session(payload: &Value) -> Option<String> {
+    str_field(payload, "session_id").filter(|_| str_field(payload, "agent_id").is_none()).map(str::to_string)
 }
 
 pub fn plan(kind: AgentKind, cmd: &AgentCommand, resume: Option<&str>, launch_dir: &Path, extra: &[String]) -> SpawnPlan {

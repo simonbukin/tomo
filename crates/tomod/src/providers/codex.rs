@@ -1,4 +1,4 @@
-use super::{str_field, Gap, HookOutcome, Program, Provider};
+use super::{root_session, str_field, Gap, HookOutcome, Program, Provider};
 use crate::agents::shell_quote;
 use crate::subagents::SubagentEvent;
 use anyhow::Result;
@@ -26,6 +26,7 @@ pub static PROVIDER: Provider = Provider {
     transcript_messages: None,
     sleep_safe_children: &["codex-code-mode-host"],
     session_saved,
+    argv_session: resumed_session,
 };
 
 /// Codex puts the tool's namespace in front of its name in a hook: multi-agent v2 reports `spawn_agent` as
@@ -68,7 +69,7 @@ fn hook_outcome(payload: &Value) -> HookOutcome {
     let question = (event == "PermissionRequest" || asks).then(|| super::ask_text(tool, input));
     HookOutcome {
         state,
-        session_ref: str_field(payload, "session_id").map(str::to_string),
+        session_ref: root_session(payload),
         subagent,
         only_if_busy: matches!(event, "Interrupt" | "PostToolUse"),
         question,
@@ -172,15 +173,86 @@ fn installed(home: &Path) -> bool {
 }
 
 fn gap(home: &Path) -> Option<Gap> {
-    let ours = tomo_hooks(home);
-    match (ours.is_empty(), ours.iter().all(|h| h.trusted_in_config)) {
-        (true, _) => Some(Gap { level: IntegrationLevel::ProcessOnly, reason: "run `tomo integrations install`" }),
-        (false, true) => None,
-        (false, false) => Some(Gap {
+    gap_from(&tomo_hooks(home), listed_by_codex(home).as_deref())
+}
+
+fn gap_from(ours: &[TomoHook], listed: Option<&[Listed]>) -> Option<Gap> {
+    let by_codex = |h: &TomoHook| listed.map(|l| l.iter().find(|c| c.key == h.key));
+    let drifted = ours.iter().any(|h| by_codex(h).is_some_and(|c| c.is_none_or(|c| c.hash != h.hash)));
+    let trusted = ours.iter().all(|h| by_codex(h).map_or(h.trusted_in_config, |c| c.is_some_and(|c| c.trusted)));
+    match (ours.is_empty(), drifted, trusted) {
+        (true, _, _) => Some(Gap { level: IntegrationLevel::ProcessOnly, reason: "run `tomo integrations install`" }),
+        (false, true, _) => Some(Gap {
+            level: IntegrationLevel::Partial,
+            reason: "this Codex keys or hashes its hooks in a new way, so a Codex that Tomo starts does not trust Tomo's hooks; update Tomo",
+        }),
+        (false, false, true) => None,
+        (false, false, false) => Some(Gap {
             level: IntegrationLevel::Partial,
             reason: "Codex that Tomo starts reports in full; a Codex you start by hand reports only with --no-daemon and after you trust the hooks (press t in its hooks panel)",
         }),
     }
+}
+
+/// One of Tomo's hooks as Codex itself lists it.
+#[derive(Debug, PartialEq, Eq)]
+struct Listed {
+    key: String,
+    hash: String,
+    trusted: bool,
+}
+
+const LIST_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Asks `codex app-server` for its hooks (`hooks/list`). `trust_hash` copies Codex's algorithm, so this is the check
+/// that the copy still matches the installed Codex. `None` when Codex does not answer within `LIST_WAIT`.
+fn listed_by_codex(home: &Path) -> Option<Vec<Listed>> {
+    use std::io::{BufRead, Write};
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("codex")
+        .arg("app-server")
+        .env("CODEX_HOME", codex_home(home))
+        .current_dir(home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let requests = [
+        json!({ "id": 1, "method": "initialize", "params": { "clientInfo": { "name": "tomo", "version": env!("CARGO_PKG_VERSION") } } }),
+        json!({ "method": "initialized" }),
+        json!({ "id": 2, "method": "hooks/list", "params": { "cwds": [home] } }),
+    ];
+    let mut stdin = child.stdin.take()?;
+    let sent = requests.iter().all(|r| writeln!(stdin, "{r}").is_ok());
+    let stdout = child.stdout.take();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let answer = stdout.into_iter().flat_map(|s| std::io::BufReader::new(s).lines().map_while(Result::ok)).find_map(|line| {
+            let message = serde_json::from_str::<Value>(&line).ok()?;
+            (message.get("id") == Some(&json!(2))).then_some(message)
+        });
+        let _ = tx.send(answer);
+    });
+    let answer = sent.then(|| rx.recv_timeout(LIST_WAIT).ok().flatten()).flatten();
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    answer.map(|a| listed_from(&a))
+}
+
+fn listed_from(answer: &Value) -> Vec<Listed> {
+    let hooks = answer.pointer("/result/data").and_then(Value::as_array).into_iter().flatten().flat_map(|d| d.get("hooks").and_then(Value::as_array).into_iter().flatten());
+    hooks
+        .filter(|h| h.get("command").and_then(Value::as_str).is_some_and(|c| c.contains("hook codex")))
+        .filter_map(|h| {
+            Some(Listed {
+                key: h.get("key")?.as_str()?.to_string(),
+                hash: h.get("currentHash")?.as_str()?.to_string(),
+                trusted: matches!(h.get("trustStatus").and_then(Value::as_str), Some("trusted" | "managed")),
+            })
+        })
+        .collect()
 }
 
 fn snake(event: &str) -> String {
@@ -219,6 +291,7 @@ struct TomoHook {
 
 fn tomo_hooks(home: &Path) -> Vec<TomoHook> {
     let file = hooks_file(home);
+    let file = std::fs::canonicalize(&file).unwrap_or(file);
     let Some(hooks) = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { return Vec::new() };
     let config = std::fs::read_to_string(codex_home(home).join("config.toml")).unwrap_or_default();
     hooks
@@ -244,6 +317,13 @@ fn tomo_hooks(home: &Path) -> Vec<TomoHook> {
 fn trust_override(home: &Path) -> Option<String> {
     let ours = tomo_hooks(home);
     (!ours.is_empty()).then(|| format!("hooks.state={{{}}}", ours.iter().map(|h| format!("\"{}\"={{trusted_hash=\"{}\"}}", h.key, h.hash)).collect::<Vec<_>>().join(",")))
+}
+
+/// The session that `codex resume <id>` names, for a Codex typed by hand that has no hooks to report it. Only a
+/// UUID: `resume` also takes a session name, which does not name a rollout file.
+fn resumed_session(cmd: &str) -> Option<String> {
+    let words: Vec<&str> = cmd.split_whitespace().collect();
+    words.windows(2).find(|w| w[0] == "resume").map(|w| w[1]).filter(|id| uuid::Uuid::parse_str(id).is_ok()).map(str::to_string)
 }
 
 fn detects(p: &Program) -> bool {
@@ -321,15 +401,54 @@ mod tests {
         assert_eq!(ours.len(), 10);
         let stop = ours.iter().find(|h| h.key.ends_with(":stop:1:0")).expect("Tomo's Stop comes after the other entry");
         assert!(!stop.trusted_in_config);
-        assert!(matches!(gap(&home), Some(Gap { level: IntegrationLevel::Partial, .. })));
+        assert!(matches!(gap_from(&tomo_hooks(&home), None), Some(Gap { level: IntegrationLevel::Partial, .. })));
         let config: String = ours.iter().map(|h| format!("[hooks.state.\"{}\"]\ntrusted_hash = \"{}\"\n\n", h.key, h.hash)).collect();
         std::fs::write(home.join(".codex/config.toml"), &config).unwrap();
-        assert!(gap(&home).is_none(), "every hook trusted with its own hash leaves no gap");
+        assert!(gap_from(&tomo_hooks(&home), None).is_none(), "every hook trusted with its own hash leaves no gap");
         std::fs::write(home.join(".codex/config.toml"), config.replace("sha256:", "sha256:0")).unwrap();
-        assert!(gap(&home).is_some(), "a stale hash is not trust");
+        assert!(gap_from(&tomo_hooks(&home), None).is_some(), "a stale hash is not trust");
         let value = trust_override(&home).unwrap();
         assert!(value.starts_with("hooks.state={\"") && value.contains(&format!("={{trusted_hash=\"{}\"}}", stop.hash)), "{value}");
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    fn listed(key: &str, hash: &str, trusted: bool) -> Listed {
+        Listed { key: key.into(), hash: hash.into(), trusted }
+    }
+
+    #[test]
+    fn codexs_own_list_decides_trust_and_shows_a_drifted_hash() {
+        let home = codex_home_with("listed", "");
+        let ours = tomo_hooks(&home);
+        let as_codex = |trusted: bool| ours.iter().map(|h| listed(&h.key, &h.hash, trusted)).collect::<Vec<_>>();
+        assert!(gap_from(&ours, Some(&as_codex(true))).is_none(), "Codex trusts every hook");
+        assert!(gap_from(&ours, Some(&as_codex(false))).is_some_and(|g| g.reason.contains("press t")));
+        let mut other_hash = as_codex(true);
+        other_hash[0].hash = "sha256:new".into();
+        assert!(gap_from(&ours, Some(&other_hash)).is_some_and(|g| g.reason.contains("update Tomo")));
+        assert!(gap_from(&ours, Some(&as_codex(true)[1..])).is_some_and(|g| g.reason.contains("update Tomo")), "a key that Codex does not list");
+    }
+
+    #[test]
+    fn the_hooks_list_answer_gives_tomos_hooks_only() {
+        let answer = json!({ "id": 2, "result": { "data": [ { "hooks": [
+            { "key": "/h/hooks.json:stop:0:0", "command": "other", "currentHash": "sha256:a", "trustStatus": "trusted" },
+            { "key": "/h/hooks.json:stop:1:0", "command": "'/bin/tomo' hook codex", "currentHash": "sha256:b", "trustStatus": "modified" },
+            { "key": "/h/hooks.json:stop:2:0", "command": "/bin/tomo hook codex", "currentHash": "sha256:c", "trustStatus": "managed" },
+        ] } ] } });
+        assert_eq!(listed_from(&answer), [listed("/h/hooks.json:stop:1:0", "sha256:b", false), listed("/h/hooks.json:stop:2:0", "sha256:c", true)]);
+    }
+
+    #[test]
+    fn the_installed_codex_agrees_with_tomos_keys_and_hashes() {
+        if crate::config::resolve_program("codex").is_none() {
+            return;
+        }
+        let home = codex_home_with("live", "");
+        let by_codex = listed_by_codex(&home).expect("codex app-server answers hooks/list");
+        let ours = tomo_hooks(&home);
+        assert_eq!(by_codex.len(), ours.len());
+        assert!(gap_from(&ours, Some(&by_codex)).is_some_and(|g| g.reason.contains("press t")), "the keys and the hashes match: {by_codex:?}");
     }
 
     fn outcome(payload: Value) -> HookOutcome {
@@ -348,6 +467,7 @@ mod tests {
         let late = outcome(json!({ "hook_event_name": "PostToolUse", "session_id": "s", "tool_name": "Bash" }));
         assert_eq!((late.state, late.only_if_busy), (Some(AgentState::Working), true), "a background tool that ends after the turn does not start it again");
         assert_eq!(outcome(json!({ "hook_event_name": "Stop", "session_id": "abc" })).session_ref.as_deref(), Some("abc"));
+        assert_eq!(outcome(json!({ "hook_event_name": "PreToolUse", "session_id": "child", "agent_id": "a1" })).session_ref, None);
     }
 
     #[test]
@@ -368,6 +488,15 @@ mod tests {
         let work = outcome(json!({ "hook_event_name": "PreToolUse", "agent_id": "t2", "tool_name": "Bash" }));
         assert_eq!(work.subagent, Some(SubagentEvent::Activity { id: "t2".into(), state: AgentState::Working }));
         assert_eq!(outcome(json!({ "hook_event_name": "SubagentStop", "agent_id": "t2" })).subagent, Some(SubagentEvent::Stop { id: "t2".into() }));
+    }
+
+    #[test]
+    fn a_resume_by_hand_names_its_session() {
+        let id = "019a6c4e-7d2b-7c41-9d6e-2f1b3c4d5e6f";
+        assert_eq!(resumed_session(&format!("/opt/codex --no-daemon resume {id}")).as_deref(), Some(id));
+        assert_eq!(resumed_session("/opt/codex resume --last"), None);
+        assert_eq!(resumed_session("/opt/codex resume my-session-name"), None);
+        assert_eq!(resumed_session("/opt/codex"), None);
     }
 
     #[test]
