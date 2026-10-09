@@ -150,8 +150,30 @@ sha256 of the hook group as compact JSON with sorted keys
 entries for that launch in `-c hooks.state={...}`, so it reports with no trust
 step. A Codex that you start by hand reports only when you start it with
 `--no-daemon` and after you trust the hooks once in its hooks panel (press
-`t`). The health check compares the hash in `~/.codex/config.toml` with the
-hash of each Tomo entry; a stale hash is not trust.
+`t`).
+
+The key of a hook is `<hooks.json>:<event>:<group>:<handler>`, with the real
+path of `hooks.json`: Codex resolves symlinks, so Tomo does too. Tomo's copy
+of the hash algorithm can drift when Codex changes. The health check asks
+Codex itself: it runs `codex app-server` and sends `hooks/list` (about 50 ms).
+When the key or the hash of a Tomo entry differs from Tomo's own, the check
+reports a partial integration and tells you to update Tomo. When Codex does
+not answer in 3 s, the check reads the trust in `~/.codex/config.toml`.
+`the_installed_codex_agrees_with_tomos_keys_and_hashes` runs the same
+comparison in `cargo test` when `codex` is on the PATH.
+
+To make a Codex that you type by hand report, add this to `~/.zshrc`. It adds
+`--no-daemon` in a Tomo pane only. `codex agents`, `codex queue`, and
+`--remote` need the shared server, so they keep it.
+
+```zsh
+[[ -n $TOMO_PANE_ID ]] && codex() {
+  case " $* " in
+    " agents "*|" queue "*|*" --remote"*) command codex "$@" ;;
+    *) command codex --no-daemon "$@" ;;
+  esac
+}
+```
 
 | Codex hook | State |
 |---|---|
@@ -175,8 +197,11 @@ the end of its name.
 | `SubagentStop` with `agent_id` | stop |
 | any other event with `agent_id` | the subagent works or waits |
 
-The session reference is `session_id` from the first hook. Codex chooses it,
-so a pane has no reference before its first prompt. Such a pane resumes with
+The session reference is `session_id` from the first hook. An event with an
+`agent_id` comes from a subagent and does not set it (Claude too). Codex
+chooses the id, so a pane has no reference before its first prompt. A
+`codex resume <uuid>` that you type gives the pane that session at once,
+through the process scan, until a hook reports one. Such a pane resumes with
 `codex resume --last`. Sessions are rollouts in
 `~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl`: the session list
 skips a rollout with a `parent_thread_id` (a subagent), and it reads the user

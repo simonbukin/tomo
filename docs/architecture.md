@@ -407,6 +407,7 @@ the modes as they are now.
 |---|---|
 | uses the alternate screen | an empty alternate screen in the program's modes, then a size nudge |
 | does not | the scrollback without terminal queries, then the modes |
+| ended | the scrollback without terminal queries, with the mouse off |
 
 The nudge makes the PTY one row smaller, then sets the size again after
 50 ms. The program gets two SIGWINCH signals and draws itself at the current
