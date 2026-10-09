@@ -391,7 +391,33 @@ Error codes: `bad_request`, `not_found`, `conflict`, `git`, `io`,
 A client sends `hello` with `protocol: 3`. The daemon rejects other versions.
 A client sends `subscribe` to receive events and gets a full snapshot back.
 Pane output flows only to clients that sent `pane_attach` for that pane. The
-first output after attach is the stored scrollback.
+first output after attach is the stored scrollback, or a fresh frame for a
+full-screen program. See "Reattach" below.
+
+### Reattach
+
+A pane keeps the last 1 MB of output. In a long session, the cut removes the
+start, where a full-screen program such as Codex turns on the alternate
+screen and mouse reporting. Old frames also have the size of the old window.
+A raw replay of the tail shows scattered words, and the wheel does not
+scroll. `term_modes.rs` reads every byte before the cut, so the daemon knows
+the modes as they are now.
+
+| The program in the pane | What `pane_attach` sends |
+|---|---|
+| uses the alternate screen | an empty alternate screen in the program's modes, then a size nudge |
+| does not | the scrollback without terminal queries, then the modes |
+
+The nudge makes the PTY one row smaller, then sets the size again after
+50 ms. The program gets two SIGWINCH signals and draws itself at the current
+size. A `pane_resize` in those 50 ms wins, and the nudge does not restore the
+old size. A program that ignores SIGWINCH shows an empty screen until its
+next output.
+
+When the shell is back with no child, and the alternate screen or the mouse
+is still on, the monitor sends the sequence that turns them off. This
+handles a program that died without cleanup. Bracketed paste stays on,
+because the shell sets it for each prompt.
 
 Requests on one connection run in order. Git-backed calls (`repo_add`,
 `repo_clone`, `worktree_refresh`, `worktree_create`, `git_summary`,

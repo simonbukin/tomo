@@ -250,7 +250,10 @@ daemon numbers listed in `architecture.md`.
   `config_changed`, so the theme, the terminal font, and keybindings apply at
   once. A terminal that is already open keeps its shell.
 - Switching worktrees unmounts xterm and replays up to 1 MB of scrollback on
-  return. This is fast but not free.
+  return. This is fast but not free. A full-screen program gets no replay. It
+  draws itself again after a size nudge, so its pane is empty for about
+  50 ms.
+- The Ghostty screen does not follow a resize yet. Only Rio does.
 - zsh may print a stray inverse `%` on the first prompt. The shell starts
   at the stored size before the GUI reports its real size.
 - Some desktop automation tools deliver keyboard input to the webview but
