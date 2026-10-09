@@ -154,9 +154,10 @@ step. A Codex that you start by hand reports only when you start it with
 
 The key of a hook is `<hooks.json>:<event>:<group>:<handler>`, with the real
 path of `hooks.json`: Codex resolves symlinks, so Tomo does too. Tomo's copy
-of the hash algorithm can drift when Codex changes. `tomo integrations status`
-asks Codex itself: it runs the configured `codex app-server` and sends
-`hooks/list` (about 50 ms). A reload of the config does not run Codex.
+of the hash algorithm can drift when Codex changes. So the health check asks
+Codex itself: it runs the configured `codex app-server` and sends
+`hooks/list` (about 50 ms). The check runs outside the daemon lock, at each
+config reload and at each `tomo integrations status`.
 When the key or the hash of a Tomo entry differs from Tomo's own, the check
 reports a partial integration and tells you to update Tomo. When Codex does
 not answer in 3 s, or answers with an error, the check reads the trust in
