@@ -34,6 +34,8 @@ and the GUI as one surface, because most failures cross all three.
 | 14 | Many worktrees | 25+ | Discovery runs `git status` concurrently; sidebar scrolls | Med | Low | Low |
 | 15 | Deep split nesting | 6+ splits | Panes shrink; agent spawns without a target go to a new tab once a tab holds 2 panes | Med | Low | Low |
 | 16 | Scrollback replay after restart | 1 MB | Query sequences stripped so the client does not answer into the new shell | High | Med | High |
+| 16a | Full-screen program after the 1 MB cut, or after a resize | Codex for hours, then a new window size | Attach sends an empty alternate screen with the mouse modes, and a size nudge makes the program draw itself again (`torture/reattach.sh`) | High | High | High |
+| 16b | Full-screen program dies without cleanup | SIGKILL with the mouse on | The monitor turns off the mouse and the alternate screen when the shell is back | Med | Med | Med |
 | 17 | Tab title emptied | rename to `""` | Rename ignored; old title kept | Low | Low | Low |
 
 ### Error States (network / system / permission)

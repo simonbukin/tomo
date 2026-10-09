@@ -10,18 +10,57 @@ pub const SCROLLBACK_CAP: usize = 1024 * 1024;
 #[derive(Default)]
 pub struct Scrollback {
     bytes: Vec<u8>,
+    /// Read from every byte before the front is cut, so it outlives the setup that the cut drops.
+    modes: crate::term_modes::Modes,
 }
 
 impl Scrollback {
+    /// No output yet, but the modes of a saved session. A holder's replay can start after the setup of its program.
+    pub fn with_modes_of(saved: &[u8]) -> Self {
+        Scrollback { modes: crate::term_modes::Modes::from_bytes(saved), bytes: Vec::new() }
+    }
+
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        let mut s = Scrollback { bytes };
+        let mut s = Scrollback { modes: crate::term_modes::Modes::from_bytes(&bytes), bytes };
         s.trim();
         s
     }
 
     pub fn push(&mut self, chunk: &[u8]) {
+        self.modes.feed(chunk);
         self.bytes.extend_from_slice(chunk);
         self.trim();
+    }
+
+    pub fn modes(&self) -> &crate::term_modes::Modes {
+        &self.modes
+    }
+
+    /// The bytes to keep on disk across a daemon restart: the modes first, so `from_bytes` reads them back even when
+    /// the setup was cut from the bytes long ago.
+    pub fn persisted(&self) -> Vec<u8> {
+        [self.screen(), &self.modes.restore(), &self.bytes].concat()
+    }
+
+    /// The bytes for a read-only view at the size the pane had: the frames land on the alternate screen when the
+    /// program used it, but no mouse mode takes the wheel or the selection away from the viewer.
+    pub fn view_snapshot(&self) -> Vec<u8> {
+        [self.screen(), &self.bytes].concat()
+    }
+
+    /// What a new client gets. A live full-screen program gets an empty alternate screen, because it draws itself
+    /// again after a size nudge. A pane whose program ended keeps its last frames, with the mouse off.
+    pub fn attach_bytes(&self, live: bool) -> Vec<u8> {
+        use crate::term_modes::Modes;
+        match (live, self.modes.alt_screen()) {
+            (true, true) => self.modes.alt_frame(),
+            (true, false) => [strip_terminal_queries(&self.bytes), self.modes.restore()].concat(),
+            (false, _) => [strip_terminal_queries(&self.view_snapshot()), Modes::end_sync_and_mouse_off()].concat(),
+        }
+    }
+
+    fn screen(&self) -> &'static [u8] {
+        if self.modes.alt_screen() { b"\x1b[?1049h" } else { b"" }
     }
 
     fn trim(&mut self) {
@@ -355,6 +394,29 @@ mod tests {
         let snap = sb.snapshot();
         assert!(snap.len() <= SCROLLBACK_CAP + SCROLLBACK_CAP / 4);
         assert_eq!(*snap.last().unwrap(), 2);
+    }
+
+    #[test]
+    fn a_cut_full_screen_session_keeps_its_modes_on_disk_and_in_a_snapshot() {
+        let mut sb = Scrollback::default();
+        sb.push(b"\x1b[?1049h\x1b[?1003h\x1b[?1006h");
+        sb.push(&b"\x1b[1;1Hframe".repeat(SCROLLBACK_CAP / 4));
+        assert!(!sb.snapshot().starts_with(b"\x1b[?1049h"), "the setup fell out of the tail");
+        let restored = Scrollback::from_bytes(sb.persisted());
+        assert!(restored.modes().alt_screen() && restored.modes().mouse());
+        let view = sb.view_snapshot();
+        assert!(view.starts_with(b"\x1b[?1049h") && view.ends_with(b"frame"));
+        assert!(!Scrollback::from_bytes(view).modes().mouse());
+    }
+
+    #[test]
+    fn attach_bytes_depend_on_the_program_and_its_life() {
+        let full = Scrollback::from_bytes(b"\x1b[?1049h\x1b[?1003hframe\x1b[6n".to_vec());
+        assert!(full.attach_bytes(true).starts_with(b"\x1b[?2026l\x1b[0m\x1b[?1049h\x1b[2J") && !full.attach_bytes(true).ends_with(b"frame"));
+        let dead = full.attach_bytes(false);
+        assert!(dead.starts_with(b"\x1b[?1049h\x1b[?1049h\x1b[?1003hframe\x1b[?2026l") && dead.ends_with(b"\x1b[?1016l"), "{dead:?}");
+        let shell = Scrollback::from_bytes(b"$ ls\x1b[6n".to_vec());
+        assert_eq!(shell.attach_bytes(true), b"$ ls");
     }
 
     #[test]

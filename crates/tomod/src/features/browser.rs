@@ -56,6 +56,8 @@ impl Daemon {
                 process_cmd: None,
                 stop_intent: false,
                 hook_exit: None,
+                size_gen: 0,
+                repaint_pending: false,
                 pending_line: None,
                 last_output_ms: 0,
                 scrollback: Scrollback::default(),

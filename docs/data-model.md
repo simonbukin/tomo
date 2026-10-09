@@ -181,7 +181,9 @@ leaf deletes the tab.
 ## Scrollback files
 
 `<data dir>/scrollback/<pane id>.bin` holds the last 1 MB of raw pane
-output, written on daemon stop and on pane close. Category R. Safe to
+output, written on daemon stop and on pane close. The file starts with the
+terminal modes of the pane, so the modes survive a restart after the cut
+removed their setup. Category R. Safe to
 delete.
 
 ## Integration files

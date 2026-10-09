@@ -38,7 +38,7 @@ pub struct Provider {
     pub write_launch_file: fn(launch_dir: &Path, tomo_bin: &Path) -> Result<()>,
     pub install: fn(home: &Path, tomo_bin: &Path) -> Result<()>,
     pub installed: fn(home: &Path) -> bool,
-    pub gap: fn(home: &Path) -> Option<Gap>,
+    pub gap: fn(home: &Path, agent: &Path) -> Option<Gap>,
     pub sessions: fn(home: &Path, cwd: &Path) -> Vec<AgentSession>,
     /// The message text of one line of a session file: what the user or the agent wrote, without tool calls,
     /// tool output, or thinking. `None` for every other line.
@@ -49,6 +49,8 @@ pub struct Provider {
     pub sleep_safe_children: &'static [&'static str],
     /// Whether the provider saved the session, so a resume can find it. Claude saves no file before the first turn.
     pub session_saved: fn(home: &Path, session_ref: &str) -> bool,
+    /// The session that the agent's command line resumes, for an agent with no hooks to report it.
+    pub argv_session: fn(cmd: &str) -> Option<String>,
 }
 
 /// What an installed provider still needs before Tomo sees its lifecycle events.
@@ -57,7 +59,11 @@ pub struct Gap {
     pub reason: &'static str,
 }
 
-pub fn no_gap(_home: &Path) -> Option<Gap> {
+pub fn no_gap(_home: &Path, _agent: &Path) -> Option<Gap> {
+    None
+}
+
+pub fn no_argv_session(_cmd: &str) -> Option<String> {
     None
 }
 
@@ -103,6 +109,10 @@ fn basename(program: &str) -> &str {
 pub fn detect(name: &str, cmd: &str) -> Option<AgentKind> {
     let program = Program { name: basename(name), argv0: basename(cmd.split_whitespace().next().unwrap_or("")), cmd };
     table().into_iter().find(|p| (p.detects)(&program)).map(|p| p.kind)
+}
+
+pub fn argv_session(kind: AgentKind, cmd: &str) -> Option<String> {
+    (provider(kind).argv_session)(cmd)
 }
 
 /// True for a variable that marks the process as a child of an agent. A name
@@ -172,6 +182,12 @@ pub fn hook_outcome(kind: AgentKind, payload: &Value) -> HookOutcome {
 
 fn str_field<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty())
+}
+
+/// The session of the pane, from a hook payload. An event from inside a subagent does not set it, so a subagent id
+/// can never take the place of the root session that a resume needs.
+fn root_session(payload: &Value) -> Option<String> {
+    str_field(payload, "session_id").filter(|_| str_field(payload, "agent_id").is_none()).map(str::to_string)
 }
 
 pub fn plan(kind: AgentKind, cmd: &AgentCommand, resume: Option<&str>, launch_dir: &Path, extra: &[String]) -> SpawnPlan {
@@ -314,6 +330,7 @@ fn clip(text: &str) -> String {
     one_line.chars().take(120).collect()
 }
 
+/// A provider may run its agent binary to check what its files cannot show, so call this outside the daemon lock.
 pub fn status(config: &Config) -> Vec<IntegrationStatus> {
     let home = dirs::home_dir().unwrap_or_default();
     table()
@@ -322,18 +339,19 @@ pub fn status(config: &Config) -> Vec<IntegrationStatus> {
             let kind = p.kind;
             let key = kind.label().to_lowercase();
             let command = config.agents.get(&key).map(|a| a.command.clone()).unwrap_or(key);
-            let binary = crate::config::resolve_program(&command);
-            if binary.is_none() {
+            let Some(agent) = crate::config::resolve_program(&command) else {
                 return IntegrationStatus {
                     kind,
                     level: IntegrationLevel::Unavailable,
-                    binary,
+                    binary: None,
                     lifecycle: false,
                     resume: false,
                     reason: Some(format!("{command} not found on PATH")),
                 };
-            }
-            match (p.gap)(&home) {
+            };
+            let gap = (p.gap)(&home, &agent);
+            let binary = Some(agent);
+            match gap {
                 None => IntegrationStatus { kind, level: IntegrationLevel::Full, binary, lifecycle: true, resume: true, reason: None },
                 Some(gap) => IntegrationStatus { kind, level: gap.level, binary, lifecycle: false, resume: true, reason: Some(gap.reason.to_string()) },
             }

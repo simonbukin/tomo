@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""A full-screen program for the harness, like Codex: the alternate screen, mouse reporting, and absolute drawing.
+
+usage: fake-tui [--spam BYTES] [--crash]
+It draws `row R of COLSxROWS` on every row and its draw count as `draw#N#`, and draws itself again on each
+size change. --spam first writes that many bytes of small updates, so the start of its output falls out of
+what the daemon keeps. --crash exits after 0.5 s without leaving the alternate screen or turning the mouse off.
+"""
+import os
+import signal
+import sys
+import time
+
+out = sys.stdout
+
+
+def write(text):
+    out.write(text)
+    out.flush()
+
+
+draws = 0
+
+
+def draw(*_):
+    global draws
+    draws += 1
+    cols, rows = os.get_terminal_size()
+    rows_text = "".join(f"\x1b[{r};1Hrow {r} of {cols}x{rows}" for r in range(1, rows + 1))
+    write(f"\x1b[?2026h\x1b[2J{rows_text} draw#{draws}#\x1b[?2026l")
+
+
+write("\x1b[?1049h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[?25l")
+if "--spam" in sys.argv:
+    left = int(sys.argv[sys.argv.index("--spam") + 1])
+    n = 0
+    while left > 0:
+        chunk = "".join(f"\x1b[1;1Htick {n + i:08d}" for i in range(500))
+        write(chunk)
+        left -= len(chunk)
+        n += 500
+draw()
+signal.signal(signal.SIGWINCH, draw)
+if "--crash" in sys.argv:
+    time.sleep(0.5)
+    os._exit(0)
+while True:
+    time.sleep(3600)

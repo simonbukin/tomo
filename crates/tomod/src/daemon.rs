@@ -98,10 +98,17 @@ pub struct PaneState {
     pub source: Option<PaneSource>,
     /// The exit code of a pane-mode hook command, read from the marker that its script prints.
     pub hook_exit: Option<i32>,
+    /// Counts the size changes, so a repaint nudge does not undo a resize that came while it waited.
+    pub size_gen: u64,
+    /// A repaint nudge left the terminal one row off its size, and the next resize must set it even when it is equal.
+    pub repaint_pending: bool,
     pub sleep: crate::sleep::PaneSleep,
 }
 
 const DIAGNOSTICS_KEPT: usize = 200;
+/// Between the two halves of a repaint nudge. tmux waits 10 ms and shpool 50 ms; a shorter pause can reach the program
+/// after both changes, as no change at all.
+const REPAINT_PAUSE: std::time::Duration = std::time::Duration::from_millis(50);
 
 pub struct Inner {
     pub store: Store,
@@ -875,6 +882,9 @@ impl Daemon {
         )?;
         let pane = inner.panes.get_mut(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
         Self::take_replay(pane, &replay);
+        if let Some(screen) = pane.screen.as_mut() {
+            screen.resize(row.cols.max(2), row.rows.max(2));
+        }
         pane.pty = Some(Arc::new(session));
         pane.exit_code = None;
         if pane.pending_line.is_some() {
@@ -923,32 +933,51 @@ impl Daemon {
         Self::take_replay(pane, &replay);
         let (cols, rows) = (pane.row.cols.max(2), pane.row.rows.max(2));
         let _ = session.resize(cols, rows);
+        if let Some(screen) = pane.screen.as_mut() {
+            screen.resize(cols, rows);
+        }
         pane.pty = Some(Arc::new(session));
         pane.exit_code = None;
         Ok(())
     }
 
+    fn show_output(inner: &mut Inner, pane_id: &str, bytes: &[u8]) {
+        let Some(pane) = inner.panes.get_mut(pane_id) else { return };
+        pane.scrollback.push(bytes);
+        if let Some(screen) = pane.screen.as_mut() {
+            screen.write(bytes);
+        }
+        let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id: pane_id.to_string(), data_base64: B64.encode(bytes) } };
+        if let Ok(text) = serde_json::to_string(&frame) {
+            for client in inner.clients.values().filter(|c| c.attached.contains(pane_id)) {
+                let _ = client.tx.send(text.clone());
+            }
+        }
+    }
+
+    /// A program that ended without cleaning up can leave the alternate screen and mouse reporting on, and the shell
+    /// after it then gets mouse codes as typed text. Called when the pane's shell runs nothing.
+    pub(crate) fn disarm_left_modes(inner: &mut Inner, pane_id: &str) {
+        let left_on = inner.panes.get(pane_id).is_some_and(|p| p.scrollback.modes().left_on());
+        if left_on {
+            Self::show_output(inner, pane_id, crate::term_modes::Modes::disarm());
+        }
+    }
+
     fn on_output(&self, pane_id: &str, bytes: &[u8]) {
         {
             let mut inner = self.lock();
-            let Some(pane) = inner.panes.get_mut(pane_id) else { return };
-            pane.scrollback.push(bytes);
-            if let Some(screen) = pane.screen.as_mut() {
-                screen.write(bytes);
+            if !inner.panes.contains_key(pane_id) {
+                return;
             }
+            Self::show_output(&mut inner, pane_id, bytes);
+            let pane = inner.panes.get_mut(pane_id).expect("checked above");
             pane.last_output_ms = now_ms();
             let hook_running = pane.hook_exit.is_none() && pane.source.as_ref().is_some_and(|s| s.kind == crate::events::HOOK_SOURCE);
             if hook_running {
                 pane.hook_exit = crate::events::hook_exit_in(pane.scrollback.last_bytes(bytes.len() + crate::events::HOOK_EXIT_LOOKBACK));
             }
             let hook_ended = hook_running && pane.hook_exit.is_some();
-            let encoded = B64.encode(bytes);
-            let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id: pane_id.to_string(), data_base64: encoded } };
-            if let Ok(text) = serde_json::to_string(&frame) {
-                for client in inner.clients.values().filter(|c| c.attached.contains(pane_id)) {
-                    let _ = client.tx.send(text.clone());
-                }
-            }
             if hook_ended {
                 Self::emit_pane(&mut inner, pane_id);
             }
@@ -1032,7 +1061,7 @@ impl Daemon {
 
     fn persist_scrollback(&self, inner: &Inner, pane_id: &str) {
         if let Some(pane) = inner.panes.get(pane_id) {
-            let _ = std::fs::write(self.paths.scrollback_dir.join(format!("{pane_id}.bin")), pane.scrollback.snapshot());
+            let _ = std::fs::write(self.paths.scrollback_dir.join(format!("{pane_id}.bin")), pane.scrollback.persisted());
         }
     }
 
@@ -1143,6 +1172,8 @@ impl Daemon {
                 stop_intent: false,
                 hook_exit: None,
                 source: None,
+                size_gen: 0,
+                repaint_pending: false,
                 sleep: Default::default(),
             },
         );
@@ -1271,6 +1302,7 @@ impl Daemon {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
+            let saved = std::fs::read(self.paths.scrollback_dir.join(format!("{}.bin", row.id))).ok();
             if let Some(kind) = row.agent_kind {
                 inner.agents.insert(
                     row.id.clone(),
@@ -1301,11 +1333,13 @@ impl Daemon {
                     process_cmd: None,
                     pending_line: None,
                     last_output_ms: 0,
-                    scrollback: Scrollback::default(),
+                    scrollback: saved.as_deref().map(Scrollback::with_modes_of).unwrap_or_default(),
                     screen: crate::vt::screen_for(crate::vt::VtEngine::parse(&engine).unwrap_or_default(), 120, 30, scrollback_lines),
                     stop_intent: false,
                     hook_exit: None,
                     source: None,
+                    size_gen: 0,
+                    repaint_pending: false,
                     sleep: Default::default(),
                 },
             );
@@ -1331,7 +1365,10 @@ impl Daemon {
                 }
                 _ => (PaneOrigin::Restored, None),
             };
-            let mut scrollback = std::fs::read(self.paths.scrollback_dir.join(format!("{}.bin", row.id))).map(Scrollback::from_bytes).unwrap_or_default();
+            let mut scrollback = saved.map(Scrollback::from_bytes).unwrap_or_default();
+            if scrollback.modes().left_on() {
+                scrollback.push(crate::term_modes::Modes::disarm());
+            }
             scrollback.push(b"\r\n\x1b[2m[tomo] daemon restarted: output above is from the previous session\x1b[0m\r\n");
             if row.agent_kind.is_some() {
                 let _ = inner.store.attention_resolve_waiting(&row.id, now_ms());
@@ -2000,30 +2037,73 @@ impl Daemon {
         Ok(Value::Null)
     }
 
+    /// Gives a new client the pane as it is now. A full-screen program on the alternate screen gets an empty alternate
+    /// screen in its modes, and a size nudge that makes it draw itself at the real size: its old frames were drawn for
+    /// other sizes and would land at the wrong places. Any other pane gets its output, then the modes as they are now,
+    /// which the front that was cut from the output may have set. A pane whose program ended cannot draw again, so it
+    /// keeps its last frames, with the mouse off so that the wheel scrolls.
     async fn pane_attach(self: &Arc<Self>, client_id: u64, pane_id: Id) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         Self::terminal_only(&inner, &pane_id)?;
-        let snapshot =
-            crate::pty::strip_terminal_queries(&inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?.scrollback.snapshot());
+        let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
+        let live = pane.exit_code.is_none() && pane.pty.is_some();
+        let full_screen = live && pane.scrollback.modes().alt_screen();
+        let snapshot = pane.scrollback.attach_bytes(live);
         let view = Self::pane_view(&inner, &pane_id);
         if let Some(c) = inner.clients.get_mut(&client_id) {
             c.attached.insert(pane_id.clone());
-            let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id, data_base64: B64.encode(snapshot) } };
+            let frame = Frame::Event { seq: 0, event: Event::PaneOutput { pane_id: pane_id.clone(), data_base64: B64.encode(snapshot) } };
             let _ = c.tx.send(serde_json::to_string(&frame).unwrap_or_default());
         }
+        if full_screen {
+            self.repaint(&mut inner, &pane_id);
+        }
         ok(view)
+    }
+
+    /// Makes the program in a pane draw itself again: the terminal goes one row smaller, then back after a pause. A
+    /// program learns of a size only when it changes, and it reads the size after the signal, so the pause matters.
+    /// A resize that comes during the pause wins.
+    fn repaint(self: &Arc<Self>, inner: &mut Inner, pane_id: &str) {
+        let Some(pane) = inner.panes.get_mut(pane_id) else { return };
+        let Some(pty) = pane.pty.clone() else { return };
+        let (cols, rows) = (pane.row.cols.max(2), pane.row.rows.max(2));
+        let other = if rows > 2 { rows - 1 } else { rows + 1 };
+        if pty.resize(cols, other).is_err() {
+            return;
+        }
+        pane.repaint_pending = true;
+        let generation = pane.size_gen;
+        let (daemon, pane_id) = (self.clone(), pane_id.to_string());
+        self.rt.spawn(async move {
+            tokio::time::sleep(REPAINT_PAUSE).await;
+            let mut inner = daemon.lock();
+            let Some(pane) = inner.panes.get_mut(&pane_id) else { return };
+            if pane.size_gen == generation && pane.repaint_pending {
+                let _ = pty.resize(cols, rows);
+            }
+            pane.repaint_pending = false;
+        });
     }
 
     async fn pane_resize(self: &Arc<Self>, pane_id: Id, cols: u16, rows: u16) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         Self::terminal_only(&inner, &pane_id)?;
         let pane = inner.panes.get_mut(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-        if pane.row.cols != cols || pane.row.rows != rows {
+        let changed = pane.row.cols != cols || pane.row.rows != rows;
+        if changed || pane.repaint_pending {
+            pane.size_gen += 1;
+            pane.repaint_pending = false;
             pane.row.cols = cols;
             pane.row.rows = rows;
             if let Some(pty) = &pane.pty {
                 let _ = pty.resize(cols.max(2), rows.max(2));
             }
+            if let Some(screen) = pane.screen.as_mut() {
+                screen.resize(cols, rows);
+            }
+        }
+        if changed {
             let row = pane.row.clone();
             let _ = inner.store.pane_upsert(&row);
         }
@@ -2358,8 +2438,9 @@ impl Daemon {
                 ok(providers::installed())
             }
             Call::IntegrationsStatus => {
+                let config = self.lock().config.clone();
+                let list = tokio::task::spawn_blocking(move || providers::status(&config)).await.map_err(|e| internal(e.into()))?;
                 let mut inner = self.lock();
-                let list = providers::status(&inner.config);
                 providers::record_health(&mut inner, &list);
                 ok(list)
             }

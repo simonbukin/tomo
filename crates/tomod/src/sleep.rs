@@ -315,7 +315,7 @@ fn begin(daemon: &Arc<Daemon>, inner: &mut Inner, pane_id: &str) -> Result<(), R
     let agent = inner.agents.get(pane_id).cloned().ok_or_else(|| err(ErrorCode::NotFound, "the pane has no agent"))?;
     let pid = agent.pid.ok_or_else(|| err(ErrorCode::BadRequest, "no agent process runs in the pane"))?;
     let pane = inner.panes.get(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-    std::fs::write(snapshot_path(daemon, pane_id), encode_snapshot(pane.row.cols, pane.row.rows, &pane.scrollback.snapshot()))
+    std::fs::write(snapshot_path(daemon, pane_id), encode_snapshot(pane.row.cols, pane.row.rows, &pane.scrollback.view_snapshot()))
         .map_err(|e| internal(e.into()))?;
     let pane = inner.panes.get_mut(pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
     pane.row.sleep = Some(SleepRow { at_ms: now_ms() });

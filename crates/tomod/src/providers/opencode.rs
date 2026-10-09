@@ -25,6 +25,7 @@ pub static PROVIDER: Provider = Provider {
     transcript_messages: Some(transcript_messages),
     sleep_safe_children: &[],
     session_saved,
+    argv_session: super::no_argv_session,
 };
 
 fn detects(p: &Program) -> bool {
@@ -53,7 +54,7 @@ fn installed(home: &Path) -> bool {
     plugin_file(home).is_file()
 }
 
-fn gap(home: &Path) -> Option<Gap> {
+fn gap(home: &Path, _agent: &Path) -> Option<Gap> {
     (!installed(home)).then_some(Gap { level: IntegrationLevel::ProcessOnly, reason: "the Tomo plugin is not installed; run tomo integrations install" })
 }
 

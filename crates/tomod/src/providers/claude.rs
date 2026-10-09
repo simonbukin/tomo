@@ -25,6 +25,7 @@ pub static PROVIDER: Provider = Provider {
     transcript_messages: None,
     sleep_safe_children: &["caffeinate"],
     session_saved,
+    argv_session: super::no_argv_session,
 };
 
 /// Claude Code keeps `~/.claude/projects/<encoded cwd>/<session id>.jsonl`.
@@ -215,7 +216,7 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
         }
         _ => None,
     };
-    HookOutcome { state, session_ref: str_field(payload, "session_id").map(str::to_string), subagent: subagent_event(event, payload, state), only_if_busy, question }
+    HookOutcome { state, session_ref: super::root_session(payload), subagent: subagent_event(event, payload, state), only_if_busy, question }
 }
 
 /// The tool that starts a subagent. Claude Code renamed `Task` to `Agent` and accepts both.
