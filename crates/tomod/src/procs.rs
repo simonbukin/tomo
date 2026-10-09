@@ -112,7 +112,6 @@ fn env_var(p: &sysinfo::Process, name: &str) -> Option<String> {
     p.environ().iter().find_map(|e| e.to_str()?.strip_prefix(&prefix).filter(|v| !v.is_empty()).map(str::to_string))
 }
 
-/// The programs that are a pane's shell, as opposed to a program that runs in it.
 const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
 
 pub fn is_shell(name: &str) -> bool {

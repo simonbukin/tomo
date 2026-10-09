@@ -943,7 +943,6 @@ impl Daemon {
         Ok(())
     }
 
-    /// Bytes on a pane's terminal: kept, read by the pane's screen, and sent to every client that shows the pane.
     fn show_output(inner: &mut Inner, pane_id: &str, bytes: &[u8]) {
         let Some(pane) = inner.panes.get_mut(pane_id) else { return };
         pane.scrollback.push(bytes);
@@ -1305,6 +1304,7 @@ impl Daemon {
                 let _ = inner.store.pane_delete(&row.id);
                 continue;
             }
+            let saved = std::fs::read(self.paths.scrollback_dir.join(format!("{}.bin", row.id))).ok();
             if let Some(kind) = row.agent_kind {
                 inner.agents.insert(
                     row.id.clone(),
@@ -1335,7 +1335,7 @@ impl Daemon {
                     process_cmd: None,
                     pending_line: None,
                     last_output_ms: 0,
-                    scrollback: Scrollback::default(),
+                    scrollback: saved.as_deref().map(Scrollback::with_modes_of).unwrap_or_default(),
                     screen: crate::vt::screen_for(crate::vt::VtEngine::parse(&engine).unwrap_or_default(), 120, 30, scrollback_lines),
                     stop_intent: false,
                     hook_exit: None,
@@ -1367,7 +1367,10 @@ impl Daemon {
                 }
                 _ => (PaneOrigin::Restored, None),
             };
-            let mut scrollback = std::fs::read(self.paths.scrollback_dir.join(format!("{}.bin", row.id))).map(Scrollback::from_bytes).unwrap_or_default();
+            let mut scrollback = saved.map(Scrollback::from_bytes).unwrap_or_default();
+            if scrollback.modes().alt_screen() || scrollback.modes().mouse() {
+                scrollback.push(crate::term_modes::Modes::disarm());
+            }
             scrollback.push(b"\r\n\x1b[2m[tomo] daemon restarted: output above is from the previous session\x1b[0m\r\n");
             if row.agent_kind.is_some() {
                 let _ = inner.store.attention_resolve_waiting(&row.id, now_ms());
@@ -2051,7 +2054,7 @@ impl Daemon {
         let snapshot = match (full_screen, live) {
             (true, _) => modes.alt_frame(),
             (false, true) => [crate::pty::strip_terminal_queries(&pane.scrollback.snapshot()), modes.restore()].concat(),
-            (false, false) => [crate::pty::strip_terminal_queries(&pane.scrollback.view_snapshot()), crate::term_modes::Modes::release_mouse()].concat(),
+            (false, false) => [crate::pty::strip_terminal_queries(&pane.scrollback.view_snapshot()), crate::term_modes::Modes::end_sync_and_mouse_off()].concat(),
         };
         let view = Self::pane_view(&inner, &pane_id);
         if let Some(c) = inner.clients.get_mut(&client_id) {

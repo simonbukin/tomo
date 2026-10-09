@@ -101,11 +101,10 @@ impl Modes {
         }
         let mouse_on = MOUSE.iter().filter(|m| self.on(**m)).map(|m| format!("\x1b[?{m}h"));
         let other = OTHER.iter().filter_map(|m| self.set.get(m).map(|on| format!("\x1b[?{m}{}", if *on { 'h' } else { 'l' })));
-        [Self::release_mouse(), mouse_on.chain(other).collect::<String>().into_bytes()].concat()
+        [Self::end_sync_and_mouse_off(), mouse_on.chain(other).collect::<String>().into_bytes()].concat()
     }
 
-    /// Ends a synchronized update and turns every mouse mode off, so the wheel scrolls the client again.
-    pub fn release_mouse() -> Vec<u8> {
+    pub fn end_sync_and_mouse_off() -> Vec<u8> {
         std::iter::once("\x1b[?2026l".to_string()).chain(MOUSE.iter().map(|m| format!("\x1b[?{m}l"))).collect::<String>().into_bytes()
     }
 

@@ -12,7 +12,6 @@ TUI="python3 $FIX/fake-tui"
 attach() { $RPC raw "$1" "${2:-2}" | python3 -c "import sys; print(sys.stdin.buffer.read().decode('utf8','replace'))"; }
 size() { $RPC call pane_resize "{\"pane_id\":\"$1\",\"cols\":$2,\"rows\":$3}" >/dev/null; }
 last_draw() { grep -o 'draw#[0-9]*#' | tr -dc '0-9\n' | sort -n | tail -1; }
-# The mouse mode that a terminal ends in after it reads the bytes on stdin: 1 when reporting is on.
 mouse_after() { python3 -c "import re,sys; s=sys.stdin.read(); m=re.findall(r'\x1b\[\?100[023]([hl])', s); print(1 if m and m[-1]=='h' else 0)"; }
 
 # 1. a long session and a resize, then a new client
@@ -55,6 +54,21 @@ printf %s "$OUT" | grep -q last-words-of-the-program && check 0 "a pane whose fu
 S=$($T pane create --worktree "$WT"); sleep 1.5
 $RPC send "$S" 'echo hello-from-the-shell\r'
 wait_for "attach $S 0.5 | grep -q hello-from-the-shell" 10 && check 0 "a shell pane replays its output" || check 1 "shell replay"
+
+# 6. a restart: the holder keeps the program, but its replay no longer holds the setup
+R=$($T pane create --worktree "$WT"); sleep 1.5
+$RPC send "$R" "$TUI --spam 3000000\r"
+wait_for "attach $R 0.3 | grep -q 'draw#1#'" 40
+daemon_restart
+OUT=$(attach "$R" 1.5)
+case "$OUT" in $'\e[?2026l\e[0m\e[?1049h\e[2J\e[H'*) check 0 "after a restart, the program still gets the alternate screen" ;; *) check 1 "alt frame after restart" "$(printf %q "${OUT:0:40}")" ;; esac
+[ "$(printf %s "$OUT" | mouse_after)" = 1 ] && check 0 "and its mouse reporting" || check 1 "mouse after restart"
+
+# 7. a cold restart ends the program: the new shell gets no alternate screen and no mouse
+daemon_restart_cold
+OUT=$(attach "$R" 1.5)
+printf %s "$OUT" | grep -qF $'\e[?1049h\e[2J\e[H' && check 1 "cold restart" "the new shell is treated as full-screen" || check 0 "after a cold restart, the new shell is not full-screen"
+[ "$(printf %s "$OUT" | mouse_after)" = 0 ] && check 0 "and the mouse is off" || check 1 "mouse after cold restart"
 
 daemon_stop
 summary

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """A full-screen program for the harness, like Codex: the alternate screen, mouse reporting, and absolute drawing.
 
-usage: fake-tui [--spam BYTES]
-It draws `row R of COLSxROWS` on every row and its draw count as `draw#N#`, and draws itself again on each size change. --spam first writes that many
-bytes of small updates, so the start of its output falls out of what the daemon keeps. `--crash` ends it with
-SIGKILL-like behaviour: it exits without leaving the alternate screen or turning the mouse off.
+usage: fake-tui [--spam BYTES] [--crash]
+It draws `row R of COLSxROWS` on every row and its draw count as `draw#N#`, and draws itself again on each
+size change. --spam first writes that many bytes of small updates, so the start of its output falls out of
+what the daemon keeps. --crash exits after 0.5 s without leaving the alternate screen or turning the mouse off.
 """
 import os
 import signal

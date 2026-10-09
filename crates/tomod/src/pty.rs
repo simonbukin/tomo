@@ -15,6 +15,11 @@ pub struct Scrollback {
 }
 
 impl Scrollback {
+    /// No output yet, but the modes of a saved session. A holder's replay can start after the setup of its program.
+    pub fn with_modes_of(saved: &[u8]) -> Self {
+        Scrollback { modes: crate::term_modes::Modes::from_bytes(saved), bytes: Vec::new() }
+    }
+
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         let mut s = Scrollback { modes: crate::term_modes::Modes::from_bytes(&bytes), bytes };
         s.trim();
