@@ -93,12 +93,20 @@ impl Modes {
     }
 
     /// The sequence that puts a fresh terminal in these modes, apart from the screen buffer. Mouse modes are all
-    /// switched off first and then on again, because terminals track the mouse bits in different ways.
+    /// switched off first and then on again, because terminals track the mouse bits in different ways. Nothing when
+    /// the program never switched a mode.
     pub fn restore(&self) -> Vec<u8> {
-        let mouse_off = MOUSE.iter().map(|m| format!("\x1b[?{m}l"));
+        if self.set.is_empty() {
+            return Vec::new();
+        }
         let mouse_on = MOUSE.iter().filter(|m| self.on(**m)).map(|m| format!("\x1b[?{m}h"));
         let other = OTHER.iter().filter_map(|m| self.set.get(m).map(|on| format!("\x1b[?{m}{}", if *on { 'h' } else { 'l' })));
-        std::iter::once("\x1b[?2026l".to_string()).chain(mouse_off).chain(mouse_on).chain(other).collect::<String>().into_bytes()
+        [Self::release_mouse(), mouse_on.chain(other).collect::<String>().into_bytes()].concat()
+    }
+
+    /// Ends a synchronized update and turns every mouse mode off, so the wheel scrolls the client again.
+    pub fn release_mouse() -> Vec<u8> {
+        std::iter::once("\x1b[?2026l".to_string()).chain(MOUSE.iter().map(|m| format!("\x1b[?{m}l"))).collect::<String>().into_bytes()
     }
 
     /// What a new client gets for a full-screen program in place of its old frames: the alternate screen, empty, in
@@ -158,6 +166,7 @@ mod tests {
     fn other_sequences_and_text_change_nothing() {
         let m = Modes::from_bytes(b"\x1b[31mred\x1b[0m \x1b[2J\x1b[10;5H\x1b]0;title\x07 \x1b[?2026h\x1b[?2026l\x1b[1;20r");
         assert_eq!(m, Modes::default());
+        assert!(m.restore().is_empty(), "a fresh terminal needs no restore");
     }
 
     #[test]

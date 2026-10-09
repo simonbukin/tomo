@@ -2051,7 +2051,7 @@ impl Daemon {
         let snapshot = match (full_screen, live) {
             (true, _) => modes.alt_frame(),
             (false, true) => [crate::pty::strip_terminal_queries(&pane.scrollback.snapshot()), modes.restore()].concat(),
-            (false, false) => [crate::pty::strip_terminal_queries(&pane.scrollback.view_snapshot()), crate::term_modes::Modes::default().restore()].concat(),
+            (false, false) => [crate::pty::strip_terminal_queries(&pane.scrollback.view_snapshot()), crate::term_modes::Modes::release_mouse()].concat(),
         };
         let view = Self::pane_view(&inner, &pane_id);
         if let Some(c) = inner.clients.get_mut(&client_id) {
