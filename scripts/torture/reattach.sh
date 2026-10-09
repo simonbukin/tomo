@@ -45,7 +45,13 @@ OUT=$(attach "$Q" 1)
 printf %s "$OUT" | grep -qF $'\e[?1049h\e[2J' && check 1 "dead program" "the shell pane is still treated as full-screen" || check 0 "after the program died, the pane is a shell again"
 [ "$(printf %s "$OUT" | mouse_after)" = 0 ] && check 0 "its mouse reporting is off for the shell" || check 1 "mouse left on"
 
-# 4. a plain shell pane still replays its output
+# 4. a full-screen program that ended the pane keeps its last frame
+D=$($T pane create --worktree "$WT" -- sh -c "printf '\033[?1049h\033[?1003hlast-words-of-the-program'; exit 3"); sleep 1.5
+OUT=$(attach "$D" 1)
+printf %s "$OUT" | grep -q last-words-of-the-program && check 0 "a pane whose full-screen program ended keeps its last frame" || check 1 "dead full-screen pane" "$(printf %q "${OUT:0:80}")"
+[ "$(printf %s "$OUT" | mouse_after)" = 0 ] && check 0 "and gets no mouse reporting" || check 1 "dead pane mouse"
+
+# 5. a plain shell pane still replays its output
 S=$($T pane create --worktree "$WT"); sleep 1.5
 $RPC send "$S" 'echo hello-from-the-shell\r'
 wait_for "attach $S 0.5 | grep -q hello-from-the-shell" 10 && check 0 "a shell pane replays its output" || check 1 "shell replay"

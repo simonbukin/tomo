@@ -63,7 +63,7 @@ impl Modes {
                 let end = s[start..].iter().position(|b| !(b.is_ascii_digit() || *b == b';' || *b == b'!')).map(|i| start + i)?;
                 let params = &s[start..end];
                 match (private, s[end], params) {
-                    (false, b'p', b"!") => self.set.clear(),
+                    (false, b'p', b"!") => self.set.retain(|mode, _| !OTHER.contains(mode)),
                     (true, b'h' | b'l', _) => {
                         let on = s[end] == b'h';
                         for mode in params.split(|b| *b == b';').filter_map(|p| std::str::from_utf8(p).ok()?.parse::<u16>().ok()) {
@@ -110,7 +110,7 @@ impl Modes {
     /// The sequence that takes back what a program left on when it ended without cleaning up: the alternate screen
     /// and mouse reporting. Bracketed paste stays, because a shell turns it on for each prompt.
     pub fn disarm() -> &'static [u8] {
-        b"\x1b[?2026l\x1b[?1049l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?1004l\x1b[?25h"
+        b"\x1b[?2026l\x1b[?1049l\x1b[?1047l\x1b[?47l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?1004l\x1b[?25h"
     }
 }
 
@@ -142,7 +142,16 @@ mod tests {
         let m = Modes::from_bytes(b"\x1b[?1049;1000h");
         assert!(m.alt_screen() && m.mouse());
         assert_eq!(Modes::from_bytes(b"\x1b[?1049;1000h\x1bc"), Modes::default());
-        assert!(!Modes::from_bytes(b"\x1b[?1049h\x1b[!p").alt_screen());
+        let soft = Modes::from_bytes(b"\x1b[?1049;1003;25h\x1b[!p");
+        assert!(soft.alt_screen() && soft.mouse(), "a soft reset keeps the screen buffer and the mouse");
+        assert!(!String::from_utf8(soft.restore()).unwrap().contains("?25"));
+    }
+
+    #[test]
+    fn disarm_turns_off_every_alt_screen_and_mouse_mode_that_the_tracker_knows() {
+        let mut m = Modes::from_bytes(b"\x1b[?47h\x1b[?1047h\x1b[?1049h\x1b[?9h\x1b[?1003h");
+        m.feed(Modes::disarm());
+        assert!(!m.alt_screen() && !m.mouse());
     }
 
     #[test]

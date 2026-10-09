@@ -884,6 +884,9 @@ impl Daemon {
         )?;
         let pane = inner.panes.get_mut(pane_id).ok_or_else(|| anyhow!("pane missing"))?;
         Self::take_replay(pane, &replay);
+        if let Some(screen) = pane.screen.as_mut() {
+            screen.resize(row.cols.max(2), row.rows.max(2));
+        }
         pane.pty = Some(Arc::new(session));
         pane.exit_code = None;
         if pane.pending_line.is_some() {
@@ -2036,17 +2039,19 @@ impl Daemon {
     /// Gives a new client the pane as it is now. A full-screen program on the alternate screen gets an empty alternate
     /// screen in its modes, and a size nudge that makes it draw itself at the real size: its old frames were drawn for
     /// other sizes and would land at the wrong places. Any other pane gets its output, then the modes as they are now,
-    /// which the front that was cut from the output may have set.
+    /// which the front that was cut from the output may have set. A pane whose program ended cannot draw again, so it
+    /// keeps its last frames, with the mouse off so that the wheel scrolls.
     async fn pane_attach(self: &Arc<Self>, client_id: u64, pane_id: Id) -> Result<Value, RpcError> {
         let mut inner = self.lock();
         Self::terminal_only(&inner, &pane_id)?;
         let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
         let modes = pane.scrollback.modes();
-        let full_screen = modes.alt_screen();
-        let snapshot = if full_screen {
-            modes.alt_frame()
-        } else {
-            [crate::pty::strip_terminal_queries(&pane.scrollback.snapshot()), modes.restore()].concat()
+        let live = pane.exit_code.is_none() && pane.pty.is_some();
+        let full_screen = live && modes.alt_screen();
+        let snapshot = match (full_screen, live) {
+            (true, _) => modes.alt_frame(),
+            (false, true) => [crate::pty::strip_terminal_queries(&pane.scrollback.snapshot()), modes.restore()].concat(),
+            (false, false) => [crate::pty::strip_terminal_queries(&pane.scrollback.view_snapshot()), crate::term_modes::Modes::default().restore()].concat(),
         };
         let view = Self::pane_view(&inner, &pane_id);
         if let Some(c) = inner.clients.get_mut(&client_id) {
@@ -2438,7 +2443,6 @@ impl Daemon {
             }
             Call::IntegrationsStatus => {
                 let mut inner = self.lock();
-                let list = providers::status(&inner.config);
                 providers::record_health(&mut inner, &list);
                 ok(list)
             }
