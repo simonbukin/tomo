@@ -24,7 +24,7 @@ pub fn issues_summary(issues: &[ConfigIssue]) -> Option<String> {
 pub fn reload(daemon: &Daemon) -> Config {
     let loaded = config::load_checked(&daemon.paths.config).map(|(cfg, parse_issues)| {
         let issues = [parse_issues, config::check(&cfg, &daemon.seams.hook_events)].concat();
-        let integrations = crate::providers::status(&cfg, false);
+        let integrations = crate::providers::status(&cfg);
         (cfg, issues, integrations)
     });
     let mut inner = daemon.lock();

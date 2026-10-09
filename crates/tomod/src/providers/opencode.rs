@@ -54,7 +54,7 @@ fn installed(home: &Path) -> bool {
     plugin_file(home).is_file()
 }
 
-fn gap(home: &Path, _check: super::Check) -> Option<Gap> {
+fn gap(home: &Path, _agent: &Path) -> Option<Gap> {
     (!installed(home)).then_some(Gap { level: IntegrationLevel::ProcessOnly, reason: "the Tomo plugin is not installed; run tomo integrations install" })
 }
 

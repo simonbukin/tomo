@@ -123,7 +123,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
             .find_map(|r| crate::providers::detect(&r.name, &r.cmd).map(|k| (k, r.pid, r.cmd.as_str())));
         match agent_proc {
             Some((kind, pid, cmd)) => {
-                let known_session = inner.agents.get(&pane_id).is_some_and(|a| a.session_ref.is_some() && a.pid == Some(pid));
+                let known_session = inner.agents.get(&pane_id).is_some_and(|a| a.session_ref.is_some() && a.pid.is_none_or(|p| p == pid));
                 let session_ref = (!known_session).then(|| crate::providers::argv_session(kind, cmd)).flatten();
                 let subtree_cpu: f32 = std::iter::once(pid)
                     .chain(procs::descendants(&inner.proc_rows, pid))

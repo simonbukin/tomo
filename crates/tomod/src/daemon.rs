@@ -2441,7 +2441,7 @@ impl Daemon {
             }
             Call::IntegrationsStatus => {
                 let config = self.lock().config.clone();
-                let list = tokio::task::spawn_blocking(move || providers::status(&config, true)).await.map_err(|e| internal(e.into()))?;
+                let list = tokio::task::spawn_blocking(move || providers::status(&config)).await.map_err(|e| internal(e.into()))?;
                 let mut inner = self.lock();
                 providers::record_health(&mut inner, &list);
                 ok(list)

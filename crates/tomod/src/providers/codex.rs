@@ -1,4 +1,4 @@
-use super::{root_session, str_field, Check, Gap, HookOutcome, Program, Provider};
+use super::{root_session, str_field, Gap, HookOutcome, Program, Provider};
 use crate::agents::shell_quote;
 use crate::subagents::SubagentEvent;
 use anyhow::Result;
@@ -172,12 +172,8 @@ fn installed(home: &Path) -> bool {
     std::fs::read_to_string(hooks_file(home)).map(|t| t.contains("hook codex")).unwrap_or(false)
 }
 
-fn gap(home: &Path, check: Check) -> Option<Gap> {
-    let listed = match check {
-        Check::Ask(codex) => listed_by_codex(home, codex),
-        Check::Files => None,
-    };
-    gap_from(&tomo_hooks(home), listed.as_deref())
+fn gap(home: &Path, codex: &Path) -> Option<Gap> {
+    gap_from(&tomo_hooks(home), listed_by_codex(home, codex).as_deref())
 }
 
 fn gap_from(ours: &[TomoHook], listed: Option<&[Listed]>) -> Option<Gap> {
@@ -238,11 +234,11 @@ fn listed_by_codex(home: &Path, codex: &Path) -> Option<Vec<Listed>> {
     std::thread::spawn(move || {
         let answer = stdout.into_iter().flat_map(|s| std::io::BufReader::new(s).lines().map_while(Result::ok)).find_map(|line| {
             let message = serde_json::from_str::<Value>(&line).ok()?;
-            (message.get("id") == Some(&json!(2))).then_some(message.get("result")?.clone())
+            (message.get("id") == Some(&json!(2))).then(|| message.get("result").cloned())
         });
         let _ = tx.send(answer);
     });
-    let answer = sent.then(|| rx.recv_timeout(LIST_WAIT).ok().flatten()).flatten();
+    let answer = sent.then(|| rx.recv_timeout(LIST_WAIT).ok().flatten().flatten()).flatten();
     drop(stdin);
     let _ = child.kill();
     let _ = child.wait();
@@ -445,6 +441,19 @@ mod tests {
             { "key": "/h/hooks.json:stop:2:0", "command": "/bin/tomo hook codex", "currentHash": "sha256:c", "trustStatus": "managed" },
         ] } ] });
         assert_eq!(listed_from(&answer), [listed("/h/hooks.json:stop:1:0", "sha256:b", false), listed("/h/hooks.json:stop:2:0", "sha256:c", true)]);
+    }
+
+    #[test]
+    fn a_codex_that_rejects_hooks_list_gives_no_list_at_once() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = codex_home_with("rejects", "");
+        let fake = home.join("codex");
+        let answer = r#"{"id":2,"error":{"code":-32600,"message":"unknown method"}}"#;
+        std::fs::write(&fake, format!("#!/bin/sh\nread a; read b; read c\necho '{answer}'\nsleep 30\n")).unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let started = std::time::Instant::now();
+        assert_eq!(listed_by_codex(&home, &fake), None);
+        assert!(started.elapsed() < LIST_WAIT, "it waited {:?}", started.elapsed());
     }
 
     #[test]
