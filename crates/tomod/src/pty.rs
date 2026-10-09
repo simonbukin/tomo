@@ -48,6 +48,17 @@ impl Scrollback {
         [self.screen(), &self.bytes].concat()
     }
 
+    /// What a new client gets. A live full-screen program gets an empty alternate screen, because it draws itself
+    /// again after a size nudge. A pane whose program ended keeps its last frames, with the mouse off.
+    pub fn attach_bytes(&self, live: bool) -> Vec<u8> {
+        use crate::term_modes::Modes;
+        match (live, self.modes.alt_screen()) {
+            (true, true) => self.modes.alt_frame(),
+            (true, false) => [strip_terminal_queries(&self.bytes), self.modes.restore()].concat(),
+            (false, _) => [strip_terminal_queries(&self.view_snapshot()), Modes::end_sync_and_mouse_off()].concat(),
+        }
+    }
+
     fn screen(&self) -> &'static [u8] {
         if self.modes.alt_screen() { b"\x1b[?1049h" } else { b"" }
     }
@@ -396,6 +407,16 @@ mod tests {
         let view = sb.view_snapshot();
         assert!(view.starts_with(b"\x1b[?1049h") && view.ends_with(b"frame"));
         assert!(!Scrollback::from_bytes(view).modes().mouse());
+    }
+
+    #[test]
+    fn attach_bytes_depend_on_the_program_and_its_life() {
+        let full = Scrollback::from_bytes(b"\x1b[?1049h\x1b[?1003hframe\x1b[6n".to_vec());
+        assert!(full.attach_bytes(true).starts_with(b"\x1b[?2026l\x1b[0m\x1b[?1049h\x1b[2J") && !full.attach_bytes(true).ends_with(b"frame"));
+        let dead = full.attach_bytes(false);
+        assert!(dead.starts_with(b"\x1b[?1049h\x1b[?1049h\x1b[?1003hframe\x1b[?2026l") && dead.ends_with(b"\x1b[?1016l"), "{dead:?}");
+        let shell = Scrollback::from_bytes(b"$ ls\x1b[6n".to_vec());
+        assert_eq!(shell.attach_bytes(true), b"$ ls");
     }
 
     #[test]

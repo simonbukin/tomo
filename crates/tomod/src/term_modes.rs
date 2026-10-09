@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 const ALT_SCREEN: [u16; 3] = [1049, 1047, 47];
 /// Mouse reporting (9, 1000, 1002, 1003) and its encodings (1005, 1006, 1015, 1016).
 const MOUSE: [u16; 8] = [9, 1000, 1002, 1003, 1005, 1006, 1015, 1016];
+const MOUSE_REPORT: [u16; 4] = [9, 1000, 1002, 1003];
 /// Other modes that change what the client sends or shows: cursor keys, autowrap, cursor visible, keypad, focus
 /// reports, and bracketed paste.
 const OTHER: [u16; 6] = [1, 7, 25, 66, 1004, 2004];
@@ -88,8 +89,12 @@ impl Modes {
         ALT_SCREEN.iter().any(|m| self.on(*m))
     }
 
+    pub fn left_on(&self) -> bool {
+        self.alt_screen() || self.mouse()
+    }
+
     pub fn mouse(&self) -> bool {
-        MOUSE[..4].iter().any(|m| self.on(*m))
+        MOUSE_REPORT.iter().any(|m| self.on(*m))
     }
 
     /// The sequence that puts a fresh terminal in these modes, apart from the screen buffer. Mouse modes are all

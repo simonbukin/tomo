@@ -960,7 +960,7 @@ impl Daemon {
     /// A program that ended without cleaning up can leave the alternate screen and mouse reporting on, and the shell
     /// after it then gets mouse codes as typed text. Called when the pane's shell runs nothing.
     pub(crate) fn disarm_left_modes(inner: &mut Inner, pane_id: &str) {
-        let left_on = inner.panes.get(pane_id).is_some_and(|p| p.scrollback.modes().alt_screen() || p.scrollback.modes().mouse());
+        let left_on = inner.panes.get(pane_id).is_some_and(|p| p.scrollback.modes().left_on());
         if left_on {
             Self::show_output(inner, pane_id, crate::term_modes::Modes::disarm());
         }
@@ -1368,7 +1368,7 @@ impl Daemon {
                 _ => (PaneOrigin::Restored, None),
             };
             let mut scrollback = saved.map(Scrollback::from_bytes).unwrap_or_default();
-            if scrollback.modes().alt_screen() || scrollback.modes().mouse() {
+            if scrollback.modes().left_on() {
                 scrollback.push(crate::term_modes::Modes::disarm());
             }
             scrollback.push(b"\r\n\x1b[2m[tomo] daemon restarted: output above is from the previous session\x1b[0m\r\n");
@@ -2048,14 +2048,9 @@ impl Daemon {
         let mut inner = self.lock();
         Self::terminal_only(&inner, &pane_id)?;
         let pane = inner.panes.get(&pane_id).ok_or_else(|| err(ErrorCode::NotFound, "pane not found"))?;
-        let modes = pane.scrollback.modes();
         let live = pane.exit_code.is_none() && pane.pty.is_some();
-        let full_screen = live && modes.alt_screen();
-        let snapshot = match (full_screen, live) {
-            (true, _) => modes.alt_frame(),
-            (false, true) => [crate::pty::strip_terminal_queries(&pane.scrollback.snapshot()), modes.restore()].concat(),
-            (false, false) => [crate::pty::strip_terminal_queries(&pane.scrollback.view_snapshot()), crate::term_modes::Modes::end_sync_and_mouse_off()].concat(),
-        };
+        let full_screen = live && pane.scrollback.modes().alt_screen();
+        let snapshot = pane.scrollback.attach_bytes(live);
         let view = Self::pane_view(&inner, &pane_id);
         if let Some(c) = inner.clients.get_mut(&client_id) {
             c.attached.insert(pane_id.clone());

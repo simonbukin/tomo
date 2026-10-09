@@ -181,9 +181,13 @@ fn gap(home: &Path, check: Check) -> Option<Gap> {
 }
 
 fn gap_from(ours: &[TomoHook], listed: Option<&[Listed]>) -> Option<Gap> {
-    let by_codex = |h: &TomoHook| listed.map(|l| l.iter().find(|c| c.key == h.key));
-    let drifted = ours.iter().any(|h| by_codex(h).is_some_and(|c| c.is_none_or(|c| c.hash != h.hash)));
-    let trusted = ours.iter().all(|h| by_codex(h).map_or(h.trusted_in_config, |c| c.is_some_and(|c| c.trusted)));
+    let (drifted, trusted) = match listed {
+        None => (false, ours.iter().all(|h| h.trusted_in_config)),
+        Some(listed) => {
+            let found = |h: &TomoHook| listed.iter().find(|c| c.key == h.key);
+            (ours.iter().any(|h| found(h).is_none_or(|c| c.hash != h.hash)), ours.iter().all(|h| found(h).is_some_and(|c| c.trusted)))
+        }
+    };
     match (ours.is_empty(), drifted, trusted) {
         (true, _, _) => Some(Gap { level: IntegrationLevel::ProcessOnly, reason: "run `tomo integrations install`" }),
         (false, true, _) => Some(Gap {
