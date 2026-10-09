@@ -107,6 +107,11 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
             }
         }
 
+        let shell_runs_nothing = index.get(&root_pid).is_none_or(|kids| kids.is_empty()) && procs::is_shell(&procs::program_name(&inner.proc_rows[root_idx]));
+        if shell_runs_nothing {
+            Daemon::disarm_left_modes(inner, &pane_id);
+        }
+
         if inner.agents.get(&pane_id).is_some_and(|a| a.sleep == Some(Sleep::Asleep)) {
             continue;
         }

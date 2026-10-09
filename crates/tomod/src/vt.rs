@@ -40,6 +40,8 @@ pub trait Screen: Send {
     fn write(&mut self, bytes: &[u8]);
     /// The visible rows, trailing blanks trimmed. Empty from an engine that cannot read back.
     fn rows(&self) -> Vec<String>;
+    /// Follows the size of the pane, so the screen matches what the program draws for.
+    fn resize(&mut self, cols: u16, rows: u16);
 }
 
 pub struct RioScreen {
@@ -83,6 +85,10 @@ impl Screen for RioScreen {
     fn rows(&self) -> Vec<String> {
         self.visible()
     }
+
+    fn resize(&mut self, cols: u16, rows: u16) {
+        self.grid.resize(CrosswordsSize::new(cols.max(2) as usize, rows.max(2) as usize));
+    }
 }
 
 #[cfg(feature = "ghostty")]
@@ -113,6 +119,9 @@ impl Screen for GhosttyScreen {
     fn rows(&self) -> Vec<String> {
         Vec::new()
     }
+
+    /// Not wired: like `rows`, this engine waits for a render state before Tomo reads it.
+    fn resize(&mut self, _cols: u16, _rows: u16) {}
 }
 
 pub fn screen_for(engine: VtEngine, cols: u16, rows: u16, scrollback: usize) -> Option<Box<dyn Screen>> {
@@ -163,6 +172,15 @@ mod tests {
         let mut s = RioScreen::new(20, 4, 100);
         s.write(b"\x1b[3;5Hthere");
         assert_eq!(s.visible()[2], "    there");
+    }
+
+    #[test]
+    fn rio_follows_a_resize() {
+        let mut s = RioScreen::new(20, 4, 100);
+        s.resize(30, 6);
+        assert_eq!(s.visible().len(), 6);
+        s.write(b"\x1b[6;25Hend");
+        assert_eq!(s.visible()[5], format!("{}end", " ".repeat(24)));
     }
 
     #[test]

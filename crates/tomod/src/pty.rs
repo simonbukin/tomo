@@ -10,18 +10,41 @@ pub const SCROLLBACK_CAP: usize = 1024 * 1024;
 #[derive(Default)]
 pub struct Scrollback {
     bytes: Vec<u8>,
+    /// Read from every byte before the front is cut, so it outlives the setup that the cut drops.
+    modes: crate::term_modes::Modes,
 }
 
 impl Scrollback {
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        let mut s = Scrollback { bytes };
+        let mut s = Scrollback { modes: crate::term_modes::Modes::from_bytes(&bytes), bytes };
         s.trim();
         s
     }
 
     pub fn push(&mut self, chunk: &[u8]) {
+        self.modes.feed(chunk);
         self.bytes.extend_from_slice(chunk);
         self.trim();
+    }
+
+    pub fn modes(&self) -> &crate::term_modes::Modes {
+        &self.modes
+    }
+
+    /// The bytes to keep on disk across a daemon restart: the modes first, so `from_bytes` reads them back even when
+    /// the setup was cut from the bytes long ago.
+    pub fn persisted(&self) -> Vec<u8> {
+        [self.screen(), &self.modes.restore(), &self.bytes].concat()
+    }
+
+    /// The bytes for a read-only view at the size the pane had: the frames land on the alternate screen when the
+    /// program used it, but no mouse mode takes the wheel or the selection away from the viewer.
+    pub fn view_snapshot(&self) -> Vec<u8> {
+        [self.screen(), &self.bytes].concat()
+    }
+
+    fn screen(&self) -> &'static [u8] {
+        if self.modes.alt_screen() { b"\x1b[?1049h" } else { b"" }
     }
 
     fn trim(&mut self) {
@@ -355,6 +378,19 @@ mod tests {
         let snap = sb.snapshot();
         assert!(snap.len() <= SCROLLBACK_CAP + SCROLLBACK_CAP / 4);
         assert_eq!(*snap.last().unwrap(), 2);
+    }
+
+    #[test]
+    fn a_cut_full_screen_session_keeps_its_modes_on_disk_and_in_a_snapshot() {
+        let mut sb = Scrollback::default();
+        sb.push(b"\x1b[?1049h\x1b[?1003h\x1b[?1006h");
+        sb.push(&b"\x1b[1;1Hframe".repeat(SCROLLBACK_CAP / 4));
+        assert!(!sb.snapshot().starts_with(b"\x1b[?1049h"), "the setup fell out of the tail");
+        let restored = Scrollback::from_bytes(sb.persisted());
+        assert!(restored.modes().alt_screen() && restored.modes().mouse());
+        let view = sb.view_snapshot();
+        assert!(view.starts_with(b"\x1b[?1049h") && view.ends_with(b"frame"));
+        assert!(!Scrollback::from_bytes(view).modes().mouse());
     }
 
     #[test]

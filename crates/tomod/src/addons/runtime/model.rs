@@ -25,7 +25,6 @@ pub const PROBE_RETRIES: [Duration; 7] = [secs(1), secs(2), secs(3), secs(5), se
 const fn secs(s: u64) -> Duration {
     Duration::from_secs(s)
 }
-const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Listener {
@@ -62,10 +61,7 @@ pub fn parse_lsof(text: &str) -> Vec<Listener> {
     out
 }
 
-pub fn is_shell(name: &str) -> bool {
-    let base = name.trim_start_matches('-').rsplit('/').next().unwrap_or(name);
-    SHELLS.contains(&base)
-}
+pub use crate::procs::is_shell;
 
 #[derive(Debug, Default)]
 pub struct Reconciled {

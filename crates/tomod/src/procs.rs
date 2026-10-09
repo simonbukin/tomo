@@ -112,6 +112,14 @@ fn env_var(p: &sysinfo::Process, name: &str) -> Option<String> {
     p.environ().iter().find_map(|e| e.to_str()?.strip_prefix(&prefix).filter(|v| !v.is_empty()).map(str::to_string))
 }
 
+/// The programs that are a pane's shell, as opposed to a program that runs in it.
+const SHELLS: [&str; 6] = ["zsh", "bash", "sh", "fish", "dash", "login"];
+
+pub fn is_shell(name: &str) -> bool {
+    let base = name.trim_start_matches('-').rsplit('/').next().unwrap_or(name);
+    SHELLS.contains(&base)
+}
+
 /// The program a process runs now: the exe basename when refreshed, else the first-seen name.
 pub fn program_name(row: &ProcRow) -> String {
     row.exe.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| row.name.clone())
