@@ -178,7 +178,7 @@ export function Palette() {
   const { scope, text } = parseQuery(query);
   const searching = !top && (scope !== "all" || text !== "");
   const short = scope === "terminal" && text.length < CONTENT_MIN;
-  const results = useSearch(!!open && !top, scope, searching && !short ? text : "", worktreeId, scope === "all" ? GROUP_LIMIT + 3 : SCOPED_LIMIT);
+  const results = useSearch(!!state && !top, scope, searching && !short ? text : "", worktreeId, scope === "all" ? GROUP_LIMIT + 3 : SCOPED_LIMIT);
   const local = useMemo(() => (state && searching ? localGroups(state, scope) : []), [state, searching, scope]);
   const entries = useMemo(
     () => (top ? ((top.entry.key === FILES_KEY && filesEntry ? filesEntry : top.entry).children?.() ?? []) : state && !searching ? paletteEntries(state) : []),

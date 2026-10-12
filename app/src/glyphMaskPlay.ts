@@ -20,6 +20,9 @@ const MAX_DEVICE_PIXELS = 4.5e6;
 const finished: Cover = { done: Promise.resolve(), cancel: () => {} };
 const active = new WeakMap<HTMLElement, Cover>();
 
+/** Ends a mask on `el` at once and clears it, as if it had never run. */
+export const stopMask = (el: HTMLElement) => active.get(el)?.cancel();
+
 const setMask = (el: HTMLElement, value: string) => {
   el.style.setProperty("mask-image", value);
   el.style.setProperty("-webkit-mask-image", value);

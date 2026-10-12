@@ -1,21 +1,28 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import {failQuietly, paneIds, useStore} from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
 import { BrowserPane } from "./browser/BrowserPane";
 import { EditorPane } from "./editor/EditorPane";
 import { LayoutHidden, LayoutPreview } from "./LayoutDnd";
-import { keptTabs, type Candidate } from "./layoutKeep";
+import { keptTabs, stableOrder, type Candidate } from "./layoutKeep";
+import { focusTerminal } from "./terminals";
 import type { Id, LayoutNode, Tab } from "./types";
-
-const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 /**
  * The active tab's layout and the layouts of the tabs seen just before it, mounted on top of each other. Only the
  * active one shows; a switch to a kept tab draws nothing new. See layoutKeep.ts.
  */
+const AGE_CHECK_MS = 60 * 1000;
+
 export function LayoutStack({ active }: { active: Tab }) {
-  const recent = useRef<string[]>([]);
+  const seen = useRef(new Map<string, number>());
+  const order = useRef<string[]>([]);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => tick((n) => n + 1), AGE_CHECK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
   const tabsByWorktree = useStore((s) => s.tabs);
   const browsers = useStore((s) => Object.values(s.panes).filter((p) => p.kind === "browser").map((p) => p.id).join(" "));
   const candidates = new Map(
@@ -23,11 +30,14 @@ export function LayoutStack({ active }: { active: Tab }) {
       .flat()
       .map((t): [string, Candidate & { tab: Tab }] => [t.id, { id: t.id, tab: t, panes: paneIds(t.layout).length, keepable: paneIds(t.layout).every((p) => !browsers.split(" ").includes(p)) }]),
   );
-  const kept = keptTabs(recent.current, active.id, candidates);
-  if (!sameIds(kept, recent.current)) recent.current = kept;
+  const now = Date.now();
+  seen.current.set(active.id, now);
+  [...seen.current.keys()].filter((id) => !candidates.has(id)).forEach((id) => seen.current.delete(id));
+  const kept = keptTabs(seen.current, active.id, candidates, now);
+  order.current = stableOrder(order.current, kept);
   return (
     <div className="layout-stack">
-      {kept.map((id) => {
+      {order.current.map((id) => {
         const t = id === active.id ? active : candidates.get(id)?.tab;
         return t ? <TabLayout key={id} tab={t} hidden={id !== active.id} /> : null;
       })}
@@ -39,8 +49,11 @@ export function TabLayout({ tab, hidden = false }: { tab: Tab; hidden?: boolean 
   const zoomed = useStore((s) => s.zoomed[tab.id] ?? null);
   const node: LayoutNode = zoomed && paneIds(tab.layout).includes(zoomed) ? { type: "leaf", pane_id: zoomed } : tab.layout;
   const root = useRef<HTMLDivElement>(null);
+  const shown = useRef(!hidden);
   useLayoutEffect(() => {
     if (hidden && root.current?.contains(document.activeElement)) (document.activeElement as HTMLElement | null)?.blur();
+    if (!hidden && !shown.current && tab.active_pane_id) focusTerminal(tab.active_pane_id);
+    shown.current = !hidden;
   }, [hidden]);
   return (
     <LayoutHidden.Provider value={hidden}>

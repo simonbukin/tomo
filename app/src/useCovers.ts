@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { coversFor, type CoverTarget, type Plan, type Scene } from "./coverPlan";
 import { playCover } from "./glyphCoverPlay";
-import { playMask } from "./glyphMaskPlay";
+import { playMask, stopMask } from "./glyphMaskPlay";
 import { activeTab, paneIds, useStore, type State } from "./store";
 
 const POINTER_FRESH_MS = 1500;
@@ -40,6 +40,11 @@ const oldLayout = (tabId: string) => document.querySelector<HTMLElement>(`main.c
 
 /** A swap shows the old layout on top for a moment and masks it away over the new one, which is already drawn. */
 function play(plan: Plan, pointer: Point | null) {
+  const current = targetOf({ kind: "layout" });
+  if (current && current.dataset.leaving !== undefined) {
+    stopMask(current);
+    delete current.dataset.leaving;
+  }
   if (plan.kind === "swap") {
     const old = oldLayout(plan.fromTabId);
     if (old) {
