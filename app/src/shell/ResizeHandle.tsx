@@ -25,9 +25,10 @@ export function ResizeHandle({ side, width }: { side: Side; width: number }) {
     const end = () => {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("lostpointercapture", end);
-      document.body.classList.remove("resizing-h", "no-anim");
-      app?.style.setProperty(COLUMN_VAR[side], before);
+      document.body.classList.remove("resizing-h");
       if (raw !== width) setUi(snapPatch(side, raw));
+      else app?.style.setProperty(COLUMN_VAR[side], before);
+      requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("no-anim")));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("lostpointercapture", end);

@@ -40,6 +40,7 @@ import { ShellLoading } from "./states";
 import { useWindowChrome, useWindowWidth } from "./windowChrome";
 import { useAgentSeen } from "./agentSeen";
 import { useCovers } from "./useCovers";
+import { useLinger } from "./useLinger";
 
 /** Dev-only harnesses, each behind its own URL hash. Never linked from the product. */
 const DEV_ROUTES: Record<string, () => Promise<{ default: ComponentType }>> = {
@@ -146,10 +147,14 @@ function Shell() {
   const addonView = addonViews().find((v) => v.id === ui.view);
   const CoreCenter = CORE_CENTER[ui.view];
   const layout = shellLayout(ui, windowWidth, !!showWorktree);
+  const leftShown = useLinger(layout.left === "open");
+  const rightShown = useLinger(layout.right === "open");
   return (
-    <div className="app" data-left={layout.left} data-right={layout.right} style={{ ["--left-col" as string]: `${layout.leftCol}px`, ["--right-col" as string]: `${layout.rightCol}px` }}>
-      {layout.left === "open" && <Sidebar />}
+    <div className="app" data-left={layout.left} data-right={layout.right} style={{ ["--left-col" as string]: `${layout.leftCol}px`, ["--right-col" as string]: `${layout.rightCol}px`, ["--left-open" as string]: `${ui.leftWidth}px`, ["--right-open" as string]: `${ui.rightWidth}px` }}>
       {layout.left === "minimal" && <LeftRail />}
+      <div className="shell-keep" hidden={!leftShown}>
+        <Sidebar />
+      </div>
       <main className="center">
         <CenterHead worktree={showWorktree ? worktree : null} layout={layout} />
         {!loaded && <ShellLoading connected={connected} />}
@@ -168,8 +173,12 @@ function Shell() {
           </LayoutDnd>
         )}
       </main>
-      {showWorktree && layout.right === "open" && <RightSidebar worktree={worktree} />}
       {showWorktree && layout.right === "minimal" && <RightRail worktree={worktree} />}
+      {showWorktree && (
+        <div className="shell-keep" hidden={!rightShown}>
+          <RightSidebar worktree={worktree} />
+        </div>
+      )}
       <ResizeHandle side="left" width={layout.leftCol} />
       {showWorktree && <ResizeHandle side="right" width={layout.rightCol} />}
       <Palette />
