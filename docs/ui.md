@@ -498,6 +498,17 @@ its own canvas rides the edge.
 | the next tab after a close; a pane that falls asleep or wakes | silk cover: slow noise with a soft band | 460 ms |
 
 A layout that is not kept yet gets the cover in place of the mask.
+
+The sidebars slide. `--left-col` and `--right-col` are typed with
+`@property`, so the shell grid moves them over `--dur-open`, and the
+centre and the bottom strip follow on the same curve. Both sidebars stay
+mounted while they are a rail or closed, so an opening one only shows; a
+closing one stays visible for the length of the slide. Each keeps its open
+width while its column moves, so its rows are clipped, not reflowed. A drag
+of the boundary turns the slide off (`no-anim`) until the new width is set.
+An inspector section opens and closes by its height, from the
+`--collapsible-panel-height` that Base UI measures; the files section, which
+fills the rest of the column, only fades.
 `coverPlan.ts` decides: it compares the last scene of the centre with the
 next one. `useCovers` in the shell plays the plan.
 
