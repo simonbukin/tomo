@@ -249,8 +249,10 @@ daemon numbers listed in `architecture.md`.
 - The daemon reloads `config.toml` when the file changes and sends
   `config_changed`, so the theme, the terminal font, and keybindings apply at
   once. A terminal that is already open keeps its shell.
-- Switching worktrees unmounts xterm and replays up to 1 MB of scrollback on
-  return. This is fast but not free. A full-screen program gets no replay. It
+- The GUI keeps the layouts of the last tabs it showed mounted (at most
+  eight panes), so a switch back to one of them draws nothing new. A tab
+  that left that set mounts xterm again and replays up to 1 MB of scrollback.
+  This is fast but not free. A full-screen program gets no replay. It
   draws itself again after a size nudge, so its pane is empty for about
   50 ms.
 - The Ghostty screen does not follow a resize yet. Only Rio does.
