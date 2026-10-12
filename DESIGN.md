@@ -105,8 +105,10 @@ Tomo is compact and information-rich. Do not add whitespace to look modern.
 - The sidebar worktree row is a minimal card: a 20px name line, a 16px
   branch line, then groups of 20px lines with 4px between the groups. Every
   height is a multiple of 4.
-- The text of a worktree row wraps. It never cuts with an ellipsis. The
-  hover card holds what the row leaves out.
+- The text of a worktree row wraps. It never cuts with an ellipsis, apart
+  from the live ticker of a working agent, which keeps to one line so the
+  row does not change height with each tool call. The hover card holds what
+  the row leaves out.
 - Too many tabs shrink from 140 px to 72 px, then the tab row scrolls.
 
 ## Motion
@@ -115,17 +117,22 @@ Motion confirms a change. It never entertains.
 
 - One curve, `--ease-out` (`cubic-bezier(0.2, 0.8, 0.2, 1)`), and two
   speeds: `--dur-fast` 120 ms for hover and press, `--dur-open` 240 ms for
-  open, arrival, and the selection block.
+  open, arrival, and the selection block. Glyph covers (340 to 460 ms) and
+  glyph text (620 and 900 ms) keep their own speeds, set in their modules.
 - The selection block glides. The tab bar, the sidebar views, and each
   segmented control hold one inverted `.glide` cell that `useGlide` in
   `app/src/glide.ts` moves to the selected item. It jumps into place when it
   first appears.
 - Dialogs, the palette, and toasts rise 8 px as they fade in. Nothing scales.
-- A view change is not animated. Reflow is: a lens change moves the rows
-  that are already there, with `useFlip`. Do not animate the arrival of new
-  rows.
+- A change of what the centre shows opens through a glyph cover: another
+  view, another worktree, another tab, a new split, sleep and wake. Text that
+  changes in place decodes. See "Glyph motion" in `docs/ui.md`. Reflow is
+  different: a lens change moves the rows that are already there, with
+  `useFlip`. Do not animate the arrival of new rows.
 - Animate `transform`, `translate`, and `opacity` only, plus the size of the
-  selection block. This window is full of canvases that pay for layout.
+  selection block, and draw covers on their own canvas. This window is full
+  of canvases that pay for layout. Nothing that moves may change the size of
+  anything else.
 - No springs, no bounce, no parallax. Under `prefers-reduced-motion` every
   duration is 0.
 
