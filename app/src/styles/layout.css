@@ -2,7 +2,21 @@
    Each column starts with its own head row, one unit tall, so the rows of all three line up.
    The traffic lights sit in the first head row; --traffic-inset keeps text clear of them. */
 
+/* The column widths are typed, so a sidebar that opens, closes, or turns into its rail slides; the centre and the
+   bottom strip follow on the same curve. A drag of the boundary turns this off (`no-anim`). */
+@property --left-col { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --right-col { syntax: "<length>"; inherits: true; initial-value: 0px; }
+
+.shell-keep { display: contents; }
+.shell-keep[hidden] { display: none; }
+/* A sidebar keeps its open width while its column slides, so its rows are clipped, not reflowed, on each frame. The
+   centre paints over what the left one overflows; the right one is anchored to its own left edge and slides off. */
+.shell-keep > .sidebar { width: max(var(--left-col), var(--left-open)); }
+.shell-keep > .rightbar { width: max(var(--right-col), var(--right-open)); justify-self: start; }
+.resizing-h .shell-keep > .sidebar, .resizing-h .shell-keep > .rightbar { width: auto; }
+
 .app {
+  transition: --left-col var(--dur-open) var(--ease-out), --right-col var(--dur-open) var(--ease-out);
   --traffic-inset: 84px;
   position: relative;
   display: grid;
@@ -118,6 +132,12 @@
 .side-section .section-label .chevron { transform: rotate(-90deg); transition: transform var(--dur-open) var(--ease-out); }
 .side-section .section-label .chevron[data-open="true"] { transform: none; }
 .collapsible-panel { overflow: hidden; }
+/* An inspector section opens and closes by its height (Base UI measures it). The files section fills the rest of
+   the column instead, so it only fades. */
+.side-section:not(.side-files) .collapsible-panel { height: var(--collapsible-panel-height); transition: height var(--dur-open) var(--ease-out), padding-bottom var(--dur-open) var(--ease-out), opacity var(--dur-open) var(--ease-out); }
+.side-section .collapsible-panel[data-starting-style], .side-section .collapsible-panel[data-ending-style] { opacity: 0; }
+.side-section:not(.side-files) .collapsible-panel[data-starting-style], .side-section:not(.side-files) .collapsible-panel[data-ending-style] { height: 0; padding-bottom: 0; }
+.side-files .collapsible-panel { transition: opacity var(--dur-open) var(--ease-out); }
 
 .file-actions { display: flex; gap: var(--sp-3); height: var(--u); align-items: center; }
 .file-tree { flex: 1; overflow: auto; font-size: var(--fs-1); font-family: var(--mono); margin: 0 calc(var(--inset) * -1); }
