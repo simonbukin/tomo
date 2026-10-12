@@ -1,4 +1,4 @@
-import { cellAt, frontAt, STYLES, thresholds, type CoverMode, type CoverStyle } from "./glyphCover";
+import { frontAt, glyphAt, groundAt, inkAt, passedAt, STYLES, thresholds, type CoverMode, type CoverStyle } from "./glyphCover";
 
 /**
  * Plays a glyph cover over `host`: a canvas child that fills it, sits above everything in it, and takes no clicks
@@ -22,6 +22,9 @@ export interface Cover {
 }
 
 const FONT_PX = 12;
+/** Device pixels a cover may paint each frame. A full-screen cover on a dense display paints a little softer, so
+ * every frame stays one cheap raster. */
+const PIXEL_BUDGET = 4.5e6;
 const FONT = `500 ${FONT_PX}px "Red Hat Mono", ui-monospace, Menlo, monospace`;
 const active = new WeakMap<HTMLElement, Cover>();
 
@@ -77,7 +80,7 @@ export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   if (rect.width < 4 || rect.height < 4) return finished;
 
   const { style, mode = "in", ms = STYLES[options.style].ms, origin, reverse = false } = options;
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(PIXEL_BUDGET / (rect.width * rect.height)));
   const { cw, lh } = cellSize(dpr);
   const width = Math.ceil(rect.width * dpr), height = Math.ceil(rect.height * dpr);
   const cols = Math.ceil(width / cw), rows = Math.ceil(height / lh);
@@ -107,21 +110,28 @@ export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   const little = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
   const pack = (alpha: number) => (little ? ((alpha << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | alpha) >>> 0);
 
+  const solid = pack(255);
+  const edgeCells = new Int32Array(at.length);
   const paint = (k: number) => {
     const front = frontAt(k, mode, band);
-    ctx.clearRect(0, 0, width, height);
-    const glyphs: number[] = [];
+    let edges = 0;
     for (let i = 0; i < at.length; i++) {
-      const cell = cellAt(style, front, at[i]);
-      pixels[i] = cell.ground ? pack(Math.round(cell.ground * 255)) : 0;
-      if (cell.glyph >= 0) glyphs.push(i, cell.glyph, cell.ink);
+      const p = passedAt(style, front, at[i]);
+      if (p >= 1) pixels[i] = 0;
+      else if (p <= 0) pixels[i] = solid;
+      else {
+        pixels[i] = pack(Math.round(groundAt(style, p) * 255));
+        edgeCells[edges++] = i;
+      }
     }
     mctx.putImageData(image, 0, 0);
+    ctx.globalCompositeOperation = "copy";
     ctx.drawImage(mask, 0, 0, cols * cw, rows * lh);
-    for (let j = 0; j < glyphs.length; j += 3) {
-      const i = glyphs[j], x = (i % cols) * cw, y = Math.floor(i / cols) * lh;
-      ctx.globalAlpha = glyphs[j + 2];
-      ctx.drawImage(atlas, glyphs[j + 1] * cw, 0, cw, lh, x, y, cw, lh);
+    ctx.globalCompositeOperation = "source-over";
+    for (let j = 0; j < edges; j++) {
+      const i = edgeCells[j], p = passedAt(style, front, at[i]);
+      ctx.globalAlpha = inkAt(style, p);
+      ctx.drawImage(atlas, glyphAt(style, p) * cw, 0, cw, lh, (i % cols) * cw, Math.floor(i / cols) * lh, cw, lh);
     }
     ctx.globalAlpha = 1;
   };

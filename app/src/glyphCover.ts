@@ -38,7 +38,7 @@ const HALFTONE_SLOPE = 0.55;
 const SILK_SCALE = 16;
 const SILK_GRAIN = 5;
 const EQUALIZE_BINS = 256;
-const EPSILON = 1e-6;
+const EPSILON = 1e-5;
 
 const hash = (a: number, b: number, s: number): number => {
   let h = Math.imul(a + s * 7919, 374761393) + Math.imul(b, 668265263);
@@ -129,15 +129,24 @@ export interface Cell {
 const OPEN: Cell = { ground: 0, glyph: -1, ink: 0 };
 const SHUT: Cell = { ground: 1, glyph: -1, ink: 0 };
 
+/** How far the front has passed a cell, in bands: 0 or less is shut, 1 or more is open, between is the edge. */
+export const passedAt = (style: CoverStyle, front: number, threshold: number): number => {
+  const p = (front - threshold) / STYLES[style].band;
+  return p >= 1 - EPSILON ? 1 : p;
+};
+
+export const groundAt = (style: CoverStyle, p: number): number => (p >= 1 ? 0 : p <= 0 || !STYLES[style].soft ? 1 : 1 - smooth(p) * 0.85);
+
+export const glyphAt = (style: CoverStyle, p: number): number => {
+  const { edge } = STYLES[style];
+  return p <= 0 || p >= 1 ? -1 : Math.min(edge.length - 1, Math.floor((1 - p) * edge.length));
+};
+
+export const inkAt = (style: CoverStyle, p: number): number => (STYLES[style].soft ? Math.min(1, (1 - p) * 1.6) : 1);
+
 export function cellAt(style: CoverStyle, front: number, threshold: number): Cell {
-  const { band, edge, soft } = STYLES[style];
-  const d = front - threshold;
-  if (d >= band - EPSILON) return OPEN;
-  if (d <= 0) return SHUT;
-  const p = d / band, e = 1 - p;
-  return {
-    ground: soft ? 1 - smooth(p) * 0.85 : 1,
-    glyph: Math.min(edge.length - 1, Math.floor(e * edge.length)),
-    ink: soft ? Math.min(1, e * 1.6) : 1,
-  };
+  const p = passedAt(style, front, threshold);
+  if (p >= 1) return OPEN;
+  if (p <= 0) return SHUT;
+  return { ground: groundAt(style, p), glyph: glyphAt(style, p), ink: inkAt(style, p) };
 }

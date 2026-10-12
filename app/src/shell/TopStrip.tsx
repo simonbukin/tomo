@@ -52,7 +52,7 @@ export function CenterHead({ worktree, layout }: { worktree: Worktree | null; la
   return (
     <header className="column-head center-head" data-left={layout.left} data-tauri-drag-region>
       {layout.left !== "open" && <SidebarToggle side="left" mode={layout.left} />}
-      {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="center-title" data-tauri-drag-region><GlyphText text={viewTitle(view)} /></span>}
+      {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="center-title" data-tauri-drag-region><GlyphText text={viewTitle(view)} dragRegion /></span>}
       {worktree && layout.right === "closed" && <SidebarToggle side="right" mode="closed" />}
     </header>
   );

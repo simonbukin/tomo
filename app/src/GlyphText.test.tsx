@@ -43,6 +43,21 @@ describe("glyph text", () => {
     expect(container.querySelector(".glyph-letter")).toBeNull();
   });
 
+  it("hides the changing letters from assistive technology and says the final text once", () => {
+    const { container, rerender } = render(<GlyphText text="Kanazawa" />);
+    rerender(<GlyphText text="Hakone" />);
+    expect([...container.querySelectorAll(".glyph-letter")].every((b) => b.getAttribute("aria-hidden") === "true")).toBe(true);
+    expect(container.querySelector(".glyph-said")?.textContent).toBe("Hakone");
+    advance(2000);
+    expect(container.querySelector(".glyph-said")).toBeNull();
+  });
+
+  it("keeps a drag region on the letters, so the title still moves the window", () => {
+    const { container, rerender } = render(<GlyphText text="Kanazawa" dragRegion />);
+    rerender(<GlyphText text="Hakone" dragRegion />);
+    expect([...container.querySelectorAll(".glyph-letter")].every((b) => b.hasAttribute("data-tauri-drag-region"))).toBe(true);
+  });
+
   it("brushes a new text in with strokes when it enters", () => {
     const { container } = render(<GlyphText text="zsh" effect="hitsujun" enter />);
     advance(250);

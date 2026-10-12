@@ -62,3 +62,4 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .glyph-cover { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 60; pointer-events: none; }
 .glyph-letter { display: inline-block; white-space: pre; text-align: center; }
 .glyph-stroke { color: var(--fg-3); font-size: 0.8em; }
+.glyph-said { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

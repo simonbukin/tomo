@@ -18,7 +18,7 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
   return (
     <div className="wt-header" data-tauri-drag-region>
       <span className="wt-header-name" data-tauri-drag-region>
-        <GlyphText text={w.name} />
+        <GlyphText text={w.name} dragRegion />
         {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
       </span>
       <HoverCard content={<GitPreview worktree={w} />}>

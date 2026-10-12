@@ -56,6 +56,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const known = useRef<{ worktreeId: Id; ids: Set<Id> } | null>(null);
   if (known.current?.worktreeId !== worktreeId) known.current = { worktreeId, ids: new Set(tabs.map((t) => t.id)) };
   const arrived = (id: Id) => !known.current?.ids.has(id);
+  useEffect(() => tabs.forEach((t) => known.current?.ids.add(t.id)));
 
   const commit = () => {
     if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(failQuietly("tab_rename"));
