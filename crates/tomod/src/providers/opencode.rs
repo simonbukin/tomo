@@ -118,6 +118,7 @@ fn hook_outcome(payload: &Value) -> HookOutcome {
         subagent,
         only_if_busy: event == "interrupted",
         question: question_of(event, payload),
+        activity: None,
     }
 }
 

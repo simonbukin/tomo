@@ -25,8 +25,6 @@
 .inspector-head .inspector-title { display: flex; align-items: center; flex: 1; min-width: 0; padding: 0 var(--inset); font-size: var(--fs-1); color: var(--fg-2); }
 .inspector-head .side-toggle { box-shadow: inset 1px 0 0 var(--line); }
 
-.center > :not(.column-head) { animation: view-in var(--dur-open) var(--ease-out) backwards; }
-@keyframes view-in { from { opacity: 0; translate: 0 8px; } }
 
 .center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
 .center-empty { flex: 1; display: flex; align-items: center; justify-content: center; }

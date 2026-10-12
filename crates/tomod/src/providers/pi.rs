@@ -108,6 +108,7 @@ fn hook_outcome(payload: &Value) -> HookOutcome {
         subagent,
         only_if_busy: event == "ui_prompt_end" && !still_running,
         question: (event == "ui_prompt_start").then(|| str_field(payload, "title").map(super::clip_question)).flatten(),
+        activity: None,
     }
 }
 

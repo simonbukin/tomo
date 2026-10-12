@@ -1362,6 +1362,11 @@ pub struct AgentPresence {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub sleep: Option<Sleep>,
+    /// What a working agent does now: its last tool call in a few words, such as `Edit src/app.ts`. Only a working
+    /// agent has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub activity: Option<String>,
 }
 
 /// An agent that sleeps: its process ended after a long idle period, and a key resumes its session.

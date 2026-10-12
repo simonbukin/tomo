@@ -28,7 +28,8 @@ Tomo, not like a component library.
 ## Worktree rows and the hover card
 
 A sidebar row is a minimal card. It shows enough to act on, and it cuts
-nothing off: its text wraps and it has no ellipsis. The hover card on the row
+nothing off: its text wraps and it has no ellipsis. The one exception is the
+ticker of a working agent, which keeps to one line (see "Glyph motion"). The hover card on the row
 shows everything. Both use the rules in `app/src/rowModel.ts` (pure
 functions) and the line components in `app/src/WorktreeLines.tsx`.
 
@@ -50,8 +51,9 @@ links, right-aligned 12px in. Every height is a multiple of 4:
      subagent of it one level in (its 6px mark at x=32, its task at x=48).
      An idle or sleeping agent has no line, because the row mark says it.
      The line shows the kind (`claude`) and only the words that the mark
-     cannot say: the question when it needs you, the exit code when it
-     died, `no signal`, and `waking`.
+     cannot say: what a working agent does now (the ticker), the question
+     when it needs you, the exit code when it died, `no signal`, and
+     `waking`.
    - apps: a running app and its port (`web  :3003`), or a crash of an
      Action (`Storybook  exited -1`, red). Addons give these lines.
 
@@ -113,7 +115,8 @@ so a branch name from a pull request works with one paste.
 - The main worktree of a repo shows a star and always sorts first, in
   every sort mode.
 - A worktree row is as tall as its lines. A quiet row is 52 px: the name
-  line and the branch line. Its text wraps and never cuts with an ellipsis.
+  line and the branch line. Its text wraps and never cuts with an ellipsis,
+  apart from the one-line ticker of a working agent.
   See "Worktree rows and the hover card". The row menu shows on hover, over
   the links.
 - Drag a worktree row or a repo header to reorder it. The first drop
@@ -457,6 +460,56 @@ its columns scroll on their own axis.
 
 Under `prefers-reduced-motion: reduce` every duration is 0. The guard in `base.css` also stops every animation. No springs,
 no bounce. `styles/interaction.css` applies the tokens.
+
+### Glyph motion
+
+The centre changes through glyph covers, and text that changes in place
+decodes. The technique comes from ascii.rest (MIT, @bas3line): each cell of a
+monospace grid gets a threshold from 0 to 1, a front passes every cell once,
+and the cells in the band at the front show a glyph from a ramp that grows.
+
+A cover (`glyphCover.ts`, `glyphCoverPlay.ts`) is a canvas that
+`playCover` appends to its host for a moment: `position: absolute`, no
+clicks, no layout. It hides the host behind the host's own background, then
+opens along the front. The first frame is drawn before the browser paints,
+so a pane that mounts with a cover never shows bare. Each frame writes one
+cell-sized mask for the ground and copies edge glyphs from a pre-drawn
+atlas. A full-screen cover at 2560×1440 px and 2× density holds 60 fps with
+the GPU on; a warm frame takes 2 to 9 ms of script, and a cover takes 3 to
+9 ms to set up.
+
+| Change | Cover | Speed |
+|---|---|---|
+| another view, another worktree, the palette | aperture: a hexagon that turns as it opens | 440 ms |
+| a new tab | aperture, from the click | 440 ms |
+| another tab | halftone, toward the tab you go to | 340 ms |
+| a new split pane | halftone | 340 ms |
+| the next tab after a close; a pane that falls asleep or wakes | silk: slow noise with a soft band | 460 ms |
+| a toast | seed: nine seeds that sprout in turn | 420 ms |
+
+`coverPlan.ts` decides: it compares the last scene of the centre with the
+next one. `useCovers` in the shell plays the plan.
+
+`GlyphText` changes text in place. Scramble breaks the old letters up and
+settles the new ones out of flickering glyphs (the worktree name, the view
+title, the ticker). Hitsujun (筆順, stroke order) brushes each letter from
+丶 丿 一 十 (the branch, a new tab's title, a toast's title). Every letter is
+a box as wide as its final glyph from the first frame, so nothing around the
+text moves; the boxes fold back into plain text at the end.
+
+The ticker is the line of a working agent on its row: its last tool call,
+from `AgentPresence.activity`. It is the one row line that keeps to one line
+and clips, because it changes with every tool call and a line that wrapped
+would move the whole sidebar each time. Its full text is its tooltip.
+
+A cover paints at most 4.5 million device pixels, so a full-screen cover on
+a dense display draws its glyphs a little softer and every frame stays one
+raster. A browser pane is a native view above the window, so a cover passes
+under it.
+
+Changing letters are hidden from assistive technology while they run; one
+visually hidden copy says the final text. Under `prefers-reduced-motion:
+reduce` no cover is drawn and text changes at once.
 
 ## States
 

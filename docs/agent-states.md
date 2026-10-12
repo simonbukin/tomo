@@ -97,6 +97,10 @@ dead. A row shows every subagent one level in under its agent.
 - A finished turn of the parent keeps a subagent that still runs (a
   background subagent) and drops the finished ones.
 - A parent that exits or dies drops all its subagents.
+- `activity` is the last tool call of a working agent in a few words, such
+  as `Edit src/app.ts`. Claude and Codex set it from `PreToolUse`; a path in
+  the agent's folder is shown relative to it. Any state other than working
+  clears it. Pi and OpenCode send no tool events, so they have none.
 - A subagent with no event for 30 minutes while its parent is idle is
   dropped: a lost stop event must not keep a worktree working for ever.
 - Above the cap of 16, a finished subagent drops before a running one.

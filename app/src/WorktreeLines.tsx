@@ -1,5 +1,6 @@
 import { appLines, worktreeLinks } from "./addons";
 import { cx } from "./components/ui";
+import { GlyphText } from "./GlyphText";
 import { leadLine, rowGroups, type Line, type RowGroups, type RowInput } from "./rowModel";
 import { StateMark, WorktreeMark } from "./StateMark";
 import { agentsOf, setRowError, useStore } from "./store";
@@ -23,7 +24,12 @@ function LineText({ line }: { line: Line }) {
     <>
       {line.label && <b className="wt-line-label">{line.label}</b>}
       {line.kind && <span className="wt-line-kind">{line.kind}</span>}
-      {line.text && <span className={line.tone && `wt-tone-${line.tone}`}>{line.text}</span>}
+      {line.text && line.ticker && (
+        <span title={line.text}>
+          <GlyphText className="wt-ticker" text={line.text} />
+        </span>
+      )}
+      {line.text && !line.ticker && <span className={line.tone && `wt-tone-${line.tone}`}>{line.text}</span>}
     </>
   );
 }
@@ -42,7 +48,7 @@ export function LineView({ line, meta = false, dismiss }: { line: Line; meta?: b
     onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && dismiss(),
   };
   return (
-    <span className={cx("wt-line", line.sub && "wt-line-sub")}>
+    <span className={cx("wt-line", line.sub && "wt-line-sub", line.ticker && "wt-line-ticker")}>
       <span className="wt-mcell">{line.sub ? null : mark}</span>
       <span className="wt-line-text" {...press}>
         {line.sub ? (

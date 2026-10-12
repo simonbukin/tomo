@@ -8,6 +8,7 @@ import { GitPreview } from "./HoverPreviews";
 import { editorName, overflowMenu } from "./menus";
 import { useShortcuts } from "./shortcuts";
 import { RowError } from "./RowError";
+import { GlyphText } from "./GlyphText";
 import { useStore } from "./store";
 import { KIND_LABEL, type Worktree } from "./types";
 
@@ -17,12 +18,12 @@ export function WorktreeHeader({ worktree: w }: { worktree: Worktree }) {
   return (
     <div className="wt-header" data-tauri-drag-region>
       <span className="wt-header-name" data-tauri-drag-region>
-        {w.name}
+        <GlyphText text={w.name} dragRegion />
         {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
       </span>
       <HoverCard content={<GitPreview worktree={w} />}>
         <span className="wt-header-branch">
-          {branch}
+          <GlyphText text={branch} effect="hitsujun" />
           {w.git?.dirty ? " *" : ""}
         </span>
       </HoverCard>

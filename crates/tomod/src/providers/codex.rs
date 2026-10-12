@@ -73,6 +73,7 @@ fn hook_outcome(payload: &Value) -> HookOutcome {
         subagent,
         only_if_busy: matches!(event, "Interrupt" | "PostToolUse"),
         question,
+        activity: (event == "PreToolUse" && !asks && !tool.is_empty()).then(|| super::activity_text(tool, input, str_field(payload, "cwd"))),
     }
 }
 
@@ -482,6 +483,8 @@ mod tests {
         let late = outcome(json!({ "hook_event_name": "PostToolUse", "session_id": "s", "tool_name": "Bash" }));
         assert_eq!((late.state, late.only_if_busy), (Some(AgentState::Working), true), "a background tool that ends after the turn does not start it again");
         assert_eq!(outcome(json!({ "hook_event_name": "Stop", "session_id": "abc" })).session_ref.as_deref(), Some("abc"));
+        let shell = outcome(json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": { "command": ["cargo", "test"] }, "cwd": "/w" }));
+        assert_eq!(shell.activity.as_deref(), Some("Bash cargo test"));
         assert_eq!(outcome(json!({ "hook_event_name": "PreToolUse", "session_id": "child", "agent_id": "a1" })).session_ref, None);
     }
 

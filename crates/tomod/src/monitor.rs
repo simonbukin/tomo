@@ -134,7 +134,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                 let (busy, state) = fallback(prev, subtree_cpu > BUSY_CPU_PERCENT, now);
                 inner.busy.insert(pane_id.clone(), busy);
                 let report = AgentReport { pane_id: pane_id.clone(), kind, state, session_ref, authority: Authority::Heuristic, at_ms: now };
-                Daemon::apply_report(inner, &report, Some(pid), None);
+                Daemon::apply_report(inner, &report, Some(pid), None, None);
             }
             None => {
                 inner.busy.remove(&pane_id);
@@ -149,7 +149,7 @@ pub fn poll_once(daemon: &Arc<Daemon>, inner: &mut Inner, force_full: bool) {
                     });
                 if let Some((kind, state)) = ended {
                     let report = AgentReport { pane_id: pane_id.clone(), kind, state: Some(state), session_ref: None, authority: Authority::Lifecycle, at_ms: now };
-                    Daemon::apply_report(inner, &report, None, None);
+                    Daemon::apply_report(inner, &report, None, None, None);
                 }
             }
         }

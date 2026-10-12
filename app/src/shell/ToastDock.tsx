@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { playCover } from "../glyphCoverPlay";
+import { GlyphText } from "../GlyphText";
 import { Button, IconButton } from "../components/ui";
 import { GLYPH, type Status } from "../glyphs";
 import { dismissToast, useStore, type Toast, type ToastLevel } from "../store";
@@ -27,7 +29,12 @@ function ToastCard({ toast: t }: { toast: Toast }) {
   const [focused, setFocused] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const remaining = useRef(LIFETIME_MS[t.level]);
+  const card = useRef<HTMLDivElement>(null);
   const paused = hovered || focused;
+
+  useLayoutEffect(() => {
+    if (card.current) playCover(card.current, { style: "seed" });
+  }, []);
 
   useEffect(() => {
     if (t.sticky || paused || leaving) return;
@@ -56,6 +63,7 @@ function ToastCard({ toast: t }: { toast: Toast }) {
 
   return (
     <div
+      ref={card}
       className={`toast toast-${t.level}`}
       data-leaving={leaving || undefined}
       onPointerEnter={() => setHovered(true)}
@@ -68,7 +76,7 @@ function ToastCard({ toast: t }: { toast: Toast }) {
         {GLYPH[status]}
       </span>
       <div className="toast-body">
-        <div className="toast-title">{t.title}</div>
+        <GlyphText className="toast-title" text={t.title} effect="hitsujun" enter />
         {t.detail && (
           <div className="toast-detail" title={t.detail}>
             {t.detail}

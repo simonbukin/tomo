@@ -216,7 +216,10 @@ pub fn hook_outcome(payload: &Value) -> HookOutcome {
         }
         _ => None,
     };
-    HookOutcome { state, session_ref: super::root_session(payload), subagent: subagent_event(event, payload, state), only_if_busy, question }
+    let activity = (event == "PreToolUse")
+        .then(|| str_field(payload, "tool_name").map(|tool| super::activity_text(tool, payload.get("tool_input").unwrap_or(&Value::Null), str_field(payload, "cwd"))))
+        .flatten();
+    HookOutcome { state, session_ref: super::root_session(payload), subagent: subagent_event(event, payload, state), only_if_busy, question, activity }
 }
 
 /// The tool that starts a subagent. Claude Code renamed `Task` to `Agent` and accepts both.
@@ -271,6 +274,18 @@ pub fn hooks_settings(tomo_bin: &Path) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_call_names_what_the_agent_does() {
+        let pre = |tool: &str, input: Value| hook_outcome(&serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input, "cwd": "/w/acme" })).activity;
+        assert_eq!(pre("Edit", serde_json::json!({ "file_path": "/w/acme/src/app.ts" })).as_deref(), Some("Edit src/app.ts"));
+        assert_eq!(pre("Bash", serde_json::json!({ "command": "pnpm   vitest\nrun" })).as_deref(), Some("Bash pnpm vitest run"));
+        assert_eq!(pre("Grep", serde_json::json!({ "pattern": "aperture" })).as_deref(), Some("Grep aperture"));
+        assert_eq!(pre("TodoWrite", serde_json::json!({})).as_deref(), Some("TodoWrite"));
+        assert_eq!(pre("Read", serde_json::json!({ "file_path": "/elsewhere/x.md" })).as_deref(), Some("Read /elsewhere/x.md"));
+        let post = hook_outcome(&serde_json::json!({ "hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_input": {} }));
+        assert_eq!(post.activity, None);
+    }
 
     #[test]
     fn claude_dir_encoding_matches_claude_code() {

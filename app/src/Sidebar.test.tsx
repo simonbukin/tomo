@@ -121,8 +121,8 @@ describe("the worktree row", () => {
 });
 
 describe("nothing on the row is cut off", () => {
-  it("wraps the text of the row and never draws an ellipsis", () => {
-    expect(rowCss).not.toMatch(/text-overflow/);
+  it("wraps the text of the row and never draws an ellipsis, apart from the live ticker", () => {
+    expect(rowCss.replace(/\.wt-line-ticker[^{]*\{[^}]*\}/g, "")).not.toMatch(/text-overflow/);
     expect(rowCss).toMatch(/\.wt-branch \{[^}]*overflow-wrap: anywhere/);
     expect(rowCss).toMatch(/\.wt-line-text \{[^}]*overflow-wrap: anywhere/);
     expect(rowCss).toMatch(/\.wt-name \{[^}]*overflow-wrap: anywhere/);
