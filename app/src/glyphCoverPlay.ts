@@ -1,10 +1,5 @@
 import { frontAt, glyphAt, groundAt, inkAt, passedAt, STYLES, thresholds, type CoverMode, type CoverStyle } from "./glyphCover";
 
-/**
- * Plays a glyph cover over `host`: a canvas child that fills it, sits above everything in it, and takes no clicks
- * and no space. The first frame is drawn before this returns, so an element that mounts with a cover never shows
- * bare. Each frame writes one cell-sized mask for the ground and copies edge glyphs from a pre-drawn atlas.
- */
 export interface CoverOptions {
   readonly style: CoverStyle;
   readonly mode?: CoverMode;
@@ -22,9 +17,8 @@ export interface Cover {
 }
 
 const FONT_PX = 12;
-/** Device pixels a cover may paint each frame. A full-screen cover on a dense display paints a little softer, so
- * every frame stays one cheap raster. */
-const PIXEL_BUDGET = 4.5e6;
+/** A full-screen cover on a dense display paints a little softer, so every frame stays one cheap raster. */
+const MAX_DEVICE_PIXELS = 4.5e6;
 const FONT = `500 ${FONT_PX}px "Red Hat Mono", ui-monospace, Menlo, monospace`;
 const active = new WeakMap<HTMLElement, Cover>();
 
@@ -43,8 +37,7 @@ const rgba = (css: string): [number, number, number, number] => {
   return [r, g, b, a];
 };
 
-/** The colour that the host shows: its own background, or the first ancestor that has one. */
-const groundOf = (el: HTMLElement): string => {
+const visibleBackgroundOf = (el: HTMLElement): string => {
   for (let at: HTMLElement | null = el; at; at = at.parentElement) {
     const bg = getComputedStyle(at).backgroundColor;
     if (bg && bg !== "transparent" && !/rgba\(.*,\s*0\)$/.test(bg)) return bg;
@@ -73,6 +66,11 @@ const atlasOf = (glyphs: readonly string[], ink: string, cw: number, lh: number,
   return atlas;
 };
 
+/**
+ * Plays a glyph cover over `host`: a canvas child that fills it, sits above everything in it, and takes no clicks
+ * and no space. The first frame is drawn before this returns, so an element that mounts with a cover never shows
+ * bare. Each frame writes one cell-sized mask for the ground and copies edge glyphs from a pre-drawn atlas.
+ */
 export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   active.get(host)?.cancel();
   if (motionReduced()) return finished;
@@ -80,7 +78,7 @@ export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   if (rect.width < 4 || rect.height < 4) return finished;
 
   const { style, mode = "in", ms = STYLES[options.style].ms, origin, reverse = false } = options;
-  const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(PIXEL_BUDGET / (rect.width * rect.height)));
+  const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(MAX_DEVICE_PIXELS / (rect.width * rect.height)));
   const { cw, lh } = cellSize(dpr);
   const width = Math.ceil(rect.width * dpr), height = Math.ceil(rect.height * dpr);
   const cols = Math.ceil(width / cw), rows = Math.ceil(height / lh);
@@ -103,7 +101,7 @@ export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   if (!ctx || !mctx) return finished;
   ctx.imageSmoothingEnabled = false;
 
-  const [r, g, b] = rgba(groundOf(host));
+  const [r, g, b] = rgba(visibleBackgroundOf(host));
   const atlas = atlasOf(edge, options.ink ?? (getComputedStyle(host).getPropertyValue("--fg-2").trim() || "#888"), cw, lh, dpr);
   const image = mctx.createImageData(cols, rows);
   const pixels = new Uint32Array(image.data.buffer);

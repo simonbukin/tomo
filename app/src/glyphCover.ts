@@ -29,8 +29,7 @@ export const STYLES: Readonly<Record<CoverStyle, Style>> = {
   silk: { ms: 460, band: 0.28, edge: ["·", "∘", "○"], soft: true },
 };
 
-/** A cell is twice as tall as it is wide, so distances count a row as two columns. */
-const ROW = 2;
+const ROW_IN_COLUMNS = 2;
 const APERTURE_TWIST = 0.045;
 const SEEDS = 9;
 const SEED_STAGGER = 22;
@@ -85,20 +84,20 @@ const equalized = (values: Float32Array): Float32Array => {
 
 const aperture = (g: CoverGrid) =>
   fill(g, (x, y) => {
-    const dx = x - g.ox, dy = (y - g.oy) * ROW, a = Math.hypot(dx, dy) * APERTURE_TWIST;
+    const dx = x - g.ox, dy = (y - g.oy) * ROW_IN_COLUMNS, a = Math.hypot(dx, dy) * APERTURE_TWIST;
     const rx = dx * Math.cos(a) - dy * Math.sin(a), ry = dx * Math.sin(a) + dy * Math.cos(a);
     return Math.max(Math.abs(rx) * 0.866 + Math.abs(ry) * 0.5, Math.abs(ry));
   });
 
 const seeded = (g: CoverGrid, salt: number) => {
   const seeds = Array.from({ length: SEEDS }, (_, i) => ({ x: hash(i, 1, salt) * g.cols, y: hash(i, 2, salt) * g.rows, lag: hash(i, 4, salt) * SEED_STAGGER }));
-  return fill(g, (x, y) => seeds.reduce((m, p) => Math.min(m, Math.hypot(x - p.x, (y - p.y) * ROW) + p.lag), Infinity));
+  return fill(g, (x, y) => seeds.reduce((m, p) => Math.min(m, Math.hypot(x - p.x, (y - p.y) * ROW_IN_COLUMNS) + p.lag), Infinity));
 };
 
-const halftone = (g: CoverGrid, reverse: boolean) => fill(g, (x, y) => (reverse ? g.cols - x : x) * HALFTONE_SLOPE + y * ROW);
+const halftone = (g: CoverGrid, reverse: boolean) => fill(g, (x, y) => (reverse ? g.cols - x : x) * HALFTONE_SLOPE + y * ROW_IN_COLUMNS);
 
 const silk = (g: CoverGrid, salt: number) =>
-  fill(g, (x, y) => noise(x / SILK_SCALE, (y * ROW) / SILK_SCALE, salt) * 0.88 + noise(x / SILK_GRAIN, (y * ROW) / SILK_GRAIN, salt + 1) * 0.12);
+  fill(g, (x, y) => noise(x / SILK_SCALE, (y * ROW_IN_COLUMNS) / SILK_SCALE, salt) * 0.88 + noise(x / SILK_GRAIN, (y * ROW_IN_COLUMNS) / SILK_GRAIN, salt + 1) * 0.12);
 
 /** Each cell's threshold, 0 to 1: the share of the opening that passes before the cell shows. */
 export function thresholds(style: CoverStyle, grid: CoverGrid, salt: number, reverse = false): Float32Array {

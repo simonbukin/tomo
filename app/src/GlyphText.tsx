@@ -10,6 +10,8 @@ import { DURATION_MS, frameOf, type TextEffect } from "./glyphFrames";
 export function GlyphText({ text, effect = "scramble", enter = false, className, dragRegion = false }: { text: string; effect?: TextEffect; enter?: boolean; className?: string; dragRegion?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const shown = useRef<string | null>(null);
+  const entering = useRef(enter);
+  entering.current = enter;
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -17,26 +19,24 @@ export function GlyphText({ text, effect = "scramble", enter = false, className,
     const from = shown.current;
     shown.current = text;
     if (from === text) return;
-    if ((from === null && !enter) || motionReduced() || !text) {
+    if ((from === null && !entering.current) || motionReduced() || !text) {
       el.textContent = text;
       return;
     }
     return play(el, from ?? "", text, effect);
-  }, [text, effect, enter]);
+  }, [text, effect]);
 
   return <span ref={ref} className={className} data-tauri-drag-region={dragRegion || undefined} />;
 }
 
 /**
- * The span keeps the width of the final text as one shaped run, so kerning lost between the letter boxes cannot move
- * what follows. The boxes are hidden from assistive technology; one visually hidden copy says the final text.
+ * The letter boxes share the width of the final text as one shaped run, so kerning lost between them cannot move
+ * what follows. They are hidden from assistive technology; one visually hidden copy says the final text.
  */
 function play(el: HTMLSpanElement, from: string, to: string, effect: TextEffect): () => void {
   const target = [...to], before = [...from];
-  const style = el.style.cssText;
   el.textContent = to;
-  const width = el.getBoundingClientRect().width;
-  Object.assign(el.style, { display: "inline-block", width: `${width}px`, whiteSpace: "pre" });
+  const run = el.getBoundingClientRect().width;
   el.textContent = "";
   const drag = el.hasAttribute("data-tauri-drag-region");
   const boxes = target.map((ch) => {
@@ -51,9 +51,11 @@ function play(el: HTMLSpanElement, from: string, to: string, effect: TextEffect)
   const said = document.createElement("span");
   said.className = "glyph-said";
   said.textContent = to;
-  el.appendChild(said);
+  el.prepend(said);
   const widths = boxes.map((b) => b.getBoundingClientRect().width);
-  boxes.forEach((b, i) => (b.style.width = `${widths[i]}px`));
+  const total = widths.reduce((a, w) => a + w, 0);
+  const scale = total > 0 && run > 0 ? run / total : 1;
+  boxes.forEach((b, i) => (b.style.width = `${widths[i] * scale}px`));
 
   const paint = (k: number, seconds: number) =>
     frameOf(effect, before, target, k, seconds).forEach((g, i) => {
@@ -68,7 +70,6 @@ function play(el: HTMLSpanElement, from: string, to: string, effect: TextEffect)
   const finish = () => {
     cancelAnimationFrame(frame);
     el.textContent = to;
-    el.style.cssText = style;
   };
   const tick = (now: number) => {
     const k = Math.min(1, (now - start) / ms);

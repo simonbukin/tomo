@@ -52,6 +52,15 @@ describe("glyph text", () => {
     expect(container.querySelector(".glyph-said")).toBeNull();
   });
 
+  it("lets an entrance finish when its parent renders again", () => {
+    const { container, rerender } = render(<GlyphText text="zsh" effect="hitsujun" enter />);
+    advance(200);
+    rerender(<GlyphText text="zsh" effect="hitsujun" enter={false} />);
+    expect(container.querySelectorAll(".glyph-letter")).toHaveLength(3);
+    advance(2000);
+    expect(container.textContent).toBe("zsh");
+  });
+
   it("keeps a drag region on the letters, so the title still moves the window", () => {
     const { container, rerender } = render(<GlyphText text="Kanazawa" dragRegion />);
     rerender(<GlyphText text="Hakone" dragRegion />);
