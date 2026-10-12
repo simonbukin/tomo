@@ -14,6 +14,7 @@ fn fresh(report: &AgentReport, worktree_id: &str, pid: Option<u32>) -> AgentPres
         seen: false,
         subagents: Vec::new(),
         sleep: None,
+        activity: None,
     }
 }
 
@@ -57,6 +58,7 @@ pub fn merge(current: Option<&AgentPresence>, report: &AgentReport, worktree_id:
         seen: cur.seen && next_state == cur.state,
         subagents: cur.subagents.clone(),
         sleep: cur.sleep,
+        activity: cur.activity.clone().filter(|_| next_state == AgentState::Working),
     })
 }
 
@@ -116,6 +118,15 @@ mod tests {
         assert!(merge(Some(&cur), &report(Authority::Lifecycle, Some(AgentState::Working), 4000), "w", None).is_none());
         let newer = merge(Some(&cur), &report(Authority::Lifecycle, Some(AgentState::Working), 5000), "w", None).unwrap();
         assert_eq!(newer.state, AgentState::Working);
+    }
+
+    #[test]
+    fn only_a_working_agent_keeps_its_activity() {
+        let working = AgentPresence { activity: Some("Edit src/a.ts".into()), ..merge(None, &report(Authority::Lifecycle, Some(AgentState::Working), 1), "w", None).unwrap() };
+        let still = merge(Some(&working), &report(Authority::Lifecycle, Some(AgentState::Working), 2), "w", None).unwrap();
+        assert_eq!(still.activity.as_deref(), Some("Edit src/a.ts"));
+        let done = merge(Some(&working), &report(Authority::Lifecycle, Some(AgentState::Done), 3), "w", None).unwrap();
+        assert_eq!(done.activity, None);
     }
 
     #[test]

@@ -24,4 +24,9 @@ subagents?: Array<Subagent>,
 /**
  * Tomo ended the idle agent process and keeps its session, or it resumes the session now.
  */
-sleep?: Sleep, };
+sleep?: Sleep, 
+/**
+ * What a working agent does now: its last tool call in a few words, such as `Edit src/app.ts`. Only a working
+ * agent has one.
+ */
+activity?: string, };

@@ -182,7 +182,8 @@ export const agentPresenceSchema = z.object({
     estimated: z.boolean(),
     seen: z.boolean(),
     subagents: z.array(subagentSchema).optional(),
-    sleep: sleepSchema.optional()
+    sleep: sleepSchema.optional(),
+    activity: z.string().optional()
 });
 
 export const attentionItemSchema = z.object({

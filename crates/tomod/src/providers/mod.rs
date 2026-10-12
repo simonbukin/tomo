@@ -133,6 +133,8 @@ pub struct HookOutcome {
     pub only_if_busy: bool,
     /// What the agent asks, when the event makes it wait: the question, or the command it wants to run.
     pub question: Option<String>,
+    /// What the agent starts to do, when the event is a tool call.
+    pub activity: Option<String>,
 }
 
 const QUESTION_CHARS: usize = 200;
@@ -154,9 +156,31 @@ pub fn ask_text(tool_name: &str, input: &Value) -> String {
     clip_question(&text)
 }
 
+const ACTIVITY_CHARS: usize = 120;
+
+/// What a tool call does, in a few words for a row: the tool and its command, file, pattern, address, or task. A
+/// path inside `cwd` is shown relative to it.
+pub fn activity_text(tool_name: &str, input: &Value, cwd: Option<&str>) -> String {
+    let command = match input.get("command") {
+        Some(Value::String(c)) => Some(c.clone()),
+        Some(Value::Array(parts)) => Some(parts.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),
+        _ => None,
+    };
+    let detail = command.or_else(|| ["file_path", "path", "filePath", "pattern", "url", "query", "description"].iter().find_map(|k| str_field(input, k)).map(str::to_string));
+    let relative = |d: String| match cwd.map(|c| format!("{}/", c.trim_end_matches('/'))) {
+        Some(prefix) if d.starts_with(&prefix) => d[prefix.len()..].to_string(),
+        _ => d,
+    };
+    clip_to(&detail.map(relative).map_or_else(|| tool_name.to_string(), |d| format!("{tool_name} {d}")), ACTIVITY_CHARS)
+}
+
 pub fn clip_question(text: &str) -> String {
+    clip_to(text, QUESTION_CHARS)
+}
+
+fn clip_to(text: &str, max: usize) -> String {
     let one_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    match one_line.char_indices().nth(QUESTION_CHARS) {
+    match one_line.char_indices().nth(max) {
         Some((cut, _)) => format!("{}…", &one_line[..cut]),
         None => one_line,
     }

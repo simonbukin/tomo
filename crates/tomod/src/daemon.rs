@@ -1193,6 +1193,7 @@ impl Daemon {
                 seen: false,
                 subagents: Vec::new(),
                 sleep: None,
+                activity: None,
             };
             inner.agents.insert(id.clone(), presence.clone());
             Self::emit(inner, Event::AgentChanged { agent: presence.clone() });
@@ -1321,6 +1322,7 @@ impl Daemon {
                         seen: false,
                         subagents: Vec::new(),
                         sleep: row.sleep.as_ref().map(|_| Sleep::Asleep),
+                        activity: None,
                     },
                 );
             }
@@ -1471,11 +1473,12 @@ impl Daemon {
     }
 
     /// Folds one report into the presence. `question` is what the agent asks, when it starts to wait.
-    pub fn apply_report(inner: &mut Inner, report: &AgentReport, pid: Option<u32>, question: Option<&str>) {
+    pub fn apply_report(inner: &mut Inner, report: &AgentReport, pid: Option<u32>, question: Option<&str>, activity: Option<&str>) {
         let Some(worktree_id) = inner.panes.get(&report.pane_id).map(|p| p.row.worktree_id.clone()) else { return };
         let pid = pid.or_else(|| inner.agents.get(&report.pane_id).and_then(|a| a.pid));
         let previous = inner.agents.get(&report.pane_id).map(|a| a.state);
         let Some(next) = agents::merge(inner.agents.get(&report.pane_id), report, &worktree_id, pid) else { return };
+        let next = AgentPresence { activity: activity.map(str::to_string).or(next.activity).filter(|_| next.state == AgentState::Working), ..next };
         if let Some(pane) = inner.panes.get_mut(&report.pane_id) {
             if pane.row.session_ref != next.session_ref || pane.row.agent_kind != Some(next.kind) {
                 pane.row.session_ref = next.session_ref.clone();
@@ -2664,6 +2667,7 @@ impl Daemon {
                     &AgentReport { pane_id: pane_id.clone(), kind, state, session_ref: outcome.session_ref, authority: Authority::Lifecycle, at_ms },
                     None,
                     outcome.question.as_deref(),
+                    outcome.activity.as_deref(),
                 );
                 Self::apply_subagents(&mut inner, &pane_id, outcome.subagent.as_ref(), at_ms);
                 crate::sleep::woke(self, &mut inner, &pane_id);
@@ -2674,7 +2678,7 @@ impl Daemon {
                 if !inner.panes.contains_key(&report.pane_id) {
                     return Err(err(ErrorCode::NotFound, "pane not found"));
                 }
-                Self::apply_report(&mut inner, &report, None, None);
+                Self::apply_report(&mut inner, &report, None, None, None);
                 ok(inner.agents.get(&report.pane_id).cloned())
             }
 
