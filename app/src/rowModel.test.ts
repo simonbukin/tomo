@@ -59,6 +59,14 @@ describe("agent lines on the row", () => {
     expect(lines.map((l) => l.mark)).toEqual(["working", "done"]);
   });
 
+  it("ticks what a working agent does now, and drops it when the agent stops working", () => {
+    const [line] = agentLines(input({ agents: [agent("p1", "working", { activity: "Edit src/app.ts" })] }));
+    expect(texts([line])).toEqual(["claude Edit src/app.ts"]);
+    expect(line.ticker).toBe(true);
+    const [waiting] = agentLines(input({ agents: [agent("p1", "waiting", { activity: "Edit src/app.ts" })] }));
+    expect(waiting.ticker).toBeUndefined();
+  });
+
   it("says the question when an agent needs you, and nothing when the only words are Tomo's own", () => {
     const needs = agent("p1", "waiting");
     expect(texts(agentLines(input({ agents: [needs], attention: [attention({})] })))).toEqual(["claude"]);

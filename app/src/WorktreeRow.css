@@ -60,3 +60,9 @@
 .wt-active :is(.wt-branch, .wt-line-text) { opacity: 0.78; }
 .wt-missing .wt-name-text { text-decoration: line-through; color: var(--fg-3); }
 .wt-archived :is(.wt-name, .wt-branch) { color: var(--fg-3); }
+
+/* The ticker: what a working agent does now. It changes with every tool call, so it is the one line that keeps
+   to one line and clips: a line that wrapped would move the whole sidebar each time. The full text is its title. */
+.wt-line-ticker .wt-line-text { white-space: nowrap; overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; }
+.wt-ticker { color: var(--fg-2); }
+.wt-active .wt-ticker { color: var(--bg); }

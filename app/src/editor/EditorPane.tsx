@@ -129,7 +129,7 @@ export function EditorPane({ paneId, active }: { paneId: Id; active: boolean }) 
   const loadError = doc?.error && !doc.base ? doc.error : null;
   const takeFocus = () => !active && rpc("pane_focus", { pane_id: paneId }).catch(failQuietly("pane_focus"));
   return (
-    <div className="pane-wrap">
+    <div className="pane-wrap" data-pane-id={paneId}>
       <div className={`pane pane-editor${active ? " pane-active" : ""}`}>
         <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, editorMenu(paneId))}>
           <span className={splits ? "chip pane-grip" : "chip"} ref={drag.ref} {...drag.props}>

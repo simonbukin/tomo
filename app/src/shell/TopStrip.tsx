@@ -4,6 +4,7 @@ import { addonViews } from "../addons";
 import { Mark, Wordmark } from "../Brand";
 import { IconButton } from "../components/ui";
 import { useShortcuts } from "../shortcuts";
+import { GlyphText } from "../GlyphText";
 import { useStore } from "../store";
 import type { SidebarMode, Worktree } from "../types";
 import { WorktreeHeader } from "../WorktreeHeader";
@@ -51,7 +52,7 @@ export function CenterHead({ worktree, layout }: { worktree: Worktree | null; la
   return (
     <header className="column-head center-head" data-left={layout.left} data-tauri-drag-region>
       {layout.left !== "open" && <SidebarToggle side="left" mode={layout.left} />}
-      {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="center-title" data-tauri-drag-region>{viewTitle(view)}</span>}
+      {worktree ? <WorktreeHeader worktree={worktree} /> : <span className="center-title" data-tauri-drag-region><GlyphText text={viewTitle(view)} /></span>}
       {worktree && layout.right === "closed" && <SidebarToggle side="right" mode="closed" />}
     </header>
   );

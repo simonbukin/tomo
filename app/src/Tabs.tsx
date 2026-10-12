@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { SortableContext } from "@dnd-kit/sortable";
 import { Globe, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GlyphText } from "./GlyphText";
 import { rpc, rpcParsed } from "./api";
 import { activateTab, closeTab, renameTab } from "./actions";
 import { cx, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, MenuItems, PreviewCard, PreviewCardContent, PreviewCardTrigger, Tooltip } from "./components/ui";
@@ -52,6 +53,9 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   const [editing, setEditing] = useState<Editing>(null);
   const shortcut = useShortcuts();
   const bar = useGlide<HTMLDivElement>(".tab-active");
+  const known = useRef<{ worktreeId: Id; ids: Set<Id> } | null>(null);
+  if (known.current?.worktreeId !== worktreeId) known.current = { worktreeId, ids: new Set(tabs.map((t) => t.id)) };
+  const arrived = (id: Id) => !known.current?.ids.has(id);
 
   const commit = () => {
     if (editing && editing.value.trim()) rpc("tab_rename", { tab_id: editing.id, title: editing.value.trim() }).catch(failQuietly("tab_rename"));
@@ -63,7 +67,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
       <span className="glide" aria-hidden />
       <SortableContext items={tabs.map((t) => t.id)} strategy={keepInPlace}>
         {tabs.map((t) => (
-          <TabItem key={t.id} tab={t} closable={tabs.length > 1} editing={editing} setEditing={setEditing} commit={commit} />
+          <TabItem key={t.id} tab={t} arrived={arrived(t.id)} closable={tabs.length > 1} editing={editing} setEditing={setEditing} commit={commit} />
         ))}
       </SortableContext>
       <DropdownMenu>
@@ -79,7 +83,7 @@ export function TabBar({ worktreeId }: { worktreeId: Id }) {
   );
 }
 
-function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; closable: boolean; editing: Editing; setEditing: (e: Editing) => void; commit: () => void }) {
+function TabItem({ tab: t, arrived, closable, editing, setEditing, commit }: { tab: Tab; arrived: boolean; closable: boolean; editing: Editing; setEditing: (e: Editing) => void; commit: () => void }) {
   const lead = useStore((s) => leadPane(t, s.panes));
   const agent = useStore((s) => tabAgent(t, s.agents));
   const hook = useStore((s) => hookPane(t, s.panes));
@@ -134,7 +138,7 @@ function TabItem({ tab: t, closable, editing, setEditing, commit }: { tab: Tab; 
       ) : (
         <span className="tab-title">
           {dirty && <span aria-label="unsaved edits">● </span>}
-          {t.title}
+          <GlyphText text={t.title} effect="hitsujun" enter={arrived} />
         </span>
       )}
       {closable && !t.pinned && (

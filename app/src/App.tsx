@@ -39,6 +39,7 @@ import { CenterHead } from "./shell/TopStrip";
 import { ShellLoading } from "./states";
 import { useWindowChrome, useWindowWidth } from "./windowChrome";
 import { useAgentSeen } from "./agentSeen";
+import { useCovers } from "./useCovers";
 
 /** Dev-only harnesses, each behind its own URL hash. Never linked from the product. */
 const DEV_ROUTES: Record<string, () => Promise<{ default: ComponentType }>> = {
@@ -78,6 +79,7 @@ function Shell() {
   const focusRequest = useStore((s) => s.focusRequest);
   useWindowChrome();
   useAgentSeen();
+  useCovers();
   const windowWidth = useWindowWidth();
   useAppMenu();
   const theme = useResolvedTheme();

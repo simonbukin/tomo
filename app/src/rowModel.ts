@@ -20,6 +20,8 @@ export interface Line {
   sub?: boolean;
   kind?: string;
   meta?: string;
+  /** The text is what the agent does now: one line that decodes in place when it changes. */
+  ticker?: boolean;
 }
 
 /** What a row knows about one worktree. The row reads it from the store; the rules below only read it. */
@@ -71,7 +73,7 @@ export function problemLines(input: RowInput): Line[] {
 }
 
 /** The words of an agent where its mark cannot say it: the question, the exit code, no signal, waking. */
-function agentWords(agent: AgentPresence, input: RowInput): Pick<Line, "text" | "tone"> {
+function agentWords(agent: AgentPresence, input: RowInput): Pick<Line, "text" | "tone" | "ticker"> {
   if (agent.sleep === "waking") return { text: "waking", tone: "mute" };
   const state = effectiveState(agent);
   if (state === "waiting") {
@@ -83,6 +85,7 @@ function agentWords(agent: AgentPresence, input: RowInput): Pick<Line, "text" | 
     return { text: code == null ? "exited" : `exited ${code}`, tone: "bad" };
   }
   if (state === "unknown") return { text: "no signal", tone: "mute" };
+  if (state === "working" && agent.activity) return { text: agent.activity, ticker: true };
   return {};
 }
 

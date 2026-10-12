@@ -154,7 +154,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
   const splits = useStore(splitsAllowed);
   const drag = usePaneDrag(paneId, pane?.tab_id ?? "", title, splits);
   return (
-    <div className="pane-wrap">
+    <div className="pane-wrap" data-pane-id={paneId}>
     <div className={`pane${active ? " pane-active" : ""}${pane && !pane.live ? " pane-dead" : ""}`}>
       <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, paneMenu(paneId))}>
         <span className={splits ? "chip pane-grip" : "chip"} ref={drag.ref} {...drag.props}>

@@ -126,7 +126,7 @@ export function BrowserPane({ paneId, active }: { paneId: Id; active: boolean })
 
   const legendTitle = pane?.user_title ?? (title || hostOf(url));
   return (
-    <div className="pane-wrap">
+    <div className="pane-wrap" data-pane-id={paneId}>
       <div className={`pane pane-browser${active ? " pane-active" : ""}`}>
         <div className="pane-legend" onMouseDown={() => focusPane(paneId)} onContextMenu={(e) => openMenu(e, browserMenu(paneId))}>
           <span className="chip">
