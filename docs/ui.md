@@ -478,15 +478,29 @@ atlas. A full-screen cover at 2560×1440 px and 2× density holds 60 fps with
 the GPU on; a warm frame takes 2 to 9 ms of script, and a cover takes 3 to
 9 ms to set up.
 
-| Change | Cover | Speed |
-|---|---|---|
-| another view, another worktree, the palette | aperture: a hexagon that turns as it opens | 440 ms |
-| a new tab | aperture, from the click | 440 ms |
-| another tab | halftone, toward the tab you go to | 340 ms |
-| a new split pane | halftone | 340 ms |
-| the next tab after a close; a pane that falls asleep or wakes | silk: slow noise with a soft band | 460 ms |
-| a toast | seed: nine seeds that sprout in turn | 420 ms |
+A switch never draws a cover over blank ground. `LayoutStack` keeps the
+layouts of the active tab and of the tabs seen just before it mounted (at
+most eight panes, seen in the last 10 minutes, never a tab with a browser
+pane), hidden in place at their full size and in a fixed order, so a switch
+moves nothing in the DOM. A layer that shows again focuses its active pane. A switch to a kept tab only shows a layer that is already
+drawn: no terminal is made again, nothing fits again, nothing replays. For
+the transition, the old layout shows on top for a moment and a glyph mask
+(`glyphMask.ts`, `glyphMaskPlay.ts`) takes it away over the new one. The
+mask is a CSS gradient that the compositor draws, and a band of glyphs on
+its own canvas rides the edge.
 
+| Change | Motion | Speed |
+|---|---|---|
+| another worktree | the old layout is masked away by an iris from the centre | 420 ms |
+| a new tab | the old layout is masked away by an iris from the click | 420 ms |
+| another tab | the old layout is swept away toward the tab you go to | 360 ms |
+| the palette | opens through an iris; closes into its centre | 340 ms, 240 ms |
+| a toast | opens through an iris from its corner | 380 ms |
+| another view | aperture cover: a hexagon that turns as it opens | 440 ms |
+| a new split pane | halftone cover | 340 ms |
+| the next tab after a close; a pane that falls asleep or wakes | silk cover: slow noise with a soft band | 460 ms |
+
+A layout that is not kept yet gets the cover in place of the mask.
 `coverPlan.ts` decides: it compares the last scene of the centre with the
 next one. `useCovers` in the shell plays the plan.
 

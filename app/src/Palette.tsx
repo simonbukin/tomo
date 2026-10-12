@@ -1,6 +1,6 @@
 import { ChevronRight, Search } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { playCover } from "./glyphCoverPlay";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { playMask } from "./glyphMaskPlay";
 import { z } from "zod";
 import { activateTab, allActions, focusPane, openWorktree, runAction, wakePane } from "./actions";
 import { rpcParsed } from "./api";
@@ -146,15 +146,21 @@ interface Frame {
 /** Tomo's own ranking and list inside the shared Dialog shell. A typed query searches everything, in groups. */
 export function Palette() {
   const open = useStore((s) => s.paletteOpen);
-  useEffect(() => {
-    if (!open) return;
-    const frame = requestAnimationFrame(() => {
+  useLayoutEffect(() => {
+    const mask = () => {
       const popup = document.querySelector<HTMLElement>(".dialog.palette");
-      if (popup) playCover(popup, { style: "aperture" });
-    });
+      if (!popup) return false;
+      playMask(popup, { style: "iris", mode: open ? "reveal" : "close", ms: open ? 340 : 240 });
+      return true;
+    };
+    if (mask()) return;
+    const frame = requestAnimationFrame(mask);
     return () => cancelAnimationFrame(frame);
   }, [!!open]);
-  const state = useStore((s) => (s.paletteOpen ? s : null));
+  const live = useStore((s) => (s.paletteOpen ? s : null));
+  const lastOpen = useRef(live);
+  if (live) lastOpen.current = live;
+  const state = live ?? lastOpen.current;
   const recent = useStore((s) => s.ui.paletteRecent);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -172,7 +178,7 @@ export function Palette() {
   const { scope, text } = parseQuery(query);
   const searching = !top && (scope !== "all" || text !== "");
   const short = scope === "terminal" && text.length < CONTENT_MIN;
-  const results = useSearch(!!open && !top, scope, searching && !short ? text : "", worktreeId, scope === "all" ? GROUP_LIMIT + 3 : SCOPED_LIMIT);
+  const results = useSearch(!!state && !top, scope, searching && !short ? text : "", worktreeId, scope === "all" ? GROUP_LIMIT + 3 : SCOPED_LIMIT);
   const local = useMemo(() => (state && searching ? localGroups(state, scope) : []), [state, searching, scope]);
   const entries = useMemo(
     () => (top ? ((top.entry.key === FILES_KEY && filesEntry ? filesEntry : top.entry).children?.() ?? []) : state && !searching ? paletteEntries(state) : []),

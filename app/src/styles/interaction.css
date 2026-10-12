@@ -64,4 +64,9 @@ button:not(:disabled):not(.link):not(.btn-link):not(.seg):active, .btn:not(:disa
 .glyph-cover { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 60; pointer-events: none; }
 .glyph-letter { display: inline-block; white-space: pre; text-align: center; }
 .glyph-stroke { color: var(--fg-3); font-size: 0.8em; }
+/* The palette opens and closes through its glyph mask, not a fade; the hold keeps it mounted while the mask runs. */
+.dialog.palette[data-starting-style], .dialog.palette[data-ending-style] { opacity: 1; translate: -50% 0; }
+.dialog.palette[data-ending-style] { pointer-events: none; animation: glyph-hold 240ms linear; }
+@keyframes glyph-hold { from { opacity: 1; } to { opacity: 1; } }
+.glyph-mask-band { position: fixed; z-index: 95; pointer-events: none; }
 .glyph-said { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

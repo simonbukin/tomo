@@ -156,8 +156,11 @@ these points:
   the pane (1 MB), which is what the pane showed. The holder ring stays
   2 MB.
 - **On screen means attached.** A client shows a pane when it sent
-  `pane_attach` and no `pane_detach`. The GUI attaches only the panes of
-  the tab on screen, so no new call was necessary.
+  `pane_attach` and no `pane_detach`. The GUI attaches the panes of the tab
+  on screen and of the few tabs it keeps mounted for a fast switch (at most
+  eight panes, see `app/src/layoutKeep.ts`), so no new call was necessary.
+  An agent in a tab that you saw in the last 10 minutes therefore stays
+  awake; after that its layout unmounts and detaches, and it can sleep.
 - **One more rule.** The agent process must run under the pane's shell.
   An agent that is the pane's own process never sleeps, because its end
   would end the pane.

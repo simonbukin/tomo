@@ -15,7 +15,7 @@ import { Home } from "./Home";
 import { findAction } from "./keys";
 import { BrowserHost } from "./browser/BrowserPane";
 import { EditorHost } from "./editor/EditorPane";
-import { TabLayout } from "./Layout";
+import { LayoutStack } from "./Layout";
 import { MenuHost } from "./MenuHost";
 import { Palette } from "./Palette";
 import { RightSidebar } from "./RightSidebar";
@@ -164,7 +164,7 @@ function Shell() {
           <LayoutDnd>
             <CheckpointBanner worktree={worktree} />
             <TabBar worktreeId={worktree.id} />
-            {tab ? <TabLayout key={tab.id} tab={tab} /> : <div className="center-empty muted">Opening...</div>}
+            {tab ? <LayoutStack active={tab} /> : <div className="center-empty muted">Opening...</div>}
           </LayoutDnd>
         )}
       </main>
