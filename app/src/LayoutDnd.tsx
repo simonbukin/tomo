@@ -122,9 +122,13 @@ export function useTabSortable(tabId: Id, disabled = false) {
   };
 }
 
+/** True inside a tab layout that stays mounted but hidden: its panes take no drags and no drops. */
+export const LayoutHidden = createContext(false);
+
 /** Spread on the pane chrome that starts a pane drag. Never on the terminal body: text selection must keep working. */
 export function usePaneDrag(paneId: Id, tabId: Id, title: string, enabled = true) {
-  const d = useDraggable({ id: `pane-drag:${paneId}`, disabled: !enabled, data: { kind: "pane", paneId, tabId, title } satisfies DragData });
+  const hidden = useContext(LayoutHidden);
+  const d = useDraggable({ id: `pane-drag:${paneId}`, disabled: !enabled || hidden, data: { kind: "pane", paneId, tabId, title } satisfies DragData });
   return { ref: d.setNodeRef, props: { ...d.attributes, ...d.listeners } };
 }
 
@@ -132,7 +136,8 @@ const PLACE_LABEL: Record<DropPlace, string> = { center: "swap", left: "split le
 
 /** Fills the pane so a drag can aim at it. The preview over the layout draws the result. */
 export function PaneDropZone({ paneId }: { paneId: Id }) {
-  const { setNodeRef } = useDroppable({ id: `pane-drop:${paneId}`, data: { kind: "pane-drop", paneId } satisfies DropData });
+  const hidden = useContext(LayoutHidden);
+  const { setNodeRef } = useDroppable({ id: `pane-drop:${paneId}`, disabled: hidden, data: { kind: "pane-drop", paneId } satisfies DropData });
   return <div ref={setNodeRef} className="pane-drop" aria-hidden />;
 }
 

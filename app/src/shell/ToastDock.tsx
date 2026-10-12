@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { playCover } from "../glyphCoverPlay";
+import { playMask } from "../glyphMaskPlay";
 import { GlyphText } from "../GlyphText";
 import { Button, IconButton } from "../components/ui";
 import { GLYPH, type Status } from "../glyphs";
@@ -33,7 +33,10 @@ function ToastCard({ toast: t }: { toast: Toast }) {
   const paused = hovered || focused;
 
   useLayoutEffect(() => {
-    if (card.current) playCover(card.current, { style: "seed" });
+    const el = card.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    playMask(el, { style: "iris", mode: "reveal", origin: { x: r.right, y: r.bottom }, ms: 380 });
   }, []);
 
   useEffect(() => {

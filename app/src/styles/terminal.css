@@ -1,7 +1,11 @@
 /* Terminal workspace: splits, panes, legends. The terminal stays dominant.
    Panes sit edge to edge on 1 px rules. Each pane starts with a one-unit legend row. */
 
-.layout-root { flex: 1; min-height: 0; display: flex; background: var(--bg); }
+.layout-stack { position: relative; flex: 1; min-height: 0; display: flex; }
+.layout-root { flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--bg); }
+/* A kept layout keeps its size, so its terminals never fit again; it only stops showing. */
+.layout-root[data-hidden] { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
+.layout-root[data-leaving] { visibility: visible; z-index: 3; }
 .split { display: flex; flex: 1; min-width: 0; min-height: 0; }
 .split-horizontal { flex-direction: row; }
 .split-vertical { flex-direction: column; }

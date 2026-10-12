@@ -1,20 +1,54 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { rpc } from "./api";
 import {failQuietly, paneIds, useStore} from "./store";
 const TerminalPane = lazy(() => import("./TerminalPane").then((m) => ({ default: m.TerminalPane })));
 import { BrowserPane } from "./browser/BrowserPane";
 import { EditorPane } from "./editor/EditorPane";
-import { LayoutPreview } from "./LayoutDnd";
+import { LayoutHidden, LayoutPreview } from "./LayoutDnd";
+import { keptTabs, type Candidate } from "./layoutKeep";
 import type { Id, LayoutNode, Tab } from "./types";
 
-export function TabLayout({ tab }: { tab: Tab }) {
+const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+
+/**
+ * The active tab's layout and the layouts of the tabs seen just before it, mounted on top of each other. Only the
+ * active one shows; a switch to a kept tab draws nothing new. See layoutKeep.ts.
+ */
+export function LayoutStack({ active }: { active: Tab }) {
+  const recent = useRef<string[]>([]);
+  const tabsByWorktree = useStore((s) => s.tabs);
+  const browsers = useStore((s) => Object.values(s.panes).filter((p) => p.kind === "browser").map((p) => p.id).join(" "));
+  const candidates = new Map(
+    Object.values(tabsByWorktree)
+      .flat()
+      .map((t): [string, Candidate & { tab: Tab }] => [t.id, { id: t.id, tab: t, panes: paneIds(t.layout).length, keepable: paneIds(t.layout).every((p) => !browsers.split(" ").includes(p)) }]),
+  );
+  const kept = keptTabs(recent.current, active.id, candidates);
+  if (!sameIds(kept, recent.current)) recent.current = kept;
+  return (
+    <div className="layout-stack">
+      {kept.map((id) => {
+        const t = id === active.id ? active : candidates.get(id)?.tab;
+        return t ? <TabLayout key={id} tab={t} hidden={id !== active.id} /> : null;
+      })}
+    </div>
+  );
+}
+
+export function TabLayout({ tab, hidden = false }: { tab: Tab; hidden?: boolean }) {
   const zoomed = useStore((s) => s.zoomed[tab.id] ?? null);
   const node: LayoutNode = zoomed && paneIds(tab.layout).includes(zoomed) ? { type: "leaf", pane_id: zoomed } : tab.layout;
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (hidden && root.current?.contains(document.activeElement)) (document.activeElement as HTMLElement | null)?.blur();
+  }, [hidden]);
   return (
-    <div className="layout-root">
-      <Node node={node} tabId={tab.id} activePane={tab.active_pane_id} />
-      <LayoutPreview node={node} />
-    </div>
+    <LayoutHidden.Provider value={hidden}>
+      <div className="layout-root" ref={root} data-tab-id={tab.id} data-hidden={hidden || undefined} aria-hidden={hidden || undefined}>
+        <Node node={node} tabId={tab.id} activePane={tab.active_pane_id} />
+        <LayoutPreview node={node} />
+      </div>
+    </LayoutHidden.Provider>
   );
 }
 

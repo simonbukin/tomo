@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { coversFor, type CoverTarget, type Scene } from "./coverPlan";
+import { coversFor, type CoverTarget, type Plan, type Scene } from "./coverPlan";
 import { playCover } from "./glyphCoverPlay";
+import { playMask } from "./glyphMaskPlay";
 import { activeTab, paneIds, useStore, type State } from "./store";
 
 const POINTER_FRESH_MS = 1500;
@@ -24,7 +25,7 @@ const targetOf = (t: CoverTarget): HTMLElement | null =>
   t.kind === "center"
     ? document.querySelector<HTMLElement>("main.center")
     : t.kind === "layout"
-      ? document.querySelector<HTMLElement>("main.center .layout-root")
+      ? document.querySelector<HTMLElement>("main.center .layout-root:not([data-hidden])")
       : document.querySelector<HTMLElement>(`[data-pane-id="${CSS.escape(t.paneId)}"]`);
 
 const near = (el: HTMLElement, p: { x: number; y: number }) => {
@@ -32,6 +33,32 @@ const near = (el: HTMLElement, p: { x: number; y: number }) => {
   const dx = Math.max(r.left - p.x, 0, p.x - r.right), dy = Math.max(r.top - p.y, 0, p.y - r.bottom);
   return Math.hypot(dx, dy) <= POINTER_REACH_PX;
 };
+
+type Point = { x: number; y: number };
+
+const oldLayout = (tabId: string) => document.querySelector<HTMLElement>(`main.center .layout-root[data-tab-id="${CSS.escape(tabId)}"][data-hidden]`);
+
+/** A swap shows the old layout on top for a moment and masks it away over the new one, which is already drawn. */
+function play(plan: Plan, pointer: Point | null) {
+  if (plan.kind === "swap") {
+    const old = oldLayout(plan.fromTabId);
+    if (old) {
+      const origin = plan.fromPointer && pointer && near(old, pointer) ? pointer : undefined;
+      old.dataset.leaving = "";
+      const mask = playMask(old, { style: plan.style, mode: "conceal", reverse: plan.reverse, origin });
+      mask.done.then(() => {
+        delete old.dataset.leaving;
+        mask.cancel();
+      });
+      return;
+    }
+  }
+  const target = plan.kind === "swap" ? ({ kind: "layout" } as const) : plan.target;
+  const host = targetOf(target);
+  if (!host) return;
+  const origin = plan.fromPointer && pointer && near(host, pointer) ? pointer : undefined;
+  playCover(host, { style: plan.kind === "swap" ? plan.fallback : plan.style, reverse: plan.reverse, origin });
+}
 
 /** Plays the glyph cover that each change of the centre gets: see coverPlan.ts. */
 export function useCovers() {
@@ -52,11 +79,6 @@ export function useCovers() {
     last.current = next;
     const p = pointer.current;
     const recent = p && performance.now() - p.at < POINTER_FRESH_MS ? p : null;
-    for (const plan of plans) {
-      const host = targetOf(plan.target);
-      if (!host) continue;
-      const origin = plan.fromPointer && recent && near(host, recent) ? recent : undefined;
-      playCover(host, { style: plan.style, reverse: plan.reverse, origin });
-    }
+    plans.forEach((plan) => play(plan, recent));
   }, [key]);
 }
