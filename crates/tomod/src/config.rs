@@ -129,8 +129,8 @@ pub const DEFAULT_CONFIG_TOML: &str = r#"# Tomo configuration. Every key is opti
 #
 # [[hooks]]
 # event = "worktree.tags_changed"
-# tag = "merged"
-# command = "~/.config/tomo/hooks/merged"
+# tag = "ready"
+# command = "~/.config/tomo/hooks/ready"
 
 # Archive deletes the heavy build directories before it removes the worktree.
 # The hook runs in the worktree. Change the list, or delete the hook to keep them.

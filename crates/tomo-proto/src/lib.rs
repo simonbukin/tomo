@@ -639,6 +639,8 @@ pub enum Event {
     PrChanged {
         worktree_id: Id,
         pr: Option<PullRequest>,
+        #[serde(default)]
+        prs: Vec<PullRequest>,
     },
     HookRan {
         run: HookRun,
@@ -1564,9 +1566,41 @@ pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
+/// The epoch milliseconds of a UTC time such as `2026-10-13T14:05:22Z` or `2026-10-13T14:05:22.123Z`.
+/// Days from the civil date: http://howardhinnant.github.io/date_algorithms.html#days_from_civil
+pub fn utc_ms(text: &str) -> Option<u64> {
+    let text = text.strip_suffix('Z')?;
+    let (date, time) = text.split_once('T')?;
+    let mut d = date.splitn(3, '-').map(str::parse::<i64>);
+    let (y, m, day) = (d.next()?.ok()?, d.next()?.ok()?, d.next()?.ok()?);
+    let (clock, fraction) = time.split_once('.').unwrap_or((time, ""));
+    let mut t = clock.splitn(3, ':').map(str::parse::<i64>);
+    let (h, min, s) = (t.next()?.ok()?, t.next()?.ok()?, t.next()?.ok()?);
+    let ms: i64 = format!("{fraction:0<3}").get(..3)?.parse().ok()?;
+    let valid = (1..=12).contains(&m) && (1..=31).contains(&day) && h < 24 && min < 60 && s < 61;
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    let total = ((days * 24 + h) * 60 + min) * 60_000 + s * 1000 + ms;
+    (valid && total >= 0).then_some(total as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn utc_ms_reads_github_and_linear_times() {
+        assert_eq!(utc_ms("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(utc_ms("2026-10-13T14:05:22Z"), Some(1_791_900_322_000));
+        assert_eq!(utc_ms("2026-10-13T14:05:22.5Z"), Some(1_791_900_322_500));
+        assert_eq!(utc_ms("2024-02-29T23:59:59.999Z"), Some(1_709_251_199_999));
+        assert_eq!(utc_ms("2026-10-13T14:05:22+02:00"), None);
+        assert_eq!(utc_ms("2026-13-01T00:00:00Z"), None);
+        assert_eq!(utc_ms(""), None);
+    }
 
     #[test]
     fn request_round_trips_with_tagged_method() {

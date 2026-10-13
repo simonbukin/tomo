@@ -211,7 +211,7 @@ click, and Escape. Tomo owns the look through CSS classes and tokens in
 | Which hooks run for an event          | `events::matching_hooks`, `Daemon::dispatch` |
 | The only synchronous hook             | `Daemon::gate` (`worktree.before_archive`) |
 | How tags are cleaned                  | `normalized_metadata`, called in `MetadataSet` |
-| Which GitHub tag a pull request gets  | `addons::github::model::pr_tag` |
+| When `github.pr_merged` fires        | `addons::github::model::update`, called in `github::remember` |
 | Config validation                     | `config::check`                         |
 | Layout mutations                      | `layout::{split,remove,resize,equalize,swap,rotate,insert,move_within,move_to_edge,reorder}`, applied in `moves.rs` |
 | Town naming and unlocks               | `addons::towns::{name_worktree, unlock, rebind}`, joined through `Seams` |

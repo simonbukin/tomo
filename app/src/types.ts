@@ -75,7 +75,7 @@ export type WorktreePrefill = { repoId?: Id; tags?: string[] };
 
 export type SidebarMode = "open" | "minimal" | "closed";
 
-export type CoreSection = "worktree" | "git" | "processes" | "sessions" | "files";
+export type CoreSection = "worktree" | "git" | "links" | "processes" | "sessions" | "files";
 
 /** A core inspector section, or the id of an addon inspector section. */
 export type RightSection = CoreSection | (string & {});

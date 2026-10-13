@@ -1,7 +1,8 @@
 import { Star } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { worktreeLinks } from "./addons";
-import type { WorktreeLink } from "./addons/types";
+import { LinkList } from "./LinkList";
+import { linkGroups } from "./linkGroups";
 import { durationLabel } from "./previewModel";
 import { aboutDetails, gitDetails, homePath, hoverAgentLines, hoverAppLines, problemLines, rowGroups, type Detail, type Line } from "./rowModel";
 import { useStore } from "./store";
@@ -50,21 +51,6 @@ function Lines({ lines }: { lines: Line[] }) {
   );
 }
 
-function LinkFacts({ link }: { link: WorktreeLink }) {
-  const Icon = link.icon;
-  return (
-    <>
-      <Icon className="wt-link-icon" style={{ color: link.color }} /> {link.text} {link.title}
-      {link.facts.map((f) => (
-        <Fragment key={f.text}>
-          <span className="wt-tone-mute"> · </span>
-          <span className={f.bad ? "wt-tone-bad" : "wt-tone-mute"}>{f.text}</span>
-        </Fragment>
-      ))}
-    </>
-  );
-}
-
 /** Everything the client knows about one worktree, for the hover card on a sidebar row or a rail square. */
 export function WorktreePreview({ w }: { w: Worktree }) {
   const input = useRowInput(w);
@@ -90,14 +76,7 @@ export function WorktreePreview({ w }: { w: Worktree }) {
       <Section title="git"><Details rows={gitDetails(w)} /></Section>
       {links.length > 0 && (
         <Section title="links">
-          <div className="wt-hover-kv">
-            {links.map((l) => (
-              <Fragment key={l.id}>
-                <span className="wt-hover-k">{l.label}</span>
-                <span className="wt-hover-v"><LinkFacts link={l} /></span>
-              </Fragment>
-            ))}
-          </div>
+          <LinkList groups={linkGroups(links)} now={now} />
         </Section>
       )}
       <Section><Details rows={aboutDetails(w, now)} /></Section>

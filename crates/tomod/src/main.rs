@@ -24,6 +24,7 @@ mod subagents;
 mod sync;
 mod system;
 mod term_modes;
+mod trail;
 mod vt;
 mod watch;
 

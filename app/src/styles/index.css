@@ -5,6 +5,7 @@
 @import "./layout.css";
 @import "./sidebar.css";
 @import "../WorktreeRow.css";
+@import "../LinkList.css";
 @import "./home.css";
 @import "./terminal.css";
 @import "../browser/browser.css";

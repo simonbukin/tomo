@@ -1,10 +1,14 @@
 use crate::activity;
+use crate::trail::BranchTouch;
 use serde_json::{json, Value};
 use std::process::Output;
-use tomo_proto::{now_ms, ActivityEvent, ActivityKind, GitHubActivity, PrStatusResult, PullRequest};
+use tomo_proto::{now_ms, utc_ms, ActivityEvent, ActivityKind, GitHubActivity, PrStatusResult, PullRequest};
 
 /// How long a fetched pull request answers `pr_status` without a new `gh` run.
 pub const FRESH_MS: u64 = 60_000;
+
+/// The `--json` fields of both `gh pr view` and `gh pr list`.
+pub const PR_FIELDS: &str = "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt";
 
 pub fn parse_pr(v: &Value) -> Option<PullRequest> {
     let number = v.get("number")?.as_u64()?;
@@ -31,11 +35,35 @@ pub fn parse_pr(v: &Value) -> Option<PullRequest> {
         checks_failed: failed,
         checks_pending: pending,
         fetched_at_ms: now_ms(),
+        head: v.get("headRefName").and_then(Value::as_str).unwrap_or("").to_string(),
+        updated_at_ms: v.get("updatedAt").and_then(Value::as_str).and_then(utc_ms).unwrap_or(0),
+        touched_ms: 0,
     })
 }
 
 fn unavailable(reason: impl Into<String>) -> PrStatusResult {
-    PrStatusResult { available: false, reason: Some(reason.into()), pr: None }
+    PrStatusResult { available: false, reason: Some(reason.into()), pr: None, prs: vec![] }
+}
+
+/// The newest pull request in the answer of `gh pr list --head <branch> --limit 1`. None for a failure or no pull request.
+pub fn listed(out: std::io::Result<Output>) -> Option<PullRequest> {
+    let out = out.ok().filter(|o| o.status.success())?;
+    serde_json::from_slice::<Value>(&out.stdout).ok()?.as_array()?.first().and_then(parse_pr)
+}
+
+/// The answer for the branch now, with the pull requests of the earlier branches. Each one gets the time that this
+/// worktree last touched its head, and the list goes newest first by that time or by the last change on GitHub.
+pub fn with_history(current: PrStatusResult, earlier: Vec<PullRequest>, trail: &[BranchTouch]) -> PrStatusResult {
+    let touched = |pr: PullRequest| PullRequest { touched_ms: trail.iter().find(|t| t.branch == pr.head).map_or(0, |t| t.touched_ms), ..pr };
+    let pr = current.pr.map(touched);
+    let mut prs = pr.iter().cloned().chain(earlier.into_iter().map(touched)).fold(Vec::<PullRequest>::new(), |mut seen, p| {
+        if !seen.iter().any(|s| s.number == p.number) {
+            seen.push(p);
+        }
+        seen
+    });
+    prs.sort_by_key(|p| std::cmp::Reverse(p.touched_ms.max(p.updated_at_ms)));
+    PrStatusResult { pr, prs, ..current }
 }
 
 /// The `pr_status` answer for the outcome of `gh pr view`.
@@ -44,12 +72,12 @@ pub fn answer(out: std::io::Result<Output>) -> PrStatusResult {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => unavailable("gh is not installed"),
         Err(e) => unavailable(e.to_string()),
         Ok(o) if o.status.success() => {
-            PrStatusResult { available: true, reason: None, pr: parse_pr(&serde_json::from_slice(&o.stdout).unwrap_or(Value::Null)) }
+            PrStatusResult { available: true, reason: None, pr: parse_pr(&serde_json::from_slice(&o.stdout).unwrap_or(Value::Null)), prs: vec![] }
         }
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
             if err.contains("no pull requests found") {
-                PrStatusResult { available: true, reason: None, pr: None }
+                PrStatusResult { available: true, reason: None, pr: None, prs: vec![] }
             } else {
                 unavailable(err.lines().next().unwrap_or("gh failed"))
             }
@@ -65,7 +93,7 @@ pub fn fresh(cached: Option<&PrStatusResult>, now_ms: u64) -> bool {
 /// What a new answer means next to the answer that it replaces.
 #[derive(Debug, PartialEq)]
 pub struct Update<'a> {
-    /// The pull request differs, so `pr_changed` fires. A new fetch of the same pull request differs by `fetched_at_ms`.
+    /// A pull request differs, so `pr_changed` fires. A new fetch of the same pull request differs by `fetched_at_ms`.
     pub changed: bool,
     /// The pull request is merged now and was not merged before, so `pr_merged` is recorded.
     pub merged: Option<&'a PullRequest>,
@@ -73,7 +101,7 @@ pub struct Update<'a> {
 
 pub fn update<'a>(before: Option<&PrStatusResult>, after: &'a PrStatusResult) -> Update<'a> {
     let was_merged = before.and_then(|b| b.pr.as_ref()).is_some_and(|pr| pr.state == "merged");
-    Update { changed: before.map(|b| &b.pr) != Some(&after.pr), merged: after.pr.as_ref().filter(|pr| pr.state == "merged" && !was_merged) }
+    Update { changed: before.map(|b| (&b.pr, &b.prs)) != Some((&after.pr, &after.prs)), merged: after.pr.as_ref().filter(|pr| pr.state == "merged" && !was_merged) }
 }
 
 pub fn merged_event(worktree_id: &str, pr: &PullRequest) -> ActivityEvent {
@@ -84,24 +112,16 @@ pub fn merged_event(worktree_id: &str, pr: &PullRequest) -> ActivityEvent {
     }
 }
 
-/// The tags that GitHub owns. A worktree carries at most one of them, and only this addon sets them.
-pub const PR_TAGS: [&str; 6] = ["draft", "review", "changes-requested", "approved", "merged", "closed"];
+/// The tags that this addon once wrote for the state of a pull request. `migrate` removes them one time.
+pub const OLD_PR_TAGS: [&str; 6] = ["draft", "review", "changes-requested", "approved", "merged", "closed"];
 
-pub fn pr_tag(pr: &PullRequest) -> &'static str {
-    match (pr.state.as_str(), pr.draft, pr.review_decision.as_deref()) {
-        ("merged", _, _) => "merged",
-        ("closed", _, _) => "closed",
-        (_, true, _) => "draft",
-        (_, _, Some("changes_requested")) => "changes-requested",
-        (_, _, Some("approved")) => "approved",
-        _ => "review",
-    }
+pub fn without_old_pr_tags(tags: &[String]) -> Vec<String> {
+    tags.iter().filter(|t| !OLD_PR_TAGS.contains(&t.as_str())).cloned().collect()
 }
 
-/// The user's tags with the one GitHub tag that fits the pull request in place of any other.
-pub fn with_pr_tag(tags: &[String], pr: &PullRequest) -> Vec<String> {
-    let tag = pr_tag(pr);
-    tags.iter().filter(|t| t.as_str() == tag || !PR_TAGS.contains(&t.as_str())).cloned().chain((!tags.iter().any(|t| t == tag)).then(|| tag.to_string())).collect()
+/// The `pull_request` field of a `github.pr_merged` hook event.
+pub fn hook_fields(pr: &PullRequest) -> serde_json::Map<String, Value> {
+    serde_json::Map::from_iter([("pull_request".to_string(), json!({ "number": pr.number, "title": pr.title, "url": pr.url }))])
 }
 
 /// A pull request link: the number, the URL, and the state.
@@ -142,11 +162,49 @@ mod tests {
             checks_failed: 0,
             checks_pending: 0,
             fetched_at_ms,
+            head: String::new(),
+            updated_at_ms: 0,
+            touched_ms: 0,
         }
     }
 
     fn found(pr: Option<PullRequest>) -> PrStatusResult {
-        PrStatusResult { available: true, reason: None, pr }
+        PrStatusResult { available: true, reason: None, pr, prs: vec![] }
+    }
+
+    fn on(number: u64, head: &str, updated_at_ms: u64) -> PullRequest {
+        PullRequest { number, head: head.into(), updated_at_ms, ..pr("open", 1) }
+    }
+
+    fn touch(branch: &str, touched_ms: u64) -> BranchTouch {
+        BranchTouch { branch: branch.into(), touched_ms, subjects: vec![] }
+    }
+
+    #[test]
+    fn reads_the_head_and_the_update_time() {
+        let v = serde_json::json!({ "number": 4, "headRefName": "you/eng-31-retry", "updatedAt": "2026-10-13T14:05:22Z" });
+        let pr = parse_pr(&v).unwrap();
+        assert_eq!((pr.head.as_str(), pr.updated_at_ms, pr.touched_ms), ("you/eng-31-retry", 1_791_900_322_000, 0));
+    }
+
+    #[test]
+    fn a_list_answer_gives_its_first_pull_request() {
+        assert_eq!(listed(gh(0, r#"[{"number":9,"state":"MERGED"},{"number":2}]"#, "")).map(|p| p.number), Some(9));
+        assert_eq!(listed(gh(0, "[]", "")), None);
+        assert_eq!(listed(gh(1, "", "boom")), None);
+        assert_eq!(listed(Err(std::io::Error::other("no gh"))), None);
+    }
+
+    #[test]
+    fn history_puts_every_pull_request_once_the_most_recently_touched_first() {
+        let trail = [touch("now", 300), touch("before", 200), touch("long-ago", 100)];
+        let current = found(Some(on(1, "now", 0)));
+        let result = with_history(current, vec![on(2, "long-ago", 250), on(1, "now", 0), on(3, "before", 0)], &trail);
+        assert_eq!(result.prs.iter().map(|p| (p.number, p.touched_ms)).collect::<Vec<_>>(), vec![(1, 300), (2, 100), (3, 200)]);
+        assert_eq!(result.pr.map(|p| p.touched_ms), Some(300));
+        assert!(result.available);
+        let none = with_history(found(None), vec![on(5, "before", 0)], &trail);
+        assert_eq!((none.pr, none.prs.len()), (None, 1));
     }
 
     fn gh(code: i32, stdout: &str, stderr: &str) -> std::io::Result<Output> {
@@ -244,14 +302,9 @@ mod tests {
     }
 
     #[test]
-    fn a_pull_request_swaps_the_github_tag_and_keeps_the_rest() {
+    fn the_old_pull_request_tags_go_and_the_rest_stay_in_order() {
         let tags = |t: &[&str]| t.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        let open = pr("open", 1);
-        assert_eq!(with_pr_tag(&tags(&["labor", "draft"]), &open), tags(&["labor", "review"]));
-        assert_eq!(with_pr_tag(&tags(&["review", "labor"]), &open), tags(&["review", "labor"]), "the order stays when nothing changes");
-        assert_eq!(with_pr_tag(&tags(&["labor"]), &pr("merged", 1)), tags(&["labor", "merged"]));
-        assert_eq!(pr_tag(&PullRequest { draft: true, ..open.clone() }), "draft");
-        assert_eq!(pr_tag(&PullRequest { review_decision: Some("changes_requested".into()), ..open.clone() }), "changes-requested");
-        assert_eq!(pr_tag(&PullRequest { review_decision: Some("approved".into()), ..open }), "approved");
+        assert_eq!(without_old_pr_tags(&tags(&["sync", "review", "q4", "merged"])), tags(&["sync", "q4"]));
+        assert_eq!(without_old_pr_tags(&tags(&["sync"])), tags(&["sync"]));
     }
 }

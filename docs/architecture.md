@@ -62,7 +62,7 @@ overwrite it.
 
 | Category                    | Examples                                                       | Rule                                                          |
 |-----------------------------|----------------------------------------------------------------|---------------------------------------------------------------|
-| Authoritative Tomo metadata | known repository roots; display name, tags, town unlocks | Only the user (through GUI, CLI, or a hook script) changes it. The GitHub addon also sets its reserved tags. |
+| Authoritative Tomo metadata | known repository roots; display name, tags, town unlocks | Only the user (through GUI, CLI, or a hook script) changes it. |
 | Cached external observation | worktree path, gitdir name, branch, dirty state, diff counts   | Rediscovered from Git on every refresh. Never trusted forever. |
 | Recoverable runtime state   | tabs, layout tree, panes, cwd, agent kind, session reference, attention, UI state | Written so a restart can rebuild the shape of the work. |
 
@@ -158,10 +158,8 @@ A worktree has any number of **tags**. Tags are free text with no leading
 sidebar tag lens, the Home groups, and the board columns. A tag can say what
 the work is about (`labor`) or where it is in your workflow (`ready`).
 
-The GitHub addon owns six reserved tags (`draft`, `review`,
-`changes-requested`, `approved`, `merged`, `closed`). It keeps exactly one
-of them on a worktree that has a pull request. See
-[features/github.md](features/github.md).
+No addon writes tags. The state of a pull request shows on its link, not as
+a tag. See [features/github.md](features/github.md).
 
 Why one dimension: a separate state field needed its own config, its own
 CLI flags, and its own hook filter. A tag does the same work, and a hook can
