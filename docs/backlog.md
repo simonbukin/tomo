@@ -308,6 +308,26 @@ levers, in the order they are likely to pay:
 
 Change one thing at a time, and keep the idle CPU gate from the baseline.
 
+Measured on 2026-10-13, usual start, from process start (`TOMO_TIMING=1`):
+
+| Step | ms |
+|---|---|
+| Tauri setup | 70 |
+| Window and native splash on screen | 135 |
+| WebKit starts the page | 290 |
+| Main module runs (931 kB, about 3 ms of parse for each 100 kB) | 320 |
+| Snapshot answered (the daemon answers in under 1 ms) | 345 |
+| Aperture opens on the first snapshot | 370 |
+
+When the webview is built in the same main-thread turn as the window, the
+window reaches the screen about 120 ms late, at 240 ms, together with
+WebKit. So the app builds the webview one frame after the window shows.
+
+A cold start adds about 30 ms, for the daemon to boot. Zed, for comparison,
+shows its window in about 255 ms. Most of what is left belongs to WebKit:
+about 130 ms to start its web process before any of our code runs. A
+smaller main chunk saves less than 10 ms.
+
 ### 2.9 Brand and the design system — done
 The PRD asked for a brand definition, a small design system, logo studies, and
 a copy pass, and explicitly not a redesign.
