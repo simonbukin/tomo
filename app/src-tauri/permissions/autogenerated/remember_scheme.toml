@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remember-scheme"
+description = "Enables the remember_scheme command without any pre-configured scope."
+commands.allow = ["remember_scheme"]
+
+[[permission]]
+identifier = "deny-remember-scheme"
+description = "Denies the remember_scheme command without any pre-configured scope."
+commands.deny = ["remember_scheme"]

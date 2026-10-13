@@ -1,4 +1,6 @@
 mod browser;
+#[cfg(target_os = "macos")]
+mod splash;
 mod viewer;
 
 use serde_json::{json, Value};
@@ -180,7 +182,11 @@ async fn rpc(link: State<'_, Arc<Link>>, method: String, params: Option<Value>) 
             return Err(RpcError { code: ErrorCode::Io, message: "daemon not connected".into() });
         }
     }
-    rx.await.unwrap_or_else(|_| Err(RpcError { code: ErrorCode::Io, message: "daemon disconnected".into() }))
+    let answer = rx.await.unwrap_or_else(|_| Err(RpcError { code: ErrorCode::Io, message: "daemon disconnected".into() }));
+    if id == 1 {
+        mark("first rpc answered");
+    }
+    answer
 }
 
 /// What Browser runs for each addon when a page finishes loading (webview, pane id) and when a pane closes (app, pane id).
@@ -240,67 +246,130 @@ async fn clipboard_image() -> Option<String> {
 
 #[tauri::command]
 fn splash_ready(app: AppHandle) {
+    mark("splash ready");
     if let Some(window) = app.get_window("main") {
         reveal(&window);
     }
 }
 
-/// Must run on the main thread.
-#[cfg(target_os = "macos")]
-fn set_alpha_now(window: &tauri::Window, alpha: f64) {
-    if let Ok(ptr) = window.ns_window() {
-        // SAFETY: ns_window is the live NSWindow of this window, and the caller is on the main thread.
-        unsafe { (*ptr.cast::<objc2_app_kit::NSWindow>()).setAlphaValue(alpha) };
+const SCHEME_FILE: &str = "scheme";
+/// One frame at 60 Hz.
+const ONE_FRAME: std::time::Duration = std::time::Duration::from_millis(17);
+
+#[derive(serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Scheme {
+    Light,
+    Dark,
+}
+
+impl Scheme {
+    fn name(self) -> &'static str {
+        match self {
+            Scheme::Light => "light",
+            Scheme::Dark => "dark",
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn parse(text: &str) -> Option<Scheme> {
+        [Scheme::Light, Scheme::Dark].into_iter().find(|s| s.name() == text)
+    }
+}
+
+/// Keeps the scheme the page settled on, so the next native splash opens on the same ground.
+#[tauri::command]
+fn remember_scheme(scheme: Scheme) {
+    let path = data_dir().join(SCHEME_FILE);
+    if std::fs::read_to_string(&path).ok().as_deref() != Some(scheme.name()) {
+        let _ = std::fs::write(path, scheme.name());
     }
 }
 
 #[cfg(target_os = "macos")]
-fn set_alpha(window: &tauri::Window, alpha: f64) {
-    let target = window.clone();
-    let _ = window.run_on_main_thread(move || set_alpha_now(&target, alpha));
+fn remembered_scheme(window: &tauri::Window) -> Scheme {
+    std::fs::read_to_string(data_dir().join(SCHEME_FILE)).ok().as_deref().and_then(Scheme::parse).unwrap_or(match window.theme() {
+        Ok(tauri::Theme::Light) => Scheme::Light,
+        _ => Scheme::Dark,
+    })
 }
 
+#[cfg(target_os = "macos")]
+fn with_ns_window(window: &tauri::Window, f: impl FnOnce(&objc2_app_kit::NSWindow, objc2::MainThreadMarker)) {
+    let Some(mtm) = objc2::MainThreadMarker::new() else { return };
+    if let Ok(ptr) = window.ns_window() {
+        // SAFETY: ns_window is the live NSWindow of this window, and mtm proves that this is the main thread.
+        f(unsafe { &*ptr.cast() }, mtm);
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn reveal(window: &tauri::Window) {
+    let target = window.clone();
+    let _ = window.run_on_main_thread(move || with_ns_window(&target, |w, _| splash::uncover(w)));
+}
+
+#[cfg(not(target_os = "macos"))]
+fn reveal(window: &tauri::Window) {
+    if window.is_visible().is_ok_and(|v| !v) {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
+    let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or_else(|| tauri::Error::WindowNotFound)?;
+    // Until its first paint the webview holds WebKit's blank page, white whatever background
+    // colour it carries. On macOS the window shows at once under a native splash that covers
+    // the webview until the page paints its own. Elsewhere it stays hidden until then.
+    let window = tauri::window::WindowBuilder::from_config(app, &config)?.visible(false).build()?;
     #[cfg(target_os = "macos")]
-    set_alpha(window, 1.0);
-    let _ = window.show();
-    let _ = window.set_focus();
+    {
+        with_ns_window(&window, |w, mtm| splash::cover(w, remembered_scheme(&window), mtm));
+        window.show()?;
+        let _ = window.set_focus();
+        mark("window shown");
+    }
+    // Measured: with the webview built in the same turn as show(), the window reached the
+    // screen about 120 ms late, together with WebKit (docs/backlog.md, 2.8). The main thread
+    // first goes idle for one frame, so that AppKit puts the splash on screen first.
+    let main = window.clone();
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(ONE_FRAME);
+        let _ = handle.run_on_main_thread(move || {
+            if let Err(e) = attach_main_webview(&main, &config) {
+                eprintln!("[tomo-app] could not make the main webview: {e}");
+            }
+        });
+    });
+    // A page that never paints must not leave the splash up for good.
+    let fallback = window.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        reveal(&fallback);
+    });
+    Ok(())
 }
 
 // The main webview must be a child of the window, like the browser webviews. On macOS
 // a webview created as the window content replaces the content view, and a child added
 // later lands in the old, detached view and never paints.
-fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
-    let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or_else(|| tauri::Error::WindowNotFound)?;
-    // The window stays invisible until the page calls splash_ready after the splash has
-    // painted. Every earlier moment measured as a white window: the webview holds WebKit's
-    // blank page until its first paint, whatever background colour it carries. On macOS it
-    // is on screen at alpha 0, not hidden: WebKit runs no animation frame in a hidden
-    // window, so the page would never reach splash_ready.
-    let window = tauri::window::WindowBuilder::from_config(app, &config)?.visible(false).build()?;
-    #[cfg(target_os = "macos")]
-    {
-        set_alpha_now(&window, 0.0);
-        window.show()?;
-    }
+fn attach_main_webview(window: &tauri::Window, config: &tauri::utils::config::WindowConfig) -> tauri::Result<()> {
     let ground = match window.theme() {
         Ok(tauri::Theme::Light) => Color(0xfb, 0xfa, 0xfd, 0xff),
         _ => Color(0x17, 0x14, 0x1f, 0xff),
     };
     window.set_background_color(Some(ground))?;
     let size = window.inner_size()?.to_logical::<f64>(window.scale_factor()?);
-    window.add_child(WebviewBuilder::from_config(&config).background_color(ground).auto_resize(), LogicalPosition::new(0.0, 0.0), size)?;
-    // A page that never loads must not leave the person with no window at all.
-    let fallback = window.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        #[cfg(target_os = "macos")]
-        set_alpha(&fallback, 1.0);
-        #[cfg(not(target_os = "macos"))]
-        if fallback.is_visible().is_ok_and(|v| !v) {
-            let _ = fallback.show();
-        }
-    });
+    let webview = WebviewBuilder::from_config(config)
+        .background_color(ground)
+        .auto_resize()
+        .on_page_load(|_, payload| mark(&format!("page {:?}", payload.event())));
+    window.add_child(webview, LogicalPosition::new(0.0, 0.0), size)?;
+    #[cfg(target_os = "macos")]
+    with_ns_window(window, |w, _| splash::lift(w));
+    mark("window built");
     Ok(())
 }
 
@@ -329,6 +398,7 @@ pub fn run() {
             clipboard_image,
             open_folder,
             splash_ready,
+            remember_scheme,
             browser::browser_create,
             browser::browser_set_bounds,
             browser::browser_set_visible,

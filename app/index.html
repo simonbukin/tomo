@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tomo</title>
     <style>
-      /* The window stays hidden until the mark below has painted, so this is the first thing
-         anyone sees. It is inline because a linked stylesheet is one more round trip. */
+      /* The mark below is the first thing that the page paints, on the same spot as the native
+         splash (splash.rs). It is inline because a linked stylesheet is one more round trip. */
       html, body { height: 100%; margin: 0; background: #0e0e0e; }
       :root[data-theme="light"], :root[data-theme="light"] body { background: #efeee9; }
       #boot {
@@ -52,11 +52,10 @@
       </svg>
     </div>
     <script>
-      // Showing the window any earlier shows WebKit's white page for the frames before this
-      // paints. Two frames: the first schedules the paint, the second runs after it.
+      // The native splash covers the webview until this paints; any earlier shows WebKit's
+      // white page. Two frames: the first schedules the paint, the second runs after it.
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
-          window.__tomoShownAt = performance.now();
           var internals = window.__TAURI_INTERNALS__;
           if (internals && internals.invoke) internals.invoke("splash_ready");
         });
