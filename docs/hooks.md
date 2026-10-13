@@ -256,7 +256,7 @@ git fetch -q origin
 if git branch -r --merged origin/HEAD | grep -q "origin/$TOMO_BRANCH\$"; then
   tomo worktree archive "$TOMO_WORKTREE_ID"
 else
-  tomo notify --worktree "$TOMO_WORKTREE_ID" "marked merged, but $TOMO_BRANCH is not merged on origin"
+  tomo notify --worktree "$TOMO_WORKTREE_ID" "the pull request is merged, but $TOMO_BRANCH is not merged on origin"
 fi
 ```
 

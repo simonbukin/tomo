@@ -89,7 +89,7 @@ has "$(hist "$W4")" "d['pr']=={'number':7,'url':'https://github.com/acme/acme/pu
 has "$(hist "$W1")" "d['pr'] is None" && check 0 "after a restart, the cache is empty" || check 1 "cache after restart" "$(hist "$W1")"
 pr "$W4" >/dev/null
 [ "$(calls "$N4")" = 2 ] && check 0 "after a restart, pr_status runs gh again" || check 1 "gh after restart" "calls=$(calls "$N4")"
-has "$(merged "$W4")" "len(d)==2" && known "a restart forgets the cache, so the next pr_status records pr_merged again" || check 1 "pr_merged after restart" "$(merged "$W4")"
+has "$(merged "$W4")" "len(d)==1" && check 0 "after a restart, a merge that the activity has is not recorded again" || check 1 "pr_merged after restart" "$(merged "$W4")"
 
 daemon_stop
 rm -rf "$GHD"

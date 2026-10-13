@@ -24,6 +24,9 @@ pub type Cache = BTreeMap<Id, PrStatusResult>;
 pub const HOOK_EVENTS: &[&str] = &["github.pr_merged"];
 
 const OLD_TAGS_REMOVED: &str = "github.old_pr_tags_removed";
+/// How far back the activity says that a merge was already seen. The cache is memory only, so after a restart, or
+/// after an answer that failed, the next answer looks like a new merge. The activity table survives both.
+const MERGE_MEMORY_MS: u64 = 365 * 24 * 60 * 60 * 1000;
 
 /// Removes the pull request tags that older versions wrote, one time. A tag that a person sets later stays.
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
@@ -88,7 +91,10 @@ pub async fn pr_status(daemon: &Arc<Daemon>, worktree_id: Id) -> Result<Value, R
 pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
     let before = addons::state_mut(inner).github.insert(worktree_id.clone(), result.clone());
     let update = model::update(before.as_ref(), &result);
-    if let Some(pr) = update.merged {
+    let seen = |pr: &PullRequest| {
+        Daemon::recorded_recently(inner, GitHubActivity::PrMerged, MERGE_MEMORY_MS, |a| a.worktree_id.as_deref() == Some(worktree_id.as_str()) && a.payload["number"] == pr.number)
+    };
+    if let Some(pr) = update.merged.filter(|pr| !seen(pr)) {
         Daemon::record(inner, model::merged_event(&worktree_id, pr));
         let hook = HookEvent { addons: model::hook_fields(pr), ..events::envelope(inner, "github.pr_merged", Some(&worktree_id)) };
         inner.hook_queue.push(hook);

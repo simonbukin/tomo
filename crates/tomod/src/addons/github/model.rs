@@ -62,7 +62,7 @@ pub fn listed(out: std::io::Result<Output>, own: Option<&str>) -> Option<PullReq
     let ours = |v: &&Value| {
         let cross = v.get("isCrossRepository").and_then(Value::as_bool) == Some(true);
         let owner = v.pointer("/headRepositoryOwner/login").and_then(Value::as_str);
-        !cross || (own.is_some() && owner == own)
+        !cross || own.zip(owner).is_some_and(|(own, owner)| own.eq_ignore_ascii_case(owner))
     };
     list.as_array()?.iter().find(ours).and_then(parse_pr)
 }
@@ -116,7 +116,8 @@ pub struct Update<'a> {
 }
 
 pub fn update<'a>(before: Option<&PrStatusResult>, after: &'a PrStatusResult) -> Update<'a> {
-    let was_merged = before.and_then(|b| b.pr.as_ref()).is_some_and(|pr| pr.state == "merged");
+    let after_number = after.pr.as_ref().map(|pr| pr.number);
+    let was_merged = before.and_then(|b| b.pr.as_ref()).is_some_and(|pr| pr.state == "merged" && Some(pr.number) == after_number);
     Update { changed: before.map(|b| (&b.pr, &b.prs)) != Some((&after.pr, &after.prs)), merged: after.pr.as_ref().filter(|pr| pr.state == "merged" && !was_merged) }
 }
 
@@ -215,6 +216,7 @@ mod tests {
         let forks = r#"[{"number":9,"isCrossRepository":true,"headRepositoryOwner":{"login":"stranger"}},{"number":8,"isCrossRepository":true,"headRepositoryOwner":{"login":"you"}},{"number":2,"isCrossRepository":false}]"#;
         assert_eq!(listed(gh(0, forks, ""), None).map(|p| p.number), Some(2), "a stranger's fork does not count");
         assert_eq!(listed(gh(0, forks, ""), Some("you")).map(|p| p.number), Some(8), "the fork of the origin owner counts");
+        assert_eq!(listed(gh(0, forks, ""), Some("You")).map(|p| p.number), Some(8), "a login is the same in any case");
         assert_eq!(listed(gh(0, r#"[{"number":9,"isCrossRepository":true}]"#, ""), Some("you")), None);
         assert_eq!(listed(gh(0, "[]", ""), None), None);
         assert_eq!(listed(gh(1, "", "boom"), None), None);
@@ -310,6 +312,8 @@ mod tests {
         assert_eq!(update(Some(&open), &merged).merged.map(|p| p.fetched_at_ms), Some(2));
         assert_eq!(update(None, &merged).merged.map(|p| p.fetched_at_ms), Some(2));
         assert_eq!(update(Some(&merged), &found(Some(pr("merged", 3)))), Update { changed: true, merged: None });
+        let next = found(Some(PullRequest { number: 4, ..pr("merged", 5) }));
+        assert_eq!(update(Some(&merged), &next).merged.map(|p| p.number), Some(4), "another pull request that merged is new");
     }
 
     #[test]
