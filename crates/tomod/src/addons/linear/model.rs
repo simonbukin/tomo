@@ -1,6 +1,6 @@
 //! Pure rules of the Linear addon: which issues a worktree names, the one query for all of them, and how to read the answer.
 
-use crate::trail::BranchTouch;
+use crate::trail::{ticket_keys, BranchTouch};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use tomo_proto::{utc_ms, Id, LinearIssue, LinearLink, LinearState, LinearStatus, LinearViewer};
@@ -15,27 +15,9 @@ pub fn valid_key(key: &str) -> bool {
     key.strip_prefix("lin_api_").is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric()))
 }
 
-/// Every `TEAM-123` in a branch or a commit subject, in order, with the team key in upper case:
-/// `you/eng-2611-fix` gives `ENG-2611`. A word such as `utf-8` matches too; no Linear team has that key.
-pub fn identifiers(text: &str) -> Vec<(String, u32)> {
-    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
-        .flat_map(|segment| {
-            let parts: Vec<&str> = segment.split('-').collect();
-            parts
-                .windows(2)
-                .filter_map(|w| {
-                    let key_like = w[0].starts_with(|c: char| c.is_ascii_alphabetic());
-                    let number = w[1].parse::<u32>().ok().filter(|_| w[1].chars().all(|c| c.is_ascii_digit()));
-                    key_like.then_some(number).flatten().map(|n| (w[0].to_ascii_uppercase(), n))
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
-}
-
 /// The first `TEAM-123` in a branch: `you/eng-2611-fix` gives `ENG-2611`.
 pub fn identifier(branch: &str) -> Option<(String, u32)> {
-    identifiers(branch).into_iter().next()
+    ticket_keys(branch).into_iter().next()
 }
 
 /// An issue that a worktree names: in a branch that it had, or in a commit that it made.
@@ -58,7 +40,7 @@ pub fn wanted(worktree_id: &Id, current: Option<&str>, trail: &[BranchTouch]) ->
     let named = trail.iter().flat_map(|t| {
         let now = Some(t.branch.as_str()) == current;
         let by_branch = identifier(&t.branch).map(|ident| (ident, now, format!("branch {}", t.branch)));
-        let by_commit = t.subjects.iter().flat_map(|s| identifiers(s)).map(|ident| (ident, false, format!("named in a commit on {}", t.branch)));
+        let by_commit = t.subjects.iter().flat_map(|s| ticket_keys(s)).map(|ident| (ident, false, format!("named in a commit on {}", t.branch)));
         by_branch.into_iter().chain(by_commit).map(move |(ident, now, why)| (ident, t.touched_ms, now, why))
     });
     let by_ident = named.fold(BTreeMap::<(String, u32), Wanted>::new(), |mut seen, (ident, touched_ms, now, why)| {

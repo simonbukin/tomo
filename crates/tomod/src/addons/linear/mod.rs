@@ -1,7 +1,7 @@
 //! Linear: the issues that each worktree names, and their state. See docs/linear.md.
-//! A worktree names an issue in a branch that its reflog shows from the last 30 days, or in a commit that it made.
+//! A worktree names an issue in a branch of its trail (`crate::trail`), or in a commit that it made.
 //! The key lives in the Keychain. `curl` gets it on stdin, never in argv.
-//! A background check runs every 20 s while a client is subscribed. It fetches when the answer is 60 s old or when a branch names another issue.
+//! A background check runs every 20 s while a client is subscribed. It fetches when the answer is 60 s old or when a worktree names another issue.
 
 mod model;
 
@@ -101,7 +101,6 @@ fn fetch(wanted: &[Wanted], now: u64) -> LinearStatus {
     }
 }
 
-/// The live worktrees, read under the lock. `wanted` reads their reflogs after the lock is released.
 fn live(inner: &Inner) -> Vec<(Id, PathBuf)> {
     inner.worktrees.values().filter(|w| w.exists && w.archived_at_ms.is_none()).map(|w| (w.id.clone(), w.path.clone())).collect()
 }
@@ -119,7 +118,6 @@ fn wanted(live: &[(Id, PathBuf)]) -> Vec<Wanted> {
     wanted
 }
 
-/// Whether a fetch is due. With nobody to watch, it reads nothing; else it reads the reflogs outside the lock.
 fn is_due(daemon: &Daemon, subscribed: impl Fn(&Inner) -> bool) -> bool {
     let (last, asked, worktrees) = {
         let inner = daemon.lock();

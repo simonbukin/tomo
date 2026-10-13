@@ -65,7 +65,7 @@ describe("Linear issue of a branch", () => {
   it("stacks every issue of the worktree, the newest first, and puts a pull request under the issue that its branch names", () => {
     const older = { ...issue, identifier: "ENG-7", title: "Older", url: "https://linear.app/x/issue/ENG-7" };
     changed(status([link("w1", { touched_ms: 300 }), link("w1", { issue: older, touched_ms: 100, current: false, why: "named in a commit on simon/eng-2611-fix-login" })]));
-    const pr = { number: 9, title: "Older work", url: "https://github.com/acme/acme/pull/9", state: "merged", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, head: "simon/eng-7-older", updated_at_ms: 0, touched_ms: 50 };
+    const pr = { number: 9, title: "Older work", url: "https://github.com/acme/acme/pull/9", state: "merged", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, head: "simon/eng-7-older", tickets: ["ENG-7"], updated_at_ms: 0, touched_ms: 50 };
     act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: null, prs: [pr] } } as Frame));
     const row = render(<WorktreeLinks w={wt} />).container;
     expect(row.textContent).toBe("ENG-2611+1");
