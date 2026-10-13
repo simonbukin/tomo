@@ -3,6 +3,7 @@ const COMMANDS: &[&str] = &[
     "daemon_connected",
     "clipboard_image",
     "open_folder",
+    "splash_ready",
     "browser_create",
     "browser_set_bounds",
     "browser_set_visible",
