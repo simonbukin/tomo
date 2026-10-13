@@ -6,6 +6,7 @@ import { snapshotSchema } from "./schemas";
 import { applyZoom, runAction } from "./actions";
 import { zoomKey } from "./appearance";
 import { applyTheme, useResolvedTheme } from "./theme";
+import { openSplash } from "./splash";
 import { TooltipProvider } from "./components/ui";
 import { Activity } from "./Activity";
 import { Agents } from "./Agents";
@@ -71,6 +72,8 @@ export function App() {
   );
 }
 
+const SPLASH_MAX_WAIT_MS = 1500;
+
 function Shell() {
   const connected = useStore((s) => s.connected);
   const loaded = useStore((s) => s.loaded);
@@ -135,7 +138,20 @@ function Shell() {
   }, [ui.view, worktree?.id, loaded, tab?.id]);
 
   const appearance = ui.appearance;
-  useEffect(() => applyTheme(document.documentElement, theme), [theme]);
+  // Before the snapshot there is no config, so the theme falls back to the OS scheme; the
+  // remembered scheme that index.html set is the better guess until then.
+  useEffect(() => {
+    if (loaded) applyTheme(document.documentElement, theme);
+  }, [theme, loaded]);
+
+  useEffect(() => {
+    if (loaded) openSplash();
+  }, [loaded]);
+
+  useEffect(() => {
+    const giveUp = window.setTimeout(openSplash, SPLASH_MAX_WAIT_MS);
+    return () => window.clearTimeout(giveUp);
+  }, []);
 
   useEffect(() => {
     try {

@@ -506,7 +506,7 @@ its own canvas rides the edge.
 | another tab | the old layout is swept away toward the tab you go to | 360 ms |
 | the palette | opens through an iris; closes into its centre | 340 ms, 240 ms |
 | a toast | opens through an iris from its corner | 380 ms |
-| the app opens | the mark goes and an aperture cover opens from the centre | 720 ms |
+| the app opens | AppKit draws the mark at once; when the first snapshot loads, an aperture cover opens from the centre | 720 ms |
 | another view | aperture cover: a hexagon that turns as it opens | 440 ms |
 | a new split pane | halftone cover | 340 ms |
 | the next tab after a close; a pane that falls asleep or wakes | silk cover: slow noise with a soft band | 460 ms |

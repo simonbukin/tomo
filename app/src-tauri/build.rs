@@ -4,6 +4,7 @@ const COMMANDS: &[&str] = &[
     "clipboard_image",
     "open_folder",
     "splash_ready",
+    "remember_scheme",
     "browser_create",
     "browser_set_bounds",
     "browser_set_visible",

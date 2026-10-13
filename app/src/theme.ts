@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useMemo, useSyncExternalStore } from "react";
 import { useStore } from "./store";
 import type { ThemeConfig } from "./types";
@@ -71,8 +72,8 @@ export function xtermTheme(theme: ResolvedTheme) {
   return { background: p.bg, foreground: p.fg, cursor: p.fg, cursorAccent: p.bg, selectionBackground: p.accent_soft };
 }
 
-// The splash in index.html reads this before the daemon has answered, so the window opens
-// on the ground the app last settled on rather than on whatever the OS prefers.
+// The splash in index.html reads this before the daemon answers, so the window opens on the
+// ground the app last settled on rather than on whatever the OS prefers.
 const SCHEME_KEY = "tomo.theme.scheme";
 
 export function applyTheme(root: HTMLElement, theme: ResolvedTheme): void {
@@ -83,6 +84,7 @@ export function applyTheme(root: HTMLElement, theme: ResolvedTheme): void {
   } catch {
     // A webview with storage blocked still themes correctly; only the next splash guesses.
   }
+  invoke("remember_scheme", { scheme: theme.scheme }).catch(() => {});
 }
 
 const darkQuery = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null);

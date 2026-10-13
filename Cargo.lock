@@ -5766,8 +5766,11 @@ name = "tomo-app"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "objc2",
  "objc2-app-kit",
+ "objc2-foundation",
  "percent-encoding",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",
