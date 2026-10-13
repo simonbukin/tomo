@@ -8,7 +8,7 @@ use tomo_proto::{now_ms, utc_ms, ActivityEvent, ActivityKind, GitHubActivity, Pr
 pub const FRESH_MS: u64 = 60_000;
 
 /// The `--json` fields of both `gh pr view` and `gh pr list`.
-pub const PR_FIELDS: &str = "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt";
+pub const PR_FIELDS: &str = "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository";
 
 pub fn parse_pr(v: &Value) -> Option<PullRequest> {
     let number = v.get("number")?.as_u64()?;
@@ -45,10 +45,13 @@ fn unavailable(reason: impl Into<String>) -> PrStatusResult {
     PrStatusResult { available: false, reason: Some(reason.into()), pr: None, prs: vec![] }
 }
 
-/// The newest pull request in the answer of `gh pr list --head <branch> --limit 1`. None for a failure or no pull request.
+/// The newest pull request in the answer of `gh pr list --head <branch>`. None for a failure or no pull request.
+/// `--head` matches the branch name in a fork too, so a branch such as `main` gives the pull requests of forks. Only
+/// one from this repository counts.
 pub fn listed(out: std::io::Result<Output>) -> Option<PullRequest> {
     let out = out.ok().filter(|o| o.status.success())?;
-    serde_json::from_slice::<Value>(&out.stdout).ok()?.as_array()?.first().and_then(parse_pr)
+    let list = serde_json::from_slice::<Value>(&out.stdout).ok()?;
+    list.as_array()?.iter().find(|v| v.get("isCrossRepository").and_then(Value::as_bool) != Some(true)).and_then(parse_pr)
 }
 
 /// The answer for the branch now, with the pull requests of the earlier branches. Each one gets the time that this
@@ -190,6 +193,8 @@ mod tests {
     #[test]
     fn a_list_answer_gives_its_first_pull_request() {
         assert_eq!(listed(gh(0, r#"[{"number":9,"state":"MERGED"},{"number":2}]"#, "")).map(|p| p.number), Some(9));
+        assert_eq!(listed(gh(0, r#"[{"number":9,"isCrossRepository":true},{"number":2,"isCrossRepository":false}]"#, "")).map(|p| p.number), Some(2));
+        assert_eq!(listed(gh(0, r#"[{"number":9,"isCrossRepository":true}]"#, "")), None);
         assert_eq!(listed(gh(0, "[]", "")), None);
         assert_eq!(listed(gh(1, "", "boom")), None);
         assert_eq!(listed(Err(std::io::Error::other("no gh"))), None);

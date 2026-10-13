@@ -39,7 +39,7 @@ o=$(pr "$W1")
 [ "$(calls "$N1")" = 1 ] || { fail "the daemon did not run the fake gh; stopping before a real gh runs"; daemon_stop; summary; exit 1; }
 has "$o" "d['available'] and d['reason'] is None and d['pr']['number']==12 and d['pr']['state']=='open' and d['pr']['draft'] and d['pr']['review_decision']=='changes_requested' and d['pr']['mergeable']=='conflicting' and (d['pr']['checks_passed'],d['pr']['checks_failed'],d['pr']['checks_pending'])==(1,1,1) and d['pr']['fetched_at_ms']>0" \
   && check 0 "pr_status parses state, draft, review, mergeable, and checks" || check 1 "pr_status parse" "$o"
-grep -q "^$N1 pr view --json number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt$" "$GHD/calls" && check 0 "gh runs pr view in the worktree directory" || check 1 "gh args" "$(cat "$GHD/calls")"
+grep -q "^$N1 pr view --json number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository$" "$GHD/calls" && check 0 "gh runs pr view in the worktree directory" || check 1 "gh args" "$(cat "$GHD/calls")"
 
 o2=$(pr "$W1")
 [ "$(calls "$N1")" = 1 ] && [ "$o2" = "$o" ] && check 0 "a pull request fetched less than 60 s ago comes from the cache" || check 1 "cache" "calls=$(calls "$N1") $o2"
@@ -64,7 +64,7 @@ printf '{"number":31,"title":"Second","url":"u31","state":"OPEN","isDraft":false
 printf '[{"number":30,"title":"First","url":"u30","state":"MERGED","isDraft":false,"headRefName":"feat/first","updatedAt":"2026-01-01T00:00:00Z"}]' > "$GHD/$N5.list"
 o=$(pr "$W5")
 has "$o" "d['pr']['number']==31 and [p['number'] for p in d['prs']]==[31,30] and all(p['touched_ms']>0 for p in d['prs'])" && check 0 "pr_status adds the pull request of a branch that the worktree had before" || check 1 "earlier pull requests" "$o"
-grep -q "^$N5 pr list --head feat/first --state all --limit 1 --json " "$GHD/calls" && ! grep -q "^$N5 pr list --head feat/second" "$GHD/calls" && check 0 "gh lists only the earlier branches" || check 1 "pr list args" "$(grep "^$N5" "$GHD/calls")"
+grep -q "^$N5 pr list --head feat/first --state all --limit 5 --json " "$GHD/calls" && ! grep -q "^$N5 pr list --head feat/second" "$GHD/calls" && check 0 "gh lists only the earlier branches" || check 1 "pr list args" "$(grep "^$N5" "$GHD/calls")"
 
 read -r W4 P4 < <(new_wt feat/merged); N4=$(basename "$P4")
 pr_json 7 "Ship it" 7 MERGED false APPROVED UNKNOWN > "$GHD/$N4.json"

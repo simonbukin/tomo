@@ -52,7 +52,7 @@ async fn earlier_prs(worktree: &Path, branches: Vec<String>) -> Vec<PullRequest>
     let mut asks = tokio::task::JoinSet::new();
     for branch in branches {
         let worktree = worktree.to_path_buf();
-        asks.spawn(async move { model::listed(gh(&worktree, &["pr", "list", "--head", &branch, "--state", "all", "--limit", "1", "--json", model::PR_FIELDS]).await) });
+        asks.spawn(async move { model::listed(gh(&worktree, &["pr", "list", "--head", &branch, "--state", "all", "--limit", "5", "--json", model::PR_FIELDS]).await) });
     }
     asks.join_all().await.into_iter().flatten().collect()
 }
