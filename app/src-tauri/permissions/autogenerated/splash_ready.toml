@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-splash-ready"
+description = "Enables the splash_ready command without any pre-configured scope."
+commands.allow = ["splash_ready"]
+
+[[permission]]
+identifier = "deny-splash-ready"
+description = "Denies the splash_ready command without any pre-configured scope."
+commands.deny = ["splash_ready"]
