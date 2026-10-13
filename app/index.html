@@ -15,12 +15,9 @@
         display: grid;
         place-items: center;
         color: #ecebe8;
-        transition: opacity 180ms ease-out;
       }
       :root[data-theme="light"] #boot { color: #121212; }
-      #boot[data-done] { opacity: 0; pointer-events: none; }
       #boot svg { width: 64px; height: 64px; }
-      @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
     </style>
     <script>
       // The real theme comes from the daemon, which has not answered yet. The scheme the app
