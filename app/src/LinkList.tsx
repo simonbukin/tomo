@@ -40,7 +40,6 @@ function LinkLine({ link, now, sub, why }: { link: WorktreeLink; now: number; su
   );
 }
 
-/** The links of a worktree, the newest first, a ticket's pull requests under it. A click opens a link; a right click offers its menu. */
 export function LinkList({ groups, why = false, now = Date.now() }: { groups: LinkGroup[]; why?: boolean; now?: number }) {
   return (
     <div className="link-list">

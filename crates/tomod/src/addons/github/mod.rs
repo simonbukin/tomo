@@ -1,7 +1,7 @@
 //! GitHub: the pull requests of a worktree's branches, read with the `gh` CLI. See docs/features/github.md.
 //! No poller: `gh` runs only inside a `pr_status` call, and a young pull request comes from the cache.
-//! The branches are the one that the worktree has now and the ones that its reflog shows from the last 30 days.
-//! A pull request that becomes merged fires the `github.pr_merged` hook. The addon writes no tags.
+//! The branches are the one that the worktree has now and the others of its trail (`crate::trail`).
+//! A pull request that becomes merged fires the `github.pr_merged` hook.
 
 mod model;
 
@@ -24,9 +24,7 @@ pub type Cache = BTreeMap<Id, PrStatusResult>;
 pub const HOOK_EVENTS: &[&str] = &["github.pr_merged"];
 
 const OLD_TAGS_REMOVED: &str = "github.old_pr_tags_removed";
-/// How far back the activity says that a merge was already seen. The cache is memory only, so after a restart, or
-/// after an answer that failed, the next answer looks like a new merge. The activity table survives both.
-const MERGE_MEMORY_MS: u64 = 365 * 24 * 60 * 60 * 1000;
+const MERGE_LOOKBACK_MS: u64 = 365 * 24 * 60 * 60 * 1000;
 
 /// Removes the pull request tags that older versions wrote, one time. A tag that a person sets later stays.
 pub fn migrate(store: &Store) -> anyhow::Result<()> {
@@ -47,7 +45,6 @@ async fn gh(worktree: &Path, args: &[&str]) -> std::io::Result<std::process::Out
     tokio::process::Command::new("gh").args(args).current_dir(worktree).env("GH_NO_UPDATE_NOTIFIER", "1").env("NO_COLOR", "1").output().await
 }
 
-/// The newest pull request of each earlier branch, asked in parallel.
 async fn earlier_prs(worktree: &Path, branches: Vec<String>, own: Option<String>) -> Vec<PullRequest> {
     let mut asks = tokio::task::JoinSet::new();
     for branch in branches {
@@ -62,7 +59,7 @@ fn old_tag_hooks(inner: &mut Inner) {
     Daemon::diagnostic_on_change(inner, "github", "hooks on pull request tags", problem);
 }
 
-/// `pr_status`: the cached answer while it is fresh, else a new `gh pr view`. It records `pr_merged` and emits `pr_changed`.
+/// `pr_status`: the cached answer while it is fresh, else new `gh pr view` and `gh pr list` calls. It records `pr_merged` and emits `pr_changed`.
 pub async fn pr_status(daemon: &Arc<Daemon>, worktree_id: Id) -> Result<Value, RpcError> {
     let (path, own, cached) = {
         let inner = daemon.lock();
@@ -92,7 +89,7 @@ pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
     let before = addons::state_mut(inner).github.insert(worktree_id.clone(), result.clone());
     let update = model::update(before.as_ref(), &result);
     let seen = |pr: &PullRequest| {
-        Daemon::recorded_recently(inner, GitHubActivity::PrMerged, MERGE_MEMORY_MS, |a| a.worktree_id.as_deref() == Some(worktree_id.as_str()) && a.payload["number"] == pr.number)
+        Daemon::recorded_recently(inner, GitHubActivity::PrMerged, MERGE_LOOKBACK_MS, |a| a.worktree_id.as_deref() == Some(worktree_id.as_str()) && a.payload["number"] == pr.number)
     };
     if let Some(pr) = update.merged.filter(|pr| !seen(pr)) {
         Daemon::record(inner, model::merged_event(&worktree_id, pr));

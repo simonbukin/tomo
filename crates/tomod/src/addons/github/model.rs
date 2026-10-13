@@ -1,5 +1,5 @@
 use crate::activity;
-use crate::trail::BranchTouch;
+use crate::trail::{ticket_keys, BranchTouch};
 use serde_json::{json, Value};
 use std::process::Output;
 use tomo_proto::{now_ms, utc_ms, ActivityEvent, ActivityKind, GitHubActivity, HookDef, PrStatusResult, PullRequest};
@@ -10,8 +10,19 @@ pub const FRESH_MS: u64 = 60_000;
 /// The `--json` fields of both `gh pr view` and `gh pr list`.
 pub const PR_FIELDS: &str = "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository,headRepositoryOwner";
 
+fn tickets(texts: &[&str]) -> Vec<String> {
+    texts.iter().flat_map(|t| ticket_keys(t)).map(|(team, n)| format!("{team}-{n}")).fold(vec![], |mut seen, key| {
+        if !seen.contains(&key) {
+            seen.push(key);
+        }
+        seen
+    })
+}
+
 pub fn parse_pr(v: &Value) -> Option<PullRequest> {
     let number = v.get("number")?.as_u64()?;
+    let head = v.get("headRefName").and_then(Value::as_str).unwrap_or("");
+    let title = v.get("title").and_then(Value::as_str).unwrap_or("");
     let (mut passed, mut failed, mut pending) = (0u32, 0u32, 0u32);
     for check in v.get("statusCheckRollup").and_then(Value::as_array).into_iter().flatten() {
         let conclusion = check.get("conclusion").and_then(Value::as_str).unwrap_or("");
@@ -25,7 +36,7 @@ pub fn parse_pr(v: &Value) -> Option<PullRequest> {
     }
     Some(PullRequest {
         number,
-        title: v.get("title").and_then(Value::as_str).unwrap_or("").to_string(),
+        title: title.to_string(),
         url: v.get("url").and_then(Value::as_str).unwrap_or("").to_string(),
         state: v.get("state").and_then(Value::as_str).unwrap_or("").to_lowercase(),
         draft: v.get("isDraft").and_then(Value::as_bool).unwrap_or(false),
@@ -35,7 +46,8 @@ pub fn parse_pr(v: &Value) -> Option<PullRequest> {
         checks_failed: failed,
         checks_pending: pending,
         fetched_at_ms: now_ms(),
-        head: v.get("headRefName").and_then(Value::as_str).unwrap_or("").to_string(),
+        head: head.to_string(),
+        tickets: tickets(&[head, title]),
         updated_at_ms: v.get("updatedAt").and_then(Value::as_str).and_then(utc_ms).unwrap_or(0),
         touched_ms: 0,
     })
@@ -186,6 +198,7 @@ mod tests {
             checks_pending: 0,
             fetched_at_ms,
             head: String::new(),
+            tickets: vec![],
             updated_at_ms: 0,
             touched_ms: 0,
         }
@@ -205,8 +218,9 @@ mod tests {
 
     #[test]
     fn reads_the_head_and_the_update_time() {
-        let v = serde_json::json!({ "number": 4, "headRefName": "you/eng-31-retry", "updatedAt": "2026-10-13T14:05:22Z" });
+        let v = serde_json::json!({ "number": 4, "title": "Retry, and ENG-31 and ENG-40 too", "headRefName": "you/eng-31-retry", "updatedAt": "2026-10-13T14:05:22Z" });
         let pr = parse_pr(&v).unwrap();
+        assert_eq!(pr.tickets, vec!["ENG-31", "ENG-40"], "the head first, each key once");
         assert_eq!((pr.head.as_str(), pr.updated_at_ms, pr.touched_ms), ("you/eng-31-retry", 1_791_900_322_000, 0));
     }
 

@@ -212,6 +212,7 @@ mod tests {
             checks_pending: 0,
             fetched_at_ms: now_ms(),
             head: "feat".into(),
+            tickets: vec![],
             updated_at_ms: 0,
             touched_ms: 0,
         };

@@ -222,6 +222,7 @@ export const pullRequestSchema = z.object({
     checks_pending: z.number(),
     fetched_at_ms: z.number(),
     head: z.string(),
+    tickets: z.array(z.string()),
     updated_at_ms: z.number(),
     touched_ms: z.number()
 });

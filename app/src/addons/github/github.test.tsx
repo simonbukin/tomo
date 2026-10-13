@@ -18,7 +18,7 @@ const { RepoAvatar } = await import("../../Sidebar");
 const { defaultUi } = await import("../../uiState");
 
 const wt = { id: "w1", name: "kobe", repo_id: "r1", path: "/src/kobe", branch: "feat/kobe", head: "abc1234", detached: false, exists: true, archived_at_ms: null, git: null, metadata: { state: null, tags: [], project: null, display_name: null } } as unknown as Worktree;
-const pr = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 12, title: "Add kobe", url: "https://github.com/acme/acme/pull/12", state: "open", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, head: "feat/kobe", updated_at_ms: 0, touched_ms: 0, ...patch });
+const pr = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 12, title: "Add kobe", url: "https://github.com/acme/acme/pull/12", state: "open", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, head: "feat/kobe", tickets: [], updated_at_ms: 0, touched_ms: 0, ...patch });
 const prChanged = (value: PullRequest | null) => act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: value, prs: value ? [value] : [] } } as Frame));
 const prCalls = () => vi.mocked(rpc).mock.calls.filter(([method]) => method === "pr_status");
 const section = () => document.querySelector('[data-section="git"]');
