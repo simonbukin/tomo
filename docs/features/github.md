@@ -42,9 +42,16 @@ The result is `PrStatusResult { available, reason, pr, prs }`:
 
 The call runs `gh pr view` for the branch now, read from the HEAD file of the
 worktree, and then `gh pr list --head <branch> --state all --limit 5` for
-each earlier branch, at most five, in parallel. A pull request from a fork
-does not count: `--head main` also matches a fork's own `main`. When `gh pr view` fails, the
-call asks about no earlier branch.
+each earlier branch, at most five, in parallel. The trail leaves out the base
+branch (the one that `origin/HEAD` names, else `main` and `master`), because
+every work branch leaves it, and a pull request whose head is the base is a
+release, not work of this worktree. `--head` matches the branch name in every
+fork, so a pull request from a fork counts only when the fork belongs to the
+owner of the repository's `origin`. When `gh pr view` fails, the call asks
+about no earlier branch.
+
+A hook that waits for one of the old tags never runs now. The first
+`pr_status` call shows a diagnostic for each one, with the event to use.
 
 The daemon emits `pr_changed { worktree_id, pr, prs }` when a new pull request
 is not equal to the cached one. A new fetch of an open pull request always
@@ -99,7 +106,7 @@ GitHub is an addon. Core does not import it. See [../addons.md](../addons.md).
 
 ```text
 crates/tomo-proto/src/addons/github.rs   PullRequest, PrStatusResult, GitHubActivity
-crates/tomod/src/addons/github/mod.rs    gh pr view, the cache, pr_status, known_pr
+crates/tomod/src/addons/github/mod.rs    gh pr view and list, the cache, pr_status, known_pr
 crates/tomod/src/addons/github/model.rs  parse, answer, freshness, change and merge rules, known_pr
 app/src/addons/github/index.ts           the Addon value: inspector section, row link, repo avatar, frame reducer
 app/src/addons/github/                   PrSection.tsx, Avatar.tsx, model.ts, state.ts, activity.ts, github.test.tsx

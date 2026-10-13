@@ -39,7 +39,7 @@ o=$(pr "$W1")
 [ "$(calls "$N1")" = 1 ] || { fail "the daemon did not run the fake gh; stopping before a real gh runs"; daemon_stop; summary; exit 1; }
 has "$o" "d['available'] and d['reason'] is None and d['pr']['number']==12 and d['pr']['state']=='open' and d['pr']['draft'] and d['pr']['review_decision']=='changes_requested' and d['pr']['mergeable']=='conflicting' and (d['pr']['checks_passed'],d['pr']['checks_failed'],d['pr']['checks_pending'])==(1,1,1) and d['pr']['fetched_at_ms']>0" \
   && check 0 "pr_status parses state, draft, review, mergeable, and checks" || check 1 "pr_status parse" "$o"
-grep -q "^$N1 pr view --json number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository$" "$GHD/calls" && check 0 "gh runs pr view in the worktree directory" || check 1 "gh args" "$(cat "$GHD/calls")"
+grep -q "^$N1 pr view --json number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository,headRepositoryOwner$" "$GHD/calls" && check 0 "gh runs pr view in the worktree directory" || check 1 "gh args" "$(cat "$GHD/calls")"
 
 o2=$(pr "$W1")
 [ "$(calls "$N1")" = 1 ] && [ "$o2" = "$o" ] && check 0 "a pull request fetched less than 60 s ago comes from the cache" || check 1 "cache" "calls=$(calls "$N1") $o2"

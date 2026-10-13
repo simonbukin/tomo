@@ -24,6 +24,7 @@ crates/tomod/              daemon
   src/pty.rs               PTY spawn, scrollback buffer, query stripping
   src/layout.rs            pure split-tree operations
   src/git.rs               git child processes and porcelain parsers
+  src/trail.rs             the branches and commit subjects of a worktree, from its HEAD reflog
   src/procs.rs             process table, ownership, aggregation
   src/monitor.rs           periodic poll: cwd, titles, heuristics, resources
   src/agents.rs            authority merge, shell quoting

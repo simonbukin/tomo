@@ -15,6 +15,7 @@ use crate::trail;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 use tomo_proto::*;
 
 /// The last `pr_status` answer of each worktree, in `addons::State`.
@@ -39,41 +40,47 @@ pub fn migrate(store: &Store) -> anyhow::Result<()> {
     store.kv_set(OLD_TAGS_REMOVED, "1")
 }
 
-/// How far back the reflog names the branches that `pr_status` asks about, and how many branches at most.
-const TRAIL_MS: u64 = 30 * 24 * 60 * 60 * 1000;
-const TRAIL_BRANCHES: usize = 6;
-
 async fn gh(worktree: &Path, args: &[&str]) -> std::io::Result<std::process::Output> {
     tokio::process::Command::new("gh").args(args).current_dir(worktree).env("GH_NO_UPDATE_NOTIFIER", "1").env("NO_COLOR", "1").output().await
 }
 
 /// The newest pull request of each earlier branch, asked in parallel.
-async fn earlier_prs(worktree: &Path, branches: Vec<String>) -> Vec<PullRequest> {
+async fn earlier_prs(worktree: &Path, branches: Vec<String>, own: Option<String>) -> Vec<PullRequest> {
     let mut asks = tokio::task::JoinSet::new();
     for branch in branches {
-        let worktree = worktree.to_path_buf();
-        asks.spawn(async move { model::listed(gh(&worktree, &["pr", "list", "--head", &branch, "--state", "all", "--limit", "5", "--json", model::PR_FIELDS]).await) });
+        let (worktree, own) = (worktree.to_path_buf(), own.clone());
+        asks.spawn(async move { model::listed(gh(&worktree, &["pr", "list", "--head", &branch, "--state", "all", "--limit", "5", "--json", model::PR_FIELDS]).await, own.as_deref()) });
     }
     asks.join_all().await.into_iter().flatten().collect()
 }
 
+fn old_tag_hooks(inner: &mut Inner) {
+    let problem = model::old_tag_problem(&inner.config.hooks);
+    Daemon::diagnostic_on_change(inner, "github", "hooks on pull request tags", problem);
+}
+
 /// `pr_status`: the cached answer while it is fresh, else a new `gh pr view`. It records `pr_merged` and emits `pr_changed`.
-pub async fn pr_status(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcError> {
-    let (path, cached) = {
+pub async fn pr_status(daemon: &Arc<Daemon>, worktree_id: Id) -> Result<Value, RpcError> {
+    let (path, own, cached) = {
         let inner = daemon.lock();
-        let path = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?.path.clone();
-        (path, addons::state(&inner).github.get(&worktree_id).cloned())
+        let w = inner.worktrees.get(&worktree_id).ok_or_else(|| err(ErrorCode::NotFound, "worktree not found"))?;
+        let own = inner.repos.iter().find(|r| r.id == w.repo_id).and_then(|r| r.remote_url.as_deref()).and_then(model::remote_owner);
+        (w.path.clone(), own, addons::state(&inner).github.get(&worktree_id).cloned())
     };
     if model::fresh(cached.as_ref(), now_ms()) {
         return ok(cached);
     }
-    let branch = trail::head_branch(&path);
-    let trail = trail::branch_trail(&trail::read_reflog(&path), branch.as_deref(), now_ms().saturating_sub(TRAIL_MS), TRAIL_BRANCHES);
+    let (branch, trail) = trail::worktree_trail(&path, now_ms());
     let current = model::answer(gh(&path, &["pr", "view", "--json", model::PR_FIELDS]).await);
     let earlier: Vec<String> = trail.iter().map(|t| t.branch.clone()).filter(|b| Some(b) != branch.as_ref()).collect();
-    let earlier = if current.available { earlier_prs(&path, earlier).await } else { vec![] };
+    let earlier = if current.available { earlier_prs(&path, earlier, own).await } else { vec![] };
     let result = model::with_history(current, earlier, &trail);
-    remember(&mut daemon.lock(), worktree_id, result.clone());
+    {
+        let mut inner = daemon.lock();
+        remember(&mut inner, worktree_id, result.clone());
+        old_tag_hooks(&mut inner);
+    }
+    daemon.flush_hooks();
     ok(result)
 }
 

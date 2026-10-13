@@ -2,13 +2,13 @@ use crate::activity;
 use crate::trail::BranchTouch;
 use serde_json::{json, Value};
 use std::process::Output;
-use tomo_proto::{now_ms, utc_ms, ActivityEvent, ActivityKind, GitHubActivity, PrStatusResult, PullRequest};
+use tomo_proto::{now_ms, utc_ms, ActivityEvent, ActivityKind, GitHubActivity, HookDef, PrStatusResult, PullRequest};
 
 /// How long a fetched pull request answers `pr_status` without a new `gh` run.
 pub const FRESH_MS: u64 = 60_000;
 
 /// The `--json` fields of both `gh pr view` and `gh pr list`.
-pub const PR_FIELDS: &str = "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository";
+pub const PR_FIELDS: &str = "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup,headRefName,updatedAt,isCrossRepository,headRepositoryOwner";
 
 pub fn parse_pr(v: &Value) -> Option<PullRequest> {
     let number = v.get("number")?.as_u64()?;
@@ -45,13 +45,26 @@ fn unavailable(reason: impl Into<String>) -> PrStatusResult {
     PrStatusResult { available: false, reason: Some(reason.into()), pr: None, prs: vec![] }
 }
 
+const GITHUB_REMOTE_PREFIXES: [&str; 4] = ["git@github.com:", "https://github.com/", "http://github.com/", "ssh://git@github.com/"];
+
+/// The owner of a GitHub `origin`, such as `you` in `git@github.com:you/acme.git`. None for another remote.
+pub fn remote_owner(url: &str) -> Option<String> {
+    let rest = GITHUB_REMOTE_PREFIXES.iter().find_map(|p| url.strip_prefix(p))?;
+    rest.split('/').next().filter(|o| !o.is_empty()).map(str::to_string)
+}
+
 /// The newest pull request in the answer of `gh pr list --head <branch>`. None for a failure or no pull request.
-/// `--head` matches the branch name in a fork too, so a branch such as `main` gives the pull requests of forks. Only
-/// one from this repository counts.
-pub fn listed(out: std::io::Result<Output>) -> Option<PullRequest> {
+/// `--head` matches the branch name in every fork, so a pull request counts only when it comes from this repository
+/// or from the fork of `own`, the owner of the `origin` remote: a person who works in a fork keeps their own.
+pub fn listed(out: std::io::Result<Output>, own: Option<&str>) -> Option<PullRequest> {
     let out = out.ok().filter(|o| o.status.success())?;
     let list = serde_json::from_slice::<Value>(&out.stdout).ok()?;
-    list.as_array()?.iter().find(|v| v.get("isCrossRepository").and_then(Value::as_bool) != Some(true)).and_then(parse_pr)
+    let ours = |v: &&Value| {
+        let cross = v.get("isCrossRepository").and_then(Value::as_bool) == Some(true);
+        let owner = v.pointer("/headRepositoryOwner/login").and_then(Value::as_str);
+        !cross || (own.is_some() && owner == own)
+    };
+    list.as_array()?.iter().find(ours).and_then(parse_pr)
 }
 
 /// The answer for the branch now, with the pull requests of the earlier branches. Each one gets the time that this
@@ -117,6 +130,12 @@ pub fn merged_event(worktree_id: &str, pr: &PullRequest) -> ActivityEvent {
 
 /// The tags that this addon once wrote for the state of a pull request. `migrate` removes them one time.
 pub const OLD_PR_TAGS: [&str; 6] = ["draft", "review", "changes-requested", "approved", "merged", "closed"];
+
+/// A hook that waits for one of the old pull request tags waits forever now. The problem says what to use.
+pub fn old_tag_problem(hooks: &[HookDef]) -> Option<String> {
+    let waiting: Vec<&str> = hooks.iter().filter_map(|h| h.tag.as_deref()).filter(|t| OLD_PR_TAGS.contains(t)).collect();
+    (!waiting.is_empty()).then(|| format!("a hook waits for the tag {}, which the GitHub addon no longer sets; use event = \"github.pr_merged\"", waiting.join(", ")))
+}
 
 pub fn without_old_pr_tags(tags: &[String]) -> Vec<String> {
     tags.iter().filter(|t| !OLD_PR_TAGS.contains(&t.as_str())).cloned().collect()
@@ -192,12 +211,22 @@ mod tests {
 
     #[test]
     fn a_list_answer_gives_its_first_pull_request() {
-        assert_eq!(listed(gh(0, r#"[{"number":9,"state":"MERGED"},{"number":2}]"#, "")).map(|p| p.number), Some(9));
-        assert_eq!(listed(gh(0, r#"[{"number":9,"isCrossRepository":true},{"number":2,"isCrossRepository":false}]"#, "")).map(|p| p.number), Some(2));
-        assert_eq!(listed(gh(0, r#"[{"number":9,"isCrossRepository":true}]"#, "")), None);
-        assert_eq!(listed(gh(0, "[]", "")), None);
-        assert_eq!(listed(gh(1, "", "boom")), None);
-        assert_eq!(listed(Err(std::io::Error::other("no gh"))), None);
+        assert_eq!(listed(gh(0, r#"[{"number":9,"state":"MERGED"},{"number":2}]"#, ""), None).map(|p| p.number), Some(9));
+        let forks = r#"[{"number":9,"isCrossRepository":true,"headRepositoryOwner":{"login":"stranger"}},{"number":8,"isCrossRepository":true,"headRepositoryOwner":{"login":"you"}},{"number":2,"isCrossRepository":false}]"#;
+        assert_eq!(listed(gh(0, forks, ""), None).map(|p| p.number), Some(2), "a stranger's fork does not count");
+        assert_eq!(listed(gh(0, forks, ""), Some("you")).map(|p| p.number), Some(8), "the fork of the origin owner counts");
+        assert_eq!(listed(gh(0, r#"[{"number":9,"isCrossRepository":true}]"#, ""), Some("you")), None);
+        assert_eq!(listed(gh(0, "[]", ""), None), None);
+        assert_eq!(listed(gh(1, "", "boom"), None), None);
+        assert_eq!(listed(Err(std::io::Error::other("no gh")), None), None);
+    }
+
+    #[test]
+    fn the_owner_of_a_github_origin() {
+        assert_eq!(remote_owner("git@github.com:you/acme.git").as_deref(), Some("you"));
+        assert_eq!(remote_owner("https://github.com/acme/acme").as_deref(), Some("acme"));
+        assert_eq!(remote_owner("https://gitlab.com/you/acme"), None);
+        assert_eq!(remote_owner("git@github.com:"), None);
     }
 
     #[test]
@@ -304,6 +333,13 @@ mod tests {
         assert_eq!(known_pr(Some(&found(None)), &events), Some(KnownPr { number: 12, url: "https://github.com/o/r/pull/12".into(), state: "merged".into() }));
         assert_eq!(known_pr(None, &events[2..]), None);
         assert_eq!(known_pr(None, &[event(GitHubActivity::PrMerged, 1, json!({ "number": 1, "url": "" }))]), None);
+    }
+
+    #[test]
+    fn a_hook_on_an_old_pull_request_tag_is_a_problem() {
+        let hook = |tag: Option<&str>| HookDef { event: "worktree.tags_changed".into(), command: "x".into(), tag: tag.map(str::to_string), mode: tomo_proto::HookMode::Async, timeout_s: 1 };
+        assert_eq!(old_tag_problem(&[hook(Some("ready")), hook(None)]), None);
+        assert!(old_tag_problem(&[hook(Some("merged"))]).unwrap().contains("the tag merged"));
     }
 
     #[test]

@@ -301,7 +301,7 @@ imports it. Seven addons exist. `main` ships Actions, Runtime, and GitHub;
   - `app/src/addons/towns/`: the map view, the ceremony, the create field
 - GitHub
   - `crates/tomo-proto/src/addons/github.rs`: wire types
-  - `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` call, the pull request cache
+  - `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` and `gh pr list` calls, the pull request cache
   - `app/src/addons/github/`: the pull request inspector section, the NOW signal, the repo avatar
 - Linear
   - `crates/tomo-proto/src/addons/linear.rs`: wire types
