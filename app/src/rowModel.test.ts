@@ -41,9 +41,7 @@ const sub = (id: string, state: AgentPresence["state"], description: string | nu
 
 const attention = (over: Partial<AttentionItem>): AttentionItem => ({ id: "a1", worktree_id: "w1", pane_id: "p1", level: "attention", message: "Claude is waiting for you", created_at_ms: 1, viewed_at_ms: null, kind: "waiting", url: null, agent_kind: "claude", resolved_at_ms: null, ...over });
 
-const input = (over: Partial<RowInput> = {}): RowInput => ({ worktree: worktree(), agents: [], attention: [], exitCodes: {}, rssBytes: null, warnBytes: 2 * GB, rowError: null, apps: [], ...over });
-
-const GB = 1024 ** 3;
+const input = (over: Partial<RowInput> = {}): RowInput => ({ worktree: worktree(), agents: [], attention: [], exitCodes: {}, rowError: null, apps: [], ...over });
 
 const texts = (lines: { label?: string; text?: string }[]) => lines.map((l) => [l.label, l.text].filter(Boolean).join(" "));
 
@@ -105,22 +103,16 @@ describe("agent lines on the row", () => {
 });
 
 describe("problem lines", () => {
-  it("lists a failed operation, memory over the warning, a review request, and a missing folder, in that order", () => {
+  it("lists a failed operation, a review request, and a missing folder, in that order", () => {
     const lines = problemLines(
       input({
         worktree: worktree({ exists: false }),
         rowError: { op: "archive", message: "a pane still writes to the folder" },
-        rssBytes: 2.1 * GB,
         attention: [attention({ id: "cp", kind: "checkpoint", message: "a checkpoint asks for a review", pane_id: null })],
       }),
     );
-    expect(texts(lines)).toEqual(["archive failed a pane still writes to the folder", "memory 2.1 GB, over the 2 GB warning", "review a checkpoint asks for a review", "folder missing not found on disk"]);
-    expect(lines.map((l) => l.mark)).toEqual(["failed", "needs", "needs", "unknown"]);
-  });
-
-  it("warns on memory only at the threshold", () => {
-    expect(problemLines(input({ rssBytes: 2 * GB - 1 }))).toEqual([]);
-    expect(texts(problemLines(input({ rssBytes: 2 * GB })))).toHaveLength(1);
+    expect(texts(lines)).toEqual(["archive failed a pane still writes to the folder", "review a checkpoint asks for a review", "folder missing not found on disk"]);
+    expect(lines.map((l) => l.mark)).toEqual(["failed", "needs", "unknown"]);
   });
 
   it("shows an archive in progress with the gray twinkle", () => {
@@ -133,11 +125,11 @@ describe("the groups of a row", () => {
     const groups = rowGroups(
       input({
         agents: [agent("p1", "working")],
-        rssBytes: 5 * GB,
+        rowError: { op: "rename", message: "the branch exists" },
         apps: [{ id: "web", mark: "working", label: "web", detail: ":3003" }, { id: "crash", mark: "failed", label: "Storybook", detail: "exited -1", bad: true }],
       }),
     );
-    expect(texts(groups.problems)).toEqual(["memory 5 GB, over the 2 GB warning"]);
+    expect(texts(groups.problems)).toEqual(["rename failed the branch exists"]);
     expect(texts(groups.agents)).toEqual(["claude"]);
     expect(texts(groups.apps)).toEqual(["web :3003", "Storybook exited -1"]);
     expect(groups.apps.map((l) => l.tone)).toEqual(["mute", "bad"]);
@@ -153,8 +145,8 @@ describe("the row mark", () => {
   const web = { id: "web", mark: "working" as const, label: "web", detail: ":3003" };
 
   it("shows a problem before every agent, the lead agent before an app, and an app only with no agent", () => {
-    const needsMemory = rowGroups(input({ agents: [agent("p1", "working")], rssBytes: 3 * GB }));
-    expect(leadLine(needsMemory, true)?.mark).toBe("needs");
+    const needsReview = rowGroups(input({ agents: [agent("p1", "working")], attention: [attention({ id: "cp", kind: "checkpoint", message: "review", pane_id: null })] }));
+    expect(leadLine(needsReview, true)?.mark).toBe("needs");
     expect(leadLine(rowGroups(input({ agents: [agent("p1", "working")], apps: [web] })), true)).toBeNull();
     expect(leadLine(rowGroups(input({ apps: [web] })), false)?.mark).toBe("working");
     expect(leadLine(rowGroups(input({ worktree: worktree({ exists: false }) })), false)?.mark).toBe("unknown");

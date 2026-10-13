@@ -7,12 +7,12 @@ import { Home, WorktreeCard } from "../Home";
 import { RightSidebar } from "../RightSidebar";
 import { Sidebar, WorktreeRow } from "../Sidebar";
 import { WorktreePreview } from "../WorktreePreview";
-import { BOARD_REPO, BOARD_WARN_BYTES, rowBoard } from "./rowBoard";
+import { BOARD_REPO, rowBoard } from "./rowBoard";
 import { LeftRail } from "../shell/LeftRail";
 import { BottomStrip } from "../shell/BottomStrip";
 import { aPane } from "../test-fixtures";
 import { WorktreeHeader } from "../WorktreeHeader";
-import type { AgentPresence, AgentState, Config, Frame, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
+import type { AgentPresence, AgentState, Frame, GitSummary, HomeOptions, Repo, Subagent, Worktree } from "../types";
 
 const REPO: Repo = { id: "r1", path: "/Users/you/Projects/tomo", name: "tomo", exists: true, remote_url: "git@github.com:you/tomo.git" };
 
@@ -141,7 +141,6 @@ function seed(): void {
     ...getState(),
     loaded: true,
     connected: true,
-    config: { ...getState().config, resource_warning_bytes: BOARD_WARN_BYTES } as Config,
     repos: [REPO, BOARD_REPO],
     worktrees: [...worktrees, ...board.worktrees],
     agents: Object.fromEntries(agents.map((a) => [a.pane_id, a])),
