@@ -10,6 +10,7 @@
     "allow-daemon-connected",
     "allow-clipboard-image",
     "allow-open-folder",
+    "allow-splash-ready",
     "allow-browser-create",
     "allow-browser-set-bounds",
     "allow-browser-set-visible",
