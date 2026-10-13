@@ -23,9 +23,6 @@ const KEYCHAIN_ACCOUNT: &str = "linear";
 const REQUEST_TIMEOUT_SECS: u64 = 8;
 const POLL_TICK: Duration = Duration::from_secs(20);
 const NO_KEY: &str = "no Linear key; run `tomo linear login`";
-/// How far back and how many branches of a worktree's reflog can name its issues.
-const TRAIL_MS: u64 = 30 * 24 * 60 * 60 * 1000;
-const TRAIL_BRANCHES: usize = 6;
 
 /// The last answer, and the worktree issues that it asked for. Memory only: a restart starts empty.
 /// `started` counts fetches; `kept` is the number of the fetch that gave `status`.
@@ -110,12 +107,11 @@ fn live(inner: &Inner) -> Vec<(Id, PathBuf)> {
 }
 
 fn wanted(live: &[(Id, PathBuf)]) -> Vec<Wanted> {
-    let since = now_ms().saturating_sub(TRAIL_MS);
+    let now = now_ms();
     let mut wanted: Vec<Wanted> = live
         .iter()
         .flat_map(|(id, path)| {
-            let branch = trail::head_branch(path);
-            let touches = trail::branch_trail(&trail::read_reflog(path), branch.as_deref(), since, TRAIL_BRANCHES);
+            let (branch, touches) = trail::worktree_trail(path, now);
             model::wanted(id, branch.as_deref(), &touches)
         })
         .collect();
@@ -123,14 +119,17 @@ fn wanted(live: &[(Id, PathBuf)]) -> Vec<Wanted> {
     wanted
 }
 
-/// Whether a fetch is due, with the reflogs read outside the lock.
+/// Whether a fetch is due. With nobody to watch, it reads nothing; else it reads the reflogs outside the lock.
 fn is_due(daemon: &Daemon, subscribed: impl Fn(&Inner) -> bool) -> bool {
-    let (watched, last, asked, worktrees) = {
+    let (last, asked, worktrees) = {
         let inner = daemon.lock();
+        if !subscribed(&inner) {
+            return false;
+        }
         let state = &addons::state(&inner).linear;
-        (subscribed(&inner), state.status.clone(), state.asked.clone(), live(&inner))
+        (state.status.clone(), state.asked.clone(), live(&inner))
     };
-    model::due(watched, &last, &asked, &wanted(&worktrees), now_ms())
+    model::due(true, &last, &asked, &wanted(&worktrees), now_ms())
 }
 
 /// The last answer, for the `subscribe` snapshot.

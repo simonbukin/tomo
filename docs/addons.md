@@ -397,8 +397,8 @@ view and the town dataset load lazily.
 
 GitHub background work: none in the daemon. `gh` runs only inside a
 `pr_status` call. The rail marker, the NOW signals, and the town history
-read the cache and start no work. A new answer with a pull request sets one
-reserved tag on the worktree, inside the same call. See
+read the cache and start no work. The addon writes no tags. A newly merged
+pull request fires the `github.pr_merged` hook, inside the same call. See
 [features/github.md](features/github.md#background-work).
 
 Usage background work: one daemon task, started by `addons::start`, with the
@@ -420,8 +420,8 @@ Background work that exists today and must keep its current trigger:
 | `ioreg` system stats | every 5 s with a subscriber | core `system.rs` |
 | main worktree sync (`git fetch`, then `merge --ff-only`) | 30 s tick, only with a subscriber, and a repository synced more than 5 min ago; and before `worktree_create` starts a new branch from the main worktree, unless a sync ran in the last 30 s | core `sync.rs` |
 | usage fetch (network, `codex app-server`) | 20 s tick, only with a subscriber and a snapshot older than 5 min | usage addon (`addons::start`) |
-| Linear issue fetch (network) | 20 s tick, only with a subscriber, and only when the answer is older than 60 s or a branch names another issue; `linear_get` fetches on the same rule without a subscriber | linear addon (`addons::start`) |
-| `gh pr view` | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
+| Linear issue fetch (network) | 20 s tick, only with a subscriber, and only when the answer is older than 60 s or a worktree names another issue (in a branch of its reflog or a commit subject); the check reads the HEAD reflog of each live worktree outside the lock, and reads nothing without a subscriber; `linear_get` fetches on the same rule without a subscriber | linear addon (`addons::start`) |
+| `gh pr view`, then `gh pr list --head` for each earlier branch (at most five, in parallel) | each `pr_status` call without a cached pull request younger than 60 s; the inspector section asks when it mounts, every 120 s while it is open, and on refresh; `tomo pr` asks once | github addon (milestone 2 kept this trigger) |
 | `session_list` scan | every 30 s while the sessions section is mounted | agent providers |
 | Git watcher and 30 s rediscovery | always | core `watch.rs` |
 | `.tomo.toml` reads | each discovery, and a watcher change to a worktree file or a repository file | actions addon (`worktree_files`) |
@@ -485,7 +485,8 @@ with a message, so any test finds the mistake.
     `usage::remember(&mut Inner, fresh)` writes the result, records the
     diagnostics, and emits the events under the lock.
   - GitHub: `pr_status` reads the worktree path and the cache under the
-    lock and releases it. `gh pr view` runs with no lock. Then
+    lock and releases it. The reflog read and the `gh` calls run with no
+    lock. Then
     `github::remember(&mut Inner, worktree_id, result)` writes the answer,
     records `pr_merged`, and emits `pr_changed` under the lock.
   - Actions: `reload` reads `.tomo.toml` in each worktree with no lock, then
