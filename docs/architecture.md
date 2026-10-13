@@ -288,7 +288,7 @@ imports it. `main` ships three addons. The `simon-main` branch has more
 
 - GitHub
   - `crates/tomo-proto/src/addons/github.rs`: wire types
-  - `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` call, the pull request cache
+  - `crates/tomod/src/addons/github/`: `pr_status`, the `gh pr view` and `gh pr list` calls, the pull request cache
   - `app/src/addons/github/`: the pull request inspector section, the NOW signal, the repo avatar
 - Actions
   - `crates/tomo-proto/src/addons/actions.rs`: wire types

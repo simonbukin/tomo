@@ -1,7 +1,7 @@
 import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "lucide-react";
 import type { PullRequest } from "../../generated";
 import { GLYPH, type BranchTone } from "../../glyphs";
-import { ticketKey } from "../../linkGroups";
+import { ticketKeys } from "../../linkGroups";
 import { durationLabel } from "../../previewModel";
 import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
@@ -101,7 +101,7 @@ export function prLinks(s: State, w: Worktree, now = Date.now()): WorktreeLink[]
       facts: prFacts(pr),
       url: pr.url,
       touchedMs: Math.max(pr.touched_ms, pr.updated_at_ms),
-      ticket: ticketKey(pr.head) ?? ticketKey(pr.title) ?? undefined,
+      tickets: [...ticketKeys(pr.head), ...ticketKeys(pr.title)],
       current,
       why: why(pr, current, now),
     };

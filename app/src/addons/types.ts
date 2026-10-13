@@ -121,8 +121,8 @@ export interface WorktreeLink {
   touchedMs?: number;
   /** The ticket that this link is, such as `ENG-31`. */
   key?: string;
-  /** The ticket that this link belongs to, such as the one that a pull request's branch names. The link goes under it. */
-  ticket?: string;
+  /** The tickets that this link names, such as the ones in a pull request's branch and title. It goes under the first one that the worktree has. */
+  tickets?: readonly string[];
   /** The link of the branch that the worktree has now. */
   current?: boolean;
   /** Why the worktree has the link, for the inspector, such as `branch you/eng-29-status`. */

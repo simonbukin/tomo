@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 /// The most recent part of a reflog that the trail reads. An old worktree has years of entries.
 const TAIL_BYTES: u64 = 256 * 1024;
+/// How far back and how many branches of a worktree's trail name its tickets and pull requests.
+const WINDOW_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+const BRANCHES: usize = 6;
 /// The subjects that the trail keeps for one branch, newest first.
 const SUBJECTS_PER_BRANCH: usize = 20;
 
@@ -93,6 +96,35 @@ fn gitdir(worktree: &Path) -> Option<PathBuf> {
     let text = std::fs::read_to_string(&dotgit).ok()?;
     let gitdir = PathBuf::from(text.trim().strip_prefix("gitdir:")?.trim());
     Some(if gitdir.is_absolute() { gitdir } else { worktree.join(gitdir) })
+}
+
+/// The gitdir that the worktrees of a repository share. A linked gitdir names it in its `commondir` file.
+fn common_dir(gitdir: &Path) -> PathBuf {
+    match std::fs::read_to_string(gitdir.join("commondir")) {
+        Ok(text) => gitdir.join(text.trim()),
+        Err(_) => gitdir.to_path_buf(),
+    }
+}
+
+/// The branch that every work branch leaves: the one that `origin/HEAD` names. With no `origin/HEAD`, `main` and
+/// `master`. A checkout touches the branch that it leaves, so without this rule the base would be in every trail,
+/// and a pull request whose head is the base, such as a release from `develop`, would show on every worktree.
+fn base_branches(gitdir: &Path) -> Vec<String> {
+    let head = std::fs::read_to_string(common_dir(gitdir).join("refs/remotes/origin/HEAD")).unwrap_or_default();
+    match head.trim().strip_prefix("ref: refs/remotes/origin/") {
+        Some(base) => vec![base.to_string()],
+        None => vec!["main".to_string(), "master".to_string()],
+    }
+}
+
+/// The trail of a worktree now: its branch from the HEAD file, then the other branches of the last 30 days, without
+/// the base branch unless HEAD is on it.
+pub fn worktree_trail(worktree: &Path, now_ms: u64) -> (Option<String>, Vec<BranchTouch>) {
+    let current = head_branch(worktree);
+    let base = gitdir(worktree).map(|g| base_branches(&g)).unwrap_or_default();
+    let all = branch_trail(&read_reflog(worktree), current.as_deref(), now_ms.saturating_sub(WINDOW_MS), usize::MAX);
+    let touches = all.into_iter().filter(|t| Some(&t.branch) == current.as_ref() || !base.contains(&t.branch)).take(BRANCHES).collect();
+    (current, touches)
 }
 
 pub fn head_reflog_path(worktree: &Path) -> Option<PathBuf> {
@@ -203,6 +235,33 @@ mod tests {
         assert_eq!(head_branch(&dir.join("w")), None, "a detached HEAD has no branch");
         assert!(read_reflog(&dir.join("w")).contains("commit: hi"));
         assert_eq!(read_reflog(&dir.join("missing")), "");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_trail_of_a_worktree_leaves_out_the_base_branch_unless_head_is_on_it() {
+        let dir = std::env::temp_dir().join(format!("tomo-trail-base-{}", std::process::id()));
+        let common = dir.join("repo/.git");
+        let gitdir = common.join("worktrees/w");
+        std::fs::create_dir_all(gitdir.join("logs")).unwrap();
+        std::fs::create_dir_all(common.join("refs/remotes/origin")).unwrap();
+        std::fs::create_dir_all(dir.join("w")).unwrap();
+        std::fs::write(dir.join("w/.git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+        std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+        std::fs::write(common.join("refs/remotes/origin/HEAD"), "ref: refs/remotes/origin/develop\n").unwrap();
+        std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/eng-32\n").unwrap();
+        let now = 1_000_000;
+        let log = [line(900, "checkout: moving from develop to eng-31"), line(950, "checkout: moving from eng-31 to develop"), line(960, "checkout: moving from develop to eng-32")].concat();
+        std::fs::write(gitdir.join("logs/HEAD"), &log).unwrap();
+        let (current, trail) = worktree_trail(&dir.join("w"), now * 1000);
+        assert_eq!(current.as_deref(), Some("eng-32"));
+        assert_eq!(names(&trail), vec![("eng-32", 960), ("eng-31", 950)]);
+        std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/develop\n").unwrap();
+        assert_eq!(names(&worktree_trail(&dir.join("w"), now * 1000).1)[0], ("develop", 960), "HEAD on the base keeps it");
+        std::fs::remove_file(common.join("refs/remotes/origin/HEAD")).unwrap();
+        std::fs::write(gitdir.join("logs/HEAD"), line(900, "checkout: moving from main to eng-40")).unwrap();
+        std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/eng-40\n").unwrap();
+        assert_eq!(names(&worktree_trail(&dir.join("w"), now * 1000).1), vec![("eng-40", 900)], "with no origin/HEAD, main is the base");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
