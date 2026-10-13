@@ -13,7 +13,9 @@ import { useFlip } from "./useFlip";
 import { InspectorHead } from "./shell/TopStrip";
 import { InspectorSection } from "./sections";
 import {failQuietly, failToast, formatBytes, useStore} from "./store";
-import { gitDetails, inspectorSections } from "./addons";
+import { gitDetails, inspectorSections, worktreeLinks } from "./addons";
+import { LinkList } from "./LinkList";
+import { linkGroups } from "./linkGroups";
 import type { AgentPresence, AgentSession, FsEntry, Id, ProcessInfo, Worktree } from "./types";
 
 
@@ -29,6 +31,7 @@ export function RightSidebar({ worktree }: { worktree: Worktree }) {
       <div className="rightbar-scroll">
         <MetadataSection w={worktree} />
         <GitSection w={worktree} />
+        <LinksSection w={worktree} />
         {inspectorSections().map(({ id, component: Section }) => <Section key={id} worktree={worktree} />)}
         <ProcessSection w={worktree} />
         <SessionsSection w={worktree} />
@@ -102,6 +105,15 @@ function GitSection({ w }: { w: Worktree }) {
         <div className="muted">{w.exists ? "no status yet" : "worktree directory is missing"}</div>
       )}
       {gitDetails().map(({ id, component: Detail }) => <Detail key={id} worktree={w} />)}
+    </InspectorSection>
+  );
+}
+
+function LinksSection({ w }: { w: Worktree }) {
+  const links = useStore((s) => worktreeLinks(s, w));
+  return (
+    <InspectorSection id="links" control={links.length > 0 ? <span className="right">{links.length}</span> : undefined}>
+      {links.length > 0 ? <LinkList groups={linkGroups(links)} why /> : <div className="muted">none</div>}
     </InspectorSection>
   );
 }

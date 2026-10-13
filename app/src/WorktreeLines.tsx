@@ -1,6 +1,7 @@
 import { appLines, worktreeLinks } from "./addons";
 import { cx } from "./components/ui";
 import { GlyphText } from "./GlyphText";
+import { linkGroups } from "./linkGroups";
 import { leadLine, rowGroups, type Line, type RowGroups, type RowInput } from "./rowModel";
 import { StateMark, WorktreeMark } from "./StateMark";
 import { agentsOf, setRowError, useStore } from "./store";
@@ -88,13 +89,27 @@ export function WorktreeLines({ w, only }: { w: Worktree; only?: readonly (keyof
   return <LineGroups w={w} groups={groups} only={only} />;
 }
 
-/** The links at the right of a name line, such as the pull request. With no addon there are none. */
+const STACK = 3;
+
+/**
+ * The links at the right of a name line: the icons of the newest tickets and pull requests, overlapped, then the
+ * newest one's text and how many more there are. The hover card lists them all. With no addon there are none.
+ */
 export function WorktreeLinks({ w }: { w: Worktree }) {
   const links = useStore((s) => (w.archived_at_ms ? [] : worktreeLinks(s, w)));
-  return links.map(({ id, icon: Icon, color, text, title }) => (
-    <span key={id} className="wt-link" title={title}>
-      <Icon className="wt-link-icon" style={{ color }} />
-      {text}
+  const groups = linkGroups(links);
+  const lead = groups[0]?.head;
+  if (!lead) return null;
+  const title = groups.map(({ head }) => `${head.text} ${head.title}`).join("\n");
+  return (
+    <span className="wt-link" title={title}>
+      <span className="wt-link-stack">
+        {groups.slice(0, STACK).map(({ head: { id, icon: Icon, color } }) => (
+          <Icon key={id} className="wt-link-icon" style={{ color }} />
+        ))}
+      </span>
+      {lead.text}
+      {groups.length > 1 && <span className="wt-link-more">+{groups.length - 1}</span>}
     </span>
-  ));
+  );
 }

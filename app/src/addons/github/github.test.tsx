@@ -1,12 +1,14 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PullRequest } from "../../generated";
 import type { ActivityEvent, Frame, Repo, Worktree } from "../../types";
 
 const replies = vi.hoisted(() => ({}) as Record<string, unknown>);
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
 vi.mock("../../api", async (importOriginal) => (await import("../../test-api")).mockApi(await importOriginal<typeof import("../../api")>(), vi.fn((method: string) => Promise.resolve(replies[method] ?? null))));
 
 const { rpc } = await import("../../api");
+const { openUrl } = await import("@tauri-apps/plugin-opener");
 const { applyFrame, getState, setState } = await import("../../store");
 const { RightSidebar } = await import("../../RightSidebar");
 const { RightRail } = await import("../../shell/RightRail");
@@ -52,7 +54,7 @@ describe("GitHub pull request rows inside the git section", () => {
   it("shows the number, title, state, draft, review, checks, and a merge problem", async () => {
     replies.pr_status = { available: true, reason: null, pr: pr({ draft: true, review_decision: "changes_requested", mergeable: "conflicting", checks_passed: 1, checks_failed: 1, checks_pending: 1 }), prs: [] };
     render(<RightSidebar worktree={wt} />);
-    await screen.findByText("Add kobe");
+    await screen.findAllByText("Add kobe");
     expect(section()).toHaveTextContent("#12");
     expect(section()).toHaveTextContent("open, draft, changes requested");
     expect(section()).toHaveTextContent("1 passed, 1 failed, 1 pending");
@@ -64,7 +66,7 @@ describe("GitHub pull request rows inside the git section", () => {
   it("hides the merge row for a mergeable pull request and says none without checks", async () => {
     replies.pr_status = { available: true, reason: null, pr: pr({ mergeable: "mergeable" }), prs: [] };
     render(<RightSidebar worktree={wt} />);
-    await screen.findByText("Add kobe");
+    await screen.findAllByText("Add kobe");
     expect(section()).not.toHaveTextContent("merge");
     expect(section()).toHaveTextContent(/checks\s*none/);
   });
@@ -84,7 +86,7 @@ describe("GitHub pull request rows inside the git section", () => {
   it("replaces the pull request on screen when pr_changed arrives", async () => {
     replies.pr_status = { available: true, reason: null, pr: pr(), prs: [] };
     render(<RightSidebar worktree={wt} />);
-    await screen.findByText("Add kobe");
+    await screen.findAllByText("Add kobe");
     prChanged(pr({ state: "merged" }));
     expect(section()?.querySelector(".state.pr-merged")).not.toBeNull();
   });
@@ -119,10 +121,33 @@ describe("GitHub marks outside the inspector", () => {
 
   it("gives the hover card the title, the state, the checks, and the review", () => {
     prChanged(pr({ checks_passed: 3, review_decision: "review_required" }));
-    render(<WorktreePreview w={wt} />);
-    expect(screen.getByText("PR").nextElementSibling).toHaveTextContent("#12 Add kobe · open · checks passing · review requested");
+    const { container } = render(<WorktreePreview w={wt} />);
+    expect(container.querySelector(".link-line")).toHaveTextContent("#12Add kobe · open · checks passing · review requested");
     prChanged(pr({ checks_failed: 2 }));
-    expect(screen.getByText("2 checks failing")).toHaveClass("wt-tone-bad");
+    expect(screen.getByText("· 2 checks failing")).toHaveClass("wt-tone-bad");
+  });
+
+  it("opens a pull request on a click in the hover card, and offers its menu on a right click", () => {
+    prChanged(pr());
+    const { container } = render(<WorktreePreview w={wt} />);
+    const line = container.querySelector(".link-line")!;
+    expect(line).toHaveAttribute("href", "https://github.com/acme/acme/pull/12");
+    fireEvent.click(line);
+    expect(openUrl).toHaveBeenCalledWith("https://github.com/acme/acme/pull/12");
+    fireEvent.contextMenu(line);
+    expect(getState().menu?.items.map((i) => ("label" in i ? i.label : "-"))).toEqual(["Open", "Copy link", "Copy #12"]);
+  });
+
+  it("stacks every pull request of the worktree on the name line, the newest first, and lists them in the hover card", () => {
+    const first = pr({ number: 9, title: "Earlier", head: "feat/old", state: "merged", touched_ms: 100 });
+    const now = pr({ touched_ms: 300 });
+    act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: now, prs: [now, first] } } as Frame));
+    const { container } = render(<WorktreeLinks w={wt} />);
+    expect(container.querySelectorAll(".wt-link-stack .wt-link-icon")).toHaveLength(2);
+    expect(container.textContent).toBe("#12+1");
+    const card = render(<WorktreePreview w={wt} />).container;
+    expect([...card.querySelectorAll(".link-id")].map((e) => e.textContent)).toEqual(["#12", "#9"]);
+    expect(card.querySelector(".link-now")).toHaveTextContent("this branch");
   });
 
   it("shows the owner avatar for a GitHub remote only", () => {

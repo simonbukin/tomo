@@ -1,4 +1,4 @@
-import { ChevronDown, Cpu, Folder, GitBranch, MessagesSquare, Tag } from "lucide-react";
+import { ChevronDown, Cpu, Folder, GitBranch, Link2, MessagesSquare, Tag } from "lucide-react";
 import type { ReactNode } from "react";
 import { gitMarkers, inspectorSections } from "./addons";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./components/ui";
@@ -22,6 +22,7 @@ const gitSectionMarker = (s: State, w: Worktree): RailMarker | null => gitMarker
 const BEFORE_ADDONS: readonly RailSection[] = [
   { id: "worktree", label: "Worktree", icon: Tag },
   { id: "git", label: "Git", icon: GitBranch, marker: gitSectionMarker },
+  { id: "links", label: "Links", icon: Link2 },
 ];
 
 const AFTER_ADDONS: readonly RailSection[] = [

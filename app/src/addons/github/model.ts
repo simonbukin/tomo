@@ -1,11 +1,13 @@
-import { GitPullRequest } from "lucide-react";
+import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "lucide-react";
 import type { PullRequest } from "../../generated";
 import { GLYPH, type BranchTone } from "../../glyphs";
+import { ticketKey } from "../../linkGroups";
+import { durationLabel } from "../../previewModel";
 import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
 import type { Id, Worktree } from "../../types";
 import type { SearchGroup, WorktreeLink } from "../types";
-import { prOf } from "./state";
+import { prOf, prsOf } from "./state";
 
 const openWorktree = (id: Id) => (): void => void import("../../actions").then((a) => a.openWorktree(id));
 
@@ -54,6 +56,8 @@ type PrTone = "open" | "draft" | "merged" | "closed" | "failing";
 
 const PR_COLOR: Record<PrTone, string> = { open: "var(--working)", draft: "var(--fg-3)", merged: MERGED, closed: "var(--danger)", failing: "var(--danger)" };
 
+const PR_ICON: Record<PrTone, WorktreeLink["icon"]> = { open: GitPullRequest, draft: GitPullRequestDraft, merged: GitMerge, closed: GitPullRequestClosed, failing: GitPullRequest };
+
 function prTone(pr: PullRequest): PrTone {
   if (pr.state === "merged") return "merged";
   if (pr.state === "closed") return "closed";
@@ -77,7 +81,29 @@ export function prFacts(pr: PullRequest): { text: string; bad?: boolean }[] {
   return [{ text: state }, checksFact(pr), review ? { text: review } : null].filter((f) => f !== null);
 }
 
-export function prLinks(s: State, w: Worktree): WorktreeLink[] {
-  const pr = prOf(s, w.id);
-  return pr ? [{ id: "github-pr", label: "PR", icon: GitPullRequest, color: PR_COLOR[prTone(pr)], text: `#${pr.number}`, title: pr.title, facts: prFacts(pr) }] : [];
+function why(pr: PullRequest, current: boolean, now: number): string {
+  if (current) return `branch ${pr.head}`;
+  return pr.touched_ms > 0 ? `branch ${pr.head}, here ${durationLabel(pr.touched_ms, now)} ago` : `branch ${pr.head}`;
+}
+
+/** One link for each pull request of the worktree. A pull request goes under the ticket that its branch or its title names. */
+export function prLinks(s: State, w: Worktree, now = Date.now()): WorktreeLink[] {
+  return prsOf(s, w.id).map((pr) => {
+    const tone = prTone(pr);
+    const current = pr.head === w.branch;
+    return {
+      id: `github-pr:${pr.number}`,
+      label: "PR",
+      icon: PR_ICON[tone],
+      color: PR_COLOR[tone],
+      text: `#${pr.number}`,
+      title: pr.title,
+      facts: prFacts(pr),
+      url: pr.url,
+      touchedMs: Math.max(pr.touched_ms, pr.updated_at_ms),
+      ticket: ticketKey(pr.head) ?? ticketKey(pr.title) ?? undefined,
+      current,
+      why: why(pr, current, now),
+    };
+  });
 }

@@ -115,6 +115,18 @@ export interface WorktreeLink {
   title: string;
   /** Facts after the title in the hover card, such as `open` or `2 checks failing`. A `bad` fact is red. */
   facts: readonly { text: string; bad?: boolean }[];
+  /** What a click on the link opens. */
+  url?: string;
+  /** The newest of the last local touch and the last change upstream. The links of a worktree go newest first. */
+  touchedMs?: number;
+  /** The ticket that this link is, such as `ENG-31`. */
+  key?: string;
+  /** The ticket that this link belongs to, such as the one that a pull request's branch names. The link goes under it. */
+  ticket?: string;
+  /** The link of the branch that the worktree has now. */
+  current?: boolean;
+  /** Why the worktree has the link, for the inspector, such as `branch you/eng-29-status`. */
+  why?: string;
 }
 
 /** A line in the apps group of a worktree row and its hover card: an app that runs, or one that crashed. */

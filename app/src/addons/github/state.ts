@@ -13,6 +13,13 @@ export const prStatusOf = (s: State, worktreeId: Id): PrStatusResult | undefined
 
 export const prOf = (s: State, worktreeId: Id): PullRequest | null => prStatusOf(s, worktreeId)?.pr ?? null;
 
+/** Every pull request of the worktree, newest first. An answer from a daemon before `prs` gives its one `pr`. */
+export function prsOf(s: State, worktreeId: Id): PullRequest[] {
+  const status = prStatusOf(s, worktreeId);
+  if (status?.prs.length) return status.prs;
+  return status?.pr ? [status.pr] : [];
+}
+
 export function setPrStatus(worktreeId: Id, status: PrStatusResult): void {
   setState((s) => ({ prs: { ...s.prs, [worktreeId]: status } }));
 }

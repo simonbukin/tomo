@@ -37,8 +37,13 @@ The row has three columns: the 9px mark at x=14, the text at x=32, and the
 links, right-aligned 12px in. Every height is a multiple of 4:
 
 1. The name line (20px): the row mark, the name, the main star, and at the
-   right the links that addons give, such as the pull request (`#412`). The
-   icon of a link has the color of its state.
+   right the links that addons give, such as pull requests. The links are
+   one slot: the icons of the three newest overlap, the newest in front, then
+   the text of the newest (`#412`) and `+2` for the others. An icon has the
+   color of its state, and an outline in the color of the row, so an icon in
+   front does not cut the one behind it. A link that names a ticket of the
+   worktree, such as a pull request whose branch names `ENG-12`, counts with
+   that ticket (`linkGroups`).
 2. The branch line (16px, mono): the whole branch, then `*` for changes and
    `!2` in red for conflicts. Ahead and behind are only in the hover card.
 3. Groups of 20px lines, 4px between the groups, in this order:
@@ -65,8 +70,14 @@ sections with a 1px rule between them: problems, agents (with the session,
 the state in words, and the run time; each subagent with its kind and its
 age), apps (the address and the uptime, or the crash and its time), git (the
 branch, the upstream with ahead and behind, the changes, the conflicts),
-links (the title, the state, and the facts of each link), and a last block
+links (each ticket with its pull requests one level in, the newest first:
+the text, the title, the facts, `this branch` on the link of the branch now,
+and the age; a click opens a link, and a right click gives Open, Copy link,
+and Copy with its text), and a last block
 with the tags and the age of the worktree.
+
+The inspector section `links` shows the same list, and adds for each link
+why the worktree has it, such as the branch that it came from.
 
 A Home card and a Home list row keep their own layout. Their agent, subagent,
 and app lines are the same line groups as the sidebar row
