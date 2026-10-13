@@ -241,9 +241,30 @@ async fn clipboard_image() -> Option<String> {
 #[tauri::command]
 fn splash_ready(app: AppHandle) {
     if let Some(window) = app.get_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
+        reveal(&window);
     }
+}
+
+/// Must run on the main thread.
+#[cfg(target_os = "macos")]
+fn set_alpha_now(window: &tauri::Window, alpha: f64) {
+    if let Ok(ptr) = window.ns_window() {
+        // SAFETY: ns_window is the live NSWindow of this window, and the caller is on the main thread.
+        unsafe { (*ptr.cast::<objc2_app_kit::NSWindow>()).setAlphaValue(alpha) };
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn set_alpha(window: &tauri::Window, alpha: f64) {
+    let target = window.clone();
+    let _ = window.run_on_main_thread(move || set_alpha_now(&target, alpha));
+}
+
+fn reveal(window: &tauri::Window) {
+    #[cfg(target_os = "macos")]
+    set_alpha(window, 1.0);
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 // The main webview must be a child of the window, like the browser webviews. On macOS
@@ -251,10 +272,17 @@ fn splash_ready(app: AppHandle) {
 // later lands in the old, detached view and never paints.
 fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
     let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or_else(|| tauri::Error::WindowNotFound)?;
-    // The window opens hidden and the page shows it once the splash has painted, through
-    // splash_ready. Every earlier moment measured as a white window: the webview holds
-    // WebKit's blank page until its first paint, whatever background colour it carries.
+    // The window stays invisible until the page calls splash_ready after the splash has
+    // painted. Every earlier moment measured as a white window: the webview holds WebKit's
+    // blank page until its first paint, whatever background colour it carries. On macOS it
+    // is on screen at alpha 0, not hidden: WebKit runs no animation frame in a hidden
+    // window, so the page would never reach splash_ready.
     let window = tauri::window::WindowBuilder::from_config(app, &config)?.visible(false).build()?;
+    #[cfg(target_os = "macos")]
+    {
+        set_alpha_now(&window, 0.0);
+        window.show()?;
+    }
     let ground = match window.theme() {
         Ok(tauri::Theme::Light) => Color(0xfb, 0xfa, 0xfd, 0xff),
         _ => Color(0x17, 0x14, 0x1f, 0xff),
@@ -266,6 +294,9 @@ fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
     let fallback = window.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(2));
+        #[cfg(target_os = "macos")]
+        set_alpha(&fallback, 1.0);
+        #[cfg(not(target_os = "macos"))]
         if fallback.is_visible().is_ok_and(|v| !v) {
             let _ = fallback.show();
         }
