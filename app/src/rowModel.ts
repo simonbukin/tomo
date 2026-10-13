@@ -1,7 +1,7 @@
 import type { AppLine } from "./addons/types";
 import { agentMark, effectiveState, subagentStatus, type Mark } from "./glyphs";
 import { durationLabel } from "./previewModel";
-import { formatBytes, type RowError } from "./store";
+import type { RowError } from "./store";
 import { KIND_LABEL, type AgentPresence, type AttentionItem, type Id, type Subagent, type Worktree } from "./types";
 
 export type Tone = "warn" | "bad" | "mute";
@@ -32,8 +32,6 @@ export interface RowInput {
   attention: readonly AttentionItem[];
   /** The exit code of the pane of each agent, by pane id. */
   exitCodes: Readonly<Record<Id, number | null>>;
-  rssBytes: number | null;
-  warnBytes: number;
   rowError: RowError | null;
   apps: readonly AppLine[];
 }
@@ -47,8 +45,6 @@ export interface RowGroups {
 
 const open = (a: AttentionItem) => a.resolved_at_ms == null;
 
-const bytes = (n: number) => formatBytes(n).replace(".0 ", " ");
-
 /** What an agent asks, when it asked something. Tomo's own "Claude is waiting for you" says no more than the mark does. */
 export function question(agent: AgentPresence, attention: readonly AttentionItem[]): string | null {
   const generic = `${KIND_LABEL[agent.kind]} is waiting for you`;
@@ -60,12 +56,10 @@ export function problemLines(input: RowInput): Line[] {
   const w = input.worktree;
   if (w.archived_at_ms) return [];
   const e = input.rowError;
-  const over = input.rssBytes != null && input.rssBytes >= input.warnBytes;
   const reviews = input.attention.filter((a) => open(a) && a.kind === "checkpoint");
   const lines: (Line | false)[] = [
     !!w.archiving && { key: "archiving", mark: "archiving", label: "archiving" },
     !!e && { key: "row-error", mark: "failed", label: `${e.op} failed`, text: e.message, tone: "bad" },
-    over && { key: "memory", mark: "needs", label: "memory", text: `${bytes(input.rssBytes!)}, over the ${bytes(input.warnBytes)} warning`, tone: "warn" },
     ...reviews.map((a): Line => ({ key: `review:${a.id}`, mark: "needs", label: "review", text: a.message, tone: "warn" })),
     !w.exists && { key: "missing", mark: "unknown", label: "folder missing", text: "not found on disk", tone: "mute" },
   ];

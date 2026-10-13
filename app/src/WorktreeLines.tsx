@@ -11,12 +11,10 @@ export function useRowInput(w: Worktree): RowInput {
   const agents = useStore((s) => agentsOf(s, w.id));
   const attention = useStore((s) => s.attention.filter((a) => a.worktree_id === w.id));
   const exits = useStore((s) => agents.map((a) => s.panes[a.pane_id]?.exit_code ?? null));
-  const rssBytes = useStore((s) => s.resources[w.id]?.rss_bytes ?? null);
-  const warnBytes = useStore((s) => s.config?.resource_warning_bytes ?? Infinity);
   const rowError = useStore((s) => s.rowErrors[w.id] ?? null);
   const apps = useStore((s) => appLines(s, w.id));
   const exitCodes = Object.fromEntries(agents.map((a, i) => [a.pane_id, exits[i] ?? null]));
-  return { worktree: w, agents, attention, exitCodes, rssBytes, warnBytes, rowError, apps };
+  return { worktree: w, agents, attention, exitCodes, rowError, apps };
 }
 
 function LineText({ line }: { line: Line }) {

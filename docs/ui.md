@@ -43,9 +43,8 @@ links, right-aligned 12px in. Every height is a multiple of 4:
    `!2` in red for conflicts. Ahead and behind are only in the hover card.
 3. Groups of 20px lines, 4px between the groups, in this order:
    - problems: an archive in progress, an operation that failed (archive,
-     restore, rename; a click dismisses it), memory over
-     `resource_warning_bytes`, a checkpoint that asks for a review, and a
-     folder that is not on disk.
+     restore, rename; a click dismisses it), a checkpoint that asks for a
+     review, and a folder that is not on disk.
    - agents: one line for each agent that has something to say, then every
      subagent of it one level in (its 6px mark at x=32, its task at x=48).
      An idle or sleeping agent has no line, because the row mark says it.

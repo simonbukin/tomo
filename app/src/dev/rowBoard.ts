@@ -9,8 +9,6 @@ const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 const GB = 1024 ** 3;
 
-export const BOARD_WARN_BYTES = 2 * GB;
-
 const git = (branch: string, patch: Partial<GitSummary> = {}): GitSummary => ({
   branch,
   head: "abc1234",
