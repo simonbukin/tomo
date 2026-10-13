@@ -40,8 +40,9 @@ The result is `PrStatusResult { available, reason, pr, prs }`:
   comes first.
 
 The call runs `gh pr view` for the branch now, read from the HEAD file of the
-worktree, and then `gh pr list --head <branch> --state all --limit 1` for
-each earlier branch, at most five, in parallel. When `gh pr view` fails, the
+worktree, and then `gh pr list --head <branch> --state all --limit 5` for
+each earlier branch, at most five, in parallel. A pull request from a fork
+does not count: `--head main` also matches a fork's own `main`. When `gh pr view` fails, the
 call asks about no earlier branch.
 
 The daemon emits `pr_changed { worktree_id, pr, prs }` when a new pull request
