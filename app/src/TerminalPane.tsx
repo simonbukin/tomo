@@ -1,7 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import { useEffect, useRef, useState } from "react";
 import { encodeBase64, onPaneOutput, rpc } from "./api";
 import { applyZoom, closePane, focusPane, runAction, splitPaneById } from "./actions";
@@ -49,8 +49,7 @@ export function TerminalPane({ paneId, active }: { paneId: Id; active: boolean }
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new Unicode11Addon());
-    term.unicode.activeVersion = "11";
+    term.loadAddon(new UnicodeGraphemesAddon());
     term.open(host);
     const stopLinks = registerTerminalLinks(term, paneId, host);
     const stopFileDrop = listenFileDrop(host, paneId);

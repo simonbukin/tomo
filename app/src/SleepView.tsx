@@ -1,6 +1,6 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import { useEffect, useRef } from "react";
 import { decodeBase64, rpcParsed } from "./api";
 import { focusPane, runAction, wakePane } from "./actions";
@@ -51,8 +51,7 @@ export function SleepView({ paneId, waking, active }: { paneId: Id; waking: bool
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new Unicode11Addon());
-    term.unicode.activeVersion = "11";
+    term.loadAddon(new UnicodeGraphemesAddon());
     term.open(host);
     termRef.current = term;
     const unregister = registerTerminal(paneId, { term, el: host, focus: () => term.focus() });
