@@ -1,11 +1,13 @@
-//! Pure rules of the Linear addon: which issue a branch names, the one query for all of them, and how to read the answer.
+//! Pure rules of the Linear addon: which issues a worktree names, the one query for all of them, and how to read the answer.
 
+use crate::trail::BranchTouch;
 use serde_json::{json, Value};
-use tomo_proto::{Id, LinearIssue, LinearLink, LinearState, LinearStatus, LinearViewer};
+use std::collections::{BTreeMap, BTreeSet};
+use tomo_proto::{utc_ms, Id, LinearIssue, LinearLink, LinearState, LinearStatus, LinearViewer};
 
 pub const POLL_INTERVAL_MS: u64 = 60_000;
 
-const ISSUES_QUERY: &str = "query($filter: IssueFilter!, $first: Int!) { issues(filter: $filter, first: $first, includeArchived: true) { nodes { identifier title url priorityLabel state { name type color } assignee { name } } } }";
+const ISSUES_QUERY: &str = "query($filter: IssueFilter!, $first: Int!) { issues(filter: $filter, first: $first, includeArchived: true) { nodes { identifier title url priorityLabel updatedAt state { name type color } assignee { name } } } }";
 pub const VIEWER_QUERY: &str = "query { viewer { name } }";
 
 /// A key goes to `security -i` inside a command line, so it may hold only the characters of a Linear personal key.
@@ -25,23 +27,52 @@ pub fn identifier(branch: &str) -> Option<(String, u32)> {
     })
 }
 
-/// A worktree and the issue that its branch names.
-pub type Wanted = (Id, (String, u32));
+/// An issue that a worktree names: in a branch that it had, or in a commit that it made.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Wanted {
+    pub worktree_id: Id,
+    pub ident: (String, u32),
+    pub touched_ms: u64,
+    pub current: bool,
+    pub why: String,
+}
 
 pub fn identifier_text((team, number): &(String, u32)) -> String {
     format!("{team}-{number}")
 }
 
-/// Each worktree whose branch names an issue, with that issue's identifier.
-pub fn wanted<'a>(branches: impl Iterator<Item = (&'a Id, &'a str)>) -> Vec<Wanted> {
-    branches.filter_map(|(id, branch)| identifier(branch).map(|ident| (id.clone(), ident))).collect()
+/// Each issue that the trail of one worktree names, once: with the newest touch, as current when the branch now
+/// names it, and with the first place that names it, a branch before a commit.
+pub fn wanted(worktree_id: &Id, current: Option<&str>, trail: &[BranchTouch]) -> Vec<Wanted> {
+    let named = trail.iter().flat_map(|t| {
+        let now = Some(t.branch.as_str()) == current;
+        let by_branch = identifier(&t.branch).map(|ident| (ident, now, format!("branch {}", t.branch)));
+        let by_commit = t.subjects.iter().filter_map(|s| identifier(s)).map(|ident| (ident, false, format!("named in a commit on {}", t.branch)));
+        by_branch.into_iter().chain(by_commit).map(move |(ident, now, why)| (ident, t.touched_ms, now, why))
+    });
+    let by_ident = named.fold(BTreeMap::<(String, u32), Wanted>::new(), |mut seen, (ident, touched_ms, now, why)| {
+        let w = seen.entry(ident.clone()).or_insert_with(|| Wanted { worktree_id: worktree_id.clone(), ident, touched_ms, current: now, why: why.clone() });
+        w.touched_ms = w.touched_ms.max(touched_ms);
+        if now && !w.current {
+            w.current = true;
+            w.why = why;
+        }
+        seen
+    });
+    by_ident.into_values().collect()
+}
+
+/// The worktree and issue of each entry: what a fetch asks Linear about, without the touch times.
+pub fn asked_keys(wanted: &[Wanted]) -> BTreeSet<(&str, &(String, u32))> {
+    wanted.iter().map(|w| (w.worktree_id.as_str(), &w.ident)).collect()
 }
 
 /// Each branch of the `or` needs an explicit `and`: Linear matches almost every issue for `{ team, number }` inside an `or`.
 pub fn issues_request(wanted: &[Wanted]) -> Value {
-    let or: Vec<Value> = wanted.iter().map(|(_, (team, number))| json!({ "and": [{ "team": { "key": { "eq": team } } }, { "number": { "eq": number } }] })).collect();
+    let idents: BTreeSet<&(String, u32)> = wanted.iter().map(|w| &w.ident).collect();
+    let or: Vec<Value> = idents.iter().map(|(team, number)| json!({ "and": [{ "team": { "key": { "eq": team } } }, { "number": { "eq": number } }] })).collect();
     // ponytail: one page of at most 250 issues (Linear's page cap); page with `after` if one daemon ever links more.
-    json!({ "query": ISSUES_QUERY, "variables": { "filter": { "or": or }, "first": wanted.len().min(250) } })
+    json!({ "query": ISSUES_QUERY, "variables": { "filter": { "or": or }, "first": idents.len().min(250) } })
 }
 
 pub fn viewer_request() -> Value {
@@ -74,16 +105,18 @@ fn hex_color(v: &Value) -> String {
 fn issue(n: &Value) -> Option<LinearIssue> {
     let state = LinearState { name: text(&n["state"]["name"])?, kind: text(&n["state"]["type"])?, color: hex_color(&n["state"]["color"]) };
     let url = text(&n["url"]).filter(|u| u.starts_with("https://linear.app/"))?;
-    Some(LinearIssue { identifier: text(&n["identifier"])?, title: text(&n["title"])?, url, state, assignee: text(&n["assignee"]["name"]), priority: text(&n["priorityLabel"])? })
+    let updated_at_ms = n["updatedAt"].as_str().and_then(utc_ms).unwrap_or(0);
+    Some(LinearIssue { identifier: text(&n["identifier"])?, title: text(&n["title"])?, url, state, assignee: text(&n["assignee"]["name"]), priority: text(&n["priorityLabel"])?, updated_at_ms })
 }
 
 pub fn links(wanted: &[Wanted], body: &Value) -> Vec<LinearLink> {
     let issues: Vec<LinearIssue> = body["data"]["issues"]["nodes"].as_array().into_iter().flatten().filter_map(issue).collect();
     wanted
         .iter()
-        .filter_map(|(worktree_id, ident)| {
-            let text = identifier_text(ident);
-            issues.iter().find(|i| i.identifier == text).map(|issue| LinearLink { worktree_id: worktree_id.clone(), issue: issue.clone() })
+        .filter_map(|w| {
+            let text = identifier_text(&w.ident);
+            let issue = issues.iter().find(|i| i.identifier == text)?.clone();
+            Some(LinearLink { worktree_id: w.worktree_id.clone(), issue, touched_ms: w.touched_ms, current: w.current, why: w.why.clone() })
         })
         .collect()
 }
@@ -100,9 +133,10 @@ pub fn found(links: Vec<LinearLink>, now: u64) -> LinearStatus {
     LinearStatus { available: true, reason: None, links, fetched_at_ms: now }
 }
 
-/// A fetch is due while a client watches, when the last one is old or when a branch names another issue since it.
+/// A fetch is due while a client watches, when the last one is old or when a worktree names another issue since it.
+/// A new touch of an issue that the last fetch asked about waits for the next poll.
 pub fn due(subscribed: bool, last: &LinearStatus, asked: &[Wanted], wanted_now: &[Wanted], now: u64) -> bool {
-    subscribed && (stale(last, now) || asked != wanted_now)
+    subscribed && (stale(last, now) || asked_keys(asked) != asked_keys(wanted_now))
 }
 
 /// A fetch that started before the kept answer, such as a poll that was in flight during a logout, must not replace it.
@@ -161,23 +195,57 @@ mod tests {
         assert!(!valid_key("lin_oauth_abc"));
     }
 
+    fn want(worktree: &str, number: u32) -> Wanted {
+        Wanted { worktree_id: worktree.into(), ident: ("ENG".into(), number), touched_ms: 0, current: false, why: String::new() }
+    }
+
+    fn touch(branch: &str, touched_ms: u64, subjects: &[&str]) -> BranchTouch {
+        BranchTouch { branch: branch.into(), touched_ms, subjects: subjects.iter().map(|s| s.to_string()).collect() }
+    }
+
     #[test]
-    fn request_has_one_filter_per_worktree() {
-        let wanted = vec![("w1".to_string(), ("ENG".to_string(), 1)), ("w2".to_string(), ("ENG".to_string(), 2))];
-        let r = issues_request(&wanted);
+    fn request_has_one_filter_per_issue() {
+        let r = issues_request(&[want("w1", 1), want("w2", 2), want("w3", 1)]);
         assert_eq!(r["variables"]["filter"]["or"][1], json!({ "and": [{ "team": { "key": { "eq": "ENG" } } }, { "number": { "eq": 2 } }] }));
-        assert_eq!(r["variables"]["first"], 2);
+        assert_eq!(r["variables"]["first"], 2, "two worktrees that name ENG-1 ask about it once");
+    }
+
+    #[test]
+    fn a_worktree_names_the_issues_of_its_branches_and_its_commits_once_each() {
+        let trail = [
+            touch("you/eng-31-retry", 300, &["ENG-33 show the count", "Retry the sync"]),
+            touch("you/eng-29-status", 200, &["ENG-31 prepare the retry"]),
+            touch("main", 100, &[]),
+        ];
+        let got = wanted(&"w1".to_string(), Some("you/eng-31-retry"), &trail);
+        let shape: Vec<(String, u64, bool, &str)> = got.iter().map(|w| (identifier_text(&w.ident), w.touched_ms, w.current, w.why.as_str())).collect();
+        assert_eq!(
+            shape,
+            vec![
+                ("ENG-29".into(), 200, false, "branch you/eng-29-status"),
+                ("ENG-31".into(), 300, true, "branch you/eng-31-retry"),
+                ("ENG-33".into(), 300, false, "named in a commit on you/eng-31-retry"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_branch_now_makes_an_issue_current_even_when_a_commit_named_it_first() {
+        let trail = [touch("you/fix", 300, &["ENG-5 start"]), touch("you/eng-5-fix", 100, &[])];
+        let got = wanted(&"w1".to_string(), Some("you/eng-5-fix"), &trail);
+        assert_eq!((got.len(), got[0].current, got[0].why.as_str(), got[0].touched_ms), (1, true, "branch you/eng-5-fix", 300));
     }
 
     fn node(identifier: &str) -> Value {
-        json!({ "identifier": identifier, "title": "Fix it", "url": "https://linear.app/x/issue/ENG-1", "priorityLabel": "High", "state": { "name": "In Progress", "type": "started", "color": "#f2c94c" }, "assignee": null })
+        json!({ "identifier": identifier, "title": "Fix it", "url": "https://linear.app/x/issue/ENG-1", "priorityLabel": "High", "state": { "name": "In Progress", "type": "started", "color": "#f2c94c" }, "assignee": null, "updatedAt": "2026-10-13T14:05:22.000Z" })
     }
 
     #[test]
     fn links_match_worktrees_and_skip_missing_issues() {
-        let wanted = vec![("w1".to_string(), ("ENG".to_string(), 1)), ("w2".to_string(), ("ENG".to_string(), 404))];
+        let wanted = vec![Wanted { touched_ms: 7, current: true, why: "branch b".into(), ..want("w1", 1) }, want("w2", 404)];
         let body = json!({ "data": { "issues": { "nodes": [node("ENG-1"), { "broken": true }] } } });
         let got = links(&wanted, &body);
+        assert_eq!((got[0].touched_ms, got[0].current, got[0].why.as_str(), got[0].issue.updated_at_ms), (7, true, "branch b", 1_791_900_322_000));
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].worktree_id, "w1");
         assert_eq!(got[0].issue.state.kind, "started");
@@ -187,7 +255,7 @@ mod tests {
 
     #[test]
     fn links_refuse_a_color_or_url_of_another_shape() {
-        let wanted = vec![("w1".to_string(), ("ENG".to_string(), 1))];
+        let wanted = vec![want("w1", 1)];
         let mut odd = node("ENG-1");
         odd["state"]["color"] = json!("red; background: url(x)");
         assert_eq!(links(&wanted, &json!({ "data": { "issues": { "nodes": [odd] } } }))[0].issue.state.color, "");
@@ -221,8 +289,10 @@ mod tests {
     #[test]
     fn due_on_age_or_new_branches_only_while_watched() {
         let last = found(vec![], 1_000);
-        let a = vec![("w1".to_string(), ("ENG".to_string(), 1))];
-        let renamed = vec![("w1".to_string(), ("ENG".to_string(), 2))];
+        let a = vec![want("w1", 1)];
+        let renamed = vec![want("w1", 2)];
+        let touched = vec![Wanted { touched_ms: 9, ..want("w1", 1) }];
+        assert!(!due(true, &last, &a, &touched, 1_001), "a new touch alone waits for the next poll");
         assert!(!due(false, &last, &a, &[], 1_000_000));
         assert!(!due(true, &last, &a, &a, 1_000 + POLL_INTERVAL_MS - 1));
         assert!(due(true, &last, &a, &a, 1_000 + POLL_INTERVAL_MS));

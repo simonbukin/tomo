@@ -1,4 +1,5 @@
-//! Linear: the issue that each worktree's branch names, and its state. See docs/linear.md.
+//! Linear: the issues that each worktree names, and their state. See docs/linear.md.
+//! A worktree names an issue in a branch that its reflog shows from the last 30 days, or in a commit that it made.
 //! The key lives in the Keychain. `curl` gets it on stdin, never in argv.
 //! A background check runs every 20 s while a client is subscribed. It fetches when the answer is 60 s old or when a branch names another issue.
 
@@ -6,9 +7,11 @@ mod model;
 
 use crate::addons;
 use crate::daemon::{err, ok, Daemon, Inner};
+use crate::trail;
 use model::Wanted;
 use serde_json::Value;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,6 +23,9 @@ const KEYCHAIN_ACCOUNT: &str = "linear";
 const REQUEST_TIMEOUT_SECS: u64 = 8;
 const POLL_TICK: Duration = Duration::from_secs(20);
 const NO_KEY: &str = "no Linear key; run `tomo linear login`";
+/// How far back and how many branches of a worktree's reflog can name its issues.
+const TRAIL_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+const TRAIL_BRANCHES: usize = 6;
 
 /// The last answer, and the worktree issues that it asked for. Memory only: a restart starts empty.
 /// `started` counts fetches; `kept` is the number of the fetch that gave `status`.
@@ -98,11 +104,33 @@ fn fetch(wanted: &[Wanted], now: u64) -> LinearStatus {
     }
 }
 
-fn wanted_now(inner: &Inner) -> Vec<Wanted> {
-    let live = inner.worktrees.values().filter(|w| w.exists && w.archived_at_ms.is_none());
-    let mut wanted = model::wanted(live.filter_map(|w| w.branch.as_deref().map(|b| (&w.id, b))));
+/// The live worktrees, read under the lock. `wanted` reads their reflogs after the lock is released.
+fn live(inner: &Inner) -> Vec<(Id, PathBuf)> {
+    inner.worktrees.values().filter(|w| w.exists && w.archived_at_ms.is_none()).map(|w| (w.id.clone(), w.path.clone())).collect()
+}
+
+fn wanted(live: &[(Id, PathBuf)]) -> Vec<Wanted> {
+    let since = now_ms().saturating_sub(TRAIL_MS);
+    let mut wanted: Vec<Wanted> = live
+        .iter()
+        .flat_map(|(id, path)| {
+            let branch = trail::head_branch(path);
+            let touches = trail::branch_trail(&trail::read_reflog(path), branch.as_deref(), since, TRAIL_BRANCHES);
+            model::wanted(id, branch.as_deref(), &touches)
+        })
+        .collect();
     wanted.sort();
     wanted
+}
+
+/// Whether a fetch is due, with the reflogs read outside the lock.
+fn is_due(daemon: &Daemon, subscribed: impl Fn(&Inner) -> bool) -> bool {
+    let (watched, last, asked, worktrees) = {
+        let inner = daemon.lock();
+        let state = &addons::state(&inner).linear;
+        (subscribed(&inner), state.status.clone(), state.asked.clone(), live(&inner))
+    };
+    model::due(watched, &last, &asked, &wanted(&worktrees), now_ms())
 }
 
 /// The last answer, for the `subscribe` snapshot.
@@ -126,13 +154,14 @@ pub fn remember(inner: &mut Inner, fetch: u64, asked: Vec<Wanted>, fresh: Linear
 }
 
 async fn refresh(daemon: &Arc<Daemon>) {
-    let (number, wanted) = {
+    let (number, worktrees) = {
         let mut inner = daemon.lock();
-        let wanted = wanted_now(&inner);
+        let worktrees = live(&inner);
         let last = &mut addons::state_mut(&mut inner).linear;
         last.started += 1;
-        (last.started, wanted)
+        (last.started, worktrees)
     };
+    let wanted = wanted(&worktrees);
     let asked = wanted.clone();
     let fresh = tokio::task::spawn_blocking(move || fetch(&wanted, now_ms())).await.unwrap_or_else(|e| model::unavailable(e.to_string(), now_ms()));
     remember(&mut daemon.lock(), number, asked, fresh);
@@ -140,12 +169,7 @@ async fn refresh(daemon: &Arc<Daemon>) {
 
 /// `linear_get`: fetches at once when `refresh` is set, or when a subscribed poll would, because no poll runs without a subscriber.
 pub async fn get(daemon: &Arc<Daemon>, refresh_now: bool) -> Result<Value, RpcError> {
-    let is_due = {
-        let inner = daemon.lock();
-        let last = &addons::state(&inner).linear;
-        model::due(true, &last.status, &last.asked, &wanted_now(&inner), now_ms())
-    };
-    if refresh_now || is_due {
+    if refresh_now || is_due(daemon, |_| true) {
         refresh(daemon).await;
     }
     ok(snapshot(&daemon.lock()))
@@ -183,12 +207,7 @@ pub async fn logout(daemon: &Arc<Daemon>) -> Result<Value, RpcError> {
 pub async fn run(daemon: Arc<Daemon>) {
     loop {
         tokio::time::sleep(POLL_TICK).await;
-        let is_due = {
-            let inner = daemon.lock();
-            let last = &addons::state(&inner).linear;
-            model::due(inner.clients.values().any(|c| c.subscribed), &last.status, &last.asked, &wanted_now(&inner), now_ms())
-        };
-        if is_due {
+        if is_due(&daemon, |inner| inner.clients.values().any(|c| c.subscribed)) {
             refresh(&daemon).await;
         }
     }

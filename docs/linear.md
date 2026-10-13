@@ -1,7 +1,9 @@
 # Linear
 
-Tomo shows the state of the Linear issue that a worktree's branch names. The
-branch `simon/eng-2611-fix-login` names `ENG-2611`. `tomo linear issue`
+Tomo shows the state of the Linear issues that a worktree names. The branch
+`you/eng-2611-fix-login` names `ENG-2611`. A worktree that had more than one
+branch, or a commit subject such as `ENG-2612 fix the redirect too`, names
+more than one issue. `tomo linear issue`
 prints it, the `subscribe` snapshot carries it in `linear`, and the daemon
 sends `linear_changed` when it changes.
 
@@ -43,23 +45,32 @@ works again or you log in with a new one.
 
 ## The link
 
-The link is the branch name. The daemon does not store a link.
+The link is a name in git. The daemon does not store a link.
 
-1. `model::identifier` finds the first `<key>-<number>` in the branch, where
-   `<key>` starts with a letter. It makes the key upper case, because Linear
-   team keys are case-sensitive.
-2. One query asks for all issues. Each branch of the `or` filter is an
+1. The trail of the worktree (`crates/tomod/src/trail.rs`) gives the branches
+   that the worktree checked out, left, or committed on in the last 30 days,
+   at most six, with the subjects of the commits that it made on each.
+   `model::wanted` takes the issue of each branch and of each subject, one
+   time for each worktree: with the newest touch, as current when the branch
+   now names it, and with why, such as `branch you/eng-31-retry` or
+   `named in a commit on you/eng-31-retry`.
+2. `model::identifier` finds the first `<key>-<number>` in a branch or a
+   subject, where `<key>` starts with a letter. It makes the key upper case,
+   because Linear team keys are case-sensitive.
+3. One query asks for all issues, each one time. Each branch of the `or` filter is an
    explicit `and` of `team.key` and `number`. Linear matches almost every
    issue for an `or` of `{ team, number }` objects without the `and`.
-3. A branch such as `release-2` asks for `RELEASE-2`. No team has that key,
+4. A branch such as `release-2` asks for `RELEASE-2`. No team has that key,
    so no issue comes back, and the worktree shows nothing.
 
-A card shows one issue: the first one that the branch names.
+The daemon reads the reflogs outside its lock: a check copies the list of
+live worktrees under the lock, then reads the files without it.
 
 ## Background work
 
 A poll runs every 20 s. It fetches only while a client is subscribed, and
-only when the last answer is 60 s old or when a branch names another issue.
+only when the last answer is 60 s old or when a worktree names another issue.
+A new touch of an issue that the last answer has waits for the next poll.
 `linear_get` uses the same rule without a subscriber, so `tomo linear issue`
 is current when no GUI runs.
 It reads the Keychain on each fetch, but it does no network work when no
@@ -77,16 +88,20 @@ use Linear, so a missing key is not a problem.
 
 ## Display
 
-- The name line of a sidebar row and a Home card shows the Linear mark in
-  the color of the issue state, and the identifier (`ENG-12`). The addon
-  gives it through the `worktreeLinks` slot.
-- The links section of the worktree hover card shows the identifier, the
-  title, the state name, and the assignee.
+- The addon gives one link for each issue through the `worktreeLinks` slot.
+  The name line of a sidebar row and a Home card stacks them with the other
+  links: the Linear mark in the color of the issue state, then the newest
+  identifier (`ENG-12`) and `+N`. See "Worktree rows" in [ui.md](ui.md).
+- The links section of the worktree hover card and of the inspector shows
+  each issue with the identifier, the title, the state name, and the
+  assignee, and a pull request whose branch or title names the issue under
+  it. The inspector adds why the worktree has the issue.
 - The mark has the team's colour for the state, mixed 70% with `--fg`. A pale
   colour such as `#e2e2e2` then still reads on a light theme.
-- The git section of the inspector shows the identifier and the title, which
-  open the issue, and the state, priority, and assignee.
-- The palette has "open ENG-2611 in Linear" for the worktree.
+- The git section of the inspector shows the issue of the branch now, else
+  the one that the worktree touched last: the identifier and the title,
+  which open the issue, and the state, priority, and assignee.
+- The palette has "open ENG-2611 in Linear" for each issue of the worktree.
 
 ## Known limits
 

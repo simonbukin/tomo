@@ -160,8 +160,8 @@ export function rowBoard(now: number): Board {
     { seq: 0, event: "endpoints_changed", data: { worktree_id: "board-hakodate", endpoints: [endpoint("hakodate", "docs", 4000, now - 30 * MIN)] } } as Frame,
   ];
   const linear: LinearLink[] = [
-    { worktree_id: "board-isahaya", issue: { identifier: "ENG-12", title: "Burn down the lint backlog", url: "", state: { name: "In Review", kind: "started", color: "#8a6fd1" }, assignee: "Simon", priority: "Medium" } },
-    { worktree_id: "board-otaru", issue: { identifier: "ENG-9", title: "Search everything", url: "", state: { name: "Done", kind: "completed", color: "#2f8a44" }, assignee: "Simon", priority: "Medium" } },
+    { worktree_id: "board-isahaya", issue: { identifier: "ENG-12", title: "Burn down the lint backlog", url: "", state: { name: "In Review", kind: "started", color: "#8a6fd1" }, assignee: "Simon", priority: "Medium", updated_at_ms: 0 }, touched_ms: now - 22 * MIN, current: true, why: "branch you/eng-12-lint" },
+    { worktree_id: "board-otaru", issue: { identifier: "ENG-9", title: "Search everything", url: "", state: { name: "Done", kind: "completed", color: "#2f8a44" }, assignee: "Simon", priority: "Medium", updated_at_ms: 0 }, touched_ms: now - 2 * HOUR, current: true, why: "branch you/eng-9-search" },
   ];
   return {
     worktrees,

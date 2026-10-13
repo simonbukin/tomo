@@ -1,4 +1,4 @@
-//! Linear wire types: the issue that each worktree's branch names. `lib.rs` re-exports them, so the generated TypeScript names stay the same.
+//! Linear wire types: the issues that each worktree's branches and commits name. `lib.rs` re-exports them, so the generated TypeScript names stay the same.
 
 use crate::Id;
 use serde::{Deserialize, Serialize};
@@ -21,12 +21,24 @@ pub struct LinearIssue {
     pub state: LinearState,
     pub assignee: Option<String>,
     pub priority: String,
+    /// When the issue last changed in Linear. 0 when Linear gave no time.
+    #[serde(default)]
+    pub updated_at_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct LinearLink {
     pub worktree_id: Id,
     pub issue: LinearIssue,
+    /// The last time that the worktree touched the branch or made the commit that names the issue.
+    #[serde(default)]
+    pub touched_ms: u64,
+    /// The branch that the worktree has now names the issue.
+    #[serde(default)]
+    pub current: bool,
+    /// Where the worktree names the issue, such as `branch you/eng-31-retry`.
+    #[serde(default)]
+    pub why: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]

@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearStatus } from "../../generated";
+import type { LinearIssue, LinearLink, LinearStatus } from "../../generated";
 import { setState, type State } from "../../store";
 import type { Frame, Id, Snapshot } from "../../types";
 
@@ -9,7 +9,14 @@ declare module "../../store" {
   }
 }
 
-export const linearIssueOf = (s: State, worktreeId: Id): LinearIssue | null => s.linear?.links.find((l) => l.worktree_id === worktreeId)?.issue ?? null;
+export const linearLinksOf = (s: State, worktreeId: Id): LinearLink[] => (s.linear?.links ?? []).filter((l) => l.worktree_id === worktreeId);
+
+/** The issue that the branch now names, else the one that the worktree touched last. */
+export function linearIssueOf(s: State, worktreeId: Id): LinearIssue | null {
+  const links = linearLinksOf(s, worktreeId);
+  const newest = [...links].sort((a, b) => b.touched_ms - a.touched_ms)[0];
+  return (links.find((l) => l.current) ?? newest)?.issue ?? null;
+}
 
 export const replaceLinear = (snapshot: Snapshot): void => setState({ linear: snapshot.linear });
 

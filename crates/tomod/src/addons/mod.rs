@@ -252,8 +252,10 @@ mod tests {
             state: LinearState { name: "Todo".into(), kind: "unstarted".into(), color: "#e2e2e2".into() },
             assignee: None,
             priority: "No priority".into(),
+            updated_at_ms: 0,
         };
-        super::linear::remember(&mut a.lock(), 1, vec![], LinearStatus { available: true, reason: None, links: vec![LinearLink { worktree_id: worktree_id.clone(), issue }], fetched_at_ms: now_ms() });
+        let link = LinearLink { worktree_id: worktree_id.clone(), issue, touched_ms: 0, current: true, why: "branch feat".into() };
+        super::linear::remember(&mut a.lock(), 1, vec![], LinearStatus { available: true, reason: None, links: vec![link], fetched_at_ms: now_ms() });
 
         let (seen_by_a, seen_by_b) = (subscribe(&a).await, subscribe(&b).await);
         assert_eq!(seen_by_b.usage.len(), 0, "usage leaked into the second daemon");

@@ -398,12 +398,16 @@ export const linearIssueSchema = z.object({
     url: z.string(),
     state: linearStateSchema,
     assignee: z.string().nullable(),
-    priority: z.string()
+    priority: z.string(),
+    updated_at_ms: z.number()
 });
 
 export const linearLinkSchema = z.object({
     worktree_id: z.string(),
-    issue: linearIssueSchema
+    issue: linearIssueSchema,
+    touched_ms: z.number(),
+    current: z.boolean(),
+    why: z.string()
 });
 
 export const linearViewerSchema = z.object({
