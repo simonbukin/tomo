@@ -1,5 +1,6 @@
-//! GitHub: the pull request of a worktree's branch, read with the `gh` CLI. See docs/features/github.md.
+//! GitHub: the pull requests of a worktree's branches, read with the `gh` CLI. See docs/features/github.md.
 //! No poller: `gh` runs only inside a `pr_status` call, and a young pull request comes from the cache.
+//! The branches are the one that the worktree has now and the ones that its reflog shows from the last 30 days.
 //! A pull request that becomes merged fires the `github.pr_merged` hook. The addon writes no tags.
 
 mod model;
@@ -10,6 +11,7 @@ use crate::addons;
 use crate::daemon::{err, ok, Daemon, Inner};
 use crate::events;
 use crate::store::Store;
+use crate::trail;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -37,14 +39,22 @@ pub fn migrate(store: &Store) -> anyhow::Result<()> {
     store.kv_set(OLD_TAGS_REMOVED, "1")
 }
 
-async fn gh_pr_view(worktree: &Path) -> std::io::Result<std::process::Output> {
-    tokio::process::Command::new("gh")
-        .args(["pr", "view", "--json", "number,title,url,state,isDraft,reviewDecision,mergeable,statusCheckRollup"])
-        .current_dir(worktree)
-        .env("GH_NO_UPDATE_NOTIFIER", "1")
-        .env("NO_COLOR", "1")
-        .output()
-        .await
+/// How far back the reflog names the branches that `pr_status` asks about, and how many branches at most.
+const TRAIL_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+const TRAIL_BRANCHES: usize = 6;
+
+async fn gh(worktree: &Path, args: &[&str]) -> std::io::Result<std::process::Output> {
+    tokio::process::Command::new("gh").args(args).current_dir(worktree).env("GH_NO_UPDATE_NOTIFIER", "1").env("NO_COLOR", "1").output().await
+}
+
+/// The newest pull request of each earlier branch, asked in parallel.
+async fn earlier_prs(worktree: &Path, branches: Vec<String>) -> Vec<PullRequest> {
+    let mut asks = tokio::task::JoinSet::new();
+    for branch in branches {
+        let worktree = worktree.to_path_buf();
+        asks.spawn(async move { model::listed(gh(&worktree, &["pr", "list", "--head", &branch, "--state", "all", "--limit", "1", "--json", model::PR_FIELDS]).await) });
+    }
+    asks.join_all().await.into_iter().flatten().collect()
 }
 
 /// `pr_status`: the cached answer while it is fresh, else a new `gh pr view`. It records `pr_merged` and emits `pr_changed`.
@@ -57,7 +67,12 @@ pub async fn pr_status(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcErr
     if model::fresh(cached.as_ref(), now_ms()) {
         return ok(cached);
     }
-    let result = model::answer(gh_pr_view(&path).await);
+    let branch = trail::head_branch(&path);
+    let trail = trail::branch_trail(&trail::read_reflog(&path), branch.as_deref(), now_ms().saturating_sub(TRAIL_MS), TRAIL_BRANCHES);
+    let current = model::answer(gh(&path, &["pr", "view", "--json", model::PR_FIELDS]).await);
+    let earlier: Vec<String> = trail.iter().map(|t| t.branch.clone()).filter(|b| Some(b) != branch.as_ref()).collect();
+    let earlier = if current.available { earlier_prs(&path, earlier).await } else { vec![] };
+    let result = model::with_history(current, earlier, &trail);
     remember(&mut daemon.lock(), worktree_id, result.clone());
     ok(result)
 }
@@ -72,7 +87,7 @@ pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
         inner.hook_queue.push(hook);
     }
     if update.changed {
-        Daemon::emit(inner, Event::PrChanged { worktree_id, pr: result.pr });
+        Daemon::emit(inner, Event::PrChanged { worktree_id, pr: result.pr, prs: result.prs });
     }
 }
 

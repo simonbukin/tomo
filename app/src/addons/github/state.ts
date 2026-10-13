@@ -19,6 +19,6 @@ export function setPrStatus(worktreeId: Id, status: PrStatusResult): void {
 
 export function applyGitHubFrame(frame: Frame): void {
   if (frame.event !== "pr_changed") return;
-  const { worktree_id, pr } = frame.data as { worktree_id: Id; pr: PullRequest | null };
-  setPrStatus(worktree_id, { available: true, reason: null, pr });
+  const { worktree_id, pr, prs } = frame.data as { worktree_id: Id; pr: PullRequest | null; prs: PullRequest[] };
+  setPrStatus(worktree_id, { available: true, reason: null, pr, prs });
 }

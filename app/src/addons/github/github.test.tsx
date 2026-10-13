@@ -16,8 +16,8 @@ const { RepoAvatar } = await import("../../Sidebar");
 const { defaultUi } = await import("../../uiState");
 
 const wt = { id: "w1", name: "kobe", repo_id: "r1", path: "/src/kobe", branch: "feat/kobe", head: "abc1234", detached: false, exists: true, archived_at_ms: null, git: null, metadata: { state: null, tags: [], project: null, display_name: null } } as unknown as Worktree;
-const pr = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 12, title: "Add kobe", url: "https://github.com/acme/acme/pull/12", state: "open", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, ...patch });
-const prChanged = (value: PullRequest | null) => act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: value } } as Frame));
+const pr = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 12, title: "Add kobe", url: "https://github.com/acme/acme/pull/12", state: "open", draft: false, review_decision: null, mergeable: null, checks_passed: 0, checks_failed: 0, checks_pending: 0, fetched_at_ms: 1, head: "feat/kobe", updated_at_ms: 0, touched_ms: 0, ...patch });
+const prChanged = (value: PullRequest | null) => act(() => applyFrame({ event: "pr_changed", data: { worktree_id: "w1", pr: value, prs: value ? [value] : [] } } as Frame));
 const prCalls = () => vi.mocked(rpc).mock.calls.filter(([method]) => method === "pr_status");
 const section = () => document.querySelector('[data-section="git"]');
 
@@ -50,7 +50,7 @@ describe("GitHub pull request rows inside the git section", () => {
   });
 
   it("shows the number, title, state, draft, review, checks, and a merge problem", async () => {
-    replies.pr_status = { available: true, reason: null, pr: pr({ draft: true, review_decision: "changes_requested", mergeable: "conflicting", checks_passed: 1, checks_failed: 1, checks_pending: 1 }) };
+    replies.pr_status = { available: true, reason: null, pr: pr({ draft: true, review_decision: "changes_requested", mergeable: "conflicting", checks_passed: 1, checks_failed: 1, checks_pending: 1 }), prs: [] };
     render(<RightSidebar worktree={wt} />);
     await screen.findByText("Add kobe");
     expect(section()).toHaveTextContent("#12");
@@ -62,7 +62,7 @@ describe("GitHub pull request rows inside the git section", () => {
   });
 
   it("hides the merge row for a mergeable pull request and says none without checks", async () => {
-    replies.pr_status = { available: true, reason: null, pr: pr({ mergeable: "mergeable" }) };
+    replies.pr_status = { available: true, reason: null, pr: pr({ mergeable: "mergeable" }), prs: [] };
     render(<RightSidebar worktree={wt} />);
     await screen.findByText("Add kobe");
     expect(section()).not.toHaveTextContent("merge");
@@ -70,19 +70,19 @@ describe("GitHub pull request rows inside the git section", () => {
   });
 
   it("shows the gh reason when pull requests are unavailable", async () => {
-    replies.pr_status = { available: false, reason: "gh is not installed", pr: null };
+    replies.pr_status = { available: false, reason: "gh is not installed", pr: null, prs: [] };
     render(<RightSidebar worktree={wt} />);
     expect(await screen.findByText("gh is not installed")).toBeInTheDocument();
   });
 
   it("says when the branch has no pull request", async () => {
-    replies.pr_status = { available: true, reason: null, pr: null };
+    replies.pr_status = { available: true, reason: null, pr: null, prs: [] };
     render(<RightSidebar worktree={wt} />);
     expect(await screen.findByText("none")).toBeInTheDocument();
   });
 
   it("replaces the pull request on screen when pr_changed arrives", async () => {
-    replies.pr_status = { available: true, reason: null, pr: pr() };
+    replies.pr_status = { available: true, reason: null, pr: pr(), prs: [] };
     render(<RightSidebar worktree={wt} />);
     await screen.findByText("Add kobe");
     prChanged(pr({ state: "merged" }));

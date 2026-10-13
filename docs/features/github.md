@@ -1,8 +1,15 @@
 # GitHub
 
-The GitHub addon shows the pull request of the branch in a worktree. It
-reads the pull request with the GitHub CLI (`gh`). Tomo does not manage
+The GitHub addon shows the pull requests of a worktree: the one of the branch
+that the worktree has now, and the ones of the branches that it had in the
+last 30 days. It reads them with the GitHub CLI (`gh`). Tomo does not manage
 pull requests. Log in with `gh auth login` first.
+
+The earlier branches come from the reflog of the worktree's HEAD
+(`crates/tomod/src/trail.rs`). Each worktree has its own reflog, so one
+worktree that worked on three tickets shows three pull requests, and its
+neighbor shows none of them. A branch counts as touched when the worktree
+checked it out, left it, or made a commit on it.
 
 ## What it shows
 
@@ -22,13 +29,22 @@ pull requests. Log in with `gh auth login` first.
 { "method": "pr_status", "params": { "worktree_id": "…" } }
 ```
 
-The result is `PrStatusResult { available, reason, pr }`:
+The result is `PrStatusResult { available, reason, pr, prs }`:
 
 - `gh` is not on `PATH`: `available: false`, reason `gh is not installed`.
 - `gh` fails: `available: false`, the reason is the first line of its error output.
 - The branch has no pull request: `available: true`, `pr: null`.
+- `prs` holds every pull request that the call found, `pr` among them, each
+  with its `head`, `updated_at_ms`, and `touched_ms` (the last time that this
+  worktree touched the head). The newest by `touched_ms` or `updated_at_ms`
+  comes first.
 
-The daemon emits `pr_changed { worktree_id, pr }` when the new pull request
+The call runs `gh pr view` for the branch now, read from the HEAD file of the
+worktree, and then `gh pr list --head <branch> --state all --limit 1` for
+each earlier branch, at most five, in parallel. When `gh pr view` fails, the
+call asks about no earlier branch.
+
+The daemon emits `pr_changed { worktree_id, pr, prs }` when a new pull request
 is not equal to the cached one. A new fetch of an open pull request always
 differs, because `fetched_at_ms` changes. The first answer for a worktree
 after a daemon start always emits the event.
@@ -42,8 +58,8 @@ you set after that stays.
 
 ## Background work
 
-The daemon has no poller, no timer, and no watcher for GitHub. `gh pr view`
-runs only inside a `pr_status` call. The call uses the cache instead when
+The daemon has no poller, no timer, and no watcher for GitHub. `gh` runs only
+inside a `pr_status` call. The call uses the cache instead when
 the cache has a pull request that is less than 60 s old. An answer without a
 pull request is not cached, so the next call runs `gh` again.
 

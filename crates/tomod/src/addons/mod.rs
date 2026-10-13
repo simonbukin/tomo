@@ -211,8 +211,11 @@ mod tests {
             checks_failed: 0,
             checks_pending: 0,
             fetched_at_ms: now_ms(),
+            head: "feat".into(),
+            updated_at_ms: 0,
+            touched_ms: 0,
         };
-        super::github::remember(&mut a.lock(), worktree_id.clone(), PrStatusResult { available: true, reason: None, pr: Some(pr) });
+        super::github::remember(&mut a.lock(), worktree_id.clone(), PrStatusResult { available: true, reason: None, pr: Some(pr.clone()), prs: vec![pr] });
         let endpoint = RuntimeEndpoint {
             id: "1:3000".into(),
             worktree_id: worktree_id.clone(),

@@ -220,7 +220,10 @@ export const pullRequestSchema = z.object({
     checks_passed: z.number(),
     checks_failed: z.number(),
     checks_pending: z.number(),
-    fetched_at_ms: z.number()
+    fetched_at_ms: z.number(),
+    head: z.string(),
+    updated_at_ms: z.number(),
+    touched_ms: z.number()
 });
 
 export const hookRunSchema = z.object({
@@ -437,7 +440,8 @@ export const paneSnapshotSchema = z.object({
 export const prStatusResultSchema = z.object({
     available: z.boolean(),
     reason: z.string().nullable(),
-    pr: pullRequestSchema.nullable()
+    pr: pullRequestSchema.nullable(),
+    prs: z.array(pullRequestSchema)
 });
 
 export const processInfoSchema = z.object({
@@ -747,7 +751,8 @@ export const eventSchema = z.union([z.object({
         "event": z.literal("pr_changed"),
         "data": z.object({
             worktree_id: z.string(),
-            pr: pullRequestSchema.nullable()
+            pr: pullRequestSchema.nullable(),
+            prs: z.array(pullRequestSchema)
         })
     }), z.object({
         "event": z.literal("hook_ran"),
