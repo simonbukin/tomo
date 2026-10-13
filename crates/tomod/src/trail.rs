@@ -117,13 +117,24 @@ fn base_branches(gitdir: &Path) -> Vec<String> {
     }
 }
 
+/// A checkout of a remote branch or a tag, such as `git switch --detach origin/main` or `git checkout v1.2`, names it
+/// in the reflog like a branch. It is a detached HEAD, not work on a branch of this worktree.
+fn remote_or_tag(common: &Path, name: &str) -> bool {
+    let remote = name.split_once('/').is_some_and(|(first, _)| common.join("refs/remotes").join(first).is_dir());
+    let packed = std::fs::read_to_string(common.join("packed-refs")).unwrap_or_default();
+    let tag = common.join("refs/tags").join(name).is_file() || packed.lines().any(|l| l.split_once(' ').is_some_and(|(_, r)| r == format!("refs/tags/{name}")));
+    remote || tag
+}
+
 /// The trail of a worktree now: its branch from the HEAD file, then the other branches of the last 30 days, without
-/// the base branch unless HEAD is on it.
+/// the base branch unless HEAD is on it, and without a remote branch or a tag.
 pub fn worktree_trail(worktree: &Path, now_ms: u64) -> (Option<String>, Vec<BranchTouch>) {
     let current = head_branch(worktree);
-    let base = gitdir(worktree).map(|g| base_branches(&g)).unwrap_or_default();
+    let Some(gitdir) = gitdir(worktree) else { return (current, vec![]) };
+    let (common, base) = (common_dir(&gitdir), base_branches(&gitdir));
     let all = branch_trail(&read_reflog(worktree), current.as_deref(), now_ms.saturating_sub(WINDOW_MS), usize::MAX);
-    let touches = all.into_iter().filter(|t| Some(&t.branch) == current.as_ref() || !base.contains(&t.branch)).take(BRANCHES).collect();
+    let kept = |t: &BranchTouch| Some(&t.branch) == current.as_ref() || !(base.contains(&t.branch) || remote_or_tag(&common, &t.branch));
+    let touches = all.into_iter().filter(kept).take(BRANCHES).collect();
     (current, touches)
 }
 
@@ -262,6 +273,12 @@ mod tests {
         std::fs::write(gitdir.join("logs/HEAD"), line(900, "checkout: moving from main to eng-40")).unwrap();
         std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/eng-40\n").unwrap();
         assert_eq!(names(&worktree_trail(&dir.join("w"), now * 1000).1), vec![("eng-40", 900)], "with no origin/HEAD, main is the base");
+        std::fs::create_dir_all(common.join("refs/tags")).unwrap();
+        std::fs::write(common.join("refs/tags/v1.2"), "x").unwrap();
+        std::fs::write(common.join("packed-refs"), format!("# pack-refs\n{B} refs/tags/v2.0\n")).unwrap();
+        let detached = [line(910, "checkout: moving from eng-40 to origin/eng-40"), line(920, "checkout: moving from origin/eng-40 to v1.2"), line(930, "checkout: moving from v1.2 to v2.0"), line(940, "checkout: moving from v2.0 to eng-40")].concat();
+        std::fs::write(gitdir.join("logs/HEAD"), detached).unwrap();
+        assert_eq!(names(&worktree_trail(&dir.join("w"), now * 1000).1), vec![("eng-40", 940)], "a remote branch and a tag are no branch of the worktree");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

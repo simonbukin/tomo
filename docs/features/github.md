@@ -96,7 +96,9 @@ keeps the `pr_merged` rows.
 Known limits, unchanged by the extraction:
 
 - An archive, a move, or a restore does not clear or move the cache entry.
-- After a restart, the next merged answer records `pr_merged` again.
+- The cache does not survive a restart, but the activity does: a merge that
+  the activity has for the same worktree and pull request in the last year
+  is not recorded again and does not fire the hook again.
   `scripts/torture/github.sh` reports this as a known limitation.
 
 ## Code boundary
