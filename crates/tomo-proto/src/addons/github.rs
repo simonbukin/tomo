@@ -17,9 +17,11 @@ pub struct PullRequest {
     pub checks_failed: u32,
     pub checks_pending: u32,
     pub fetched_at_ms: u64,
-    /// The head branch.
     #[serde(default)]
     pub head: String,
+    /// The ticket keys that the head and the title name, in order, each once, such as `ENG-31`.
+    #[serde(default)]
+    pub tickets: Vec<String>,
     /// When GitHub last changed the pull request. 0 when `gh` gave no time.
     #[serde(default)]
     pub updated_at_ms: u64,
@@ -34,7 +36,6 @@ pub struct PrStatusResult {
     pub reason: Option<String>,
     /// The pull request of the branch that the worktree has now.
     pub pr: Option<PullRequest>,
-    /// The pull requests of every branch that the worktree had, `pr` among them, the most recently touched first.
     #[serde(default)]
     pub prs: Vec<PullRequest>,
 }

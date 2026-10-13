@@ -1,25 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { WorktreeLink } from "./addons/types";
-import { linkGroups, ticketKeys } from "./linkGroups";
+import { linkGroups } from "./linkGroups";
 
 const link = (id: string, patch: Partial<WorktreeLink> = {}): WorktreeLink => ({ id, label: "x", icon: () => null, color: undefined, text: id, title: id, facts: [], ...patch });
 const shape = (links: WorktreeLink[]) => linkGroups(links).map((g) => [g.head.id, g.children.map((c) => c.id)]);
-
-describe("ticketKeys", () => {
-  it("finds every TEAM-123 in a branch or a title, in order", () => {
-    expect(ticketKeys("you/eng-31-sync-retry")).toEqual(["ENG-31"]);
-    expect(ticketKeys("Fix utf-8 for ENG-7 and ENG-8")).toEqual(["UTF-8", "ENG-7", "ENG-8"]);
-    expect(ticketKeys("feature/abc-0042")).toEqual(["ABC-42"]);
-  });
-
-  it("needs a key that starts with a letter, then only digits", () => {
-    expect(ticketKeys("main")).toEqual([]);
-    expect(ticketKeys("v2-3")).toEqual(["V2-3"]);
-    expect(ticketKeys("2026-10-13")).toEqual([]);
-    expect(ticketKeys("eng-31b")).toEqual([]);
-    expect(ticketKeys("")).toEqual([]);
-  });
-});
 
 describe("linkGroups", () => {
   it("puts a pull request under the ticket that it names, and the newest group first", () => {

@@ -8,8 +8,4 @@ export type PrStatusResult = { available: boolean, reason: string | null,
 /**
  * The pull request of the branch that the worktree has now.
  */
-pr: PullRequest | null, 
-/**
- * The pull requests of every branch that the worktree had, `pr` among them, the most recently touched first.
- */
-prs: Array<PullRequest>, };
+pr: PullRequest | null, prs: Array<PullRequest>, };

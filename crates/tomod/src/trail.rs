@@ -1,17 +1,14 @@
 //! The branches that a worktree had checked out, read from the reflog of its HEAD.
 //! Each worktree has its own HEAD reflog, so the trail of one worktree never shows the work of another.
-//! An addon reads the trail to find the tickets and the pull requests of a worktree, not only of its branch now.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-/// The most recent part of a reflog that the trail reads. An old worktree has years of entries.
 const TAIL_BYTES: u64 = 256 * 1024;
-/// How far back and how many branches of a worktree's trail name its tickets and pull requests.
-const WINDOW_MS: u64 = 30 * 24 * 60 * 60 * 1000;
-const BRANCHES: usize = 6;
-/// The subjects that the trail keeps for one branch, newest first.
+const TRAIL_WINDOW_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+const MAX_TRAIL_BRANCHES: usize = 6;
+const FALLBACK_BASES: [&str; 2] = ["main", "master"];
 const SUBJECTS_PER_BRANCH: usize = 20;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,7 +33,7 @@ fn entry(line: &str) -> Option<Entry<'_>> {
     Some(Entry { at_ms: seconds * 1000, message })
 }
 
-/// A name that `checkout: moving from X to Y` gives for a detached HEAD: a hash, or a revision such as `HEAD~2`.
+/// None for the name that a checkout entry gives a detached HEAD: a hash, or a revision such as `HEAD~2`.
 fn branch_name(name: &str) -> Option<&str> {
     let hash = name.len() >= 7 && name.chars().all(|c| c.is_ascii_hexdigit());
     (!hash && !name.contains('~') && !name.contains('^') && name != "HEAD").then_some(name)
@@ -87,7 +84,6 @@ pub fn branch_trail(reflog: &str, current: Option<&str>, since_ms: u64, limit: u
     list
 }
 
-/// The gitdir of a worktree: `.git` for the main worktree, the linked gitdir for another.
 fn gitdir(worktree: &Path) -> Option<PathBuf> {
     let dotgit = worktree.join(".git");
     if dotgit.is_dir() {
@@ -98,7 +94,6 @@ fn gitdir(worktree: &Path) -> Option<PathBuf> {
     Some(if gitdir.is_absolute() { gitdir } else { worktree.join(gitdir) })
 }
 
-/// The gitdir that the worktrees of a repository share. A linked gitdir names it in its `commondir` file.
 fn common_dir(gitdir: &Path) -> PathBuf {
     match std::fs::read_to_string(gitdir.join("commondir")) {
         Ok(text) => gitdir.join(text.trim()),
@@ -106,45 +101,59 @@ fn common_dir(gitdir: &Path) -> PathBuf {
     }
 }
 
-/// The branch that every work branch leaves: the one that `origin/HEAD` names. With no `origin/HEAD`, `main` and
-/// `master`. A checkout touches the branch that it leaves, so without this rule the base would be in every trail,
-/// and a pull request whose head is the base, such as a release from `develop`, would show on every worktree.
 fn base_branches(gitdir: &Path) -> Vec<String> {
     let head = std::fs::read_to_string(common_dir(gitdir).join("refs/remotes/origin/HEAD")).unwrap_or_default();
     match head.trim().strip_prefix("ref: refs/remotes/origin/") {
         Some(base) => vec![base.to_string()],
-        None => vec!["main".to_string(), "master".to_string()],
+        None => FALLBACK_BASES.map(str::to_string).to_vec(),
     }
 }
 
 /// A checkout of a remote branch or a tag, such as `git switch --detach origin/main` or `git checkout v1.2`, names it
 /// in the reflog like a branch. It is a detached HEAD, not work on a branch of this worktree.
-fn remote_or_tag(common: &Path, name: &str) -> bool {
+fn remote_or_tag(common: &Path, packed_refs: &str, name: &str) -> bool {
     let remote = name.split_once('/').is_some_and(|(first, _)| common.join("refs/remotes").join(first).is_dir());
-    let packed = std::fs::read_to_string(common.join("packed-refs")).unwrap_or_default();
-    let tag = common.join("refs/tags").join(name).is_file() || packed.lines().any(|l| l.split_once(' ').is_some_and(|(_, r)| r == format!("refs/tags/{name}")));
+    let tag_ref = format!("refs/tags/{name}");
+    let tag = common.join(&tag_ref).is_file() || packed_refs.lines().any(|l| l.split_once(' ').is_some_and(|(_, r)| r == tag_ref));
     remote || tag
 }
 
-/// The trail of a worktree now: its branch from the HEAD file, then the other branches of the last 30 days, without
+/// The trail of a worktree now: its branch from the HEAD file, then the other branches of the trail window, without
 /// the base branch unless HEAD is on it, and without a remote branch or a tag.
 pub fn worktree_trail(worktree: &Path, now_ms: u64) -> (Option<String>, Vec<BranchTouch>) {
-    let current = head_branch(worktree);
+    let current = branch_on_disk(worktree);
     let Some(gitdir) = gitdir(worktree) else { return (current, vec![]) };
     let (common, base) = (common_dir(&gitdir), base_branches(&gitdir));
-    let all = branch_trail(&read_reflog(worktree), current.as_deref(), now_ms.saturating_sub(WINDOW_MS), usize::MAX);
-    let kept = |t: &BranchTouch| Some(&t.branch) == current.as_ref() || !(base.contains(&t.branch) || remote_or_tag(&common, &t.branch));
-    let touches = all.into_iter().filter(kept).take(BRANCHES).collect();
+    let packed_refs = std::fs::read_to_string(common.join("packed-refs")).unwrap_or_default();
+    let all = branch_trail(&read_reflog(worktree), current.as_deref(), now_ms.saturating_sub(TRAIL_WINDOW_MS), usize::MAX);
+    let belongs_to_worktree = |t: &BranchTouch| Some(&t.branch) == current.as_ref() || !(base.contains(&t.branch) || remote_or_tag(&common, &packed_refs, &t.branch));
+    let touches = all.into_iter().filter(belongs_to_worktree).take(MAX_TRAIL_BRANCHES).collect();
     (current, touches)
+}
+
+/// Every `TEAM-123` in a branch or a commit subject, in order, with the team key in upper case: `you/eng-31-retry`
+/// gives `ENG-31`. A word such as `utf-8` matches too; a caller keeps the keys that it knows.
+pub fn ticket_keys(text: &str) -> Vec<(String, u32)> {
+    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .flat_map(|segment| {
+            let parts: Vec<&str> = segment.split('-').collect();
+            parts
+                .windows(2)
+                .filter_map(|w| {
+                    let key_like = w[0].starts_with(|c: char| c.is_ascii_alphabetic());
+                    let number = w[1].parse::<u32>().ok().filter(|_| w[1].chars().all(|c| c.is_ascii_digit()));
+                    key_like.then_some(number).flatten().map(|n| (w[0].to_ascii_uppercase(), n))
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 pub fn head_reflog_path(worktree: &Path) -> Option<PathBuf> {
     gitdir(worktree).map(|g| g.join("logs/HEAD"))
 }
 
-/// The branch that HEAD is on now, read from the HEAD file. None for a detached HEAD. The daemon's own branch of a
-/// worktree comes from a poll, so right after a checkout only this file is sure.
-pub fn head_branch(worktree: &Path) -> Option<String> {
+fn branch_on_disk(worktree: &Path) -> Option<String> {
     let head = std::fs::read_to_string(gitdir(worktree)?.join("HEAD")).ok()?;
     head.trim().strip_prefix("ref: refs/heads/").map(str::to_string)
 }
@@ -226,6 +235,15 @@ mod tests {
     }
 
     #[test]
+    fn ticket_keys_are_every_team_and_number_in_order() {
+        let keys = |t: &str| ticket_keys(t).into_iter().map(|(team, n)| format!("{team}-{n}")).collect::<Vec<_>>();
+        assert_eq!(keys("you/eng-31-sync-retry"), vec!["ENG-31"]);
+        assert_eq!(keys("fix utf-8 for ENG-9 and eng-0010"), vec!["UTF-8", "ENG-9", "ENG-10"]);
+        assert_eq!(keys("v2-3"), vec!["V2-3"]);
+        assert!(keys("main 2026-10-13 eng-31b").is_empty());
+    }
+
+    #[test]
     fn a_line_of_another_shape_is_skipped() {
         let log = format!("not a reflog line\n{}", line(50, "commit: ok"));
         assert_eq!(names(&branch_trail(&log, Some("x"), 0, 10)), vec![("x", 50)]);
@@ -241,9 +259,9 @@ mod tests {
         std::fs::write(gitdir.join("logs/HEAD"), line(5, "commit: hi")).unwrap();
         std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/you/eng-1\n").unwrap();
         assert_eq!(head_reflog_path(&dir.join("w")), Some(gitdir.join("logs/HEAD")));
-        assert_eq!(head_branch(&dir.join("w")).as_deref(), Some("you/eng-1"));
+        assert_eq!(branch_on_disk(&dir.join("w")).as_deref(), Some("you/eng-1"));
         std::fs::write(gitdir.join("HEAD"), format!("{B}\n")).unwrap();
-        assert_eq!(head_branch(&dir.join("w")), None, "a detached HEAD has no branch");
+        assert_eq!(branch_on_disk(&dir.join("w")), None, "a detached HEAD has no branch");
         assert!(read_reflog(&dir.join("w")).contains("commit: hi"));
         assert_eq!(read_reflog(&dir.join("missing")), "");
         let _ = std::fs::remove_dir_all(&dir);

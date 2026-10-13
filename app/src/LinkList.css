@@ -1,5 +1,3 @@
-/* The links of a worktree in the hover card and the inspector (LinkList.tsx). The icon column lines up with the
-   mark column of the row lines, and a pull request under its ticket goes one level in, like a subagent. */
 .link-list { display: grid; gap: 6px; }
 .link-group { display: grid; gap: 2px; }
 .link-line { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; column-gap: 8px; align-items: start; font-size: var(--fs-1); line-height: 20px; color: var(--fg-1); text-decoration: none; cursor: pointer; }
@@ -14,13 +12,9 @@
 .link-when { font-family: var(--mono); font-size: var(--fs-0); color: var(--fg-3); white-space: nowrap; }
 .side-section .link-list { padding: var(--sp-1) 0; }
 
-/* The icons overlap by 4px and stay whole: each one has an outline in the colour behind the row, so an icon in
-   front shows a thin gap where it crosses the one behind it. The newest icon is the first and sits in front. */
 .wt-link-stack { --link-ring: var(--bg); display: inline-flex; align-items: center; }
 .wt-link-stack .wt-link-icon { position: relative; filter: drop-shadow(1px 0 0 var(--link-ring)) drop-shadow(-1px 0 0 var(--link-ring)) drop-shadow(0 1px 0 var(--link-ring)) drop-shadow(0 -1px 0 var(--link-ring)); }
 .wt-link-stack .wt-link-icon + .wt-link-icon { margin-left: -4px; }
-.wt-link-stack .wt-link-icon:nth-child(1) { z-index: 3; }
-.wt-link-stack .wt-link-icon:nth-child(2) { z-index: 2; }
 .wt-link-more { color: var(--fg-3); }
 .wt-row:hover .wt-link-stack { --link-ring: var(--bg-2); }
 .card:hover .wt-link-stack, .wt-list-row:hover .wt-link-stack { --link-ring: var(--bg-1); }

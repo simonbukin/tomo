@@ -1,7 +1,6 @@
 import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "lucide-react";
 import type { PullRequest } from "../../generated";
 import { GLYPH, type BranchTone } from "../../glyphs";
-import { ticketKeys } from "../../linkGroups";
 import { durationLabel } from "../../previewModel";
 import type { RailMarker } from "../../sections";
 import type { State } from "../../store";
@@ -88,9 +87,10 @@ function why(pr: PullRequest, current: boolean, now: number): string {
 
 /** One link for each pull request of the worktree. A pull request goes under the ticket that its branch or its title names. */
 export function prLinks(s: State, w: Worktree, now = Date.now()): WorktreeLink[] {
+  const branchNow = prOf(s, w.id)?.number;
   return prsOf(s, w.id).map((pr) => {
     const tone = prTone(pr);
-    const current = pr.head === w.branch;
+    const current = pr.number === branchNow;
     return {
       id: `github-pr:${pr.number}`,
       label: "PR",
@@ -101,7 +101,7 @@ export function prLinks(s: State, w: Worktree, now = Date.now()): WorktreeLink[]
       facts: prFacts(pr),
       url: pr.url,
       touchedMs: Math.max(pr.touched_ms, pr.updated_at_ms),
-      tickets: [...ticketKeys(pr.head), ...ticketKeys(pr.title)],
+      tickets: pr.tickets,
       current,
       why: why(pr, current, now),
     };

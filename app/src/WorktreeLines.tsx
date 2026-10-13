@@ -104,8 +104,8 @@ export function WorktreeLinks({ w }: { w: Worktree }) {
   return (
     <span className="wt-link" title={title}>
       <span className="wt-link-stack">
-        {groups.slice(0, STACK).map(({ head: { id, icon: Icon, color } }) => (
-          <Icon key={id} className="wt-link-icon" style={{ color }} />
+        {groups.slice(0, STACK).map(({ head: { id, icon: Icon, color } }, i) => (
+          <Icon key={id} className="wt-link-icon" style={{ color, zIndex: STACK - i }} />
         ))}
       </span>
       {lead.text}
