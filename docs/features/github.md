@@ -12,7 +12,7 @@ pull requests. Log in with `gh auth login` first.
 | Right rail, `Pull request` button | `×` for failed checks, else `✓` for a merged pull request |
 | Name line link (sidebar row, Home) | the pull request icon and `#412`. The icon is green when open, gray as a draft, purple when merged, red when closed or when a check fails. The hover card adds the title, the state, the checks, and the review. |
 | Repo avatar (sidebar, Home) | the image of the owner, for an `origin` remote on `github.com` |
-| Worktree tags | one reserved tag that shows the pull request; see "Tags" below |
+| Hook | `github.pr_merged`, with the same rule as the activity event; see [../hooks.md](../hooks.md) |
 | Activity | one `pr_merged` event when an answer shows a merged pull request and the cached answer did not |
 | CLI | `tomo pr [worktree] [--json]` (see [cli.md](../cli.md#pr)) |
 
@@ -35,21 +35,10 @@ after a daemon start always emits the event.
 
 ## Tags
 
-The addon owns six reserved tags: `draft`, `review`, `changes-requested`,
-`approved`, `merged`, and `closed`. When a new `gh` answer has a pull
-request, the addon sets one reserved tag on the worktree and removes the
-other five. Other tags stay. The rules, in this order:
-
-1. A merged pull request gets `merged`. A closed pull request gets `closed`.
-2. A draft gets `draft`.
-3. The review decision gives `changes-requested` or `approved`.
-4. All other pull requests get `review`.
-
-An answer without a pull request changes no tags. An answer from the cache
-changes no tags. A tag change goes through the same path as
-`tomo worktree metadata set`, so it fires `worktree.tags_changed` and
-records `tags_changed`; see [../hooks.md](../hooks.md). If you remove a
-reserved tag by hand, the next answer puts it back.
+The addon writes no tags. Older versions wrote one of `draft`, `review`,
+`changes-requested`, `approved`, `merged`, and `closed`. The first start of
+this version removes those six tags from every worktree, one time. A tag that
+you set after that stays.
 
 ## Background work
 

@@ -140,8 +140,8 @@ in the GUI.
 
 `metadata set --tags` replaces the whole tag list. Tags keep no leading `#`,
 and Tomo removes a tag that occurs two times. A tag change fires
-`worktree.tags_changed` with the previous tags. The GitHub addon owns six
-reserved tags; see [features/github.md](features/github.md).
+`worktree.tags_changed` with the previous tags. Only you change tags: no
+addon writes them.
 
 ```bash
 tomo worktree metadata set . --tags labor,ready

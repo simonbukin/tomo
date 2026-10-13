@@ -35,12 +35,12 @@ pub fn seams() -> Seams {
         worktree_files: vec![actions::FILE],
         pane_exited: vec![actions::exited],
         process_polled: vec![runtime::scan, actions::adopt],
-        hook_events: [actions::HOOK_EVENTS, runtime::HOOK_EVENTS].concat(),
+        hook_events: [actions::HOOK_EVENTS, runtime::HOOK_EVENTS, github::HOOK_EVENTS].concat(),
     }
 }
 
-pub fn migrate(_store: &Store) -> anyhow::Result<()> {
-    Ok(())
+pub fn migrate(store: &Store) -> anyhow::Result<()> {
+    github::migrate(store)
 }
 
 /// Starts the background task of each addon that has one. The addon doc gives the reason for each task.
@@ -237,9 +237,8 @@ mod tests {
         assert!(super::github::known_pr(&b.lock(), &worktree_id, &[]).is_none(), "the pull request cache leaked into the second daemon");
         assert_eq!((seen_by_a.actions.len(), seen_by_a.endpoints.len()), (1, 1));
         assert!(super::github::known_pr(&a.lock(), &worktree_id, &[]).is_some());
-        assert_eq!(a.lock().worktrees[&worktree_id].metadata.tags, vec!["review"], "an open pull request sets its GitHub tag");
-        assert!(a.lock().hook_queue.iter().any(|e| e.event == "worktree.tags_changed"));
-        assert!(b.lock().worktrees.values().all(|w| w.metadata.tags.is_empty()));
+        assert!(a.lock().worktrees[&worktree_id].metadata.tags.is_empty(), "a pull request writes no tag");
+        assert!(!a.lock().hook_queue.iter().any(|e| e.event == "worktree.tags_changed"));
         a.shutdown();
         b.shutdown();
         let _ = std::fs::remove_dir_all(&dir);

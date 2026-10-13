@@ -20,8 +20,7 @@ command = "pnpm install"
 mode = "pane"
 
 [[hooks]]
-event = "worktree.tags_changed"
-tag = "merged"
+event = "github.pr_merged"
 command = "~/.config/tomo/hooks/merged"
 timeout_s = 120
 ```
@@ -64,6 +63,7 @@ not run a `tag = "merged"` hook.
 | `action.crashed`          | A pane-mode action exited non-zero and Tomo did not stop it; after `action.exited` | `worktree`, `action`, `pane`, `attention` |
 | `runtime.endpoint_discovered` | An owned process started to listen on a TCP port             | `worktree`, `pane`, `action`?     |
 | `runtime.endpoint_removed`| A listening port went away and did not return within 5 s        | `worktree`, `pane`, `action`?     |
+| `github.pr_merged`        | The pull request of the worktree's branch became merged          | `worktree`, `pull_request`        |
 | `checkpoint.created`      | `tomo checkpoint` asked for a review or a decision               | `worktree`, `attention`, `pane`?, `agent`? |
 | `checkpoint.resolved`     | `tomo checkpoint resolve` closed a checkpoint or crash item      | `worktree`, `attention`, `pane`?  |
 
@@ -236,15 +236,15 @@ osascript -e "display notification \"$name is waiting for review\" with title \"
 
 ### Merge cleanup
 
-When the worktree gets the tag `merged`, the hook checks that the branch is
-merged into the default branch and archives the worktree. The branch stays in
-Git. The GitHub addon adds `merged` when it sees a merged pull request; see
+When the pull request of the worktree is merged, the hook checks that the
+branch is merged into the default branch and archives the worktree. The
+branch stays in Git. The GitHub addon fires `github.pr_merged` when an answer
+shows a merged pull request that the cached answer did not show; see
 [features/github.md](features/github.md).
 
 ```toml
 [[hooks]]
-event = "worktree.tags_changed"
-tag = "merged"
+event = "github.pr_merged"
 command = "~/.config/tomo/hooks/merged"
 ```
 

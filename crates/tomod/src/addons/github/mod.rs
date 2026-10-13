@@ -1,6 +1,6 @@
 //! GitHub: the pull request of a worktree's branch, read with the `gh` CLI. See docs/features/github.md.
 //! No poller: `gh` runs only inside a `pr_status` call, and a young pull request comes from the cache.
-//! Each answer with a pull request sets one of the GitHub tags in `model::PR_TAGS` on the worktree.
+//! A pull request that becomes merged fires the `github.pr_merged` hook. The addon writes no tags.
 
 mod model;
 
@@ -8,6 +8,8 @@ pub use model::KnownPr;
 
 use crate::addons;
 use crate::daemon::{err, ok, Daemon, Inner};
+use crate::events;
+use crate::store::Store;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -15,6 +17,25 @@ use tomo_proto::*;
 
 /// The last `pr_status` answer of each worktree, in `addons::State`.
 pub type Cache = BTreeMap<Id, PrStatusResult>;
+
+pub const HOOK_EVENTS: &[&str] = &["github.pr_merged"];
+
+const OLD_TAGS_REMOVED: &str = "github.old_pr_tags_removed";
+
+/// Removes the pull request tags that older versions wrote, one time. A tag that a person sets later stays.
+pub fn migrate(store: &Store) -> anyhow::Result<()> {
+    if store.kv_get(OLD_TAGS_REMOVED)?.is_some() {
+        return Ok(());
+    }
+    for mut row in store.meta_all()? {
+        let tags = model::without_old_pr_tags(&row.metadata.tags);
+        if tags != row.metadata.tags {
+            row.metadata.tags = tags;
+            store.meta_upsert(&row)?;
+        }
+    }
+    store.kv_set(OLD_TAGS_REMOVED, "1")
+}
 
 async fn gh_pr_view(worktree: &Path) -> std::io::Result<std::process::Output> {
     tokio::process::Command::new("gh")
@@ -41,21 +62,14 @@ pub async fn pr_status(daemon: &Daemon, worktree_id: Id) -> Result<Value, RpcErr
     ok(result)
 }
 
-/// Keeps a new answer under the Core lock. It records `pr_merged` and emits `pr_changed`.
+/// Keeps a new answer under the Core lock. A newly merged pull request records `pr_merged` and fires `github.pr_merged`.
 pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
     let before = addons::state_mut(inner).github.insert(worktree_id.clone(), result.clone());
     let update = model::update(before.as_ref(), &result);
     if let Some(pr) = update.merged {
         Daemon::record(inner, model::merged_event(&worktree_id, pr));
-    }
-    if let Some((pr, w)) = result.pr.as_ref().zip(inner.worktrees.get(&worktree_id)) {
-        let tags = model::with_pr_tag(&w.metadata.tags, pr);
-        if tags != w.metadata.tags {
-            let next = WorktreeMetadata { tags, ..w.metadata.clone() };
-            if let Err(e) = Daemon::write_metadata(inner, &worktree_id, next) {
-                tracing::warn!("github tag for {worktree_id}: {}", e.message);
-            }
-        }
+        let hook = HookEvent { addons: model::hook_fields(pr), ..events::envelope(inner, "github.pr_merged", Some(&worktree_id)) };
+        inner.hook_queue.push(hook);
     }
     if update.changed {
         Daemon::emit(inner, Event::PrChanged { worktree_id, pr: result.pr });
@@ -65,4 +79,24 @@ pub fn remember(inner: &mut Inner, worktree_id: Id, result: PrStatusResult) {
 /// The pull request that this addon knows for a worktree: the cached one, or the newest `pr_merged` event in `events`.
 pub fn known_pr(inner: &Inner, worktree_id: &str, events: &[ActivityEvent]) -> Option<KnownPr> {
     model::known_pr(addons::state(inner).github.get(worktree_id), events)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tags(store: &Store) -> Vec<String> {
+        store.meta_one("w").unwrap().unwrap().metadata.tags
+    }
+
+    #[test]
+    fn migrate_removes_the_old_pull_request_tags_one_time() {
+        let store = Store::open_in_memory().unwrap();
+        store.conn().execute("INSERT INTO worktree_meta (id, repo_id, path, tags) VALUES ('w', 'r', '/tmp/w', '[\"sync\",\"review\"]')", []).unwrap();
+        migrate(&store).unwrap();
+        assert_eq!(tags(&store), vec!["sync"]);
+        store.conn().execute("UPDATE worktree_meta SET tags = '[\"sync\",\"review\"]' WHERE id = 'w'", []).unwrap();
+        migrate(&store).unwrap();
+        assert_eq!(tags(&store), vec!["sync", "review"], "a tag that a person sets after the migration stays");
+    }
 }
