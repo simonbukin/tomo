@@ -105,6 +105,8 @@ export interface UiState {
   /** Worktree ids per repo id, in the order the user dragged them. Used when `sidebarSort` is manual. */
   manualOrder: Record<string, Id[]>;
   repoOrder: Id[];
+  /** Pinned worktree ids, in the order that the user pinned them. */
+  pinned: Id[];
   appearance: Appearance;
   /** Palette entry keys, most recent first. */
   paletteRecent: string[];

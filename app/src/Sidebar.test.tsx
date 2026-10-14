@@ -1,12 +1,13 @@
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentPresence, Worktree } from "./types";
 
 vi.mock("./api", async (importOriginal) => ({ ...(await importOriginal<typeof import("./api")>()), rpc: vi.fn(() => Promise.resolve(null)) }));
 
-const { WorktreeRow } = await import("./Sidebar");
+const { Sidebar, WorktreeRow } = await import("./Sidebar");
+const { setPinned } = await import("./actions");
 const { getState, setState } = await import("./store");
 const { WorktreePreview } = await import("./WorktreePreview");
 
@@ -158,6 +159,20 @@ describe("the row CSS reads tokens only", () => {
     const used = [...new Set([...rowCss.matchAll(/var\((--[a-z0-9-]+)\)/g)].map((m) => m[1]))];
     expect(used.length).toBeGreaterThan(0);
     for (const token of used) expect(tokensCss, token).toContain(`${token}:`);
+  });
+});
+
+describe("pinned worktrees in the sidebar", () => {
+  it("shows a pinned worktree in the pinned group and first in its repository, with a pin icon, until the user unpins it", () => {
+    const repo = { id: "r1", path: "/src", name: "src", exists: true, remote_url: null };
+    setState({ repos: [repo], worktrees: [worktree({ id: "w1", name: "akita" }), worktree({ id: "w2", name: "zama" })] });
+    setPinned("w2", true);
+    const { container } = render(<Sidebar />);
+    const groups = () => [...container.querySelectorAll(".repo-group")].map((g) => [g.querySelector(".repo-name")!.textContent, ...[...g.querySelectorAll(".wt-name-text")].map((n) => n.textContent)]);
+    expect(groups()).toEqual([["pinned", "zama"], ["src", "zama", "akita"]]);
+    expect(container.querySelectorAll(".wt-pin")).toHaveLength(2);
+    act(() => setPinned("w2", false));
+    expect(groups()).toEqual([["src", "akita", "zama"]]);
   });
 });
 

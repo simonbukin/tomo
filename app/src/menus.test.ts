@@ -33,7 +33,7 @@ const state = {
 
 describe("worktree menu", () => {
   it("follows the PRD order", () => {
-    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "new opencode", "—", "tags", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
+    expect(labels(worktreeMenu(worktree, state))).toEqual(["open", "new tab", "new terminal", "new claude", "new codex", "new pi", "new opencode", "—", "pin", "tags", "rename...", "—", "open in zed", "reveal in finder", "copy", "—", "archive..."]);
   });
 
   it("copies path, branch, and worktree id, and skips a missing branch", () => {

@@ -1,10 +1,10 @@
-import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Plus, Star, type LucideIcon } from "lucide-react";
+import { AppWindow, ArrowDownUp, Bot, ChevronDown, ChevronRight, Ellipsis, History, House, Layers, Pin, Plus, Star, type LucideIcon } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { addonApps, addonViews, repoAvatar } from "./addons";
-import { LENSES, LENS_LABEL, lensGroups, type LensGroup } from "./lenses";
+import { LENSES, LENS_LABEL, lensGroups, PINNED_GROUP, type LensGroup } from "./lenses";
 import { rosterSize } from "./agentRoster";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dotClass } from "./glyphs";
@@ -42,7 +42,8 @@ export function Sidebar() {
   const shown = worktrees.filter((w) => (ui.showArchivedInSidebar || !w.archived_at_ms) && (ui.showMain || !w.is_main));
   const manual = ui.sidebarSort === "manual";
   const draggable = ui.lens === "repo";
-  const groups = lensGroups(shown, ui.lens, ctx, { repos, sort: ui.sidebarSort, manualOrder: ui.manualOrder, repoOrder: ui.repoOrder });
+  const groups = lensGroups(shown, ui.lens, ctx, { repos, sort: ui.sidebarSort, manualOrder: ui.manualOrder, repoOrder: ui.repoOrder, pinned: ui.pinned });
+  const lensed = groups.filter((g) => g.key !== PINNED_GROUP);
   const listRef = useRef<HTMLDivElement>(null);
   const [dropped, setDropped] = useState(false);
   useFlip(listRef, undefined, !dropped);
@@ -55,8 +56,8 @@ export function Sidebar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const currentOrder = (): Record<string, Id[]> => (manual ? ui.manualOrder : Object.fromEntries(groups.map((g) => [g.key, g.items.map((w) => w.id)])));
-  const currentRepoOrder = () => groups.map((g) => g.key);
+  const currentOrder = (): Record<string, Id[]> => (manual ? ui.manualOrder : Object.fromEntries(lensed.map((g) => [g.key, g.items.map((w) => w.id)])));
+  const currentRepoOrder = () => lensed.map((g) => g.key);
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     const from = active.data.current as DragData | undefined;
     const to = over?.data.current as DragData | undefined;
@@ -68,7 +69,7 @@ export function Sidebar() {
       return;
     }
     if (from.kind === "worktree" && to.kind === "worktree" && from.repoId === to.repoId) {
-      const ids = groups.find((g) => g.key === from.repoId)?.items.map((w) => w.id) ?? [];
+      const ids = lensed.find((g) => g.key === from.repoId)?.items.map((w) => w.id) ?? [];
       setDropped(true);
       setUi({ sidebarSort: "manual", manualOrder: { ...currentOrder(), [from.repoId]: arrayMove(ids, ids.indexOf(from.id), ids.indexOf(to.id)) }, repoOrder: currentRepoOrder() });
     }
@@ -122,9 +123,9 @@ export function Sidebar() {
           </div>
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]} onDragEnd={onDragEnd}>
-          <SortableContext items={groups.map((g) => repoKey(g.key))} strategy={verticalListSortingStrategy}>
+          <SortableContext items={lensed.map((g) => repoKey(g.key))} strategy={verticalListSortingStrategy}>
             {groups.map((g) => (
-              <Group key={g.key} group={g} active={active} sortable={draggable} />
+              <Group key={g.key} group={g} active={active} sortable={draggable && g.key !== PINNED_GROUP} />
             ))}
           </SortableContext>
         </DndContext>
@@ -230,6 +231,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
   const groups = rowGroups(input);
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
+  const pinned = useStore((s) => s.ui.pinned.includes(w.id));
   return (
     <HoverCard side="right" content={<WorktreePreview w={w} />}>
       <div
@@ -249,6 +251,7 @@ export function WorktreeRow({ w, active, siblings = [], sortable = false, sortId
         <span className="wt-name">
           <span className="wt-name-text">{w.name}</span>
           {w.is_main && <Star className="wt-main-star" aria-label="main worktree" />}
+          {pinned && <Pin className="wt-pin" aria-label="pinned" />}
         </span>
         <span className="wt-links">
           <WorktreeLinks w={w} />

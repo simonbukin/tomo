@@ -26,7 +26,7 @@
 
 .wt-mcell { grid-column: 1; display: flex; align-items: flex-start; padding-top: 5px; }
 .wt-name { grid-column: 2; display: flex; align-items: center; gap: 5px; min-height: 20px; line-height: 20px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
-.wt-name .wt-main-star { width: 9px; height: 9px; margin: 0; color: var(--fg-3); }
+.wt-name :is(.wt-main-star, .wt-pin) { width: 9px; height: 9px; margin: 0; color: var(--fg-3); }
 .wt-links { grid-column: 3; display: flex; align-items: center; gap: 10px; height: 20px; font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); line-height: 20px; color: var(--fg-2); white-space: nowrap; }
 .wt-links:empty { display: none; }
 .wt-link { display: inline-flex; align-items: center; gap: 4px; }
@@ -56,7 +56,7 @@
 .wt-line-sub .wt-line-text { display: grid; grid-template-columns: 6px minmax(0, 1fr); column-gap: 10px; }
 .wt-smc { display: flex; align-items: flex-start; padding-top: 7px; }
 
-.wt-active :is(.wt-name, .wt-branch, .wt-links, .wt-line-text, .wt-line-label, .wt-flag, .wt-main-star) { color: var(--bg); }
+.wt-active :is(.wt-name, .wt-branch, .wt-links, .wt-line-text, .wt-line-label, .wt-flag, .wt-main-star, .wt-pin) { color: var(--bg); }
 .wt-active :is(.wt-branch, .wt-line-text) { opacity: 0.78; }
 .wt-missing .wt-name-text { text-decoration: line-through; color: var(--fg-3); }
 .wt-archived :is(.wt-name, .wt-branch) { color: var(--fg-3); }

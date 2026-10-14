@@ -1,7 +1,7 @@
-import { byManualOrder, mainFirst } from "./order";
+import { byManualOrder, mainFirst, pinnedFirst } from "./order";
 import { needsMeItem } from "./activityModel";
 import { agentMark, effectiveState, type Status } from "./glyphs";
-import type { AgentPresence, AgentState, AttentionItem, Filter, HomeOptions, Repo, SidebarSort, Worktree } from "./types";
+import type { AgentPresence, AgentState, AttentionItem, Filter, HomeOptions, Id, Repo, SidebarSort, Worktree } from "./types";
 
 export interface QueryContext {
   repos: Repo[];
@@ -94,11 +94,16 @@ export function filterWorktrees(list: Worktree[], o: HomeOptions, ctx: QueryCont
   });
 }
 
-export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | SidebarSort, ctx: QueryContext, manual: string[] = []): Worktree[] {
-  if (sort === "manual") return mainFirst(byManualOrder(list, manual, (w) => w.id));
+/** Sorts by `sort`, then puts the `pinned` worktrees first and the main worktree above them. */
+export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | SidebarSort, ctx: QueryContext, manual: string[] = [], pinned: readonly Id[] = []): Worktree[] {
+  return mainFirst(pinnedFirst(sortedBy(list, sort, ctx, manual), pinned));
+}
+
+function sortedBy(list: Worktree[], sort: HomeOptions["sort"] | SidebarSort, ctx: QueryContext, manual: string[]): Worktree[] {
+  if (sort === "manual") return byManualOrder(list, manual, (w) => w.id);
   const rank = (w: Worktree) => (needsAttention(w, ctx) ? 0 : agentStateOf(w, ctx) === "working" ? 1 : 2);
   const recent = (w: Worktree) => w.last_active_ms ?? 0;
-  return mainFirst([...list].sort((a, b) => {
+  return [...list].sort((a, b) => {
     switch (sort) {
       case "name":
         return a.name.localeCompare(b.name);
@@ -109,7 +114,7 @@ export function sortWorktrees(list: Worktree[], sort: HomeOptions["sort"] | Side
       case "attention":
         return rank(a) - rank(b) || recent(b) - recent(a) || a.name.localeCompare(b.name);
     }
-  }));
+  });
 }
 
 /** The tags after a board drag from the column `from` to the column `to`. Column keys are `#tag` or `NO_TAG`. */

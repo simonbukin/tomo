@@ -19,6 +19,11 @@ export function byManualOrder<T>(items: T[], order: Id[], idOf: (item: T) => Id)
     .map((x) => x.item);
 }
 
+/** Pinned items first, then the rest, each part in the given order. */
+export function pinnedFirst<T extends { id: Id }>(items: T[], pinned: readonly Id[]): T[] {
+  return [...items.filter((w) => pinned.includes(w.id)), ...items.filter((w) => !pinned.includes(w.id))];
+}
+
 /** Main worktrees first, everything else in the given order. */
 export function mainFirst<T extends { is_main: boolean }>(items: T[]): T[] {
   return [...items.filter((w) => w.is_main), ...items.filter((w) => !w.is_main)];
