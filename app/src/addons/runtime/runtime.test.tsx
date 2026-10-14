@@ -82,7 +82,9 @@ describe("runtime app lines", () => {
     cleanup();
     render(<WorktreePreview w={worktree} />);
     const line = document.querySelector(".wt-hover-line .wt-line-text")!.closest(".wt-hover-line")!;
-    expect(line.textContent).toMatch(/^nodehttp:\/\/localhost:3000up \d+ d$/);
+    expect(line.querySelector(".wt-line-text")!.textContent).toBe("nodehttp://localhost:3000");
+    expect(line.querySelector(".wt-line-meta")!.textContent).toMatch(/^up \d+ d$/);
+    expect(line.querySelector(".wt-hover-kill")).not.toBeNull();
     changed([db]);
     expect(document.querySelector(".wt-hover-line")).toBeNull();
   });

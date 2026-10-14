@@ -22,6 +22,8 @@ export interface Line {
   meta?: string;
   /** The text is what the agent does now: one line that decodes in place when it changes. */
   ticker?: boolean;
+  /** The live pane that runs what the line shows, so the hover card can go to it or kill its processes. */
+  paneId?: Id;
 }
 
 /** What a row knows about one worktree. The row reads it from the store; the rules below only read it. */
@@ -133,7 +135,7 @@ function stateWords(agent: AgentPresence, input: RowInput): Pick<Line, "text" | 
 /** Every agent, idle ones too, with its session, its state, and for how long; its subagents with their kind and age. */
 export function hoverAgentLines(input: RowInput, now: number): Line[] {
   return input.agents.flatMap((a) => {
-    const head: Line = { key: a.pane_id, ...agentMarkOf(a), label: a.kind, kind: a.session_ref ? `session ${shortSession(a.session_ref)}` : undefined, ...stateWords(a, input), meta: durationLabel(a.updated_at_ms, now) };
+    const head: Line = { key: a.pane_id, paneId: a.state === "exited" ? undefined : a.pane_id, ...agentMarkOf(a), label: a.kind, kind: a.session_ref ? `session ${shortSession(a.session_ref)}` : undefined, ...stateWords(a, input), meta: durationLabel(a.updated_at_ms, now) };
     const subs = (a.subagents ?? []).map((s, i): Line => ({
       key: `${a.pane_id}:${s.id ?? `launch-${i}`}`,
       mark: subagentStatus(s.state),
@@ -151,7 +153,7 @@ const appTime = (l: AppLine, now: number): string | undefined =>
   l.upSinceMs != null ? `up ${durationLabel(l.upSinceMs, now)}` : l.atMs != null ? `${durationLabel(l.atMs, now)} ago` : undefined;
 
 export const hoverAppLines = (apps: readonly AppLine[], now: number): Line[] =>
-  apps.map((l) => ({ key: l.id, mark: l.mark, label: l.label, text: l.full ?? l.detail, tone: l.bad ? "bad" : undefined, meta: appTime(l, now) }));
+  apps.map((l) => ({ key: l.id, mark: l.mark, label: l.label, text: l.full ?? l.detail, tone: l.bad ? "bad" : undefined, meta: appTime(l, now), paneId: l.paneId }));
 
 /** The branch line: the branch, or the detached head, after `archived` on an archived row. */
 export function branchText(w: Worktree): string {

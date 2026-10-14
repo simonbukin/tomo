@@ -1,8 +1,12 @@
 import { Star } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
+import { killPaneTree } from "./actions";
 import { worktreeLinks } from "./addons";
+import { cx } from "./components/ui";
 import { LinkList } from "./LinkList";
 import { linkGroups } from "./linkGroups";
+import { liveLineMenu } from "./menus";
+import { openMenu } from "./MenuHost";
 import { durationLabel } from "./previewModel";
 import { aboutDetails, gitDetails, homePath, hoverAgentLines, hoverAppLines, problemLines, rowGroups, type Detail, type Line } from "./rowModel";
 import { useStore } from "./store";
@@ -39,14 +43,18 @@ function Section({ title, children }: { title?: string; children: ReactNode }) {
   );
 }
 
-function Lines({ lines }: { lines: Line[] }) {
+function Lines({ w, lines }: { w: Worktree; lines: Line[] }) {
   return (
     <div className="wt-hover-lines">
-      {lines.map((line, i) => (
-        <span key={line.key} className={!line.sub && i > 0 ? "wt-hover-line wt-hover-gap" : "wt-hover-line"}>
-          <LineView line={line} meta />
-        </span>
-      ))}
+      {lines.map((line, i) => {
+        const { paneId } = line;
+        return (
+          <span key={line.key} className={cx("wt-hover-line", !line.sub && i > 0 && "wt-hover-gap", paneId && "wt-hover-live")} onContextMenu={paneId ? (e) => openMenu(e, liveLineMenu(w.id, paneId)) : undefined}>
+            <LineView line={line} meta />
+            {paneId && <button className="link wt-hover-kill" title="Kill the processes in this pane. The pane stays open." onClick={() => killPaneTree(paneId)}>kill</button>}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -70,9 +78,9 @@ export function WorktreePreview({ w }: { w: Worktree }) {
         <span className="wt-hover-when">{w.last_active_ms != null ? `${durationLabel(w.last_active_ms, now)} ago` : ""}</span>
         <span className="wt-hover-path">{homePath(w.path)}</span>
       </div>
-      {problems.length > 0 && <Section title="problems"><Lines lines={problems} /></Section>}
-      {agents.length > 0 && <Section title="agents"><Lines lines={agents} /></Section>}
-      {apps.length > 0 && <Section title="apps"><Lines lines={apps} /></Section>}
+      {problems.length > 0 && <Section title="problems"><Lines w={w} lines={problems} /></Section>}
+      {agents.length > 0 && <Section title="agents"><Lines w={w} lines={agents} /></Section>}
+      {apps.length > 0 && <Section title="apps"><Lines w={w} lines={apps} /></Section>}
       <Section title="git"><Details rows={gitDetails(w)} /></Section>
       {links.length > 0 && (
         <Section title="links">
