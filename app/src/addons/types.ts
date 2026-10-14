@@ -144,6 +144,8 @@ export interface AppLine {
   upSinceMs?: number;
   /** The hover card shows `2 min ago` from this time. */
   atMs?: number;
+  /** The live pane that runs the app. */
+  paneId?: Id;
 }
 
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */

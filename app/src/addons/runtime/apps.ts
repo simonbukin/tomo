@@ -26,4 +26,4 @@ export const apps = (s: State): AppRow[] => Object.values(s.endpoints ?? {}).fla
 
 /** A line for each HTTP port of a worktree on its row, pages first: the name and the port, and in the hover card the address and the uptime. */
 export const appLines = (s: State, worktreeId: Id): AppLine[] =>
-  httpEndpoints(byRank(endpointsOf(s, worktreeId))).map((e) => ({ id: e.id, mark: "working", label: endpointLabel(e), detail: `:${e.port}`, full: endpointUrl(e), upSinceMs: e.discovered_at_ms }));
+  httpEndpoints(byRank(endpointsOf(s, worktreeId))).map((e) => ({ id: e.id, mark: "working", label: endpointLabel(e), detail: `:${e.port}`, full: endpointUrl(e), upSinceMs: e.discovered_at_ms, paneId: e.pane_id ?? undefined }));

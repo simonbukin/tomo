@@ -25,6 +25,11 @@
 .wt-hover-title { padding-left: 18px; margin-bottom: 4px; font-size: 10px; font-weight: 600; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
 .wt-hover-line { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; column-gap: 9px; }
 .wt-hover-gap { margin-top: 6px; }
+.wt-hover-kill { grid-row: 1; grid-column: 3; justify-self: end; visibility: hidden; font-family: var(--mono); font-size: var(--fs-0); line-height: 20px; }
+.wt-hover-kill:hover { color: var(--danger); }
+.wt-hover-line .wt-line-meta { grid-row: 1; }
+.wt-hover-live:hover .wt-line-meta { visibility: hidden; }
+.wt-hover-live:hover .wt-hover-kill { visibility: visible; }
 .wt-hover-kv { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 9px; padding-left: 18px; }
 .wt-hover-k { font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); line-height: 20px; color: var(--fg-3); }
 .wt-hover-v { font-size: var(--fs-1); line-height: 20px; color: var(--fg-1); overflow-wrap: anywhere; }

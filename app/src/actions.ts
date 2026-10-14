@@ -34,13 +34,15 @@ function viewCrashes(worktreeId: Id): void {
     .forEach((a) => void rpc("attention_view", { id: a.id }).catch(failQuietly("attention_view")));
 }
 
-export async function openWorktree(worktreeId: Id): Promise<void> {
+/** Opens the worktree and focuses `paneId`, or the active pane when it is absent. */
+export async function openWorktree(worktreeId: Id, paneId?: Id): Promise<void> {
   setUi({ view: "worktree", activeWorktreeId: worktreeId });
   viewCrashes(worktreeId);
   try {
     const r = await rpcParsed("worktree_open", worktreeOpenedSchema, { worktree_id: worktreeId });
     const tab = r.tabs.find((t) => t.is_active) ?? r.tabs[0];
-    if (tab?.active_pane_id) window.setTimeout(() => focusTerminal(tab.active_pane_id!), 50);
+    if (paneId) window.setTimeout(() => focusPane(paneId), 50);
+    else if (tab?.active_pane_id) window.setTimeout(() => focusTerminal(tab.active_pane_id!), 50);
   } catch (e) {
     failToast("Could not open worktree")(e);
   }

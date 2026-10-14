@@ -255,6 +255,16 @@ export function paneMenu(paneId: Id, s: State = getState()): MenuItem[] {
   ];
 }
 
+/** The menu of an agent or app line in the worktree hover card. */
+export function liveLineMenu(worktreeId: Id, paneId: Id, s: State = getState()): MenuItem[] {
+  return [
+    { label: "go to pane", run: () => void openWorktree(worktreeId, paneId) },
+    sep,
+    { label: "kill process tree", danger: true, run: () => killPaneTree(paneId) },
+    { label: "close pane", disabled: isLastPane(paneId, s), run: () => closePane(paneId) },
+  ];
+}
+
 export function browserMenu(paneId: Id, s: State = getState()): MenuItem[] {
   const { pane, key } = paneContext(s, paneId);
   const url = pane?.url ?? "";
