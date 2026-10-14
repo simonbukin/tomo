@@ -30,6 +30,8 @@
 .wt-hover-line .wt-line-meta { grid-row: 1; }
 .wt-hover-live:hover .wt-line-meta { visibility: hidden; }
 .wt-hover-live:hover .wt-hover-kill { visibility: visible; }
+.wt-hover-url { cursor: pointer; }
+.wt-hover-url:hover .wt-line-text > span:last-child { text-decoration: underline; }
 .wt-hover-kv { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 9px; padding-left: 18px; }
 .wt-hover-k { font-family: var(--mono); font-weight: 400; font-size: var(--fs-0); line-height: 20px; color: var(--fg-3); }
 .wt-hover-v { font-size: var(--fs-1); line-height: 20px; color: var(--fg-1); overflow-wrap: anywhere; }

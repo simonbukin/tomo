@@ -1,6 +1,6 @@
 import { Star } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
-import { killPaneTree } from "./actions";
+import { killPaneTree, openEndpoint } from "./actions";
 import { worktreeLinks } from "./addons";
 import { cx } from "./components/ui";
 import { LinkList } from "./LinkList";
@@ -47,11 +47,28 @@ function Lines({ w, lines }: { w: Worktree; lines: Line[] }) {
   return (
     <div className="wt-hover-lines">
       {lines.map((line, i) => {
-        const { paneId } = line;
+        const { paneId, url } = line;
         return (
-          <span key={line.key} className={cx("wt-hover-line", !line.sub && i > 0 && "wt-hover-gap", paneId && "wt-hover-live")} onContextMenu={paneId ? (e) => openMenu(e, liveLineMenu(w.id, paneId)) : undefined}>
+          <span
+            key={line.key}
+            className={cx("wt-hover-line", !line.sub && i > 0 && "wt-hover-gap", paneId && "wt-hover-live", url && "wt-hover-url")}
+            title={url && "click to open"}
+            onClick={url ? () => openEndpoint(url, w.id) : undefined}
+            onContextMenu={paneId || url ? (e) => openMenu(e, liveLineMenu(w.id, { url, paneId })) : undefined}
+          >
             <LineView line={line} meta />
-            {paneId && <button className="link wt-hover-kill" title="Kill the processes in this pane. The pane stays open." onClick={() => killPaneTree(paneId)}>kill</button>}
+            {paneId && (
+              <button
+                className="link wt-hover-kill"
+                title="Kill the processes in this pane. The pane stays open."
+                onClick={(e) => {
+                  e.stopPropagation();
+                  killPaneTree(paneId);
+                }}
+              >
+                kill
+              </button>
+            )}
           </span>
         );
       })}

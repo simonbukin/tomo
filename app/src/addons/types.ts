@@ -146,6 +146,8 @@ export interface AppLine {
   atMs?: number;
   /** The live pane that runs the app. */
   paneId?: Id;
+  /** The address of the app. */
+  url?: string;
 }
 
 /** One built-in addon. Every slot is optional. The order of `builtins` is the render order of every slot. */

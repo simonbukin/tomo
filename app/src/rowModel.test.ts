@@ -186,8 +186,8 @@ describe("the hover card", () => {
   it("gives a live agent and an app in a pane a pane to kill, and an exited agent or a crash none", () => {
     const agents = hoverAgentLines(input({ agents: [agent("p1", "working", { subagents: [sub("a", "working")] }), agent("p2", "exited")] }), 0);
     expect(agents.map((l) => l.paneId)).toEqual(["p1", undefined, undefined]);
-    const apps = hoverAppLines([{ id: "e1", mark: "working", label: "vite", detail: ":5173", paneId: "p3" }, { id: "c1", mark: "failed", label: "storybook", detail: "exited 1", bad: true }], 0);
-    expect(apps.map((l) => l.paneId)).toEqual(["p3", undefined]);
+    const apps = hoverAppLines([{ id: "e1", mark: "working", label: "vite", detail: ":5173", paneId: "p3", url: "http://localhost:5173" }, { id: "c1", mark: "failed", label: "storybook", detail: "exited 1", bad: true }], 0);
+    expect(apps.map((l) => [l.paneId, l.url])).toEqual([["p3", "http://localhost:5173"], [undefined, undefined]]);
   });
 
   it("gives git the branch, the upstream with ahead and behind, the changes, and the conflicts", () => {
