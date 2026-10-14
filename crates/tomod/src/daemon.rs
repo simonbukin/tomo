@@ -138,6 +138,9 @@ pub struct Inner {
     pub sleep_clocks: HashMap<Id, crate::sleep::Clock>,
     /// When `sync` last synced the main worktree of each repository.
     pub main_synced_ms: HashMap<Id, u64>,
+    /// The tab ids of each worktree, the most recently active first.
+    // ponytail: kept in memory only, so a daemon restart forgets it and a close falls back to the first tab.
+    pub recent_tabs: HashMap<Id, Vec<Id>>,
     /// The repositories that `sync` works on now.
     pub main_syncing: HashSet<Id>,
     /// The in-memory state of the addons of this daemon, under the same lock as Core state. Core never looks inside; the composition root fills it.
@@ -318,6 +321,7 @@ impl Daemon {
                 busy: HashMap::new(),
                 sleep_clocks: HashMap::new(),
                 main_synced_ms: HashMap::new(),
+                recent_tabs: HashMap::new(),
                 main_syncing: HashSet::new(),
                 addons,
             }),
@@ -385,7 +389,23 @@ impl Daemon {
             tracing::warn!("tab {} has an invalid layout: {:?}", t.id, t.layout);
         }
         let tabs = Self::tabs_of(inner, worktree_id);
+        Self::remember_active_tab(inner, worktree_id, &tabs);
         Self::emit(inner, Event::TabsChanged { worktree_id: worktree_id.to_string(), tabs });
+    }
+
+    fn remember_active_tab(inner: &mut Inner, worktree_id: &str, tabs: &[Tab]) {
+        let recent = inner.recent_tabs.remove(worktree_id).unwrap_or_default();
+        inner.recent_tabs.insert(worktree_id.to_string(), recent_tabs_after(&recent, tabs));
+    }
+
+    fn activate_recent_tab(inner: &mut Inner, worktree_id: &str) {
+        let tabs: Vec<TabRow> = inner.tabs.values().filter(|t| t.worktree_id == worktree_id).cloned().collect();
+        let history = inner.recent_tabs.get(worktree_id).cloned().unwrap_or_default();
+        if let Some(next) = next_active_tab(&history, &tabs).and_then(|id| inner.tabs.get_mut(&id)) {
+            next.is_active = true;
+            let next = next.clone();
+            let _ = inner.store.tab_upsert(&next);
+        }
     }
 
     pub(crate) fn emit_pane(inner: &mut Inner, pane_id: &str) {
@@ -1096,13 +1116,7 @@ impl Daemon {
                     inner.tabs.remove(&tab_id);
                     let _ = inner.store.tab_delete(&tab_id);
                     if was_active {
-                        let mut siblings: Vec<&mut TabRow> = inner.tabs.values_mut().filter(|t| t.worktree_id == worktree_id).collect();
-                        siblings.sort_by_key(|t| t.position);
-                        if let Some(first) = siblings.first_mut() {
-                            first.is_active = true;
-                            let first = first.clone();
-                            let _ = inner.store.tab_upsert(&first);
-                        }
+                        Self::activate_recent_tab(inner, &worktree_id);
                     }
                 }
             }
@@ -2212,6 +2226,9 @@ impl Daemon {
         }
         inner.tabs.remove(&tab_id);
         let _ = inner.store.tab_delete(&tab_id);
+        if tab.is_active {
+            Self::activate_recent_tab(&mut inner, &tab.worktree_id);
+        }
         Self::emit_tabs(&mut inner, &tab.worktree_id);
         Ok(Value::Null)
     }
@@ -2880,6 +2897,23 @@ pub fn archive_target(w: &WorktreeState, repos: &[Repo], archiving: &HashSet<Id>
     Ok(ArchiveTarget { path: w.path.clone(), repo_path, branch: w.branch.clone().unwrap_or_default(), head: w.head.clone() })
 }
 
+fn recent_tabs_after(history: &[Id], tabs: &[Tab]) -> Vec<Id> {
+    let active = tabs.iter().find(|t| t.is_active).map(|t| t.id.clone());
+    active
+        .iter()
+        .cloned()
+        .chain(history.iter().filter(|id| Some(*id) != active.as_ref() && tabs.iter().any(|t| &t.id == *id)).cloned())
+        .collect()
+}
+
+fn next_active_tab(history: &[Id], tabs: &[TabRow]) -> Option<Id> {
+    history
+        .iter()
+        .find(|id| tabs.iter().any(|t| &t.id == *id))
+        .cloned()
+        .or_else(|| tabs.iter().min_by_key(|t| t.position).map(|t| t.id.clone()))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -3054,6 +3088,45 @@ pub(crate) mod tests {
         assert_eq!(code, 1, "the pane reports the exit of the hook command while its shell lives on");
         daemon.shutdown();
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_closed_active_tab_gives_its_place_to_the_tab_that_was_active_before_it() {
+        let (dir, repo) = repo_fixture("tab-history");
+        let daemon = Daemon::new(Paths::new(dir.join("data")), no_seams(), Box::new(())).unwrap();
+        daemon.handle_inner(0, Call::RepoAdd { path: repo.clone() }).await.unwrap();
+        let worktree_id = daemon.lock().worktrees.keys().next().unwrap().clone();
+        let mut ids = vec![];
+        for title in ["a", "b", "c", "d"] {
+            let tab: Tab = serde_json::from_value(daemon.handle_inner(0, Call::TabCreate { worktree_id: worktree_id.clone(), title: Some(title.into()) }).await.unwrap()).unwrap();
+            ids.push(tab.id);
+        }
+        let active = |d: &Daemon| Daemon::tabs_of(&d.lock(), &worktree_id).into_iter().filter(|t| t.is_active).map(|t| t.title).collect::<Vec<_>>().join(" ");
+        let call = |c: Call| daemon.handle_inner(0, c);
+        for i in [0, 2, 1] {
+            call(Call::TabActivate { tab_id: ids[i].clone() }).await.unwrap();
+        }
+        assert_eq!(active(&daemon), "b");
+
+        call(Call::TabClose { tab_id: ids[1].clone(), force: true }).await.unwrap();
+        assert_eq!(active(&daemon), "c", "the tab before b, not the first tab");
+        let c_pane = Daemon::tabs_of(&daemon.lock(), &worktree_id).into_iter().find(|t| t.title == "c").unwrap().active_pane_id.unwrap();
+        call(Call::PaneClose { pane_id: c_pane, force: true }).await.unwrap();
+        assert_eq!(active(&daemon), "a", "the close of the last pane of a tab follows the same history");
+        call(Call::TabClose { tab_id: ids[3].clone(), force: true }).await.unwrap();
+        assert_eq!(active(&daemon), "a", "a closed tab that was not active changes nothing");
+
+        daemon.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_next_active_tab_is_the_most_recent_one_that_still_exists_then_the_first_by_position() {
+        let tab = |id: &str, position: i64| TabRow { id: id.into(), worktree_id: "w".into(), title: id.into(), position, layout: LayoutNode::Leaf { pane_id: format!("p{id}") }, active_pane_id: None, is_active: false, pinned: false };
+        let tabs = [tab("x", 1), tab("y", 0), tab("z", 2)];
+        assert_eq!(next_active_tab(&["gone".into(), "z".into(), "x".into()], &tabs).as_deref(), Some("z"));
+        assert_eq!(next_active_tab(&["gone".into()], &tabs).as_deref(), Some("y"));
+        assert_eq!(next_active_tab(&[], &[]), None);
     }
 
     #[tokio::test(flavor = "multi_thread")]
