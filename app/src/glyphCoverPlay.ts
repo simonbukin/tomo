@@ -87,7 +87,6 @@ export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   const at = thresholds(style, { cols, rows, ox, oy }, Math.floor(Math.random() * 1e6), reverse);
   const { edge, band } = STYLES[style];
 
-  if (getComputedStyle(host).position === "static") host.style.position = "relative";
   const canvas = document.createElement("canvas");
   canvas.className = "glyph-cover";
   canvas.setAttribute("aria-hidden", "true");
@@ -137,16 +136,22 @@ export function playCover(host: HTMLElement, options: CoverOptions): Cover {
   let frame = 0;
   let settle: () => void = () => {};
   const done = new Promise<void>((resolve) => (settle = resolve));
+  const placed = getComputedStyle(host).position === "static";
+  const detach = () => {
+    canvas.remove();
+    if (placed) host.style.removeProperty("position");
+  };
   const stop = () => {
     cancelAnimationFrame(frame);
-    if (mode === "in") canvas.remove();
+    if (mode === "in") detach();
     if (active.get(host) === cover) active.delete(host);
     settle();
   };
-  const cover: Cover = { done, cancel: () => { canvas.remove(); stop(); } };
+  const cover: Cover = { done, cancel: () => { detach(); stop(); } };
   active.set(host, cover);
 
   paint(0);
+  if (placed) host.style.position = "relative";
   host.appendChild(canvas);
   const start = performance.now();
   const tick = (now: number) => {
