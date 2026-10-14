@@ -58,6 +58,9 @@ const DevHarness = devRoute ? lazy(devRoute) : () => null;
 const CORE_CENTER: Record<string, ComponentType> = { activity: Activity, agents: Agents, apps: Apps, settings: Settings };
 
 export function App() {
+  useEffect(() => {
+    if (devRoute) openSplash();
+  }, []);
   return (
     <TooltipProvider>
       {devRoute ? (
