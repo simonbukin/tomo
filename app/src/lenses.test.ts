@@ -29,10 +29,40 @@ const agent = (worktree_id: string, state: AgentState) =>
   ({ pane_id: `p-${worktree_id}-${state}`, worktree_id, kind: "claude", state, session_ref: null, updated_at_ms: 0, pid: null }) as unknown as AgentPresence;
 
 const ctx = (over: Partial<QueryContext> = {}): QueryContext => ({ repos: [], agents: [], attention: [], ...over });
-const opts = (over: Partial<LensOptions> = {}): LensOptions => ({ repos: [], sort: "name", manualOrder: {}, repoOrder: [], ...over });
+const opts = (over: Partial<LensOptions> = {}): LensOptions => ({ repos: [], sort: "name", manualOrder: {}, repoOrder: [], pinned: [], ...over });
 
 const labels = (groups: { label: string }[]) => groups.map((g) => g.label);
 const names = (groups: { items: Worktree[] }[]) => groups.map((g) => g.items.map((w) => w.name));
+
+describe("pinned worktrees", () => {
+  const repos = [repo("r1", { name: "tomo" }), repo("r2", { name: "labor" })];
+  const list = [
+    wt({ id: "a", repo_id: "r1", last_active_ms: 3, first_seen_ms: 1 }),
+    wt({ id: "b", repo_id: "r1", last_active_ms: 1, first_seen_ms: 3 }),
+    wt({ id: "c", repo_id: "r1", last_active_ms: 2, first_seen_ms: 2 }),
+    wt({ id: "d", repo_id: "r2", last_active_ms: 4, first_seen_ms: 4 }),
+  ];
+
+  it("lists the pinned worktrees in a group above every lens, and first in their own group, in each sort", () => {
+    const expected = {
+      name: [["c", "d"], ["c", "a", "b"], ["d"]],
+      recent: [["d", "c"], ["c", "a", "b"], ["d"]],
+      created: [["d", "c"], ["c", "b", "a"], ["d"]],
+      attention: [["d", "c"], ["c", "a", "b"], ["d"]],
+      manual: [["d", "c"], ["c", "b", "a"], ["d"]],
+    } as const;
+    for (const sort of ["name", "recent", "created", "attention", "manual"] as const) {
+      const groups = lensGroups(list, "repo", ctx({ repos }), opts({ repos, sort, pinned: ["d", "c"], manualOrder: { r1: ["b", "a", "c"] } }));
+      expect(labels(groups)).toEqual(["pinned", "tomo", "labor"]);
+      expect(names(groups), sort).toEqual(expected[sort]);
+    }
+  });
+
+  it("puts the pinned group first in the tag and focus lenses, and shows none when no worktree has a pin", () => {
+    for (const lens of ["tag", "focus"] as const) expect(lensGroups(list, lens, ctx({ repos }), opts({ repos, pinned: ["b"] }))[0]).toMatchObject({ key: "pinned", items: [{ id: "b" }] });
+    expect(labels(lensGroups(list, "repo", ctx({ repos }), opts({ repos, pinned: ["gone"] })))).toEqual(["tomo", "labor"]);
+  });
+});
 
 describe("repository lens", () => {
   it("groups worktrees under their repository", () => {

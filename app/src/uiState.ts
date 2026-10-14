@@ -4,7 +4,7 @@ import type { CoreSection, Filter, FilterKind, HomeOptions, HomeScope, Id, Sideb
 
 export const defaultHome: HomeOptions = { query: "", scope: { kind: "all" }, filters: [], view: "list", sort: "recent", group: "tag", showArchived: false };
 
-export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showMain: false, showArchivedInSidebar: false, collapsedRepos: [], collapsedSections: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], appearance: defaultAppearance, paletteRecent: [] };
+export const defaultUi: UiState = { view: "home", activeWorktreeId: null, leftMode: "open", rightMode: "open", leftWidth: 240, rightWidth: 280, rightSection: null, sidebarSort: "name", lens: "repo", showMain: false, showArchivedInSidebar: false, collapsedRepos: [], collapsedSections: [], hiddenRepos: [], showHiddenRepos: false, home: defaultHome, manualOrder: {}, repoOrder: [], pinned: [], appearance: defaultAppearance, paletteRecent: [] };
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
@@ -85,6 +85,7 @@ export function sanitizeUi(saved: unknown, worktreeIds: readonly Id[], addonView
     home: sanitizeHome(s.home),
     manualOrder: stringLists(s.manualOrder),
     repoOrder: strings(s.repoOrder),
+    pinned: strings(s.pinned),
     appearance: sanitizeAppearance(s.appearance),
     paletteRecent: strings(s.paletteRecent).slice(0, 12),
   };

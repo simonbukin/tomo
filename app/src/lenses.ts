@@ -1,4 +1,4 @@
-import { byManualOrder } from "./order";
+import { byManualOrder, mainFirst } from "./order";
 import { agentsOf, needsAttention, sortWorktrees, type QueryContext } from "./homeQuery";
 import type { Id, Repo, SidebarLens, SidebarSort, Worktree, WorktreePrefill } from "./types";
 
@@ -26,7 +26,11 @@ export interface LensOptions {
   sort: SidebarSort;
   manualOrder: Record<string, Id[]>;
   repoOrder: Id[];
+  /** Pinned worktree ids, in the order that the user pinned them. */
+  pinned: Id[];
 }
+
+export const PINNED_GROUP = "pinned";
 
 const NO_TAG = "no tag";
 
@@ -49,10 +53,10 @@ function byRepo(list: Worktree[], ctx: QueryContext, o: LensOptions): LensGroup[
       label: repo.name,
       repo,
       prefill: { repoId: repo.id },
-      items: sortWorktrees(list.filter((w) => w.repo_id === repo.id), o.sort, ctx, o.manualOrder[repo.id] ?? []),
+      items: sortWorktrees(list.filter((w) => w.repo_id === repo.id), o.sort, ctx, o.manualOrder[repo.id] ?? [], o.pinned),
     }))
     .filter((g) => g.items.length > 0 || !g.repo.exists);
-  const orphans = sortWorktrees(list.filter((w) => !o.repos.some((r) => r.id === w.repo_id)), o.sort, ctx);
+  const orphans = sortWorktrees(list.filter((w) => !o.repos.some((r) => r.id === w.repo_id)), o.sort, ctx, [], o.pinned);
   return orphans.length > 0 ? [...groups, { key: "", label: OTHER_REPO.name, repo: OTHER_REPO, prefill: {}, items: orphans }] : groups;
 }
 
@@ -79,14 +83,25 @@ function labelled(
 ): LensGroup[] {
   return [...map.entries()]
     .sort(([ka, ia], [kb, ib]) => rank(ka, ia) - rank(kb, ib) || ka.localeCompare(kb))
-    .map(([key, items]) => ({ key: `${lens}:${key}`, label: label(key), repo: null, prefill: prefill(key, items), items: sortWorktrees(items, o.sort, ctx) }));
+    .map(([key, items]) => ({ key: `${lens}:${key}`, label: label(key), repo: null, prefill: prefill(key, items), items: sortWorktrees(items, o.sort, ctx, [], o.pinned) }));
 }
 
 /**
- * Arrange the same worktrees a different way. A lens filters and groups only; it
- * never reads or writes worktree state, and it adds no object of its own.
+ * Arrange the same worktrees a different way, below a group of the pinned worktrees. A lens filters and groups only;
+ * it never reads or writes worktree state, and it adds no object of its own.
  */
 export function lensGroups(list: Worktree[], lens: SidebarLens, ctx: QueryContext, o: LensOptions): LensGroup[] {
+  return [...pinnedGroup(list, ctx, o), ...lensed(list, lens, ctx, o)];
+}
+
+function pinnedGroup(list: Worktree[], ctx: QueryContext, o: LensOptions): LensGroup[] {
+  const items = list.filter((w) => o.pinned.includes(w.id));
+  if (items.length === 0) return [];
+  const sorted = o.sort === "manual" ? mainFirst(byManualOrder(items, o.pinned, (w) => w.id)) : sortWorktrees(items, o.sort, ctx);
+  return [{ key: PINNED_GROUP, label: "pinned", repo: null, prefill: {}, items: sorted }];
+}
+
+function lensed(list: Worktree[], lens: SidebarLens, ctx: QueryContext, o: LensOptions): LensGroup[] {
   switch (lens) {
     case "repo":
       return byRepo(list, ctx, o);

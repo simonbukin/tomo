@@ -48,6 +48,11 @@ export async function openWorktree(worktreeId: Id, paneId?: Id): Promise<void> {
   }
 }
 
+export function setPinned(worktreeId: Id, pinned: boolean): void {
+  const rest = getState().ui.pinned.filter((id) => id !== worktreeId);
+  setUi({ pinned: pinned ? [...rest, worktreeId] : rest });
+}
+
 export function currentWorktree(): Worktree | null {
   const s = getState();
   return s.worktrees.find((w) => w.id === s.ui.activeWorktreeId) ?? null;

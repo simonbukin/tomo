@@ -17,7 +17,7 @@ export function railWorktrees(s: State): Worktree[] {
   const ordered = s.ui.sidebarSort === "manual" ? byManualOrder(repos, s.ui.repoOrder, (r) => r.id) : repos;
   const ctx = queryContext(s);
   const live = s.worktrees.filter((w) => !w.archived_at_ms);
-  return ordered.flatMap((r) => sortWorktrees(live.filter((w) => w.repo_id === r.id), s.ui.sidebarSort, ctx, s.ui.manualOrder[r.id] ?? []));
+  return ordered.flatMap((r) => sortWorktrees(live.filter((w) => w.repo_id === r.id), s.ui.sidebarSort, ctx, s.ui.manualOrder[r.id] ?? [], s.ui.pinned));
 }
 
 /** The minimal left sidebar: views, the attention count, and one mark per worktree. */

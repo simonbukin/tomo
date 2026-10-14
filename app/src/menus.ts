@@ -1,4 +1,4 @@
-import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setKeepAwake, setMetadata, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom, wakePane } from "./actions";
+import { archiveWorktree, bulkAddTag, bulkArchive, bulkPromptTags, bulkRestore, closeOtherTabs, closePane, closeTab, copyText, equalizeTab, killPaneTree, newTabIn, newTerminalIn, openEndpoint, openExternalFor, openExternalUrl, openWorktree, promptMetadata, removeRepo, renamePane, restoreWorktree, rotateSplit, setKeepAwake, setMetadata, setPinned, setRepoHidden, spawnAgent, splitPane, splitPaneById, swapPanes, toggleZoom, wakePane } from "./actions";
 import { browserCommand, openBrowser } from "./browser/browser";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { rpc } from "./api";
@@ -73,7 +73,9 @@ export function worktreeMenu(w: Worktree, s: State = getState()): MenuItem[] {
 function worktreeDetailItems(w: Worktree, s: State): MenuItem[] {
   const archived = !!w.archived_at_ms;
   const busy = w.archiving;
+  const pinned = s.ui.pinned.includes(w.id);
   return [
+    { label: pinned ? "unpin" : "pin", run: () => setPinned(w.id, !pinned) },
     { label: "tags", disabled: busy, submenu: tagItems(s, w) },
     { label: "rename...", disabled: busy, run: () => promptMetadata("display_name", w.id) },
     sep,
@@ -255,14 +257,20 @@ export function paneMenu(paneId: Id, s: State = getState()): MenuItem[] {
   ];
 }
 
-/** The menu of an agent or app line in the worktree hover card. */
-export function liveLineMenu(worktreeId: Id, paneId: Id, s: State = getState()): MenuItem[] {
-  return [
-    { label: "go to pane", run: () => void openWorktree(worktreeId, paneId) },
-    sep,
-    { label: "kill process tree", danger: true, run: () => killPaneTree(paneId) },
-    { label: "close pane", disabled: isLastPane(paneId, s), run: () => closePane(paneId) },
-  ];
+/** The menu of an agent or app line in the worktree hover card: its address, then its pane. */
+export function liveLineMenu(worktreeId: Id, { url, paneId }: { url?: string; paneId?: Id }, s: State = getState()): MenuItem[] {
+  const address: MenuItem[] = url
+    ? [{ label: "open", run: () => openEndpoint(url, worktreeId) }, { label: "open in external browser", run: () => openExternalUrl(url) }, copyMenu([["URL", url]])]
+    : [];
+  const pane: MenuItem[] = paneId
+    ? [
+        { label: "go to pane", run: () => void openWorktree(worktreeId, paneId) },
+        sep,
+        { label: "kill process tree", danger: true, run: () => killPaneTree(paneId) },
+        { label: "close pane", disabled: isLastPane(paneId, s), run: () => closePane(paneId) },
+      ]
+    : [];
+  return address.length > 0 && pane.length > 0 ? [...address, sep, ...pane] : [...address, ...pane];
 }
 
 export function browserMenu(paneId: Id, s: State = getState()): MenuItem[] {

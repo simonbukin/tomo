@@ -24,6 +24,8 @@ export interface Line {
   ticker?: boolean;
   /** The live pane that runs what the line shows, so the hover card can go to it or kill its processes. */
   paneId?: Id;
+  /** The address that a click on the line opens. */
+  url?: string;
 }
 
 /** What a row knows about one worktree. The row reads it from the store; the rules below only read it. */
@@ -153,7 +155,7 @@ const appTime = (l: AppLine, now: number): string | undefined =>
   l.upSinceMs != null ? `up ${durationLabel(l.upSinceMs, now)}` : l.atMs != null ? `${durationLabel(l.atMs, now)} ago` : undefined;
 
 export const hoverAppLines = (apps: readonly AppLine[], now: number): Line[] =>
-  apps.map((l) => ({ key: l.id, mark: l.mark, label: l.label, text: l.full ?? l.detail, tone: l.bad ? "bad" : undefined, meta: appTime(l, now), paneId: l.paneId }));
+  apps.map((l) => ({ key: l.id, mark: l.mark, label: l.label, text: l.full ?? l.detail, tone: l.bad ? "bad" : undefined, meta: appTime(l, now), paneId: l.paneId, url: l.url }));
 
 /** The branch line: the branch, or the detached head, after `archived` on an archived row. */
 export function branchText(w: Worktree): string {
